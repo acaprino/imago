@@ -109,8 +109,10 @@ export function sidebarDrawer(shell: HTMLElement): () => void {
         if (!narrow && isOpen()) show(false);
         if (wasNarrow === null || wasNarrow === narrow) return;
         const active = doc.activeElement;
-        if (narrow && active && sidebar.contains(active)) toggle.focus();
-        else if (!narrow && active === toggle) focusSidebar();
+        // Only focus that the width has really hidden moves: the observer delivers a frame late, and by then the person
+        // may have opened the drawer (the sidebar is on screen again) or pressed the button that this width shows.
+        if (narrow && active && sidebar.contains(active) && !isRendered(active)) toggle.focus();
+        else if (!narrow && active === toggle && !isRendered(toggle)) focusSidebar();
       })
     : null;
   observer?.observe(shell);

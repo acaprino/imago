@@ -272,6 +272,20 @@ export default async (page, url) => {
       await page.waitForFunction(() => !!document.activeElement?.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0');
       await at(610);
 
+      // A narrowing the observer has not delivered yet must not take the focus from a drawer opened in the meantime:
+      // the width changes and the button is pressed in one task, so no frame, and no observer callback, comes between.
+      await at(1160);
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))); // the observer has seen the wide shell
+      const raced = await page.evaluate(async () => {
+        window.__imago.set({ width: 610 });
+        document.querySelector('.im-sidebar-toggle').click(); // what Enter on the focused button does
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))); // the observer now delivers the narrowing
+        const el = document.activeElement;
+        return { row: !!el?.closest('.im-sidebar') && el.getAttribute('role') === 'option', open: document.querySelector('.im-shell').dataset.imSidebarOpen };
+      });
+      assert.deepEqual(raced, { row: true, open: 'true' }, where('a late narrowing does not take the focus from the open drawer'));
+      await page.keyboard.press('Escape');
+
       // From 850 up the user folds the sidebar into the rail with the button in its header, and unfolds it.
       await at(1160);
       const fold = page.locator('.im-sidebar-collapse');
