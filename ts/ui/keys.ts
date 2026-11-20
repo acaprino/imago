@@ -41,7 +41,9 @@ const hasModifier = (event: KeyboardEvent) => event.ctrlKey || event.altKey || e
 /**
  * Makes the container one tab stop: a single item has tabindex="0" (the selected one, else the first),
  * the others -1, and the arrows, Home and End move focus between them. Space and Enter call onSelect.
- * Items added later are picked up. The returned function stops it and restores the items' tabindex.
+ * Items added later are picked up, and the stop moves off an item that becomes disabled or hidden
+ * (the `disabled`, `aria-disabled`, `hidden` and `inert` attributes). The returned function stops it and
+ * restores the items' tabindex.
  */
 export function roving(container: HTMLElement, options: RovingOptions): () => void {
   const { item, orientation, onSelect } = options;
@@ -55,15 +57,16 @@ export function roving(container: HTMLElement, options: RovingOptions): () => vo
     if (el.getAttribute('tabindex') !== value) el.setAttribute('tabindex', value);
   };
 
-  // The stop is chosen without looking at visibility: a list hidden by a breakpoint still needs
-  // its stop when it comes back, and nothing tells us when that happens.
+  // The stop leaves an item that is disabled, and, while the list itself is on screen, one that is hidden.
+  // A list hidden as a whole (by a breakpoint) keeps its stop: nothing tells us when it comes back.
   const sync = () => {
     const rows = items();
     const present = new Set(rows);
     for (const el of original.keys()) if (!present.has(el)) original.delete(el);
-    if (!stop || !present.has(stop) || !isEnabled(stop)) {
-      const enabled = rows.filter(isEnabled);
-      stop = enabled.find((el) => el.getAttribute('aria-selected') === 'true') ?? enabled[0] ?? null;
+    const usable = container.getClientRects().length > 0 ? canFocus : isEnabled;
+    if (!stop || !present.has(stop) || !usable(stop)) {
+      const candidates = rows.filter(usable);
+      stop = candidates.find((el) => el.getAttribute('aria-selected') === 'true') ?? candidates[0] ?? null;
     }
     for (const el of rows) setTabIndex(el, el === stop ? '0' : '-1');
   };
@@ -99,7 +102,8 @@ export function roving(container: HTMLElement, options: RovingOptions): () => vo
   };
 
   const observer = new MutationObserver(sync);
-  observer.observe(container, { childList: true, subtree: true });
+  // tabindex is left out of the filter: sync writes it, and must not trigger itself.
+  observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'aria-disabled', 'hidden', 'inert'] });
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('focusin', onFocusIn);
   sync();
@@ -120,8 +124,10 @@ const REGIONS = ['.im-sidebar', '.im-content', '.im-inspector'];
 const FOCUSABLE =
   'a[href], button, input:not([type="hidden"]), select, textarea, summary, [contenteditable=""], [contenteditable="true"], [tabindex]';
 
-// Where focus lands in a region: its roving stop (tabindex="0"), else its first focusable element.
+// Where focus lands in a region: the region itself when it is a tab stop (tabindex="0"), else its roving stop
+// (an element inside it with tabindex="0"), else its first focusable element.
 function entryPoint(region: HTMLElement): HTMLElement | null {
+  if (region.matches('[tabindex="0"]') && canFocus(region)) return region;
   const first = (selector: string) =>
     Array.from(region.querySelectorAll<HTMLElement>(selector)).find((el) => el.tabIndex >= 0 && canFocus(el)) ?? null;
   return first('[tabindex="0"]') ?? first(FOCUSABLE);

@@ -204,7 +204,8 @@ async function otherApps(page) {
   assert.equal(content.tag, 'BUTTON');
 }
 
-// What the shell cannot show: items that come later, disabled items, a control inside an item, regions with nothing to focus.
+// What the shell cannot show: items that come later, items that become disabled or hidden, a control inside an item,
+// regions with nothing to focus or that are a tab stop themselves.
 async function scratch(page) {
   await page.evaluate(() => {
     const host = document.createElement('div');
@@ -222,12 +223,23 @@ async function scratch(page) {
         <section class="im-sidebar"><button id="s1" type="button">s1</button></section>
         <section class="im-content"><p>text only</p></section>
         <section class="im-inspector"><button id="i1" type="button">i1</button><button id="i2" type="button" tabindex="0">i2</button></section>
+      </div>
+      <div id="mini2">
+        <section class="im-sidebar"><button id="m1" type="button">m1</button></section>
+        <section class="im-content" id="region" tabindex="0"><button id="inside" type="button">inside</button></section>
+      </div>
+      <div id="stoplist">
+        <button class="st" id="x1" type="button">x1</button>
+        <button class="st" id="x2" type="button">x2</button>
+        <button class="st" id="x3" type="button">x3</button>
       </div>`;
     document.body.append(host);
     window.__scratch = {
       list: window.__imagoKeys.roving(document.getElementById('list'), { item: '.it', orientation: 'vertical' }),
       nested: window.__imagoKeys.roving(document.getElementById('nested'), { item: '.it', orientation: 'vertical' }),
       mini: window.__imagoKeys.regions(document.getElementById('mini')),
+      mini2: window.__imagoKeys.regions(document.getElementById('mini2')),
+      stoplist: window.__imagoKeys.roving(document.getElementById('stoplist'), { item: '.st', orientation: 'vertical' }),
     };
   });
   const activeId = () => page.evaluate(() => document.activeElement?.id ?? '');
@@ -291,6 +303,43 @@ async function scratch(page) {
   assert.equal(await activeId(), 'i2', 'with the sidebar hidden and the content empty F6 stays on the only region');
   await page.evaluate(() => (document.querySelector('#mini .im-sidebar').style.visibility = ''));
 
+  // A region that is itself a tab stop takes the focus, not the control inside it.
+  await page.focus('#m1');
+  await press(page, 'F6');
+  assert.equal(await activeId(), 'region', 'F6 lands on a region that has tabindex="0" itself');
+  await press(page, 'F6');
+  assert.equal(await activeId(), 'm1');
+
+  // The tab stop leaves an item that becomes disabled or hidden, and comes back when one can take it.
+  const stops = () => page.evaluate(() => [...document.querySelectorAll('#stoplist .st')].map((el) => el.getAttribute('tabindex')));
+  const waitStops = (expected) =>
+    page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('#stoplist .st, #stoplist .st-late')].map((el) => el.getAttribute('tabindex'))) === JSON.stringify(want), expected);
+  assert.deepEqual(await stops(), ['0', '-1', '-1']);
+  // While the whole list is hidden (a breakpoint) a change inside it does not take the stop away.
+  await page.evaluate(() => {
+    const list = document.getElementById('stoplist');
+    list.style.display = 'none';
+    const late = document.createElement('button');
+    late.className = 'st-late st';
+    late.type = 'button';
+    list.append(late);
+  });
+  await waitStops(['0', '-1', '-1', '-1']);
+  await page.evaluate(() => {
+    document.getElementById('stoplist').style.display = '';
+    document.querySelector('#stoplist .st-late').remove();
+  });
+  await waitStops(['0', '-1', '-1']);
+  await page.evaluate(() => (document.getElementById('x1').disabled = true));
+  await waitStops(['-1', '0', '-1']);
+  assert.equal(await tabbable(page, '#stoplist .st'), 1, 'a disabled stop leaves exactly one item reachable with Tab');
+  await page.evaluate(() => (document.getElementById('x2').hidden = true));
+  await waitStops(['-1', '-1', '0']);
+  await page.evaluate(() => document.getElementById('x3').setAttribute('aria-disabled', 'true'));
+  await waitStops(['-1', '-1', '-1']);
+  await page.evaluate(() => (document.getElementById('x1').disabled = false));
+  await waitStops(['0', '-1', '-1']);
+
   // F6 from a field outside any shell is not ours.
   await page.focus('#outside');
   await press(page, 'F6');
@@ -301,6 +350,8 @@ async function scratch(page) {
     window.__scratch.list();
     window.__scratch.nested();
     window.__scratch.mini();
+    window.__scratch.mini2();
+    window.__scratch.stoplist();
   });
   assert.deepEqual(
     await page.evaluate(() => ['a', 'b', 'c', 'd', 'e', 'row', 'row2'].map((id) => document.getElementById(id).getAttribute('tabindex'))),
