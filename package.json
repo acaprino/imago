@@ -14,14 +14,21 @@
     "./tokens": "./tokens/imago.tokens.json"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
     "tokens": "node scripts/build-tokens.mjs",
     "gallery": "vite --config gallery/vite.config.ts",
     "build": "tsc --noEmit && vite build --config gallery/vite.config.ts",
     "test:gallery": "node tests/gallery/run.mjs",
+    "demo": "cd examples/demo/src-tauri && tauri dev",
+    "demo:web": "vite build --config gallery/vite.config.ts --outDir ../examples/demo/dist",
+    "demo:build": "cd examples/demo/src-tauri && tauri build --debug --no-bundle --features custom-protocol",
+    "demo:fetch": "node -e \"require('node:fs').rmSync('examples/demo/app',{recursive:true,force:true})\" && gh run download --name imago-demo --dir examples/demo/app",
+    "capture": "node examples/demo/capture.mjs",
     "verify": "npm run tokens -- --check && npm test && npm run build && npm run test:gallery && cargo test -p imago-shell"
   },
   "devDependencies": {
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/cli": "2.12.4",
     "playwright": "1.63.0",
     "typescript": "7.0.2",
     "vite": "8.3.5"

@@ -49,3 +49,46 @@ jobs:
 
       - name: Verify
         run: npm run verify
+
+  # The demo app is never built on a developer's machine: this job builds it, which is also the only place its Rust
+  # is compiled, and keeps the program for the screen capture (`npm run demo:fetch`, then `npm run capture`).
+  demo:
+    name: Demo app (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # rustup resolves and installs the channel, components and target in rust-toolchain.toml.
+      - name: Set up pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the demo app
+        run: npm run demo:build
+
+      - name: Keep the demo app for the screen capture
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: imago-demo
+          path: target/debug/imago-demo.exe
+          if-no-files-found: error
+          retention-days: 30

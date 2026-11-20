@@ -10,6 +10,7 @@
     "Cargo.lock"
   ],
   "crates": [
-    "imago-shell"
+    "imago-shell",
+    "imago-demo"
   ]
 }

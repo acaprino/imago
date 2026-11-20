@@ -3,3 +3,4 @@ node_modules/
 target/
 dist/
 examples/demo/captures/
+examples/demo/app/
