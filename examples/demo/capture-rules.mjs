@@ -72,3 +72,35 @@ export function judgeSheetDenser({ frame, sheet }) {
   if (sheetShift <= frameShift) return [];
   return [`the work sheet moves ${sheetShift} levels with the backdrop and the frame ${frameShift}: the sheet is not denser`];
 }
+
+/**
+ * The window theme the page itself sends once it is mounted: the gallery always starts on Smooth dark
+ * (gallery/main.ts) and `gallery/mount/desktop.ts` tells the window so at its first mount, which also rewrites the saved file.
+ */
+export const PAGE_BOOT_THEME = 'dark';
+
+/**
+ * What the page's colour scheme, read once after a restart, proves about the saved window theme. Three things can give
+ * the page its scheme: the saved theme (the window's first frame), Windows' own theme (when no saved theme reached the
+ * window) and the page's own boot call, which sends `PAGE_BOOT_THEME` once the page is mounted. When the scheme that
+ * was read is also what Windows' own theme or the boot call could have given, the read says nothing about the saved
+ * theme: `unproven`, which is not a failure.
+ * @param {{ saved: 'dark' | 'light', windows: 'dark' | 'light' | null, scheme: 'dark' | 'light', mounted: boolean }} read
+ *   `windows` is Windows' apps theme (null when it could not be read); `mounted` is whether the page had mounted (its boot call sent) when the scheme was read.
+ * @returns {{ verdict: 'delivered' | 'failed' | 'unproven', why: string }}
+ */
+export function judgeSavedTheme({ saved, windows, scheme, mounted }) {
+  const bootCouldHaveGivenIt = mounted && scheme === PAGE_BOOT_THEME;
+  const windowsCouldHaveGivenIt = windows === null || windows === scheme;
+  const bootSays = `the page had mounted and its own boot call sends ${PAGE_BOOT_THEME}`;
+  if (scheme !== saved) {
+    if (bootCouldHaveGivenIt) return { verdict: 'unproven', why: `the page is ${scheme}, not the saved ${saved}, but ${bootSays}: the read may have lost the race with it` };
+    return { verdict: 'failed', why: `the page is ${scheme}, not the saved ${saved}: the saved window theme did not reach the first frame` };
+  }
+  if (bootCouldHaveGivenIt) return { verdict: 'unproven', why: `the page is ${scheme}, the saved theme, but ${bootSays}: that may be what made it ${scheme}` };
+  if (windowsCouldHaveGivenIt) {
+    const known = windows === null ? "Windows' theme could not be read" : `Windows' apps are ${windows}`;
+    return { verdict: 'unproven', why: `the page is ${scheme}, the saved theme, but ${scheme} may be Windows' own theme (${known})` };
+  }
+  return { verdict: 'delivered', why: `the page is ${scheme}, the saved theme, and neither Windows' own theme (${windows}) nor the page's boot call could have given it` };
+}

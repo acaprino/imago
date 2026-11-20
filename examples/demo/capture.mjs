@@ -14,9 +14,19 @@
 // by reloading. Raising can fail now and then: a capture whose pixels are not the app's is the window in front;
 // repeat the run.
 //
-// The restart check leaves the window in the theme OPPOSITE to Windows' own apps theme before it closes it: a page
-// that took no saved theme shows Windows' theme, so only a saved theme that differs from it can prove that the saved
-// one reached the first frame. When Windows' theme cannot be read the check says it cannot tell.
+// The restart check leaves the window in the theme OPPOSITE to Windows' own apps theme before it closes it, and reads
+// the page's colour scheme once, at the first contact with the page after the restart (in `launch`, before anything
+// waits). Three things can give the page its scheme there: the saved theme (the window's first frame), Windows' own
+// theme (when no saved theme reached the window) and the page's own boot call: the gallery always starts on Smooth
+// dark and `gallery/mount/desktop.ts` sends `dark` to the window at its first mount, which also rewrites the saved
+// file. `judgeSavedTheme` (capture-rules.mjs) says what a read proves; the read says whether the page had mounted yet
+// (`window.__imago` exists once its first, synchronous drawing is done, so its boot call has been sent):
+//   - Windows' apps light (the saved theme is dark): a light read proves a failure; a dark read proves delivery only
+//     when it was taken before the page mounted, else it may be the boot call.
+//   - Windows' apps dark (the saved theme is light): a light read proves delivery; a dark read proves a failure only
+//     when it was taken before the page mounted, else the boot call may have won the race.
+//   - Windows' theme unreadable: a light read may be Windows' own.
+// What a read cannot prove is printed as "cannot tell" and is not a failure.
 //
 // `launch` also records in the page what it was pressed on (pointer, click, key: `demoPressed`, the `pressed` console
 // lines) and prints the last of them when the demo ends by itself. It stays on purpose: it is what showed that the
@@ -31,7 +41,7 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { judgeSheetDenser, judgeShowThrough, judgeTitleBar } from './capture-rules.mjs';
+import { judgeSavedTheme, judgeSheetDenser, judgeShowThrough, judgeTitleBar } from './capture-rules.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -44,6 +54,8 @@ const THEMES = ['dark', 'light'];
 const BACKDROPS = [['over-dark', '12,12,12'], ['over-bright', '255,255,255']];
 
 const failures = [];
+/** What a check could not tell (it is not a failure): printed again at the end, so a pass does not hide it. */
+const unproven = [];
 /** The demos that the run closes itself, and what each one's page was pressed on. */
 const closing = new Set();
 const demoPressed = new Map();
@@ -107,6 +119,9 @@ async function launch(fixture) {
       throw new Error('the demo window shows no page of its own');
     };
     const view = await page();
+    // The first contact: the page's colour scheme, before anything else waits (a restart judges it). `mounted` is false
+    // when the page's script has not yet drawn the gallery, so its own boot call (the window theme `dark`) is not sent yet.
+    const firstRead = await view.evaluate(() => ({ light: matchMedia('(prefers-color-scheme: light)').matches, mounted: Boolean(window.__imago), at: Math.round(performance.now()) }));
     // What the page was pressed on, kept here: when the demo ends by itself this says whether a pointer or a key did it.
     const pressed = [];
     view.on('console', (message) => { if (message.text().startsWith('pressed ')) pressed.push(message.text().slice(8)); });
@@ -116,7 +131,7 @@ async function launch(fixture) {
     });
     await view.waitForFunction(() => window.__imago?.ready && document.querySelector('#g-window')?.classList.contains('im-glass'), null, { timeout: 30000 });
     demoPressed.set(app, pressed);
-    return { app, pid: app.pid, page: view, exited, pressed, close: () => browser.close().catch(() => {}) };
+    return { app, pid: app.pid, page: view, exited, pressed, firstRead, close: () => browser.close().catch(() => {}) };
   } catch (error) {
     // The window is already on the screen: a launch that fails (first start or restart) must not leave it there.
     closing.add(app);
@@ -322,23 +337,29 @@ const systemPrefersDark = () => {
 /**
  * The theme the window is left in before the restart: the opposite of Windows' own, because a page with no saved theme
  * at all shows Windows' theme and would pass the check whether the saved one reached the first frame or not. When
- * Windows' theme cannot be read the run ends on light as it used to, and `tells` is false: the check cannot tell.
+ * Windows' theme cannot be read (`windows` is null) the run ends on light as it used to; `judgeSavedTheme` then
+ * cannot tell a saved light from Windows' own.
  */
 function themeToSave() {
   const dark = systemPrefersDark();
-  if (dark === null) return { theme: 'light', windows: 'unknown', tells: false };
-  return { theme: dark ? 'light' : 'dark', windows: dark ? 'dark' : 'light', tells: true };
+  if (dark === null) return { theme: 'light', windows: null };
+  return { theme: dark ? 'light' : 'dark', windows: dark ? 'dark' : 'light' };
 }
 
 async function restart(fixture, base, saved) {
   const demo = await launch(fixture);
   try {
-    const seen = await demo.page.evaluate(() => ({ ratio: window.devicePixelRatio, level: localStorage.getItem('imago.zoom'), light: matchMedia('(prefers-color-scheme: light)').matches }));
-    const scheme = seen.light ? 'light' : 'dark';
-    note(`restart: devicePixelRatio ${seen.ratio} (x${(seen.ratio / base).toFixed(2)} of ${base}), saved level ${seen.level}; the window theme saved was ${saved.theme}, the page's colour scheme is ${scheme}, Windows' apps are ${saved.windows}`);
-    if (!saved.tells) note(`(Windows' apps theme could not be read: the saved theme ${saved.theme} may be Windows' own, so this check cannot tell the saved theme from Windows')`);
+    const first = demo.firstRead;
+    const scheme = first.light ? 'light' : 'dark';
+    const windows = saved.windows === null ? "Windows' theme could not be read" : `Windows' apps are ${saved.windows}`;
+    note(`restart: the window theme saved was ${saved.theme}; the page's colour scheme, read ${first.at} ms after the page started and ${first.mounted ? 'after' : 'before'} its first mount (its own boot call sends dark), was ${scheme}; ${windows}`);
+    const { verdict, why } = judgeSavedTheme({ saved: saved.theme, windows: saved.windows, scheme, mounted: first.mounted });
+    if (verdict === 'failed') fail(`after a restart ${why}`);
+    else if (verdict === 'unproven') { unproven.push('the saved window theme at a restart'); note(`restart: cannot tell whether the saved window theme reached the first frame: ${why}`); }
+    else note(`restart: the saved window theme reached the first frame: ${why}`);
+    const seen = await demo.page.evaluate(() => ({ ratio: window.devicePixelRatio, level: localStorage.getItem('imago.zoom') }));
+    note(`restart: devicePixelRatio ${seen.ratio} (x${(seen.ratio / base).toFixed(2)} of ${base}), saved level ${seen.level}`);
     if (Math.abs(seen.ratio / base - 1.2) > 0.02) fail(`after a restart the zoom is x${(seen.ratio / base).toFixed(2)}, not the x1.2 that was kept`);
-    if (scheme !== saved.theme) fail(`after a restart the page is ${scheme}, not ${saved.theme}: the saved window theme did not reach the first frame`);
   } finally {
     await closeWindow(demo);
   }
@@ -373,5 +394,6 @@ try {
   if (demo) { await demo.close(); killTree(demo.pid); }
   await rm(fixture, { recursive: true, force: true }).catch(() => {});
 }
-console.log(failures.length ? `\n${failures.length} check(s) failed. Captures in ${out}` : `\nAll checks passed. Captures in ${out}`);
+const cannotTell = unproven.length ? ` (cannot tell: ${unproven.join('; ')})` : '';
+console.log(failures.length ? `\n${failures.length} check(s) failed${cannotTell}. Captures in ${out}` : `\nAll checks passed${cannotTell}. Captures in ${out}`);
 process.exitCode = failures.length ? 1 : 0;
