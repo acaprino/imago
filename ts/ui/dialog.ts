@@ -79,7 +79,7 @@ export function confirm(shell: HTMLElement, options: ConfirmOptions): Promise<bo
   });
 }
 
-function mountDialog(shell: HTMLElement, root: HTMLElement, dialog: HTMLElement, dismiss: () => void): () => void {
+function mountDialog(shell: HTMLElement, root: HTMLElement, dialog: HTMLElement, dismiss: () => void, dispose = dismiss): () => void {
   const active = shell.ownerDocument.activeElement;
   const opener = active instanceof HTMLElement && active !== shell.ownerDocument.body ? active : null;
   root.addEventListener('keydown', event => trapTab(event, dialog));
@@ -88,7 +88,7 @@ function mountDialog(shell: HTMLElement, root: HTMLElement, dialog: HTMLElement,
   });
   const release = inertShell(shell);
   shell.append(root);
-  const pop = pushLayer({ el: root, kind: 'dialog', close: dismiss }, opener);
+  const pop = pushLayer({ el: root, kind: 'dialog', close: dismiss, dispose }, opener);
   return () => {
     release();
     pop();
@@ -150,12 +150,16 @@ export function openFormDialog(shell: HTMLElement, options: FormDialogOptions): 
   root.append(dialog);
   let locked = false;
   let closed = false;
-  const unmount = mountDialog(shell, root, dialog, close);
-  function close(): boolean {
-    if (locked || closed) return false;
+  const unmount = mountDialog(shell, root, dialog, close, dispose);
+  function dispose(): void {
+    if (closed) return;
     closed = true;
     unmount();
     options.onClose?.();
+  }
+  function close(): boolean {
+    if (locked || closed) return false;
+    dispose();
     return true;
   }
   function setTitle(text: string, sub = ''): void {

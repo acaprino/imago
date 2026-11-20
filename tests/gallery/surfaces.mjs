@@ -1201,6 +1201,20 @@ async function formDialogs(page) {
   assert.equal((await active(page)).id, 'anchor');
   assert.deepEqual(await log(page), ['Settings', 'Import']);
   assert.equal(await count(page, '.im-scrim, .im-shell [inert]'), 0);
+  await page.evaluate(() => {
+    const shell = document.querySelector('.im-shell');
+    window.__detachedShell = shell;
+    const pending = window.__imagoSurfaces.openFormDialog(shell, {
+      title: 'Saving', closeLabel: 'Close', onClose: () => window.__log.push('disposed'),
+    });
+    pending.lock(true);
+  });
+  await fresh(page); // remount the gallery shell during the write
+  assert.deepEqual(await log(page), ['Settings', 'Import', 'disposed']);
+  assert.equal(await page.evaluate(() => window.__detachedShell.querySelector('.im-scrim, [inert]') === null), true);
+  await page.keyboard.press('Control+k');
+  assert.equal(await count(page, '.im-palette'), 1);
+  await press(page, 'Escape');
 }
 
 export default async (page, url) => {

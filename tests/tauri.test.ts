@@ -34,3 +34,30 @@ test('the adapter sends native caption commands and translates hover events unti
     Reflect.deleteProperty(globalThis, 'window');
   }
 });
+
+test('disposal reports a failed asynchronous unlisten once', async () => {
+  Object.defineProperty(globalThis, 'window', { value: { crypto: globalThis.crypto }, configurable: true });
+  try {
+    mockWindows('main');
+    const failure = new Error('window already closed');
+    let removals = 0;
+    mockIPC(command => {
+      if (command === 'plugin:event|unlisten') {
+        removals++;
+        throw failure;
+      }
+      return 1;
+    });
+    const errors: unknown[] = [];
+    const api = tauriWindowApi((_action, error) => errors.push(error));
+    const stop = api.onOsHover(() => {});
+    stop();
+    stop();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(removals, 1);
+    assert.deepEqual(errors, [failure]);
+  } finally {
+    clearMocks();
+    Reflect.deleteProperty(globalThis, 'window');
+  }
+});

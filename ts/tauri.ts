@@ -8,7 +8,12 @@ export function tauriWindowApi(fail: (what: string, error: unknown) => void): Wi
   const native = getCurrentWindow();
   const stopOnResolve = (listening: Promise<() => void>): (() => void) => {
     listening.catch((error: unknown) => fail('listen to the window', error));
-    return () => { void listening.then((unlisten) => unlisten(), () => {}); };
+    let stopped = false;
+    return () => {
+      if (stopped) return;
+      stopped = true;
+      void listening.then(unlisten => unlisten(), () => {}).catch((error: unknown) => fail('stop listening to the window', error));
+    };
   };
   return {
     minimize: () => native.minimize(),

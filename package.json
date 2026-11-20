@@ -18,7 +18,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
     "tokens": "node scripts/build-tokens.mjs",
     "gallery": "vite --config gallery/vite.config.ts",
-    "build": "tsc --noEmit && vite build --config gallery/vite.config.ts",
+    "build": "npm run build:package && tsc --noEmit && vite build --config gallery/vite.config.ts",
     "test:gallery": "node tests/gallery/run.mjs",
     "demo": "cd examples/demo/src-tauri && tauri dev",
     "demo:web": "vite build --config gallery/vite.config.ts --outDir ../examples/demo/dist",
@@ -26,7 +26,9 @@
     "demo:fetch": "node examples/demo/fetch.mjs",
     "capture": "node examples/demo/capture.mjs",
     "verify": "npm run tokens -- --check && npm test && npm run build && npm run test:gallery && cargo test -p imago-shell",
-    "prepare": "tsc -p tsconfig.package.json"
+    "prepare": "npm run build:package",
+    "build:package": "tsc -p tsconfig.package.json",
+    "pretest": "npm run build:package"
   },
   "devDependencies": {
     "@tauri-apps/api": "2.12.4",
