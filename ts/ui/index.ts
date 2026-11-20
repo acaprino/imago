@@ -18,3 +18,6 @@ export * from './search-picker.ts';
 export * from './dock-tabs.ts';
 export * from './breadcrumbs.ts';
 export * from './split-view.ts';
+export * from './segmented.ts';
+export * from './readout.ts';
+export * from './icon.ts';

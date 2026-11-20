@@ -13,7 +13,8 @@
     "./shell": "./lib/shell/index.js",
     "./tokens": "./tokens/imago.tokens.json",
     "./tauri": "./lib/tauri.js",
-    "./graph": "./lib/graph.js"
+    "./graph": "./lib/graph.js",
+    "./react": "./react/index.js"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
@@ -41,10 +42,14 @@
     "vite": "8.3.5"
   },
   "peerDependencies": {
-    "@tauri-apps/api": "^2.12.4"
+    "@tauri-apps/api": "^2.12.4",
+    "react": ">=18 <20"
   },
   "peerDependenciesMeta": {
     "@tauri-apps/api": {
+      "optional": true
+    },
+    "react": {
       "optional": true
     }
   },
@@ -53,7 +58,8 @@
     "css",
     "docs",
     "tokens",
-    "ts"
+    "ts",
+    "react"
   ],
   "dependencies": {
     "d3-selection": "3.0.1",

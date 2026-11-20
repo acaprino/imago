@@ -454,3 +454,5 @@ adopts the package: if `node_modules` is out of reach of an agent's tools, copy 
 The other additions are plain `$extensions`, which the format allows: `glass`, the translucent value of a colour under
 `im-glass`, and `mix`, how a colour is mixed from another. A tool that rejects a `$type` it does not know will reject
 the file: read `css/tokens.css` instead, which is generated from it.
+
+The [inspection workspace controls](inspection.md) cover segmented choices, metrics, process stages, detail panels, selectable rows and timelines.
