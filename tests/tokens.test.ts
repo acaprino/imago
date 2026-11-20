@@ -126,6 +126,79 @@ for (const look of looks) {
   }
 }
 
+// color-mix(in srgb, <color> <percent>%, <other>) of an opaque colour: `other` is an opaque colour or "transparent", which
+// leaves the colour and takes the percentage as its alpha (what a browser does with premultiplied colours).
+function mixHex(color: string, percent: number, other: string): string {
+  const channels = (hex: string): number[] => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  const byte = (value: number): string => Math.round(value).toString(16).toUpperCase().padStart(2, '0');
+  if (other === 'transparent') return color.slice(0, 7) + byte((percent / 100) * 255);
+  const [a, b] = [channels(color), channels(other)];
+  return '#' + a.map((value, i) => byte((value * percent + b[i] * (100 - percent)) / 100)).join('');
+}
+
+// The fill that hover, press or selected lays under the text of a row, a tree item, a table row, a tab or a menu item.
+// The selection of Smooth is a mix of the app's accent, which is resolved here the way the stylesheet writes it.
+function fillOf(look: string, theme: string, name: string, app: string): string {
+  const token = at(`look.${look}.${theme}.${name}`);
+  const mix = token.$extensions?.imago?.mix;
+  if (!mix) return lookColor(look, theme, name);
+  const accent = hexOf(/^\{(.+)\}$/.exec(token.$value)![1], at(`app.${app}.hue`).$value);
+  return mixHex(accent, mix.percent, mix.with === 'transparent' ? 'transparent' : colorValueToHex(mix.with));
+}
+
+// Text is not only on the ground, the sheet and the float: hover, press and selected lay a fill over the surface of a row, a
+// tree item, a table row, a tab, a segment or a button, and the text (and a chip, a count or a key cap in it) is still read
+// on the colour that results. Where the CSS lays each fill, and the text that sits on it:
+//   ground, sheet  rows, tree items, table rows, tabs, menu items: every text colour, a chip's and a count's included
+//   field          the track of a segmented control: a segment is muted, the hovered one text, the selected one text-hi
+//   button         the wash of a neutral button (hover and press only): its label (the accent in ONI) and its key cap
+//                  (muted in Smooth, the second text colour in ONI, whose button is a strong blue)
+const places = (look: string): { under: string; on: Record<string, string[]> }[] => {
+  const everything = [...onSurfaces, 'accent-hi', 'chip-text'];
+  const button = ['text', 'accent-text', look === 'oni' ? 'text-2' : 'muted'];
+  return [
+    { under: 'ground', on: { hover: everything, press: everything, selected: everything } },
+    { under: 'sheet', on: { hover: everything, press: everything, selected: everything } },
+    { under: 'field', on: { hover: ['text'], press: ['muted'], selected: ['text-hi'] } },
+    { under: 'button', on: { hover: button, press: button } },
+  ];
+};
+
+for (const look of looks) {
+  for (const theme of themes) {
+    for (const app of apps) {
+      test(`contrast on the hover, press and selected fills: ${look} ${theme} ${app}`, () => {
+        const colour = (name: string): string => (name.startsWith('accent') ? accentColor(theme, name, app) : lookColor(look, theme, name));
+        const failures: string[] = [];
+        for (const { under: surface, on } of places(look)) {
+          for (const [fill, texts] of Object.entries(on)) {
+            const under = over(fillOf(look, theme, fill, app), lookColor(look, theme, surface));
+            for (const text of texts) {
+              const ratio = contrast(colour(text), under);
+              if (ratio < 4.5) failures.push(`${text} ${colour(text)} on ${fill} over ${surface} ${under} is ${ratio.toFixed(2)}`);
+            }
+          }
+        }
+        assert.deepEqual(failures, []);
+      });
+
+      // A toned chip carries its own opaque ground, so that the row under it (hovered, pressed, selected) cannot dim it:
+      // 14% of its tone over the sheet in Smooth, the sheet itself in ONI, where the chip is outlined.
+      test(`contrast of a toned chip on its own ground: ${look} ${theme} ${app}`, () => {
+        const failures: string[] = [];
+        for (const tone of ['ok', 'warn', 'err', 'info', 'accent-text']) {
+          const text = tone === 'accent-text' ? accentColor(theme, tone, app) : lookColor(look, theme, tone);
+          const sheet = lookColor(look, theme, 'sheet');
+          const ground = look === 'oni' ? sheet : mixHex(text, 14, sheet);
+          const ratio = contrast(text, ground);
+          if (ratio < 4.5) failures.push(`${tone} chip ${text} on ${ground} is ${ratio.toFixed(2)}`);
+        }
+        assert.deepEqual(failures, []);
+      });
+    }
+  }
+}
+
 // The custom properties of the stylesheet, by rule. Rules are written one selector per line, one declaration per line.
 function declarations(sheet: string, selector: string): Map<string, string> {
   const start = `\n${selector} {\n`;

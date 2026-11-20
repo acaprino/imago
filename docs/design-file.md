@@ -71,8 +71,10 @@ Two looks, each with a dark and a light theme, set by three attributes on the ro
 | `--im-ok`, `--im-warn`, `--im-err`, `--im-info` | Status tones |
 | `--im-danger`, `--im-danger-on` | The filled button that confirms a destructive dialog, and its text |
 
-Text has a contrast of 4.5:1 or more on the opaque colour of its surface, disabled text included. The gallery's
-contrast test checks it for every control, in both looks and both themes.
+Text has a contrast of 4.5:1 or more on the opaque colour of its surface, disabled text included. That surface is also
+the one that results when hover, press or selected lays its fill over the ground, a sheet, a field or a button, with the
+wash of a button counted. The gallery's contrast test checks it for every control, in both looks, both themes and every
+app (the accent is the app's hue); the token tests check every text colour on those fills.
 
 ### One accent per app
 
@@ -106,6 +108,10 @@ bars, not on every button, not on navigation backgrounds. ONI also takes the acc
 
 The tones are `ok`, `warn`, `err` and `info`, set with `data-im-tone` on a chip, a dot, a note or a notice. A tone
 always comes with a word, or an icon that has a name. Never the colour alone.
+
+A toned chip has a ground of its own: 14% of its tone over the sheet in Smooth, the sheet itself in ONI (where the chip
+is outlined). The fill of a row that is hovered, pressed or selected, which the chip sits on, therefore cannot take its
+text under 4.5:1.
 
 ## Type
 

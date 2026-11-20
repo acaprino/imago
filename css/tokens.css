@@ -156,7 +156,7 @@
   --im-text-hi: #FFFFFF;
   --im-muted: #9AA5B8;
   --im-hover: rgba(232, 236, 243, 0.07);
-  --im-press: rgba(232, 236, 243, 0.13);
+  --im-press: rgba(232, 236, 243, 0.105);
   --im-selected: color-mix(in srgb, var(--im-accent) 16%, transparent);
   --im-chip: #303B4D;
   --im-chip-text: #B4BECF;
@@ -197,7 +197,7 @@
   --im-shadow: rgba(21, 39, 74, 0.18);
   --im-edge: rgba(17, 24, 39, 0.14);
   --im-ok: #2F6B53;
-  --im-warn: #8A5A00;
+  --im-warn: #895900;
   --im-err: #B3261E;
   --im-info: #2B4A80;
   --im-danger: #B3261E;
@@ -248,9 +248,9 @@
   --im-text-2: #1B2C52;
   --im-text-hi: #0A1430;
   --im-muted: #3F5484;
-  --im-hover: rgba(63, 111, 181, 0.1216);
-  --im-press: rgba(63, 111, 181, 0.2392);
-  --im-selected: #CFDDF5;
+  --im-hover: rgba(63, 111, 181, 0.05);
+  --im-press: rgba(63, 111, 181, 0.08);
+  --im-selected: #D4E0F6;
   --im-chip: transparent;
   --im-chip-text: #1B2C52;
   --im-skeleton: #CFDDF5;
@@ -258,7 +258,7 @@
   --im-scrim: rgba(30, 50, 110, 0.34);
   --im-shadow: rgba(30, 50, 110, 0.25);
   --im-edge: rgba(63, 111, 181, 0.6667);
-  --im-ok: #1F7A4D;
+  --im-ok: #1C6F46;
   --im-warn: #9A3A12;
   --im-err: #B3261E;
   --im-info: #1E5FA8;
@@ -281,7 +281,7 @@
   --im-text-hi: #FFFFFF;
   --im-muted: #9AA5B8;
   --im-hover: rgba(232, 236, 243, 0.07);
-  --im-press: rgba(232, 236, 243, 0.13);
+  --im-press: rgba(232, 236, 243, 0.105);
   --im-selected: color-mix(in srgb, var(--im-accent) 16%, transparent);
   --im-chip: #303B4D;
   --im-chip-text: #B4BECF;
@@ -322,7 +322,7 @@
   --im-shadow: rgba(21, 39, 74, 0.18);
   --im-edge: rgba(17, 24, 39, 0.14);
   --im-ok: #2F6B53;
-  --im-warn: #8A5A00;
+  --im-warn: #895900;
   --im-err: #B3261E;
   --im-info: #2B4A80;
   --im-danger: #B3261E;
@@ -373,9 +373,9 @@
   --im-text-2: #1B2C52;
   --im-text-hi: #0A1430;
   --im-muted: #3F5484;
-  --im-hover: rgba(63, 111, 181, 0.1216);
-  --im-press: rgba(63, 111, 181, 0.2392);
-  --im-selected: #CFDDF5;
+  --im-hover: rgba(63, 111, 181, 0.05);
+  --im-press: rgba(63, 111, 181, 0.08);
+  --im-selected: #D4E0F6;
   --im-chip: transparent;
   --im-chip-text: #1B2C52;
   --im-skeleton: #CFDDF5;
@@ -383,7 +383,7 @@
   --im-scrim: rgba(30, 50, 110, 0.34);
   --im-shadow: rgba(30, 50, 110, 0.25);
   --im-edge: rgba(63, 111, 181, 0.6667);
-  --im-ok: #1F7A4D;
+  --im-ok: #1C6F46;
   --im-warn: #9A3A12;
   --im-err: #B3261E;
   --im-info: #1E5FA8;

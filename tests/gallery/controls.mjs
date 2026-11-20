@@ -5,6 +5,8 @@ import { CONTROLS } from '../../gallery/manifest.ts';
 
 const LOOKS = ['smooth', 'oni'];
 const THEMES = ['dark', 'light'];
+// The accent is the hue of the app, and the text in the accent is the hardest to read on a fill: every app is checked.
+const APPS = ['xiox', 'mukade', 'shinatama', 'muro', 'daodan'];
 
 // The element of a cell that carries the state, and the one that carries its text (the target when not listed).
 const TARGET = {
@@ -79,11 +81,18 @@ const measureAll = (page) =>
         const d = g.getImageData(0, 0, 1, 1).data;
         return [d[0], d[1], d[2]];
       };
+      // The colours under an element, outermost first: every background colour up to the root, and over each the wash of a
+      // button, which is an inset shadow as wide as the box (`inset 0 0 0 99px`) and not a background.
       const background = (el) => {
         const layers = [];
         for (let node = el; node; node = node.parentElement) {
-          const c = getComputedStyle(node).backgroundColor;
-          if (c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') layers.unshift(c);
+          const style = getComputedStyle(node);
+          const own = [];
+          if (style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent') own.push(style.backgroundColor);
+          for (const wash of style.boxShadow.matchAll(/((?:rgba?|color|oklch|hsla?)\([^)]*\)) 0px 0px 0px (\d+(?:\.\d+)?)px inset/g)) {
+            if (Number(wash[2]) >= 50) own.push(wash[1]);
+          }
+          layers.unshift(...own);
         }
         return layers;
       };
@@ -152,6 +161,11 @@ const measureAll = (page) =>
           pointerEvents: s.pointerEvents,
         });
       }
+      // The rows of the fill specimen (chips, a count and an avatar in a row and a table row at rest, hover, pressed and
+      // selected): only their text is read, like that of a cell.
+      for (const row of document.querySelectorAll('#im-gallery-matrix [data-specimen="fill-rows"] [data-fill-row][data-state]')) {
+        out.push({ control: `fill-${row.dataset.fillRow}`, state: row.dataset.state, worst: worstText(row) });
+      }
       return out;
     },
     { target: TARGET, text: TEXT },
@@ -161,6 +175,25 @@ const index = (rows) => {
   const map = new Map(rows.map((row) => [`${row.control}|${row.state}`, row]));
   return (control, state) => map.get(`${control}|${state}`);
 };
+
+// Text is readable: a disabled control's text is the muted colour at 4.5:1 and never faded, and every text of every cell (and
+// of the rows of the fill specimen) reaches 4.5:1 on the colour under it.
+function checkReadable(rows, where) {
+  assert.ok(rows.every((r) => !r.missing), where(`a cell has no element for ${rows.find((r) => r.missing)?.control}`));
+  const at = index(rows);
+  for (const { id, states } of CONTROLS) {
+    if (!states.includes('disabled')) continue;
+    const cell = at(id, 'disabled');
+    assert.ok(cell.contrast >= 4.5, where(`${id} disabled text is ${cell.contrast.toFixed(2)}:1`));
+    assert.equal(cell.textColor, cell.muted, where(`${id} disabled text is the muted colour`));
+    assert.equal(cell.opacity, 1, where(`${id} disabled is not shown with opacity`));
+    if (!NO_EDGE.includes(id)) assert.equal(cell.borderStyle, 'dashed', where(`${id} disabled has a dashed border`));
+  }
+  const unreadable = rows
+    .filter((row) => row.worst.ratio < 4.5)
+    .map((row) => `${row.control} ${row.state}: "${row.worst.text}" is ${row.worst.ratio.toFixed(2)}:1 (${row.worst.color} on ${row.worst.fill})`);
+  assert.deepEqual(unreadable, [], where('text under 4.5:1'));
+}
 
 // What the eye tells one state of a control from another by: the fill, the text, the edge and the wash.
 const picture = (cell) => [cell.fill, cell.textColor, cell.borderColor, cell.boxShadow, cell.fontWeight].join('|');
@@ -250,21 +283,17 @@ export default async (page) => {
       const rest = (control) => at(control, 'rest');
       assert.ok(rows.every((r) => !r.missing), where(`a cell has no element for ${rows.find((r) => r.missing)?.control}`));
 
-      // Disabled: readable at 4.5:1, a dashed edge, and never faded with opacity.
-      for (const { id, states } of CONTROLS) {
-        if (!states.includes('disabled')) continue;
-        const cell = at(id, 'disabled');
-        assert.ok(cell.contrast >= 4.5, where(`${id} disabled text is ${cell.contrast.toFixed(2)}:1`));
-        assert.equal(cell.textColor, cell.muted, where(`${id} disabled text is the muted colour`));
-        assert.equal(cell.opacity, 1, where(`${id} disabled is not shown with opacity`));
-        if (!NO_EDGE.includes(id)) assert.equal(cell.borderStyle, 'dashed', where(`${id} disabled has a dashed border`));
+      // Text is readable: disabled text at 4.5:1 with a dashed edge and no opacity, and every text of every cell and of the
+      // fill specimen at 4.5:1 on the colour under it. The accent is the app's, so every app is measured, not Xiox alone.
+      checkReadable(rows, where);
+      for (const [kind, count] of [['row', 4], ['table-row', 4], ['buttons', 3]]) {
+        assert.equal(rows.filter((r) => r.control === `fill-${kind}`).length, count, where(`the fill specimen has ${count} ${kind} states`));
       }
-
-      // Every text in every cell reaches 4.5:1 on the colour under it.
-      const unreadable = rows
-        .filter((row) => row.worst.ratio < 4.5)
-        .map((row) => `${row.control} ${row.state}: "${row.worst.text}" is ${row.worst.ratio.toFixed(2)}:1 (${row.worst.color} on ${row.worst.fill})`);
-      assert.deepEqual(unreadable, [], where('text under 4.5:1'));
+      for (const app of APPS.filter((name) => name !== 'xiox')) {
+        await show(page, { app, look, theme, glass: false, width: 1160 });
+        checkReadable(await measureAll(page), (message) => where(`${app}: ${message}`));
+      }
+      await show(page, { app: 'xiox', look, theme, glass: false, width: 1160 });
 
       // Focus: a ring 2px wide, drawn with outline (which forced colours keep), at the offset of RING_OFFSET.
       const offsets = RING_OFFSET[look];

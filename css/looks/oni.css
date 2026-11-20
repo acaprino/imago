@@ -48,6 +48,10 @@
   font-weight: 500;
 }
 
+/* The key cap in a neutral button is the second text colour, not the muted one: the button is a strong blue, and the wash of
+   a hover or a press over it would take the muted text under 4.5:1. */
+[data-im-look="oni"] .im-btn:not(.im-btn--primary, .im-btn--danger, .im-btn--confirm-danger) > .im-key { color: var(--im-text-2); }
+
 /* the ring is inside the cut corners */
 [data-im-look="oni"] .im-btn:is(:focus-visible, [data-im-force="focus"]) { outline-offset: -5px; }
 
@@ -76,8 +80,9 @@
 
 /* ---------- chips and counts: outlined, not filled ---------- */
 
+/* Outlined, on the sheet's colour: the fill of a row under the chip (hover, pressed, selected) must not dim its text. */
 [data-im-look="oni"] .im-chip[data-im-tone] {
-  background: none;
+  background: var(--im-sheet);
   border: 1px solid currentColor;
 }
 

@@ -246,6 +246,32 @@ function longLabels(): string {
   </div></div>`;
 }
 
+// What lays a fill under text, in the states that do (rest, hover, pressed, selected): a row and a table row, each with the
+// things an app puts in a row (a chip of every tone and a chip without one, a count, an avatar), and the buttons with a key
+// cap, whose wash of hover and press is under their label and their key. The fill is under the text, which is read on what
+// results; tests/gallery/controls.mjs measures every text of it like a matrix cell. These are not in the manifest (the
+// manifest is the list of controls), so they carry no [data-control].
+const FILL_STATES: State[] = ['rest', 'hover', 'press', 'selected'];
+const WASH_STATES: State[] = ['rest', 'hover', 'press'];
+
+function fillRows(): string {
+  const list = FILL_STATES.map(
+    (state) =>
+      `<div class="im-row" role="option" aria-selected="${state === 'selected'}" tabindex="-1" data-fill-row="row" data-state="${state}"${force(state)}><span class="im-row-text"><span class="im-row-title">hop-review</span><span class="im-row-sub">4 members · 11 events · 12:02</span></span>${chips()}<span class="im-count">18</span><span class="im-avatar">CA</span></div>`,
+  ).join('');
+  const table = FILL_STATES.map(
+    (state) =>
+      `<tr aria-selected="${state === 'selected'}" tabindex="-1" data-fill-row="table-row" data-state="${state}"${force(state)}><td><span class="im-cell-title">Cookies</span><span class="im-cell-sub">Sites stay signed in</span></td><td>${chips()}</td><td class="im-num">40.0 MB</td></tr>`,
+  ).join('');
+  const buttons = WASH_STATES.map(
+    (state) =>
+      `<div class="g-mx-buttons" data-fill-row="buttons" data-state="${state}">${['', ' im-btn--ghost', ' im-btn--primary', ' im-btn--danger']
+        .map((modifier) => `<button type="button" class="im-btn${modifier}" tabindex="-1"${force(state)}><span>Check now</span><kbd class="im-key">r</kbd></button>`)
+        .join('')}</div>`,
+  ).join('');
+  return `<div class="g-mx-long"><h3>Chips, a count and an avatar in a row and in a table row; buttons with a key cap</h3><div class="g-mx-fill" data-specimen="fill-rows"><div role="listbox" aria-label="Rooms">${list}</div><table class="im-table" aria-label="Items"><tbody>${table}</tbody></table>${buttons}</div></div>`;
+}
+
 /** The matrix table: a cell [data-control][data-state] for every pair of the manifest, a dash where a state does not apply. */
 export function matrixMarkup(): string {
   const head = COLUMNS.map(({ label }) => `<th scope="col">${label}</th>`).join('');
@@ -257,7 +283,7 @@ export function matrixMarkup(): string {
     ).join('');
     return `<tr><th scope="row">${LABELS[id] ?? id}</th>${cells}</tr>`;
   }).join('');
-  return `<div class="g-mx-wrap"><table class="g-mx"><thead><tr><th scope="col">Control</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>${longLabels()}`;
+  return `<div class="g-mx-wrap"><table class="g-mx"><thead><tr><th scope="col">Control</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>${longLabels()}${fillRows()}`;
 }
 
 /** The look of the matrix page itself (the table around the controls); the controls are drawn by css/controls.css. */
@@ -283,4 +309,7 @@ export const MATRIX_CSS = `
 .g-mx-long h3 { margin: 0; font: 600 12px/1.2 var(--im-font-text); color: var(--im-muted); }
 .g-mx-long-box { display: grid; gap: 10px; justify-items: start; width: 220px; }
 .g-mx-long-box > [role="listbox"] { width: 100%; }
+.g-mx-fill { display: grid; gap: 10px; width: 760px; max-width: 100%; }
+.g-mx-fill > [role="listbox"] { display: grid; gap: 4px; }
+.g-mx-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 `;
