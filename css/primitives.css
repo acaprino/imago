@@ -1,1 +1,280 @@
-/* css/primitives.css: written by its task. */
+/* Layout primitives: the shell with its seven regions and three breakpoints, the panel, and the small layout helpers.
+   Smooth: the work area is one sheet with a 10px top-left corner; the title bar and the sidebar paint nothing.
+   ONI: every pane is a bordered panel with cut corners on the ground's grid.
+   The breakpoints are container queries on the shell's own width, never the viewport's: 1000, 850, 620 (minimum 500). */
+
+/* ---------- the shell ---------- */
+.im-shell {
+  --im-pane-pad: var(--im-s-4);
+  --im-list-pad: var(--im-s-2);
+  --im-status-h: 40px;
+  --im-head-c: var(--im-text-hi);
+  --im-head-w: 600;
+  position: relative;
+  display: grid;
+  grid-template-rows: var(--im-h-titlebar) minmax(0, 1fr);
+  block-size: 100%;
+  min-inline-size: 0;
+  overflow: hidden;
+  background: var(--im-ground);
+  container: im-shell / inline-size;
+}
+
+/* ---------- title bar: mark and name, view tabs, command button, window buttons ---------- */
+.im-titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--im-s-3);
+  min-inline-size: 0;
+  padding-inline-start: var(--im-s-3);
+}
+.im-brand { display: flex; flex: none; align-items: center; gap: var(--im-s-2); white-space: nowrap; }
+.im-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 22px;
+  block-size: 22px;
+  background: var(--im-accent);
+  color: var(--im-accent-on);
+  border-radius: var(--im-r-control);
+  /* ONI cuts two corners of the square, as it cuts its buttons; Smooth's cut is 0 and this is the whole square */
+  clip-path: polygon(var(--im-cut-sm) 0, 100% 0, 100% calc(100% - var(--im-cut-sm)), calc(100% - var(--im-cut-sm)) 100%, 0 100%, 0 var(--im-cut-sm));
+}
+.im-mark svg { inline-size: 14px; block-size: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.im-wordmark {
+  font: 600 15px/1 var(--im-font-head);
+  letter-spacing: var(--im-track);
+  text-transform: var(--im-case);
+  color: var(--im-text-hi);
+}
+.im-titlebar .im-tabs { align-self: stretch; align-items: center; }
+.im-titlebar .im-tab { block-size: 100%; border-radius: 0; }
+.im-titlebar .im-tab:hover { background: none; }
+.im-titlebar .im-views-menu { display: none; }
+.im-titlebar-command {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--im-s-2);
+  block-size: var(--im-h-control-sm);
+  padding: 0 6px 0 var(--im-s-2);
+  border: 1px solid var(--im-line);
+  border-radius: var(--im-r-control);
+  color: var(--im-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.im-titlebar-command b { font-weight: 500; }
+.im-titlebar-command:hover { background: var(--im-hover); color: var(--im-text); }
+
+/* The three window buttons are the page's own: the shell module wires them (data-im-window) and, on Windows 11,
+   tells the native side where the maximize button is. */
+.im-window-buttons { display: flex; align-self: stretch; flex: none; }
+.im-window-button { display: grid; place-items: center; inline-size: 44px; color: var(--im-muted); }
+.im-window-button .im-icon { inline-size: 14px; block-size: 14px; stroke-width: 1.2; }
+.im-window-button:focus-visible { outline-offset: -2px; }
+.im-window-button:hover,
+.im-window-button[data-im-os="hover"] { background: var(--im-hover); color: var(--im-text); }
+.im-window-button:active,
+.im-window-button[data-im-os="pressed"] { background: var(--im-press); color: var(--im-text); }
+.im-window-button[data-im-window="close"]:hover { background: var(--im-accent); color: var(--im-accent-on); }
+.im-window-button[data-im-window="close"]:active { background: var(--im-accent-hover); color: var(--im-accent-on); }
+.im-window-button[data-im-window="maximize"] .im-icon:last-child { display: none; }
+.im-window-button[data-im-window="maximize"][data-im-maximized="true"] .im-icon:first-child { display: none; }
+.im-window-button[data-im-window="maximize"][data-im-maximized="true"] .im-icon:last-child { display: block; }
+
+/* ---------- body: sidebar, then the work area ---------- */
+.im-body {
+  display: grid;
+  grid-template-columns: var(--im-w-sidebar) minmax(0, 1fr);
+  min-block-size: 0;
+}
+.im-shell[data-im-sidebar="off"] .im-body { grid-template-columns: minmax(0, 1fr); }
+
+.im-work {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto var(--im-h-footer);
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+.im-status {
+  display: flex;
+  align-items: center;
+  gap: var(--im-s-3);
+  min-inline-size: 0;
+  min-block-size: var(--im-status-h);
+  padding-inline: var(--im-pane-pad);
+  color: var(--im-muted);
+  white-space: nowrap;
+}
+.im-status > * { flex: none; }
+.im-status > .im-status-text { flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; color: var(--im-text-2); }
+.im-status > .im-spacer { flex: 1 1 auto; }
+.im-columns {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--im-w-inspector);
+  min-block-size: 0;
+}
+.im-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--im-s-2);
+  padding: var(--im-s-3) var(--im-pane-pad);
+  border-top: 1px solid var(--im-line-soft);
+}
+.im-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--im-s-3);
+  min-inline-size: 0;
+  padding-inline: var(--im-pane-pad);
+  overflow: hidden;
+  border-top: 1px solid var(--im-line-soft);
+  color: var(--im-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.im-footer-text { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+.im-footer-keys { display: flex; flex: none; gap: var(--im-s-3); }
+.im-footer-keys > span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- the panel: header, tools, body, foot ---------- */
+.im-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+}
+.im-panel-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--im-s-2);
+  min-block-size: var(--im-h-panel-header);
+  padding-inline: var(--im-pane-pad);
+}
+.im-panel-title {
+  font: var(--im-head-w) 14px/1.15 var(--im-font-head);
+  letter-spacing: var(--im-track);
+  text-transform: var(--im-case);
+  color: var(--im-head-c);
+  white-space: nowrap;
+}
+.im-panel-sub { min-inline-size: 0; overflow: hidden; color: var(--im-muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.im-panel-tools { display: flex; flex: none; align-items: center; gap: var(--im-s-2); min-inline-size: 0; padding: 0 var(--im-pane-pad) var(--im-s-3); }
+.im-panel-tools > * { min-inline-size: 0; }
+.im-panel-tools > .im-note { flex: 1 1 auto; }
+.im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
+.im-panel-foot { display: flex; flex: none; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3) var(--im-pane-pad); border-top: 1px solid var(--im-line-soft); }
+/* A row's avatar for the rail is shown only in the rail (see the 850 breakpoint). */
+.im-row > .im-rail-item { display: none; }
+.im-list { display: flex; flex-direction: column; gap: 1px; padding: 0 var(--im-list-pad) var(--im-s-2); }
+
+/* ---------- helpers ---------- */
+.im-spacer { flex: 1 1 auto; }
+.im-num { font-variant-numeric: tabular-nums; }
+/* A column of things, a wrapping row of things, two groups at the two ends of a row, and a region that scrolls. */
+.im-stack { display: flex; flex-direction: column; gap: var(--im-gap, var(--im-s-3)); min-inline-size: 0; }
+.im-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--im-gap, var(--im-s-2)); min-inline-size: 0; }
+.im-split { display: flex; align-items: center; justify-content: space-between; gap: var(--im-gap, var(--im-s-3)); min-inline-size: 0; }
+.im-scroll { min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
+
+/* A surface is one of four materials: the window's ground, a sheet, a dense one for terminals and tables, a floating one. */
+.im-surface { min-inline-size: 0; }
+.im-surface[data-im-surface="ground"] { background: var(--im-ground); }
+.im-surface[data-im-surface="sheet"] { background: var(--im-sheet); border: 1px solid var(--im-line); border-radius: var(--im-r-sheet); }
+.im-surface[data-im-surface="dense"] { background: var(--im-terminal); border: 1px solid var(--im-line-soft); border-radius: var(--im-r-sheet); }
+.im-surface[data-im-surface="float"] { background: var(--im-float); border: 1px solid var(--im-line); border-radius: var(--im-r-sheet); box-shadow: 0 18px 50px var(--im-shadow); }
+
+/* ---------- Smooth: one sheet for the work area ---------- */
+[data-im-look="smooth"] .im-work {
+  background: var(--im-sheet);
+  border-top: 1px solid var(--im-line);
+  border-left: 1px solid var(--im-line);
+  border-top-left-radius: var(--im-r-sheet);
+}
+[data-im-look="smooth"] .im-shell[data-im-sidebar="off"] .im-work { margin-inline-start: var(--im-s-2); }
+[data-im-look="smooth"] .im-sidebar { padding-top: var(--im-s-1); }
+[data-im-look="smooth"] .im-inspector { border-left: 1px solid var(--im-line); }
+
+/* ---------- ONI: bordered panes with cut corners ---------- */
+[data-im-look="oni"] .im-shell {
+  --im-list-pad: 0px;
+  --im-status-h: 34px;
+  --im-head-c: var(--im-text-2);
+  --im-head-w: 700;
+  --im-pane-clip: polygon(0 var(--im-cut-lg), var(--im-cut-lg) 0, calc(100% - var(--im-cut-lg)) 0, 100% var(--im-cut-lg), 100% calc(100% - var(--im-cut-lg)), calc(100% - var(--im-cut-lg)) 100%, var(--im-cut-lg) 100%, 0 calc(100% - var(--im-cut-lg)));
+  /* the ground carries the blue grid of ONI */
+  --im-grid: #2A4A8018;
+  background-image: linear-gradient(90deg, var(--im-grid) 1px, transparent 1px), linear-gradient(0deg, var(--im-grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+[data-im-look="oni"][data-im-theme="light"] .im-shell { --im-grid: #3F6FB51C; }
+[data-im-look="oni"] .im-wordmark { font: 700 20px/1 var(--im-font-display); letter-spacing: 0.12em; color: var(--im-accent-text); }
+[data-im-look="oni"] .im-titlebar .im-tab { block-size: 26px; border: 1px solid transparent; color: var(--im-accent-text); }
+[data-im-look="oni"] .im-titlebar .im-tab::after { display: none; }
+[data-im-look="oni"] .im-titlebar .im-tab[aria-selected="true"] { background: var(--im-selected); border-color: var(--im-line-strong); color: var(--im-accent-hi); }
+[data-im-look="oni"] .im-body { gap: var(--im-s-2); padding: 2px var(--im-s-2) 0; }
+[data-im-look="oni"] .im-columns { gap: var(--im-s-2); }
+[data-im-look="oni"] .im-panel { border: 2px solid var(--im-line); background: var(--im-sheet); clip-path: var(--im-pane-clip); }
+[data-im-look="oni"] .im-status { padding-inline: var(--im-s-1); }
+[data-im-look="oni"] .im-actions { border-top: 0; padding: var(--im-s-2) var(--im-s-1); }
+[data-im-look="oni"] .im-footer { padding-inline: var(--im-s-1); }
+[data-im-look="oni"] .im-surface[data-im-surface="sheet"],
+[data-im-look="oni"] .im-surface[data-im-surface="dense"] { border-width: 2px; clip-path: var(--im-pane-clip); }
+[data-im-look="oni"] .im-surface[data-im-surface="float"] { border-width: 2px; }
+
+/* ---------- breakpoints, measured on the shell ---------- */
+/* Below 1000 the inspector covers the content's right edge as a drawer; from 1000 it is docked and pushes the content. */
+@container im-shell (max-width: 999px) {
+  .im-columns { grid-template-columns: minmax(0, 1fr); }
+  .im-columns > .im-inspector {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 3;
+    inline-size: min(320px, 88%);
+    background: var(--im-float);
+    box-shadow: -18px 0 40px var(--im-shadow);
+  }
+}
+
+/* Below 850 the sidebar is a 56px rail: one avatar per row, the row's title kept for the accessible name. */
+@container im-shell (max-width: 849px) {
+  .im-shell:not([data-im-sidebar="off"]) .im-body { grid-template-columns: var(--im-w-rail) minmax(0, 1fr); }
+  .im-sidebar .im-panel-header,
+  .im-sidebar .im-panel-tools,
+  .im-sidebar .im-panel-foot { display: none; }
+  .im-sidebar .im-row > :not(.im-rail-item, .im-row-text) { display: none; }
+  .im-sidebar .im-row > .im-rail-item { display: grid; }
+  .im-sidebar .im-row > .im-row-text {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
+  .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
+  [data-im-look="oni"] .im-sidebar { clip-path: none; }
+}
+
+/* Below 620 the sidebar opens on request and the view tabs become one "Views" menu. */
+@container im-shell (max-width: 619px) {
+  .im-shell:not([data-im-sidebar="off"]) .im-body { grid-template-columns: minmax(0, 1fr); }
+  .im-sidebar,
+  .im-titlebar .im-tabs,
+  .im-titlebar-command b,
+  .im-titlebar-command .im-key,
+  .im-footer-keys,
+  .im-status > .im-status-end { display: none; }
+  .im-titlebar .im-views-menu { display: inline-flex; }
+  .im-titlebar-command { padding: 0 6px; border-color: transparent; }
+  [data-im-look="smooth"] .im-work { border-left: 0; border-radius: 0; }
+}
