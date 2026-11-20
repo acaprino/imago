@@ -196,7 +196,9 @@ const api: WindowApi = {
   onOsHover(callback) {
     const stop = listen<{ hover: boolean; pressed: boolean }>('caption-maximize', ({ payload }) =>
       callback(payload.pressed ? 'pressed' : payload.hover ? 'hover' : 'none'));
-    return () => void stop.then((unlisten) => unlisten());
+    // A refused `listen` is a rejection that only this code can catch: mountWindowControls never sees it.
+    stop.catch((error) => notify(shell, `Listening to the window failed: ${String(error)}`, { tone: 'err' }));
+    return () => void stop.then((unlisten) => unlisten(), () => {});
   },
 };
 
@@ -220,8 +222,10 @@ and the event `caption-maximize`, are the app's side of the contract and are des
 
 Tauri 2 lets the page call the window, the webview or an event only when a capability file grants it. The app needs a
 file in `src-tauri/capabilities/` with these nine permissions, for the buttons, the drag, the zoom and the events.
-Without them Tauri refuses the call, and `mountWindowControls` passes the refusal to `onError`. `windows` lists the
-label of every window that carries the title bar.
+`windows` lists the label of every window that carries the title bar. Two parts of the wiring are optional, and their
+permissions go with them: `core:window:allow-is-maximized` is needed only with `onMaximized`, and
+`core:window:allow-start-dragging` and `core:window:allow-internal-toggle-maximize` only with drag regions
+(`data-tauri-drag-region`).
 
 ```json
 {
@@ -244,6 +248,14 @@ label of every window that carries the title bar.
 What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
 `examples/demo/src-tauri/capabilities/default.json`. The app's own commands, `set_window_theme` and
 `window_caption_maximize`, need no permission of this list.
+
+Without a permission Tauri refuses the call, as a rejected promise, and who sees it depends on the call.
+`mountWindowControls` passes the refusal of `minimize`, `toggleMaximize` and `close` to its `onError`, and nothing
+else. It does not see a refused `listen`, `unlisten`, drag or zoom. `mountZoom` moves a refused zoom back to the level
+it had, and a refused drag leaves the window where it is. A refused `listen` is a rejection that only the app can
+catch, where it calls `listen`, as the sketch above does (the demo's `stopOnResolve` in `gallery/mount/desktop.ts`).
+Left alone it is an unhandled rejection, and the page never hears `caption-maximize`, so the maximize button draws no
+hover or press from Windows.
 
 ### `@acaprino/imago/ui`
 
