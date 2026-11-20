@@ -6,22 +6,51 @@ use tauri::{
     webview::NewWindowResponse, Manager, Runtime, Url, WebviewWindow, WebviewWindowBuilder,
 };
 
-/// The embedded frontend's host: `http://tauri.localhost`, or `https://tauri.localhost` with
-/// `useHttpsScheme`.
-const EMBEDDED_HOST: &str = "tauri.localhost";
-
-/// Registers the navigation policy on a window builder: the app's embedded frontend and the
-/// origins in `app_origins` (the dev server's, in a development build only, as `http://localhost:1420`)
-/// are allowed, every other navigation is refused, and every request for a new window is denied.
+/// Registers the navigation policy on a window builder. The app's embedded frontend and the
+/// origins in `app_origins` (typically the dev server in development builds) are allowed.
+/// Every other navigation and every request for a new window is refused.
 ///
-/// Origins are compared whole (scheme, host and port), never by prefix. An entry that is not a URL
-/// allows nothing: a mistake refuses a page, it never lets one in.
+/// On Windows and Android this accepts both HTTP and HTTPS forms of Tauri's protocol.
+/// Use [`guard_navigation_with_scheme`] to limit a window to its configured protocol.
 pub fn guard_navigation<'a, R: Runtime, M: Manager<R>>(
     builder: WebviewWindowBuilder<'a, R, M>,
     app_origins: &[&str],
 ) -> WebviewWindowBuilder<'a, R, M> {
-    let origins: Vec<Url> = app_origins
+    with_origins(builder, app_origins, None)
+}
+
+/// Configures Tauri's protocol and limits navigation to that exact origin and `app_origins`.
+/// Pass the window configuration's `use_https_scheme` when building from a config.
+pub fn guard_navigation_with_scheme<'a, R: Runtime, M: Manager<R>>(
+    builder: WebviewWindowBuilder<'a, R, M>,
+    app_origins: &[&str],
+    use_https_scheme: bool,
+) -> WebviewWindowBuilder<'a, R, M> {
+    with_origins(
+        builder.use_https_scheme(use_https_scheme),
+        app_origins,
+        Some(use_https_scheme),
+    )
+}
+
+fn embedded_origins(http_mapped: bool, use_https: Option<bool>) -> &'static [&'static str] {
+    match (http_mapped, use_https) {
+        (false, _) => &["tauri://localhost"],
+        (true, Some(false)) => &["http://tauri.localhost"],
+        (true, Some(true)) => &["https://tauri.localhost"],
+        (true, None) => &["http://tauri.localhost", "https://tauri.localhost"],
+    }
+}
+
+fn with_origins<'a, R: Runtime, M: Manager<R>>(
+    builder: WebviewWindowBuilder<'a, R, M>,
+    app_origins: &[&str],
+    use_https: Option<bool>,
+) -> WebviewWindowBuilder<'a, R, M> {
+    let embedded = embedded_origins(cfg!(any(windows, target_os = "android")), use_https);
+    let origins: Vec<Url> = embedded
         .iter()
+        .chain(app_origins)
         .filter_map(|origin| parse_origin(origin))
         .collect();
     builder
@@ -74,10 +103,7 @@ fn parse_origin(text: &str) -> Option<Url> {
 
 /// Whether the webview may go to `url`: the embedded frontend, or one of `origins`.
 fn is_allowed(url: &Url, origins: &[Url]) -> bool {
-    let own = matches!(url.scheme(), "http" | "https")
-        && url.host_str() == Some(EMBEDDED_HOST)
-        && url.port().is_none();
-    own || origins.iter().any(|origin| {
+    origins.iter().any(|origin| {
         origin.scheme() == url.scheme()
             && origin.host_str() == url.host_str()
             && origin.port_or_known_default() == url.port_or_known_default()
@@ -94,29 +120,42 @@ mod tests {
     }
 
     #[test]
-    fn the_embedded_frontend_is_always_the_apps_own() {
-        for own in [
-            "http://tauri.localhost/",
-            "https://tauri.localhost/index.html?x=1#y",
+    fn only_the_configured_embedded_origin_is_allowed() {
+        let urls = [
+            "http://tauri.localhost/index.html#session",
+            "https://tauri.localhost/index.html?x=1",
+            "tauri://localhost/index.html?x=1#session",
+        ];
+        for (http_mapped, https, allowed) in [
+            (true, false, 0),
+            (true, true, 1),
+            (false, false, 2),
+            (false, true, 2),
         ] {
-            assert!(is_allowed(&url(own), &[]), "{own}");
-        }
-    }
-
-    #[test]
-    fn another_host_is_never_the_apps_own() {
-        for other in [
-            "http://tauri.localhost.example.com/",
-            "http://evil.tauri.localhost/",
-            "http://tauri.localhost:8080/",
-            "https://tauri.localhost:444/",
-            "https://example.com/",
-            "http://localhost/",
-            "file:///C:/Windows/win.ini",
-            "about:blank",
-            "javascript:alert(1)",
-        ] {
-            assert!(!is_allowed(&url(other), &[]), "{other}");
+            let origins: Vec<_> = embedded_origins(http_mapped, Some(https))
+                .iter()
+                .map(|origin| url(origin))
+                .collect();
+            for (i, candidate) in urls.iter().enumerate() {
+                assert_eq!(is_allowed(&url(candidate), &origins), i == allowed);
+            }
+            for other in [
+                "tauri://localhost:8080/",
+                "tauri://localhost.example.com/",
+                "tauri://localhost@evil.test/",
+                "other://localhost/",
+                "http://tauri.localhost.example.com/",
+                "http://evil.tauri.localhost/",
+                "http://tauri.localhost:8080/",
+                "https://tauri.localhost:444/",
+                "https://example.com/",
+                "http://localhost/",
+                "file:///C:/Windows/win.ini",
+                "about:blank",
+                "javascript:alert(1)",
+            ] {
+                assert!(!is_allowed(&url(other), &origins), "{other}");
+            }
         }
     }
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 
-// Exercise delayed providers independently of the example data. These two modules have no runtime imports.
+// Exercise delayed providers independently of the example data. These modules have no runtime imports.
 async function providerTests(page) {
   await page.route('**/test-controls/*.js', async route => {
     const file = new URL(route.request().url()).pathname.split('/').pop().replace('.js', '.ts');
@@ -65,6 +65,88 @@ async function providerTests(page) {
   assert.match(result.selected, /file/);
   assert.equal(result.errors, 1);
   assert.equal(result.loads, 2);
+}
+
+async function pathFieldTests(page) {
+  const results = await page.evaluate(async () => {
+    const { pathField } = await import('/test-controls/file-selector.js');
+    const input = document.createElement('input');
+    input.value = 'initial';
+    const requests = [];
+    const changes = [];
+    const errors = [];
+    input.addEventListener('change', () => changes.push(input.value));
+    const field = pathField(input, {
+      buttonLabel: 'Browse',
+      choose: () => new Promise((resolve, reject) => requests.push({ resolve, reject })),
+      onError: error => errors.push(error.message),
+    });
+    document.body.append(field);
+    const button = field.querySelector('button');
+    button.click();
+    button.click();
+    const count = requests.length;
+    requests.at(-1).resolve(null);
+    await Promise.resolve();
+    button.click();
+    input.dispatchEvent(new Event('input')); // an edit even if the user restores the original text
+    requests.at(-1).resolve('obsolete');
+    await Promise.resolve();
+    const afterEdit = input.value;
+    button.click();
+    input.value = 'new default'; // a change made by the app
+    requests.at(-1).resolve('obsolete');
+    await Promise.resolve();
+    const afterReset = input.value;
+    button.click();
+    requests.at(-1).reject(new Error('offline'));
+    await Promise.resolve();
+    button.click();
+    requests.at(-1).resolve('chosen');
+    await Promise.resolve();
+    button.click();
+    field.remove();
+    requests.at(-1).resolve('obsolete');
+    await Promise.resolve();
+    return { count, afterEdit, afterReset, final: input.value, changes, errors };
+  });
+  assert.deepEqual(results, {
+    count: 1, afterEdit: 'initial', afterReset: 'new default', final: 'chosen', changes: ['chosen'], errors: ['offline'],
+  });
+}
+
+async function largeTree(page) {
+  const result = await page.evaluate(async () => {
+    const { createFileTree } = await import('/test-controls/file-tree.js');
+    const entries = Array.from({ length: 5000 }, (_, index) => ({ id: String(index), name: String(index) }));
+    entries[2500].children = [{ id: 'child', name: 'Child' }];
+    const tree = createFileTree(document, entries, { label: 'Workspace' });
+    const viewport = document.createElement('div');
+    viewport.style.cssText = 'height:200px;overflow:auto';
+    viewport.append(tree.element);
+    document.body.append(viewport);
+    const originals = [...tree.element.children];
+    const folder = originals[2500];
+    folder.focus();
+    folder.scrollIntoView({ block: 'center' });
+    const scroll = viewport.scrollTop;
+    const results = [];
+    for (const key of ['ArrowRight', 'ArrowLeft']) {
+      folder.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      const rows = [...tree.element.children];
+      const roots = rows.filter(row => row.getAttribute('aria-level') === '1');
+      results.push({
+        count: rows.length,
+        retained: roots.length === originals.length && roots.every((row, i) => row === originals[i]),
+        focused: document.activeElement === folder,
+        scroll: viewport.scrollTop === scroll && scroll > 0,
+      });
+    }
+    tree.destroy();
+    viewport.remove();
+    return results;
+  });
+  assert.deepEqual(result, [5001, 5000].map(count => ({ count, retained: true, focused: true, scroll: true })));
 }
 
 export default async function workspace(page) {
@@ -134,6 +216,8 @@ export default async function workspace(page) {
     assert.equal(Number(await horizontal.getAttribute('aria-valuenow')), Number(await horizontal.getAttribute('aria-valuemax')) - 8);
   }
   await providerTests(page);
+  await pathFieldTests(page);
+  await largeTree(page);
   const guarded = await page.evaluate(async () => {
     const api = window.__imagoSurfaces.inspector;
     const shell = document.querySelector('.im-shell');

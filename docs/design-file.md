@@ -402,8 +402,8 @@ Import these functions from `@acaprino/imago/ui`. Each uses the document supplie
 |---|---|
 | `fileTree(doc, entries, options)` | Each entry has a unique string ID, a name and optional children. Supply a label and optional initially expanded IDs. Arrows navigate and expand folders, Home and End jump, Space selects, and Enter opens a file. Use `onSelect` for selection and `onOpen` for activation. The app supplies the listing. |
 | `fileSelector(doc, options)` | Returns a native file input with a label, optional accept filter, multi-file selection or directory mode. Read its FileList on change. |
-| `pathField(input, options)` | Wraps an editable path and a browse button. Supply the native chooser through `choose`, a button label and an error callback. Cancel preserves the current input. |
-| `stepProgress(doc, label, steps, current)` | Append the returned element and call `setCurrent(index)` as work advances. Index zero indicates the first step. Passing the step count marks all complete. The application controls validation, navigation and retries. |
+| `pathField(input, options)` | Wraps an editable path and a browse button. Supply the native chooser through `choose`, a button label and an error callback. Cancel preserves the current input. A pending choice is discarded if the field is edited or removed. |
+| `stepProgress(doc, label, steps, current, completeLabel?)` | Append the returned element and call `setCurrent(index)` as work advances. Index zero indicates the first step. Passing the step count marks all complete and announces the completion label (default “All steps complete”). The application controls validation, navigation and retries. |
 | `loader(doc, label)` | Inline status message with a spinner. The label stays visible with reduced motion. Use a progress bar when the amount of work is known and panel skeletons when replacing rows. |
 
 A docked shell can opt into a resizable sidebar with `sidebarResize(shell, { label, width, onChange })`.

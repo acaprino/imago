@@ -284,6 +284,17 @@ async function scratch(page) {
   assert.equal(await attr('d'), '-1');
   assert.equal(await attr('e'), '0');
 
+  // A selection made elsewhere sets the next tab stop without moving keyboard focus.
+  await page.focus('#outside');
+  await page.locator('#c').evaluate(el => el.setAttribute('aria-selected', 'true'));
+  assert.equal(await attr('c'), '0');
+  assert.equal(await activeId(), 'outside');
+  await page.focus('#c');
+  await press(page, 'ArrowDown');
+  assert.equal(await attr('d'), '0', 'arrows can still explore without selecting');
+  await page.locator('#c').evaluate(el => el.setAttribute('aria-selected', 'true'));
+  assert.equal(await attr('d'), '0', 're-rendering an existing selection preserves the roving stop');
+
   // A control inside an item keeps its keys.
   await page.focus('#field');
   await press(page, 'ArrowDown', 'Home');

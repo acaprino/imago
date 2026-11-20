@@ -173,7 +173,7 @@ example. [using-imago.md](using-imago.md) has the page side with signatures.
 
 1. Read `saved_theme` and `load_state` from the data folder. Pass the state through `clamp_to_screens`.
 2. Build the window config for the glass: `glass_window_config(base, saved)`.
-3. Make the builder from that config (`WebviewWindowBuilder::from_config`), then `guard_navigation(builder, origins)`
+3. Make the builder from that config (`WebviewWindowBuilder::from_config`), then `guard_navigation_with_scheme(builder, origins, config.use_https_scheme)`
    with the dev server's origin in a development build and none in a release build, then `build()`.
 
 ### 3.2 Rust, for each window, right after it is built

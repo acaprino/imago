@@ -1200,6 +1200,26 @@ async function formDialogs(page) {
   await press(page, 'Tab', 'Escape');
   assert.equal((await active(page)).id, 'anchor');
   assert.deepEqual(await log(page), ['Settings', 'Import']);
+  await page.evaluate(() => {
+    const form = window.__imagoSurfaces.openFormDialog(document.querySelector('.im-shell'), {
+      title: 'Advanced options', closeLabel: 'Close',
+    });
+    form.body.innerHTML = '<details><summary id="options">Options</summary><summary>Other text</summary><input id="advanced"></details>';
+  });
+  await page.focus('#options');
+  await press(page, 'Tab');
+  assert.equal((await active(page)).text, 'Close', 'Tab wraps from the closed summary');
+  await press(page, 'Shift+Tab');
+  assert.equal((await active(page)).id, 'options', 'the summary is the last stop while closed');
+  await press(page, 'Enter', 'Tab');
+  assert.equal((await active(page)).id, 'advanced', 'the expanded field follows the first summary');
+  await press(page, 'Shift+Tab');
+  assert.equal((await active(page)).id, 'options');
+  await press(page, 'Shift+Tab');
+  assert.equal((await active(page)).text, 'Close');
+  await press(page, 'Shift+Tab');
+  assert.equal((await active(page)).id, 'advanced', 'the expanded field is the last stop');
+  await press(page, 'Escape');
   assert.equal(await count(page, '.im-scrim, .im-shell [inert]'), 0);
   await page.evaluate(() => {
     const shell = document.querySelector('.im-shell');

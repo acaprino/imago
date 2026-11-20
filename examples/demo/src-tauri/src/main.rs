@@ -12,7 +12,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use imago_shell::{
-    apply_theme, disable_browser_accelerators, glass_window_config, guard_navigation,
+    apply_theme, disable_browser_accelerators, glass_window_config, guard_navigation_with_scheme,
     install_reload_menu, install_snap_layouts, parse_theme, recovery_action, save_theme,
     saved_theme, watch_process_failures, ProcessFailure, Recovery, RecoveryAction, SnapLayouts,
 };
@@ -154,8 +154,12 @@ fn build_main(app: &AppHandle) -> tauri::Result<()> {
         .ok_or(tauri::Error::WindowNotFound)?;
     let config = glass_window_config(base, saved_theme(&data_dir(app)?));
     let origins: &[&str] = if tauri::is_dev() { &[DEV_ORIGIN] } else { &[] };
-    let window =
-        guard_navigation(WebviewWindowBuilder::from_config(app, &config)?, origins).build()?;
+    let window = guard_navigation_with_scheme(
+        WebviewWindowBuilder::from_config(app, &config)?,
+        origins,
+        config.use_https_scheme,
+    )
+    .build()?;
     wire(app, &window)
 }
 

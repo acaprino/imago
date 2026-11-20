@@ -1,5 +1,5 @@
 /** Current is zero-based. Passing the number of steps marks the whole process complete. */
-export function stepProgress(doc: Document, label: string, steps: readonly string[], current = 0) {
+export function stepProgress(doc: Document, label: string, steps: readonly string[], current = 0, completeLabel = 'All steps complete') {
   const element = doc.createElement('ol');
   element.className = 'im-steps';
   element.setAttribute('aria-label', label);
@@ -15,8 +15,14 @@ export function stepProgress(doc: Document, label: string, steps: readonly strin
     element.append(item);
     return { item, mark, index };
   });
+  const status = doc.createElement('span');
+  status.className = 'im-step-status';
+  status.setAttribute('role', 'status');
+  items.at(-1)?.item.append(status);
   function setCurrent(value: number): void {
     if (!Number.isInteger(value) || value < 0 || value > steps.length) throw new RangeError('Invalid step index');
+    const message = value === steps.length ? completeLabel : '';
+    if (status.textContent !== message) status.textContent = message;
     for (const { item, mark, index } of items) {
       item.dataset.imStep = index < value ? 'done' : index === value ? 'now' : 'todo';
       if (index === value) item.setAttribute('aria-current', 'step');
