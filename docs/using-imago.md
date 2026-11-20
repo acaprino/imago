@@ -35,27 +35,16 @@ imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
   holds one WebView2 binding. The app's own `tauri` requirement must allow 2.12.5 (`"2"` and `"2.12"` do, `"2.13"` does
   not), and `Cargo.lock` moves to the pinned versions when the crate is added. A newer Tauri waits for a release of
   Imago that raises the pins.
-- The package ships TypeScript source, not built JavaScript. Its files import each other with the `.ts` extension, so
-  the app's bundler (Vite) compiles it, and the app's `tsconfig.json` needs `"allowImportingTsExtensions": true` with
-  `"noEmit": true`.
-- **A Node unit test of the app cannot import the package.** The `exports` point at `.ts` files, and Node 24 refuses
-  to strip types from a file under `node_modules`: `node --experimental-strip-types --test` throws
-  `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` on `import { createRegistry } from '@acaprino/imago/ui'`, and also on
-  a path into `node_modules/@acaprino/imago/ts/`. `import type { Registry } from '@acaprino/imago/ui'` is erased and
-  loads nothing, so a module may take its types from the package. For the rest, inject what the package gives: the
-  module under test receives the registry, the `document` or the `WindowApi` as an argument, and the test passes its
-  own object. A test that must run the package's code goes through a runner that bundles it, such as Vitest with
-  `server.deps.inline: ['@acaprino/imago']`.
-- Not verified in an app yet: no app has adopted the package. The first one confirms the two lines above, the
-  compiler setting, that `node_modules/@acaprino/imago/docs/` holds this folder (it does for a git dependency that
-  has no `files` list in its `package.json`), and the Vitest setting above (the refusal itself, and the erased
-  `import type`, were run with Node 24.14.1 on a copy of the package under `node_modules`).
+- A git install runs the package’s prepare script to compile its TypeScript into ES modules and type declarations.
+  Vite and Node use the same entry points. A consumer test can import the command registry directly with Node 24.
+  Browser interactions still require a DOM. The package includes its design and component documentation under docs/.
 
-## 2. The three imports
+## 2. Package imports
 
 | Import | What it is |
 |---|---|
 | `@acaprino/imago/css/imago.css` | The stylesheet: tokens, base, layout primitives, controls, surfaces and the ONI look. Import it once, first |
+| `@acaprino/imago/tauri` | Window controls for Tauri 2 apps. Requires `@tauri-apps/api`. |
 | `@acaprino/imago/ui` | Behaviour without a framework: the command registry, keys, menus, sheets, dialogs, notices, the inspector, the palette, panel states, the sidebar functions |
 | `@acaprino/imago/shell` | The desktop window as the page sees it: look, window theme, zoom, window buttons, the desktop guard |
 
@@ -174,7 +163,7 @@ A call that sets something up returns the function that undoes it. The calls tha
 | `applyLook(root, state, deps)` | The look of the window. `state` is `{ app, look, theme, glass }`; `deps` is `{ systemIsDark?, setWindowTheme? }`. `setWindowTheme` receives `light`, `dark` or `system` and is called only when the word changed |
 | `parseLook(value)`, `parseTheme(value)` | A stored value back into a look or a theme choice. A stale or corrupt value is the default |
 | `resolveTheme(choice, systemIsDark)`, `windowThemeFor(look, choice)` | The theme the page draws, and the theme the native window is asked for |
-| `guardDesktop(document, { allowReloadIn })` | Browser keys do nothing, the page menu stays out of the chrome, the mouse's back and forward buttons do nothing, images and links are not dragged out. `allowReloadIn` is a selector for places that run their own keys and menus, such as a terminal. The guard refuses F5, F12, Ctrl+R, Ctrl+Shift+I, J and C and the page menu in every build, so under `tauri dev` it also takes away reload and DevTools: call it only outside development, as the sketch below does |
+| `guardDesktop(document, { allowReloadIn })` | With `keyPhase` set to `bubble`, register app shortcuts before the guard to handle keys such as Ctrl+F. The default is capture. Browser keys do nothing, the page menu stays out of the chrome, the mouse's back and forward buttons do nothing, images and links are not dragged out. `allowReloadIn` is a selector for places that run their own keys and menus, such as a terminal. The guard refuses F5, F12, Ctrl+R, Ctrl+Shift+I, J and C and the page menu in every build, so under `tauri dev` it also takes away reload and DevTools: call it only outside development, as the sketch below does |
 | `mountZoom(document, { apply, storage?, storageKey?, onChange? })` | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, from 50 to 200% in steps of 10, saved. The saved level is applied at start, also at 100%. `apply` gives the level to the webview. A refusal moves the level back. `storageKey` defaults to `imago.zoom`: an app passes its own key to keep the level it already saved |
 | `mountWindowControls(titlebar, api, { onError })` | The three window buttons, and the maximize button's rectangle for Snap Layouts, reported in physical pixels |
 
@@ -187,27 +176,12 @@ own values, and `notify` is imported from `@acaprino/imago/ui`):
 
 ```ts
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { applyLook, guardDesktop, mountWindowControls, mountZoom } from '@acaprino/imago/shell';
-import type { WindowApi } from '@acaprino/imago/shell';
+import { tauriWindowApi } from '@acaprino/imago/tauri';
 
-const win = getCurrentWindow();
-const api: WindowApi = {
-  minimize: () => win.minimize(),
-  toggleMaximize: () => win.toggleMaximize(),
-  close: () => win.close(),
-  reportMaximizeRect: (rect) => invoke('window_caption_maximize', rect),
-  onOsHover(callback) {
-    const stop = listen<{ hover: boolean; pressed: boolean }>('caption-maximize', ({ payload }) =>
-      callback(payload.pressed ? 'pressed' : payload.hover ? 'hover' : 'none'));
-    // A refused `listen` is a rejection that only this code can catch: mountWindowControls never sees it.
-    stop.catch((error) => notify(shell, `Listening to the window failed: ${String(error)}`, { tone: 'err' }));
-    return () => void stop.then((unlisten) => unlisten(), () => {});
-  },
-};
-
+const onError = (action: string, error: unknown) => notify(shell, `${action} failed: ${String(error)}`, { tone: 'err' });
+const api = tauriWindowApi(onError);
 applyLook(document.documentElement, { app: 'muro', look, theme, glass: true }, {
   setWindowTheme: (word) => invoke('set_window_theme', { theme: word }),
 });
@@ -215,7 +189,7 @@ applyLook(document.documentElement, { app: 'muro', look, theme, glass: true }, {
 if (!import.meta.env.DEV) guardDesktop(document, { allowReloadIn: '.xterm' });
 mountZoom(document, { apply: (level) => getCurrentWebview().setZoom(level), storageKey: 'muro.zoom' });
 mountWindowControls(document.querySelector<HTMLElement>('.im-titlebar')!, api, {
-  onError: (action, error) => notify(shell, `${action} failed: ${String(error)}`, { tone: 'err' }),
+  onError,
 });
 ```
 
@@ -272,6 +246,7 @@ hover or press from Windows.
 | `attachLayers(shell)` | Escape closes the top surface only, and a press outside closes a menu or a sheet. Call it once for each shell. `confirm` and `openPalette` rely on it for Escape. Its returned function also closes every open surface |
 | `openMenu(anchor, items)` | A menu under `anchor`. An item is `{ label, keys?, disabled?, danger?, run }` or `'separator'`. `disabled` is the reason, shown as the item's tooltip |
 | `openSheet(anchor, content, { placement })` | A sheet docked to `anchor`. `placement` is `below` (the default), `pane-top` or `pane-bottom`. Closing it gives focus back to `anchor`, or, for a pane placement (a pane takes no focus), to what had focus when the sheet opened |
+| `openFormDialog(shell, options)` | Pass a title and localized closeLabel. Append controls to the returned body and foot. Call form.lock(true) during a write and form.lock(false) when it finishes. Closing restores focus to the opener. |
 | `confirm(shell, options)` | A dialog. Resolves `true` on the confirming button, `false` on Cancel or Escape. `options` is `{ title, body, confirm, cancel, danger? }` |
 | `notify(shell, text, options)` | A notice. `options` is `{ tone?: 'err', action?: { label, run }, timeoutMs?, errorWord?, dismissLabel? }`. An error stays until it is dismissed |
 | `inspector(shell)` | The inspector of the shell: `open(content, opener?)`, `close()`, `isOpen()`, and `guard(isDirty, ask)`, which asks once before the content is closed or replaced while it has unsaved changes |

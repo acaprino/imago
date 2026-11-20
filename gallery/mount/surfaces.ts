@@ -6,6 +6,7 @@ import {
   hasLayer,
   inspector,
   notify,
+  openFormDialog,
   openMenu,
   openPalette,
   openSheet,
@@ -25,6 +26,7 @@ declare global {
   interface Window {
     /** The surfaces and the registry of the live shell, for the gallery's test to drive them directly. */
     __imagoSurfaces?: {
+      openFormDialog: typeof openFormDialog;
       openMenu: typeof openMenu;
       openSheet: typeof openSheet;
       confirm: typeof confirm;
@@ -133,7 +135,7 @@ export default function mount({ shell, app }: MountContext): () => void {
   const detachLayers = attachLayers(shell);
   const detachKeys = registry.attach(document);
 
-  window.__imagoSurfaces = { openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
+  window.__imagoSurfaces = { openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
 
   return () => {
     shell.removeEventListener('click', onClick);

@@ -16,6 +16,8 @@ export type Layer = {
   toggles?: boolean;
   /** Removes the layer from the screen and pops it. Closing twice does nothing. */
   close: () => void;
+  /** Releases a layer when its shell unmounts, even if user dismissal is locked. */
+  dispose?: () => void;
 };
 
 type Entry = { layer: Layer; opener: HTMLElement | null };
@@ -288,6 +290,9 @@ export function attachLayers(shell: HTMLElement): () => void {
     doc.removeEventListener('pointerup', onRelease, true);
     doc.removeEventListener('pointercancel', onRelease, true);
     swallow = null;
-    for (const entry of [...stack].reverse()) entry.layer.close();
+    for (const { layer } of [...stack].reverse()) {
+      if (layer.dispose) layer.dispose();
+      else layer.close();
+    }
   };
 }
