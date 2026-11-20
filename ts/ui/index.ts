@@ -13,3 +13,8 @@ export * from './panel-state.ts';
 export * from './file-tree.ts';
 export * from './file-selector.ts';
 export * from './progress.ts';
+export * from './splitter.ts';
+export * from './search-picker.ts';
+export * from './dock-tabs.ts';
+export * from './breadcrumbs.ts';
+export * from './split-view.ts';

@@ -76,3 +76,8 @@ h1 { margin: 0; font: 600 28px/1.15 var(--g-font-display); }
   color: var(--im-text);
 }
 .g-files > button { justify-self: start; }
+
+.g-docks { height: 12rem; }
+.g-docks > .im-split-view, .g-docks > [data-im-pane] { height: 100%; }
+.g-docks [data-im-pane] { padding: var(--im-s-2); background: var(--im-sheet); border: 1px solid var(--im-line); overflow: auto; }
+.g-workspace .g-file-body { display: grid; gap: var(--im-s-2); }

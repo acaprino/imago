@@ -277,6 +277,44 @@ package does not store the choice.** The app keeps it through `onChange(collapse
 the next time. The button is shown from 850 up. From 620 to under 850 the rail is forced by the width, whatever the
 choice. Under 620 the title-bar toggle of `sidebarDrawer` opens the whole sidebar.
 
+### Workspaces, projects and files
+
+The Shinatama example in the gallery lets you move tabs between panes, search projects, browse a lazy folder, and return from an event to its session. The following controls are exported by the UI entry point.
+
+| Control | Integration |
+|---|---|
+| `splitter` | Supply a label, orientation, minimum, maximum and current size in pixels. Apply each preview in the resize callback and persist the committed value in the commit callback. Home and End reach the limits. The arrows move eight pixels or 32 with Shift. A cancelled drag restores the starting size. |
+| `splitView` | Pass two elements, per-pane minimum sizes and an initial fraction. The separator follows the available space. For nested layouts, either element can be another split. Call the returned cleanup when removing a split. |
+| `dockTabs` | Give each pane a stable ID in `data-im-pane` and each tab a stable ID in `data-im-dock-tab`. The host's move callback receives the source tab, destination pane, placement and optional reference tab. Use its validation callback to refuse unavailable targets. Give the controller a localized description for each destination. Call the returned cleanup when removing the workspace. |
+| `searchPicker` | The host supplies an asynchronous search function, labels and a selection callback. Return recent items for the empty query. Each new query cancels the previous one. The optional mark action operates independently of opening an item, using a button or Shift+Enter. Mount the returned element inline or in a sheet. Destroy the picker when its view closes. |
+| `createFileTree` | Use eager children or mark a folder lazy and supply a cancellable child loader. IDs are unique throughout the tree. Typing searches the visible names. Reveal an item by its chain of IDs. Children are cached after a successful load, and a failed expansion can be retried. Destroy the controller to cancel pending reads. The original element-returning file tree API also accepts lazy entries. |
+| `breadcrumbs` | Supply a path as labeled IDs and a callback for revealing a parent. The final segment is the current location. |
+| Inspector navigation | Push a detail view from an existing inspector. Closing it or pressing Escape inside it returns to the previous view and its opener. The parent keeps its fields, scroll and unsaved-change guard. Opening a replacement changes the current level. |
+| Expandable sidebar groups | Use a native details element with the `im-disclosure` class. Use its summary for the group name and place editable fields, checkbox rows or actions in the body. |
+
+Dragging to the centre of a pane joins its tabs. Dragging to an edge requests a split. Dropping on the first or second half of a tab requests insertion before or after it. A focused tab enters move mode with Shift+Enter. The arrows visit available destinations, Enter commits and Escape cancels. The application applies each accepted move to its own layout model and restores focus after rendering.
+
+For example, a Files view can connect its breadcrumb and tree to the same project-relative IDs.
+
+```ts
+import { breadcrumbs, createFileTree } from '@acaprino/imago/ui';
+
+const tree = createFileTree(document, [{ id: 'src', name: 'src', lazy: true }], {
+  label: 'Project files',
+  loadChildren: (folder, signal) => project.listChildren(folder.id, signal),
+  onLoadError: (folder, error) => showReadError(folder.name, error),
+  onOpen: entry => editor.open(entry.id),
+});
+const segments = [{ id: 'src', label: 'src' }, { id: 'src/main.ts', label: 'main.ts' }];
+const path = breadcrumbs(document, 'File location', segments, id => {
+  const index = segments.findIndex(part => part.id === id);
+  void tree.reveal(segments.slice(0, index + 1).map(part => part.id), true);
+});
+panel.append(path, tree.element);
+// When the Files view closes
+tree.destroy();
+```
+
 ## 6. What the app must do itself
 
 The package does not do these. Each is a place where an app that forgets looks different from the others.

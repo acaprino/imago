@@ -410,3 +410,11 @@ A docked shell can opt into a resizable sidebar with `sidebarResize(shell, { lab
 Drag the separator, use Left or Right, or jump to either limit with Home or End. The app may store the reported
 width. The separator only appears in the expanded desktop sidebar. The compact icon rail and narrow drawer use
 their existing sizes. Call the returned cleanup function when unmounting the shell.
+
+## Workspace controls
+
+Panes share one accessible separator for rows, columns and the expanded sidebar. A drag shows its destination on the pane edge, pane centre or neighbouring tab. Keyboard move mode announces the same destinations. The application supplies the view contents and owns their layout and persistence.
+
+The file tree supports incremental folder reads and keyboard search. A breadcrumb reveals a parent folder. The project finder has distinct actions for opening the highlighted project and including it in a group. An inspector can cover its current detail with a child view while the workspace stays available.
+
+The calls, keyboard interactions and a file browser example are in [Using Imago](using-imago.md#workspaces-projects-and-files).
