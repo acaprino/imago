@@ -106,7 +106,7 @@ function buildLayer(doc: Document, state: Exclude<PanelState, { kind: 'ready' }>
       const layer = make(doc, 'div', 'im-failure');
       layer.setAttribute('role', 'alert');
       layer.append(
-        make(doc, 'b', undefined, state.errorWord ?? 'Error'),
+        make(doc, 'b', undefined, state.errorWord || 'Error'),
         make(doc, 'span', undefined, state.text),
         actionButton(doc, state.retry.label, undefined, state.retry.run),
       );

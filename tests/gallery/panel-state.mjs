@@ -279,4 +279,103 @@ async function check(page, label) {
   assert.ok(housekeeping.first, at('the state layer is the first child of the body'));
   assert.ok(housekeeping.stillHidden, at('ready does not show what the page itself hid'));
   assert.match(housekeeping.message ?? '', /im-panel-body/, at('a panel without a body says so'));
+
+  // 7. Out of order: loading, error, loading, empty, ready. Whatever the path, aria-busy is set only while loading, one layer
+  // shows, and the page's own inline display (grid here) comes back exactly, with no marker left behind.
+  const sequence = await inPage(page, () => {
+    const { setPanelState } = window.__imagoPanelState;
+    const panel = document.createElement('section');
+    panel.className = 'im-panel';
+    const header = document.createElement('header');
+    header.className = 'im-panel-header';
+    const body = document.createElement('div');
+    body.className = 'im-panel-body';
+    const child = document.createElement('div');
+    child.setAttribute('style', 'display:grid');
+    child.textContent = 'content';
+    body.append(child);
+    panel.append(header, body);
+    document.getElementById('im-gallery-panel-states').append(panel);
+    const snapshot = (step) => ({
+      step,
+      ariaBusy: panel.getAttribute('aria-busy'),
+      layers: [...body.querySelectorAll('[data-im-state-layer]')].map((layer) => layer.getAttribute('data-im-state-layer')),
+      childDisplay: child.style.display,
+      childComputed: getComputedStyle(child).display,
+      markers: body.querySelectorAll('[data-im-state-hidden]').length,
+    });
+    const run = () => {};
+    const steps = [
+      ['loading', { kind: 'loading', rows: 2 }],
+      ['error', { kind: 'error', text: 'Failed.', retry: { label: 'Retry', run } }],
+      ['loading', { kind: 'loading', rows: 2 }],
+      ['empty', { kind: 'empty', text: 'Nothing.', action: { label: 'Add', run } }],
+      ['ready', { kind: 'ready' }],
+    ];
+    const seen = [snapshot('before')];
+    for (const [name, state] of steps) {
+      setPanelState(panel, state);
+      seen.push(snapshot(name));
+    }
+    panel.remove();
+    return seen;
+  });
+  assert.equal(sequence.length, 6, at('the sequence ran every step'));
+  assert.equal(sequence[0].childDisplay, 'grid', at('the child starts with display:grid'));
+  sequence.slice(1).forEach((seen, index) => {
+    const where = at(`step ${index + 1} (${seen.step}) of loading, error, loading, empty, ready`);
+    assert.equal(seen.ariaBusy, seen.step === 'loading' ? 'true' : null, `${where}: aria-busy is set only while loading`);
+    assert.deepEqual(seen.layers, seen.step === 'ready' ? [] : [seen.step], `${where}: exactly the layer of the state, and none when ready`);
+    if (seen.step === 'ready') {
+      assert.equal(seen.childDisplay, 'grid', `${where}: the content's own inline display comes back exactly`);
+      assert.equal(seen.childComputed, 'grid', `${where}: the content is laid out again`);
+      assert.equal(seen.markers, 0, `${where}: no data-im-state-hidden is left behind`);
+    } else {
+      assert.equal(seen.childComputed, 'none', `${where}: the content is out of the layout`);
+      assert.equal(seen.markers, 1, `${where}: the content is marked once`);
+    }
+  });
+
+  // 8. Text is text: markup in `text`, `label`, `keys` and `errorWord` is shown literally and never becomes elements.
+  const literal = await inPage(page, async () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    window.__injected = 0;
+    const image = '<img src=x onerror="window.__injected++">';
+    const bold = '<b>x</b>';
+    const run = () => {};
+    const read = (panel, kind) => {
+      const layer = panel.querySelector(`:scope > .im-panel-body > [data-im-state-layer="${kind}"]`);
+      return {
+        images: layer.querySelectorAll('img').length,
+        bolds: layer.querySelectorAll('b').length,
+        nestedBolds: layer.querySelectorAll('b b').length,
+        texts: [...layer.querySelectorAll('span, b, kbd')].map((node) => node.textContent),
+      };
+    };
+    setPanelState(panels.error, { kind: 'error', text: image, errorWord: bold, retry: { label: bold, run } });
+    const error = read(panels.error, 'error');
+    setPanelState(panels.empty, { kind: 'empty', text: image, action: { label: bold, keys: bold, run } });
+    const empty = read(panels.empty, 'empty');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return { error, empty, injected: window.__injected, image, bold };
+  });
+  assert.equal(literal.injected, 0, at('markup in a text never runs'));
+  // The error layer has exactly one <b>: the word's own element. It holds the text "<b>x</b>" and no second <b> inside it.
+  assert.equal(literal.error.images, 0, at('error: no img element is made from the text'));
+  assert.equal(literal.error.bolds, 1, at("error: the only <b> is the word's own element"));
+  assert.equal(literal.error.nestedBolds, 0, at('error: errorWord markup is not parsed'));
+  assert.deepEqual(literal.error.texts, [literal.bold, literal.image, literal.bold], at('error: the word, the text and the retry label are shown literally'));
+  assert.equal(literal.empty.images, 0, at('empty: no img element is made from the text'));
+  assert.equal(literal.empty.bolds, 0, at('empty: no b element is made from the label or the keys'));
+  assert.deepEqual(literal.empty.texts, [literal.image, literal.bold, literal.bold], at('empty: the text, the label and the keys are shown literally'));
+
+  // 9. The word "Error" is always there: a missing or empty errorWord falls back to it.
+  const fallback = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    return [undefined, ''].map((errorWord) => {
+      setPanelState(panels.error, { kind: 'error', text: 'Failed.', errorWord, retry: { label: 'Retry', run() {} } });
+      return panels.error.querySelector('[data-im-state-layer] b').textContent;
+    });
+  });
+  assert.deepEqual(fallback, ['Error', 'Error'], at('a missing or empty errorWord still says "Error"'));
 }
