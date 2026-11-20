@@ -54,6 +54,12 @@ export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { 
   if (name) sheet.setAttribute('aria-label', name);
   sheet.append(content);
 
+  // Under a control, the control toggles the sheet. Docked to a pane, the anchor is the whole pane: not a control, so
+  // it says nothing about being expanded, and a press in it, outside the sheet, closes the sheet and still reaches
+  // what was pressed.
+  const toggling = placement === 'below';
+  const expandedBefore = anchor.getAttribute('aria-expanded');
+
   let open = true;
   let pop = (): void => {};
   let stopFollowing = (): void => {};
@@ -62,7 +68,11 @@ export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { 
     if (!open) return;
     open = false;
     stopFollowing();
-    anchor.setAttribute('aria-expanded', 'false');
+    // The control gets back what the page wrote on it: its own aria-expanded, or none.
+    if (toggling) {
+      if (expandedBefore === null) anchor.removeAttribute('aria-expanded');
+      else anchor.setAttribute('aria-expanded', expandedBefore);
+    }
     pop();
     sheet.remove();
   }
@@ -72,15 +82,13 @@ export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { 
 
   shell.append(sheet);
   place(shell, anchor, sheet, placement);
-  // Under a control, the control toggles the sheet. Docked to a pane, the anchor is the whole pane: a press in it,
-  // outside the sheet, closes the sheet and still reaches what was pressed.
-  const layer: Layer = { el: sheet, kind: 'sheet', toggles: placement === 'below', close };
+  const layer: Layer = { el: sheet, kind: 'sheet', toggles: toggling, close };
   // Focus goes back to the opener on close. Under a control that is the control. A pane takes no focus, so a sheet
   // docked to one goes back to what had focus when it opened (read after the sheet it replaced has given focus back).
   const focused = doc.activeElement as HTMLElement | null;
-  const opener = placement === 'below' ? anchor : focused && focused !== doc.body ? focused : null;
+  const opener = toggling ? anchor : focused && focused !== doc.body ? focused : null;
   pop = pushLayer(layer, opener);
-  anchor.setAttribute('aria-expanded', 'true');
+  if (toggling) anchor.setAttribute('aria-expanded', 'true');
   stopFollowing = follow(() => {
     if (!anchor.isConnected) close(); // the control it hangs from is gone: nothing left to dock to
     else place(shell, anchor, sheet, placement);

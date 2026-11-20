@@ -873,6 +873,8 @@ async function sheetOpeners(page) {
     button.textContent = 'In the pane';
     document.querySelector('.im-content').append(button);
   });
+  const expanded = (id) => page.evaluate((id) => document.getElementById(id)?.getAttribute('aria-expanded') ?? null, id);
+  const paneExpanded = () => page.evaluate(() => document.querySelector('.im-content').getAttribute('aria-expanded'));
   const openOnPane = (placement) =>
     page.evaluate((placement) => {
       window.__imagoSurfaces.openSheet(document.querySelector('.im-content'), Object.assign(document.createElement('div'), { textContent: 'On the pane' }), { placement });
@@ -884,15 +886,34 @@ async function sheetOpeners(page) {
     await openOnPane(placement);
     assert.equal(await count(page, '.im-sheet'), 1, where('the sheet is open'));
     assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest('.im-sheet'))), true, where('focus is in the sheet'));
+    assert.equal(await paneExpanded(), null, where('the pane is not a control: no aria-expanded on it'));
     await press(page, 'Escape');
     assert.equal(await count(page, '.im-sheet'), 0, where('Escape closes the sheet'));
     assert.equal((await active(page)).id, 'in-pane', where('focus goes back to what had it, not to the body'));
+    assert.equal(await paneExpanded(), null, where('and the pane has no aria-expanded after it closes'));
 
     // Nothing had focus when it opened: there is nothing to go back to, and nothing breaks.
     await page.evaluate(() => document.activeElement?.blur());
     await openOnPane(placement);
     await press(page, 'Escape');
     assert.equal(await count(page, '.im-sheet'), 0, where('a sheet opened with no focus closes with Escape'));
+  }
+
+  // Under a control the control is the opener: it says it is expanded while the sheet is open and gets its own state back.
+  await anchor(page, { id: 'plain', left: 260, top: 120, text: 'Plain' });
+  await anchor(page, { id: 'disclosure', left: 420, top: 120, text: 'Disclosure' });
+  await page.evaluate(() => document.getElementById('disclosure').setAttribute('aria-expanded', 'false'));
+  for (const [id, before] of [['plain', null], ['disclosure', 'false']]) {
+    const where = (text) => `a sheet under #${id}: ${text}`;
+    assert.equal(await expanded(id), before, where('the control starts as the page wrote it'));
+    await page.evaluate((id) => {
+      const button = document.getElementById(id);
+      window.__imagoSurfaces.openSheet(button, Object.assign(document.createElement('div'), { textContent: 'Below' }));
+    }, id);
+    assert.equal(await expanded(id), 'true', where('the control says it is expanded'));
+    await press(page, 'Escape');
+    assert.equal(await expanded(id), before, where('and has its own state back once the sheet is closed'));
+    assert.equal((await active(page)).id, id, where('focus is back on the control'));
   }
 }
 
