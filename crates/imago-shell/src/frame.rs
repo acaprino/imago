@@ -12,6 +12,10 @@
 //! includes the zoom of the page and the monitor's scale), so the command passes the four numbers
 //! on as they come: no conversion on this side. An empty rectangle (the button hidden, as in a
 //! look with the system frame) takes the button out of Windows' hit test.
+//!
+//! The window menu (Alt+Space, Shift+right click on the taskbar button) also offers a "Reload
+//! interface" item ([`install_reload_menu`]), which works when the page is blank or hung, because
+//! the menu belongs to the window, not to the page.
 
 #[cfg(windows)]
 use std::sync::Arc;
@@ -65,6 +69,38 @@ pub fn install_snap_layouts<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Res
     {
         let _ = window;
         Ok(SnapLayouts {})
+    }
+}
+
+/// Adds an item called `label` to the window's system menu (Alt+Space, Shift+right click on the
+/// taskbar button), after a separator, and calls `on_reload` when it is chosen. The app words the
+/// label ("Reload interface") and decides what a reload is: Shinatama asks a live page to save its
+/// layout first and reloads it after three seconds if the page does not answer; a dead or hung
+/// page never answers.
+///
+/// `on_reload` runs on a thread of its own, not the window's: the window's thread may be waiting
+/// for the page, and the reload exists for when the page does not answer. A window with no system
+/// menu gets nothing. Asking twice for one window adds nothing the second time. On other targets
+/// this does nothing.
+pub fn install_reload_menu<R: Runtime>(
+    window: &WebviewWindow<R>,
+    label: &str,
+    on_reload: impl Fn() + Send + Sync + 'static,
+) -> tauri::Result<()> {
+    #[cfg(windows)]
+    {
+        let hwnd = window.hwnd()?.0 as isize;
+        let label: Vec<u16> = label.encode_utf16().chain(Some(0)).collect();
+        let action: reload::Action = Arc::new(on_reload);
+        window.run_on_main_thread(move || {
+            // SAFETY: on the thread that owns the window, which is checked to be alive.
+            unsafe { reload::add(hwnd as _, &label, action) };
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, label, on_reload);
+        Ok(())
     }
 }
 
@@ -497,6 +533,226 @@ mod win {
                     Arc::strong_count(&state),
                     1,
                     "the overlay released its count"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+mod reload {
+    use std::sync::Arc;
+    use windows_sys::{
+        core::w,
+        Win32::{
+            Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM},
+            UI::{
+                Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
+                WindowsAndMessaging::{
+                    AppendMenuW, GetPropW, GetSystemMenu, IsWindow, RemovePropW, SetPropW,
+                    MF_SEPARATOR, MF_STRING, WM_NCDESTROY, WM_SYSCOMMAND,
+                },
+            },
+        },
+    };
+
+    /// What the app does when the item is chosen.
+    pub type Action = Arc<dyn Fn() + Send + Sync>;
+
+    /// Below 0xF000, the range of Windows' own commands, with the low four bits clear (Windows
+    /// uses them itself, so the command is compared with `wparam & 0xFFF0`).
+    pub const RELOAD_COMMAND: usize = 0x5350;
+    /// The id of the subclass: "IMRL".
+    const SUBCLASS_ID: usize = 0x494d_524c;
+    /// On the window: the item is there already.
+    const MENU_PROP: *const u16 = w!("ImagoReloadCommand");
+
+    /// Adds the separator and the item to the window's system menu and subclasses the window to hear
+    /// the choice. The window holds one count of `on_reload` until `WM_NCDESTROY`.
+    ///
+    /// # Safety
+    /// Call on the thread that owns `hwnd`. `label` ends with a zero.
+    pub unsafe fn add(hwnd: HWND, label: &[u16], on_reload: Action) {
+        // SAFETY: every call below acts on the live window and its own menu.
+        unsafe {
+            if IsWindow(hwnd) == 0 || !GetPropW(hwnd, MENU_PROP).is_null() {
+                return;
+            }
+            let menu = GetSystemMenu(hwnd, 0);
+            if menu.is_null() {
+                return;
+            }
+            let state = Box::into_raw(Box::new(on_reload));
+            if SetWindowSubclass(hwnd, Some(frame_proc), SUBCLASS_ID, state as usize) == 0 {
+                drop(Box::from_raw(state));
+                return;
+            }
+            AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
+            AppendMenuW(menu, MF_STRING, RELOAD_COMMAND, label.as_ptr());
+            SetPropW(hwnd, MENU_PROP, 1 as HANDLE);
+        }
+    }
+
+    unsafe extern "system" fn frame_proc(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+        _id: usize,
+        data: usize,
+    ) -> LRESULT {
+        // SAFETY: `data` is the `Box<Action>` of `add`, freed only at `WM_NCDESTROY` below, after
+        // which this procedure is no longer in the window's chain.
+        unsafe {
+            if msg == WM_SYSCOMMAND && wparam & 0xFFF0 == RELOAD_COMMAND {
+                let action = (*(data as *const Action)).clone();
+                // Off the window's thread: it may be the one the page is not answering.
+                std::thread::spawn(move || action());
+                return 0;
+            }
+            if msg == WM_NCDESTROY {
+                RemoveWindowSubclass(hwnd, Some(frame_proc), SUBCLASS_ID);
+                RemovePropW(hwnd, MENU_PROP);
+                drop(Box::from_raw(data as *mut Action));
+            }
+            DefSubclassProc(hwnd, msg, wparam, lparam)
+        }
+    }
+
+    /// The item on a real window's system menu, on its real window procedure, over a window that is
+    /// never shown (no display needed).
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::sync::{mpsc, Arc};
+        use std::time::Duration;
+        use windows_sys::{
+            core::w,
+            Win32::{
+                Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+                System::LibraryLoader::GetModuleHandleW,
+                UI::WindowsAndMessaging::{
+                    CreateWindowExW, DefWindowProcW, DestroyWindow, GetMenuItemCount,
+                    GetMenuStringW, GetSystemMenu, RegisterClassExW, SendMessageW, MF_BYCOMMAND,
+                    SC_MAXIMIZE, WM_SYSCOMMAND, WNDCLASSEXW, WS_OVERLAPPED, WS_SYSMENU,
+                },
+            },
+        };
+
+        unsafe extern "system" fn plain_proc(
+            hwnd: HWND,
+            msg: u32,
+            wparam: WPARAM,
+            lparam: LPARAM,
+        ) -> LRESULT {
+            // SAFETY: the default procedure of this live window.
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
+
+        fn wide(text: &str) -> Vec<u16> {
+            text.encode_utf16().chain(Some(0)).collect()
+        }
+
+        /// The text of the system menu's item with this command, or `None` when there is none.
+        unsafe fn item_text(window: HWND, command: usize) -> Option<String> {
+            // SAFETY: the window is alive in the test.
+            unsafe {
+                let menu = GetSystemMenu(window, 0);
+                let mut text = [0u16; 64];
+                let length = GetMenuStringW(
+                    menu,
+                    command as u32,
+                    text.as_mut_ptr(),
+                    text.len() as i32,
+                    MF_BYCOMMAND,
+                );
+                (length > 0).then(|| String::from_utf16_lossy(&text[..length as usize]))
+            }
+        }
+
+        #[test]
+        fn the_window_menu_offers_the_item_and_a_click_calls_back_off_the_window_thread() {
+            let (clicked, hear) = mpsc::channel();
+            let action: Action = Arc::new(move || {
+                let _ = clicked.send(std::thread::current().id());
+            });
+            // SAFETY: Win32 calls on a window this test makes and destroys on its own thread.
+            unsafe {
+                let instance = GetModuleHandleW(std::ptr::null());
+                let class = WNDCLASSEXW {
+                    cbSize: size_of::<WNDCLASSEXW>() as u32,
+                    lpfnWndProc: Some(plain_proc),
+                    hInstance: instance,
+                    lpszClassName: w!("ImagoShellTestMenuParent"),
+                    ..std::mem::zeroed()
+                };
+                RegisterClassExW(&class);
+                let window = CreateWindowExW(
+                    0,
+                    w!("ImagoShellTestMenuParent"),
+                    w!("test"),
+                    WS_OVERLAPPED | WS_SYSMENU,
+                    0,
+                    0,
+                    400,
+                    300,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    instance,
+                    std::ptr::null(),
+                );
+                assert!(!window.is_null(), "a window to stand in for the app's");
+                let items = GetMenuItemCount(GetSystemMenu(window, 0));
+                assert_eq!(
+                    item_text(window, RELOAD_COMMAND),
+                    None,
+                    "not before it is added"
+                );
+
+                add(window, &wide("Reload interface"), action.clone());
+                assert_eq!(
+                    item_text(window, RELOAD_COMMAND).as_deref(),
+                    Some("Reload interface"),
+                    "the app's own words, on the window menu"
+                );
+                assert_eq!(
+                    GetMenuItemCount(GetSystemMenu(window, 0)),
+                    items + 2,
+                    "a separator and the item"
+                );
+
+                // Again for the same window: nothing is added twice.
+                add(window, &wide("Reload interface"), action.clone());
+                assert_eq!(GetMenuItemCount(GetSystemMenu(window, 0)), items + 2);
+
+                assert_eq!(
+                    Arc::strong_count(&action),
+                    2,
+                    "the window holds one count, and the second ask held none"
+                );
+
+                // Windows' own commands are not ours: they go on to the window.
+                SendMessageW(window, WM_SYSCOMMAND, SC_MAXIMIZE as WPARAM, 0);
+                assert!(hear.recv_timeout(Duration::from_millis(200)).is_err());
+
+                // The item is chosen: the app is called, and not on the window's thread, which
+                // may be waiting for the page to answer while the interface is hung.
+                assert_eq!(SendMessageW(window, WM_SYSCOMMAND, RELOAD_COMMAND, 0), 0);
+                let thread = hear
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("the app is called");
+                assert_ne!(thread, std::thread::current().id());
+                // The low four bits of a menu command are Windows' own.
+                SendMessageW(window, WM_SYSCOMMAND, RELOAD_COMMAND | 0xF, 0);
+                hear.recv_timeout(Duration::from_secs(5))
+                    .expect("called again");
+
+                // The window goes: its count of the app's callback is released.
+                DestroyWindow(window);
+                assert_eq!(
+                    Arc::strong_count(&action),
+                    1,
+                    "the window released its count"
                 );
             }
         }

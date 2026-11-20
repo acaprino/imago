@@ -1,7 +1,10 @@
 //! A webview shows only the app's own pages, so a window behaves as a Windows application rather
 //! than a web page: any other navigation is refused, and no page opens a browser window of its own
-//! (Ctrl+click, middle click, `window.open`).
-use tauri::{webview::NewWindowResponse, Manager, Runtime, Url, WebviewWindowBuilder};
+//! (Ctrl+click, middle click, `window.open`), and the browser's own keys do nothing
+//! ([`disable_browser_accelerators`]).
+use tauri::{
+    webview::NewWindowResponse, Manager, Runtime, Url, WebviewWindow, WebviewWindowBuilder,
+};
 
 /// The embedded frontend's host: `http://tauri.localhost`, or `https://tauri.localhost` with
 /// `useHttpsScheme`.
@@ -24,6 +27,44 @@ pub fn guard_navigation<'a, R: Runtime, M: Manager<R>>(
     builder
         .on_navigation(move |url| is_allowed(url, &origins))
         .on_new_window(|_, _| NewWindowResponse::Deny)
+}
+
+/// Turns WebView2's browser accelerators off: F5, Ctrl+R, Ctrl+P, Ctrl+F, F12, Alt+Left and the
+/// rest of what makes a window feel like a web page. Editing keys (copy, cut, paste...) and every
+/// key the page handles keep working. WebView2's default is on.
+///
+/// The app decides when: Shinatama calls it in release builds only (`!tauri::is_dev()`), because a
+/// development build keeps reload and DevTools. Call it on each window right after it is built, a
+/// rebuilt window included. The page's own `guardDesktop` covers the keys the engine leaves to it.
+///
+/// The `Ok` of a window that exists means the change was handed to the thread that owns the
+/// webview, where COM can still fail; nothing reports that. On other targets this does nothing.
+pub fn disable_browser_accelerators<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
+    #[cfg(windows)]
+    {
+        window.with_webview(|webview| {
+            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+            use windows_core::Interface;
+            // SAFETY: run by Tauri on the thread that owns the webview, on live COM objects.
+            unsafe {
+                let Ok(core) = webview.controller().CoreWebView2() else {
+                    return;
+                };
+                let Ok(settings) = core.Settings() else {
+                    return;
+                };
+                // WebView2's default is TRUE. Copy, cut, paste and the other editing keys stay.
+                if let Ok(settings) = settings.cast::<ICoreWebView2Settings3>() {
+                    let _ = settings.SetAreBrowserAcceleratorKeysEnabled(false);
+                }
+            }
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        Ok(())
+    }
 }
 
 /// An origin as a URL, or `None` when the text is not a URL with a host.

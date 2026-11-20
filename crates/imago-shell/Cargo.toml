@@ -12,7 +12,8 @@ tauri = "=2.12.5"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 
-# The Snap Layouts child window (src/frame.rs): the Win32 areas it calls, and no more.
+# The Win32 areas src/frame.rs calls (the Snap Layouts child window, the reload item of the window
+# menu, which subclasses the window with Win32_UI_Shell), and no more.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = [
     "Win32_Foundation",
@@ -20,8 +21,13 @@ windows-sys = { version = "=0.61.2", features = [
     "Win32_System_LibraryLoader",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+# The WebView2 settings and events Tauri does not expose (src/guard.rs, src/recovery.rs): exactly the
+# versions tauri-runtime-wry links, so the executable holds one WebView2 binding.
+webview2-com = "=0.39.1"
+windows-core = "=0.62.2"
 
 [dev-dependencies]
 tempfile = "=3.27.0"

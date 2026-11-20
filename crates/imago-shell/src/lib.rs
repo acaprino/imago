@@ -1,13 +1,16 @@
-//! The Rust side of Imago's desktop shell: the window's acrylic, theme, Snap Layouts and guard.
+//! The Rust side of Imago's desktop shell: the window's acrylic and theme, Snap Layouts, the guard
+//! and WebView2 recovery.
 //!
 //! One copy of what Shinatama and Xiox each had, for every app of the suite:
 //!
 //! - [`theme`]: the window theme (light, dark or the system's), kept in a file in the data folder so
 //!   the next start opens on the right acrylic, and [`glass_window_config`], the main window's
 //!   config with the glass material.
-//! - [`frame`]: Snap Layouts on the HTML maximize button.
-//! - [`guard`]: a webview shows only the app's own pages.
-//! - [`recovery`]: a page that fails is reloaded at most three times a minute.
+//! - [`frame`]: Snap Layouts on the HTML maximize button, and the "Reload interface" item of the
+//!   window menu.
+//! - [`guard`]: a webview shows only the app's own pages, and the browser's own keys are off.
+//! - [`recovery`]: what failed in WebView2 and what to do about it; a page is reloaded at most
+//!   three times a minute.
 //! - [`window_state`]: where the window was, brought back inside the monitors there are now.
 //!
 //! The decisions (parsing, files, limits, geometry) are plain functions that need no window; the Win32
@@ -20,9 +23,11 @@ mod recovery;
 mod theme;
 mod window_state;
 
-pub use frame::{install_snap_layouts, SnapLayouts};
-pub use guard::guard_navigation;
-pub use recovery::Recovery;
+pub use frame::{install_reload_menu, install_snap_layouts, SnapLayouts};
+pub use guard::{disable_browser_accelerators, guard_navigation};
+pub use recovery::{
+    recovery_action, watch_process_failures, ProcessFailure, Recovery, RecoveryAction,
+};
 pub use theme::{
     apply_theme, glass_window_config, parse_theme, save_theme, saved_theme, WindowTheme,
 };
