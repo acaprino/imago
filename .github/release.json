@@ -1,0 +1,15 @@
+{
+  "app": "Imago",
+  "tagPrefix": "v",
+  "files": [
+    "package.json",
+    "package-lock.json",
+    "Cargo.toml"
+  ],
+  "locks": [
+    "Cargo.lock"
+  ],
+  "crates": [
+    "imago-shell"
+  ]
+}

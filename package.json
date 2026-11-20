@@ -1,0 +1,29 @@
+{
+  "name": "@acaprino/imago",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    "./css/*": "./css/*",
+    "./ui": "./ts/ui/index.ts",
+    "./shell": "./ts/shell/index.ts",
+    "./tokens": "./tokens/imago.tokens.json"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "tokens": "node scripts/build-tokens.mjs",
+    "gallery": "vite --config gallery/vite.config.ts",
+    "build": "tsc --noEmit && vite build --config gallery/vite.config.ts",
+    "test:gallery": "node tests/gallery/run.mjs",
+    "verify": "npm run tokens -- --check && npm test && npm run build && npm run test:gallery && cargo test -p imago-shell"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.5"
+  }
+}
