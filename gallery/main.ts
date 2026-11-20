@@ -114,7 +114,7 @@ function redraw(): void {
 function set(partial: Partial<GalleryState>): void {
   const before = { ...state };
   Object.assign(state, partial);
-  state.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(state.width)));
+  state.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, state.width));
   const onlyWidth = (Object.keys(state) as (keyof GalleryState)[]).every((k) => k === 'width' || state[k] === before[k]);
   if (onlyWidth) applyFrame();
   else redraw();

@@ -1,7 +1,8 @@
 /* Layout primitives: the shell with its seven regions and three breakpoints, the panel, and the small layout helpers.
    Smooth: the work area is one sheet with a 10px top-left corner; the title bar and the sidebar paint nothing.
    ONI: every pane is a bordered panel with cut corners on the ground's grid.
-   The breakpoints are container queries on the shell's own width, never the viewport's: 1000, 850, 620 (minimum 500). */
+   The breakpoints are container queries on the shell's own width, never the viewport's: 1000, 850, 620 (minimum 500).
+   They are written as ranges, so no fractional width falls between two blocks. */
 
 /* ---------- the shell ---------- */
 .im-shell {
@@ -232,7 +233,7 @@
 
 /* ---------- breakpoints, measured on the shell ---------- */
 /* Below 1000 the inspector covers the content's right edge as a drawer; from 1000 it is docked and pushes the content. */
-@container im-shell (max-width: 999px) {
+@container im-shell (width < 1000px) {
   .im-columns { grid-template-columns: minmax(0, 1fr); }
   .im-columns > .im-inspector {
     position: absolute;
@@ -246,7 +247,7 @@
 }
 
 /* From 620 to 849 the sidebar is a 56px rail: one avatar per row, the row's title kept for the accessible name. */
-@container im-shell (min-width: 620px) and (max-width: 849px) {
+@container im-shell (620px <= width < 850px) {
   .im-shell:not([data-im-sidebar="off"]) .im-body { grid-template-columns: var(--im-w-rail) minmax(0, 1fr); }
   .im-sidebar .im-panel-header,
   .im-sidebar .im-panel-tools,
@@ -268,7 +269,7 @@
 
 /* Below 620 the view tabs become one "Views" menu and the sidebar leaves the layout: a title-bar button opens it as an
    overlay from the left edge, under the title bar, above the content, which it neither pushes nor shrinks. */
-@container im-shell (max-width: 619px) {
+@container im-shell (width < 620px) {
   .im-shell:not([data-im-sidebar="off"]) .im-body { grid-template-columns: minmax(0, 1fr); }
   .im-sidebar,
   .im-titlebar .im-tabs,

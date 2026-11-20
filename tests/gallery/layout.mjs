@@ -73,6 +73,18 @@ export default async (page, url) => {
       assert.equal(await visible(page, '.im-titlebar .im-tabs'), false, where('title-bar tabs hidden at 619'));
       assert.equal(await visible(page, '.im-views-menu'), true, where('Views menu at 619'));
       assert.equal(await visible(page, '.im-sidebar-toggle'), true, where('sidebar button at 619'));
+      // No fractional width falls between two blocks: the ranges are half-open.
+      await at(619.5);
+      assert.equal(await visible(page, '.im-sidebar'), false, where('sidebar hidden at 619.5'));
+      assert.equal(await visible(page, '.im-titlebar .im-tabs'), false, where('title-bar tabs hidden at 619.5'));
+      assert.equal(await visible(page, '.im-views-menu'), true, where('Views menu at 619.5'));
+      assert.equal(await visible(page, '.im-sidebar-toggle'), true, where('sidebar button at 619.5'));
+      await at(849.5);
+      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 849.5'));
+      await at(999.5);
+      const half = await box(page, '.im-content');
+      const halfInspector = await box(page, '.im-inspector');
+      assert.ok(halfInspector.left > half.left && halfInspector.left < half.right, where('inspector overlaps the content at 999.5'));
 
       // 990: the inspector covers the content's right edge; the content reaches the work area's right edge.
       await at(990);
@@ -160,10 +172,53 @@ export default async (page, url) => {
       await closed('after a press outside');
       await page.waitForFunction(() => document.activeElement?.classList.contains('im-sidebar-toggle'));
 
+      // Leaving the sidebar by keyboard closes it, and the focus stays where it went.
+      await toggle.click();
+      const inContent = () => page.evaluate(() => !!document.activeElement?.closest('.im-work'));
+      for (let tabs = 0; tabs < 12 && !(await inContent()); tabs++) await page.keyboard.press('Tab');
+      assert.equal(await inContent(), true, where('Tab leaves the sidebar for the content'));
+      await closed('after Tab into the content');
+      assert.equal((await focused()).toggle, false, where('the focus is not pulled back to the button'));
+
+      // With the focus in the content, a press on the button opens it again; Escape closes it from anywhere,
+      // here with the focus on the page because the press landed on the sidebar's own chrome.
+      await toggle.click();
+      assert.equal(await visible(page, '.im-sidebar'), true, where('the button reopens the sidebar'));
+      await page.locator('.im-sidebar .im-panel-title').click();
+      assert.equal(await visible(page, '.im-sidebar'), true, where('a press inside the sidebar keeps it open'));
+      assert.equal(await page.evaluate(() => document.activeElement === document.body), true, where('the focus is on the page'));
+      await page.keyboard.press('Escape');
+      await closed('after Escape with the focus on the page');
+      assert.equal((await focused()).toggle, true, where('Escape from the page gives focus to the button'));
+
+      // A floating layer (a menu opened from the sidebar) is not outside it: neither a press nor its focus closes it.
+      await toggle.click();
+      await page.evaluate(() => {
+        const layer = document.createElement('div');
+        layer.dataset.imLayer = 'menu';
+        layer.id = 'test-layer';
+        layer.style.cssText = 'position:absolute;z-index:9;right:8px;top:90px;width:120px;height:40px';
+        layer.innerHTML = '<button type="button" id="test-layer-item">Item</button>';
+        document.querySelector('.im-shell').append(layer);
+      });
+      await page.click('#test-layer-item');
+      assert.equal(await visible(page, '.im-sidebar'), true, where('a press in a floating layer keeps the sidebar open'));
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'test-layer-item', where('the layer keeps the focus'));
+      await page.evaluate(() => document.getElementById('test-layer').remove());
+      await page.keyboard.press('Escape');
+      await closed('after the layer is gone and Escape');
+
       await toggle.click();
       await at(700); // 620 or more: the sidebar is a rail again and the open state is gone
       await page.waitForFunction(() => !document.querySelector('.im-shell').hasAttribute('data-im-sidebar-open'));
       assert.equal(await toggle.getAttribute('aria-expanded'), 'false', where('widening clears the open state'));
+
+      // A width change never leaves the focus on what it hides: the sidebar when narrowing, the button when widening.
+      await page.focus('.im-sidebar [role="option"][tabindex="0"]');
+      await at(610);
+      await page.waitForFunction(() => document.activeElement?.classList.contains('im-sidebar-toggle'));
+      await at(700);
+      await page.waitForFunction(() => !!document.activeElement?.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0');
       await at(610);
 
       // Muro has no sidebar and no button for it, at any width.
