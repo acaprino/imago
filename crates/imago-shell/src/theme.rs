@@ -149,8 +149,9 @@ mod tests {
             std::fs::read_to_string(data.join("window-theme")).unwrap(),
             "light"
         );
-        assert!(
-            !data.join("window-theme.tmp").exists(),
+        assert_eq!(
+            crate::tests::names_in(&data),
+            ["window-theme"],
             "the temporary file is renamed away"
         );
     }

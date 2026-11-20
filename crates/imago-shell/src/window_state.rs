@@ -59,8 +59,13 @@ impl Screen {
 
 /// The window brought inside one of `monitors` and to at least `min_width` x `min_height`. The
 /// monitor is the one that holds the window's top-left corner; a corner on none (the monitor it
-/// was saved on is gone) takes the first. The window is cut to the monitor and moved until all of
-/// it is inside. Without any monitor only the minimum is applied.
+/// was saved on is gone) takes the first, so **pass the primary monitor first**. The window is cut
+/// to the monitor and moved until all of it is inside. Without any monitor only the minimum is
+/// applied.
+///
+/// Everything here is in physical pixels, the minimum too: the shell's own minimum width of 500
+/// (`glass_window_config`) is in the window config's logical pixels, so the app multiplies it by
+/// the monitor's scale factor before it passes it here.
 ///
 /// For a window whose frame is not the page (a system title bar, a taskbar that is not on the
 /// monitor's rectangle) see [`clamp_to_screens`].
@@ -81,7 +86,8 @@ pub fn clamp_to_monitors(
 /// are tried next, and a corner on no monitor takes the first. `frame` is the window's outer size
 /// minus its inner size (title bar and borders), because the state holds the inner size: the
 /// whole window, frame included, ends up in the area. A monitor smaller than the minimum wins
-/// over the minimum.
+/// over the minimum. The first screen is the one a lost corner takes (the primary one), and every
+/// size is in physical pixels, the minimum too.
 ///
 /// Choose the app's minimum so it fits a 1366x768 laptop at 125 % (Xiox measured it): 1093 x 614
 /// logical, 574 once the 48 px Windows 11 taskbar is out, and the page plus the title bar and
@@ -148,7 +154,10 @@ pub fn state_to_save(
     live()
 }
 
-/// The saved state, or `None` when there is no file or it is not a state.
+/// The saved state, or `None` when there is no file or it is not a state. The state is given back
+/// as the file holds it, not checked against anything: it may be on a monitor that is gone, below
+/// the minimum, or the (-32000, -32000, 0 x 0) of a minimized window, so the caller always passes
+/// it through [`clamp_to_monitors`] or [`clamp_to_screens`] before it uses it.
 pub fn load_state(data_dir: &Path) -> Option<WindowState> {
     serde_json::from_str(&fs::read_to_string(data_dir.join(STATE_FILE)).ok()?).ok()
 }
@@ -388,6 +397,103 @@ mod tests {
         assert_eq!((back.width, back.height), (500, 400));
     }
 
+    /// Xiox's own case: a window wider than the second monitor it was saved on.
+    #[test]
+    fn a_window_wider_than_the_area_is_cut_to_it_and_clamped_on_the_monitor_it_is_on() {
+        // On the second monitor (1280x1024 at x = 1920) the 1400-wide window is cut to the area and
+        // sits at its left edge.
+        let wide = WindowState {
+            x: 2000,
+            y: 100,
+            width: 1400,
+            height: 900,
+            maximized: false,
+        };
+        let back = clamp_to_screens(
+            wide,
+            &[Screen::whole(SCREEN), Screen::whole(SECOND)],
+            FRAME,
+            0,
+            0,
+        );
+        assert_eq!((back.x, back.width), (1920, 1280 - 16));
+        assert_eq!(
+            (back.y, back.height),
+            (85, 900),
+            "the height fits; the window moves up just enough to have its frame in"
+        );
+        // A corner on no monitor: the first work area decides.
+        let lost = WindowState { x: 9000, ..wide };
+        assert_eq!(
+            clamp_to_screens(lost, &[Screen::whole(SCREEN)], FRAME, 0, 0).x,
+            1920 - 1400 - 16
+        );
+    }
+
+    #[test]
+    fn a_monitor_smaller_than_the_minimum_wins_over_the_minimum() {
+        let small = Rect {
+            x: 0,
+            y: 0,
+            width: 400,
+            height: 300,
+        };
+        let state = WindowState {
+            x: 10,
+            y: 10,
+            width: 300,
+            height: 200,
+            maximized: false,
+        };
+        let back = clamp_to_monitors(state, &[small], 500, 400);
+        assert_eq!(
+            back,
+            WindowState {
+                x: 0,
+                y: 0,
+                width: 400,
+                height: 300,
+                maximized: false
+            },
+            "raised to the minimum, then cut to the only monitor there is"
+        );
+        // With a frame the whole window, frame included, is what has to fit.
+        let back = clamp_to_screens(state, &[Screen::whole(small)], FRAME, 500, 400);
+        assert_eq!(
+            (back.x, back.y, back.width, back.height),
+            (0, 0, 400 - 16, 300 - 39)
+        );
+    }
+
+    #[test]
+    fn a_state_saved_while_minimized_is_brought_back_from_nowhere() {
+        // What a minimized window reports, if it was ever written to the file as it was measured.
+        let dir = tempfile::tempdir().unwrap();
+        let gone = WindowState {
+            x: -32000,
+            y: -32000,
+            width: 0,
+            height: 0,
+            maximized: true,
+        };
+        save_state(dir.path(), &gone).unwrap();
+        // `load_state` gives the file back as it is; the caller clamps.
+        let loaded = load_state(dir.path()).unwrap();
+        assert_eq!(loaded, gone);
+        let back = clamp_to_monitors(loaded, &[SCREEN, SECOND], 500, 400);
+        assert_eq!(
+            back,
+            WindowState {
+                x: 0,
+                y: 0,
+                width: 500,
+                height: 400,
+                maximized: true
+            },
+            "on the first monitor, at the minimum, still maximized"
+        );
+    }
+
     // ---- what to save ------------------------------------------------------------------------
 
     #[test]
@@ -445,8 +551,9 @@ mod tests {
         };
         save_state(dir.path(), &state).unwrap();
         assert_eq!(load_state(dir.path()), Some(state));
-        assert!(
-            !dir.path().join("window.json.tmp").exists(),
+        assert_eq!(
+            crate::tests::names_in(dir.path()),
+            ["window.json"],
             "the temporary file is renamed away"
         );
         // A later save replaces the earlier one.

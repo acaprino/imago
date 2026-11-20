@@ -23,6 +23,13 @@ use tauri::{Runtime, WebviewWindow};
 
 /// The child window over the HTML maximize button of one window. Cheap to clone; keep it in the
 /// app's state and call [`set_rect`](SnapLayouts::set_rect) from the command the page reports to.
+///
+/// It belongs to one window: keep one for each window label, for instance a `Mutex<HashMap<String,
+/// SnapLayouts>>` in the app's state, and **replace** the entry when the window is built again
+/// (after a lost browser process, see [`RecoveryAction::Rebuild`](crate::RecoveryAction::Rebuild)).
+/// The old one points at a window that is gone and does nothing. Tauri's `manage` is no way to do
+/// that: it does nothing when the type is already managed, so the first window's overlay would stay
+/// and the rebuilt window's would be dropped.
 #[derive(Clone)]
 pub struct SnapLayouts {
     #[cfg(windows)]
@@ -42,8 +49,9 @@ impl SnapLayouts {
 }
 
 /// Prepares the Snap Layouts overlay for `window`, which has no frame of its own (an HTML title
-/// bar). The child window itself is made at the first non-empty rectangle. On other targets this
-/// does nothing and [`SnapLayouts::set_rect`] too.
+/// bar). The child window itself is made at the first non-empty rectangle. Call it on each window
+/// right after it is built, a rebuilt one included, and keep the result as [`SnapLayouts`] says.
+/// On other targets this does nothing and [`SnapLayouts::set_rect`] too.
 pub fn install_snap_layouts<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<SnapLayouts> {
     #[cfg(windows)]
     {
@@ -607,7 +615,11 @@ mod reload {
             if msg == WM_SYSCOMMAND && wparam & 0xFFF0 == RELOAD_COMMAND {
                 let action = (*(data as *const Action)).clone();
                 // Off the window's thread: it may be the one the page is not answering.
-                std::thread::spawn(move || action());
+                // A thread the system refuses is a click that does nothing, never a panic that
+                // unwinds out of a window procedure and aborts the process.
+                let _ = std::thread::Builder::new()
+                    .name("imago-reload".into())
+                    .spawn(move || action());
                 return 0;
             }
             if msg == WM_NCDESTROY {
@@ -647,6 +659,18 @@ mod reload {
         ) -> LRESULT {
             // SAFETY: the default procedure of this live window.
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
+
+        /// Whether `done` becomes true within five seconds (it is polled, never slept on blindly).
+        fn wait_until(done: impl Fn() -> bool) -> bool {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !done() {
+                if std::time::Instant::now() > deadline {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            true
         }
 
         fn wide(text: &str) -> Vec<u16> {
@@ -747,12 +771,13 @@ mod reload {
                 hear.recv_timeout(Duration::from_secs(5))
                     .expect("called again");
 
-                // The window goes: its count of the app's callback is released.
+                // The window goes: its count of the app's callback is released. The two threads
+                // that were called hold theirs until they return, a moment after they have sent.
                 DestroyWindow(window);
-                assert_eq!(
-                    Arc::strong_count(&action),
-                    1,
-                    "the window released its count"
+                assert!(
+                    wait_until(|| Arc::strong_count(&action) == 1),
+                    "the window and the threads released their counts, {} are left",
+                    Arc::strong_count(&action) - 1
                 );
             }
         }

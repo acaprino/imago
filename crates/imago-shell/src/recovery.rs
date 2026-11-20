@@ -35,8 +35,9 @@ const PERIOD: Duration = Duration::from_secs(60);
 /// A page that failed to load waits a moment before it tries again.
 const LOAD_RETRY_DELAY: Duration = Duration::from_secs(1);
 
-/// The reloads of one window in the last minute. Keep one for each window: a window that fails
-/// does not use up the reloads of another.
+/// The reloads of one window in the last minute. Keep one for each window, and keep it across
+/// rebuilds (a window built again after a lost browser process that failed three times a minute
+/// ago has still failed three times): a window that fails does not use up the reloads of another.
 #[derive(Debug, Default)]
 pub struct Recovery {
     reloads: VecDeque<Instant>,
@@ -103,28 +104,48 @@ pub enum RecoveryAction {
     /// [`watch_process_failures`] is already off WebView2's thread, so it may sleep and reload.
     Reload,
     /// Destroy every configured window and build them again, the main one where it was. Every
-    /// webview reports the same loss: do it once, for the first report, and ignore the others
-    /// (and any [`ProcessFailure::NotLoaded`]) until the windows are built.
+    /// webview reports the same loss: do it once, for the first report, with a flag the app sets
+    /// here and clears when the windows are built, and pass that flag to [`recovery_action`] as
+    /// `rebuilding`. Read the main window's place before destroying anything and put it back after;
+    /// a label is free again only once its window is gone, so wait for that (Shinatama waits up to
+    /// five seconds) before building.
+    ///
+    /// While the flag is set, the destruction of the windows is not the end of the application and
+    /// not the person closing them:
+    ///
+    /// - Answer `RunEvent::ExitRequested { code: None, .. }` with `api.prevent_exit()`: with every
+    ///   window destroyed the application would otherwise exit.
+    /// - Skip the window event handler that saves the window's state or tidies up when a window is
+    ///   closed or destroyed (Shinatama: `if recovering() { return; }`), or the place saved is the
+    ///   one of a window that is not there.
     Rebuild,
     /// No automatic reload: the main window asks the person (other windows stay as they are until
     /// the main one is built again). Either the page failed more than three times in a minute, or
     /// the render process is unresponsive. When the person says yes, call [`Recovery::reset`] and
     /// reload.
     GiveUp,
-    /// Nothing to do: WebView2 restarts the process itself.
+    /// Nothing to do: WebView2 restarts the process itself, or the window is being rebuilt.
     Ignore,
 }
 
 /// The decision for `failure` in the window whose reloads `recovery` counts. A reload that is
 /// allowed is counted, so ask once for each failure. A rebuild is not a reload and is not counted:
 /// the browser process only dies for the whole application.
+///
+/// `rebuilding` is the app's flag that its windows are being destroyed and built again (see
+/// [`RecoveryAction::Rebuild`]). A page that fails to load in a window that is going away is
+/// `Ignore`, and spends no reload: that is the one case Shinatama guards with its flag
+/// (`!recovering()` on a failed navigation). Every other failure is the same either way: a second
+/// `Browser` report is `Rebuild` again, and it is the app's flag that makes it act once.
 pub fn recovery_action(
     failure: ProcessFailure,
     recovery: &mut Recovery,
     now: Instant,
+    rebuilding: bool,
 ) -> RecoveryAction {
     match failure {
         ProcessFailure::Browser => RecoveryAction::Rebuild,
+        ProcessFailure::NotLoaded(_) if rebuilding => RecoveryAction::Ignore,
         ProcessFailure::Renderer | ProcessFailure::NotLoaded(_) => {
             if recovery.allow_reload(now) {
                 RecoveryAction::Reload
@@ -144,8 +165,8 @@ pub fn recovery_action(
 /// `on_failure` runs on a thread of its own for every report, never inside WebView2's callback, so
 /// it may destroy windows, build them, ask the person and sleep. Reports of one loss can arrive
 /// from several windows at once: the app serializes its own response (see
-/// [`RecoveryAction::Rebuild`]). Call it once for each window, right after it is built; a rebuilt
-/// window needs it again.
+/// [`RecoveryAction::Rebuild`], which also says what the app must do while it rebuilds). Call it
+/// once for each window, right after it is built; a rebuilt window needs it again.
 ///
 /// The `Ok` of a window that exists means the watcher was handed to the thread that owns the
 /// webview, where COM can still fail; nothing reports that. On other targets this does nothing.
@@ -203,9 +224,12 @@ mod win {
     }
 
     /// Off WebView2's thread: the callback of a failure must return before windows are destroyed.
+    /// A thread the system refuses is a failure not reported, never a panic inside a COM callback.
     fn deliver(report: &Report, failure: ProcessFailure) {
         let report = report.clone();
-        std::thread::spawn(move || report(failure));
+        let _ = std::thread::Builder::new()
+            .name("imago-webview-failure".into())
+            .spawn(move || report(failure));
     }
 
     pub fn watch<R: Runtime>(window: &WebviewWindow<R>, report: Report) -> tauri::Result<()> {
@@ -254,6 +278,11 @@ mod tests {
     use std::time::{Duration, Instant};
 
     const SECOND: Duration = Duration::from_secs(1);
+
+    /// The decision while the windows are not being rebuilt, which is nearly always.
+    fn decide(failure: ProcessFailure, recovery: &mut Recovery, now: Instant) -> RecoveryAction {
+        recovery_action(failure, recovery, now, false)
+    }
 
     #[test]
     fn three_reloads_a_minute_and_no_fourth() {
@@ -309,7 +338,7 @@ mod tests {
         // Every webview of the application reports the same loss, and a rebuild is not a reload.
         for second in 0..10 {
             assert_eq!(
-                recovery_action(
+                decide(
                     ProcessFailure::Browser,
                     &mut recovery,
                     start + second * SECOND
@@ -333,18 +362,18 @@ mod tests {
             let start = Instant::now();
             for second in 0..3 {
                 assert_eq!(
-                    recovery_action(failure, &mut recovery, start + second * SECOND),
+                    decide(failure, &mut recovery, start + second * SECOND),
                     RecoveryAction::Reload,
                     "{failure:?} at {second} s"
                 );
             }
             assert_eq!(
-                recovery_action(failure, &mut recovery, start + 3 * SECOND),
+                decide(failure, &mut recovery, start + 3 * SECOND),
                 RecoveryAction::GiveUp,
                 "{failure:?}: a page that fails at once cannot reload forever"
             );
             assert_eq!(
-                recovery_action(failure, &mut recovery, start + 60 * SECOND),
+                decide(failure, &mut recovery, start + 60 * SECOND),
                 RecoveryAction::Reload,
                 "{failure:?}: a place is free once the minute has passed"
             );
@@ -355,9 +384,8 @@ mod tests {
     fn the_two_kinds_of_failure_share_one_budget_of_reloads() {
         let mut recovery = Recovery::default();
         let start = Instant::now();
-        let mut act = |failure, seconds: u32| {
-            recovery_action(failure, &mut recovery, start + seconds * SECOND)
-        };
+        let mut act =
+            |failure, seconds: u32| decide(failure, &mut recovery, start + seconds * SECOND);
         assert_eq!(act(ProcessFailure::Renderer, 0), RecoveryAction::Reload);
         assert_eq!(act(ProcessFailure::NotLoaded(1), 1), RecoveryAction::Reload);
         assert_eq!(act(ProcessFailure::Renderer, 2), RecoveryAction::Reload);
@@ -369,7 +397,7 @@ mod tests {
         let mut recovery = Recovery::default();
         let start = Instant::now();
         assert_eq!(
-            recovery_action(ProcessFailure::Unresponsive, &mut recovery, start),
+            decide(ProcessFailure::Unresponsive, &mut recovery, start),
             RecoveryAction::GiveUp,
             "the person is asked: it may be busy, not dead"
         );
@@ -387,7 +415,7 @@ mod tests {
         let start = Instant::now();
         for second in 0..5 {
             assert_eq!(
-                recovery_action(
+                decide(
                     ProcessFailure::Other,
                     &mut recovery,
                     start + second * SECOND
@@ -413,6 +441,58 @@ mod tests {
             ProcessFailure::Other,
         ] {
             assert_eq!(failure.reload_delay(), Duration::ZERO, "{failure:?}");
+        }
+    }
+
+    #[test]
+    fn a_page_that_fails_to_load_while_the_windows_are_rebuilt_is_ignored_and_not_counted() {
+        let mut recovery = Recovery::default();
+        let start = Instant::now();
+        // The window is being destroyed: reloading it would spend a reload on a page that is
+        // going away, and ask a question about a window the person never saw fail.
+        for second in 0..5 {
+            assert_eq!(
+                recovery_action(
+                    ProcessFailure::NotLoaded(1),
+                    &mut recovery,
+                    start + second * SECOND,
+                    true
+                ),
+                RecoveryAction::Ignore
+            );
+        }
+        for second in 0..3 {
+            assert!(
+                recovery.allow_reload(start + second * SECOND),
+                "and nothing was counted"
+            );
+        }
+        // The same failure once the windows are built is a failure again.
+        let mut fresh = Recovery::default();
+        assert_eq!(
+            recovery_action(ProcessFailure::NotLoaded(1), &mut fresh, start, false),
+            RecoveryAction::Reload
+        );
+    }
+
+    #[test]
+    fn rebuilding_changes_only_what_a_failed_load_does() {
+        let start = Instant::now();
+        for failure in [
+            ProcessFailure::Browser,
+            ProcessFailure::Renderer,
+            ProcessFailure::Unresponsive,
+            ProcessFailure::Other,
+        ] {
+            let (mut resting, mut rebuilding) = (Recovery::default(), Recovery::default());
+            for second in 0..5 {
+                let now = start + second * SECOND;
+                assert_eq!(
+                    recovery_action(failure, &mut rebuilding, now, true),
+                    recovery_action(failure, &mut resting, now, false),
+                    "{failure:?} at {second} s"
+                );
+            }
         }
     }
 
