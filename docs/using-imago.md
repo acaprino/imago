@@ -168,7 +168,7 @@ A call that sets something up returns the function that undoes it. The calls tha
 | `applyLook(root, state, deps)` | The look of the window. `state` is `{ app, look, theme, glass }`; `deps` is `{ systemIsDark?, setWindowTheme? }`. `setWindowTheme` receives `light`, `dark` or `system` and is called only when the word changed |
 | `parseLook(value)`, `parseTheme(value)` | A stored value back into a look or a theme choice. A stale or corrupt value is the default |
 | `resolveTheme(choice, systemIsDark)`, `windowThemeFor(look, choice)` | The theme the page draws, and the theme the native window is asked for |
-| `guardDesktop(document, { allowReloadIn })` | Browser keys do nothing, the page menu stays out of the chrome, the mouse's back and forward buttons do nothing, images and links are not dragged out. `allowReloadIn` is a selector for places that run their own keys and menus, such as a terminal |
+| `guardDesktop(document, { allowReloadIn })` | Browser keys do nothing, the page menu stays out of the chrome, the mouse's back and forward buttons do nothing, images and links are not dragged out. `allowReloadIn` is a selector for places that run their own keys and menus, such as a terminal. The guard refuses F5, F12, Ctrl+R, Ctrl+Shift+I, J and C and the page menu in every build, so under `tauri dev` it also takes away reload and DevTools: call it only outside development, as the sketch below does |
 | `mountZoom(document, { apply, storage?, storageKey?, onChange? })` | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, from 50 to 200% in steps of 10, saved. The saved level is applied at start, also at 100%. `apply` gives the level to the webview. A refusal moves the level back. `storageKey` defaults to `imago.zoom`: an app passes its own key to keep the level it already saved |
 | `mountWindowControls(titlebar, api, { onError })` | The three window buttons, and the maximize button's rectangle for Snap Layouts, reported in physical pixels |
 
@@ -203,7 +203,8 @@ const api: WindowApi = {
 applyLook(document.documentElement, { app: 'muro', look, theme, glass: true }, {
   setWindowTheme: (word) => invoke('set_window_theme', { theme: word }),
 });
-guardDesktop(document, { allowReloadIn: '.xterm' });
+// The guard refuses reload and DevTools too: leave it out under `tauri dev`.
+if (!import.meta.env.DEV) guardDesktop(document, { allowReloadIn: '.xterm' });
 mountZoom(document, { apply: (level) => getCurrentWebview().setZoom(level), storageKey: 'muro.zoom' });
 mountWindowControls(document.querySelector<HTMLElement>('.im-titlebar')!, api, {
   onError: (action, error) => notify(shell, `${action} failed: ${String(error)}`, { tone: 'err' }),
