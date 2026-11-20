@@ -186,7 +186,7 @@ Each window also needs its own `Recovery`, kept per label and across rebuilds.
 |---|---|---|
 | The window theme | the command `set_window_theme(theme: String)` | page to Rust. The app registers it: the crate has no command of its own |
 | The maximize button's rectangle | the command `window_caption_maximize(window, x, y, width, height)` | page to Rust. It finds the window's `SnapLayouts` by `window.label()` and calls `set_rect` with the four numbers unchanged |
-| Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay | Rust to page. Listening needs `core:event:allow-listen` and `core:event:allow-unlisten` (section 3.5) |
+| Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay, at every change and again at every `window_caption_maximize` | Rust to page. Listening needs `core:event:allow-listen` and `core:event:allow-unlisten` (section 3.5) |
 
 The page sends the rectangle as `getBoundingClientRect()` times `devicePixelRatio`, rounded. The zoom of the page
 and the monitor's scale are both part of `devicePixelRatio`, so the numbers are already physical pixels of the
@@ -195,6 +195,11 @@ all zeros, or a negative size, hides the overlay: the page sends it when the tit
 
 The page's `onOsHover` wants `none`, `hover` or `pressed`: `pressed` when `pressed` is true, else `hover` when
 `hover` is true, else `none`.
+
+The state comes again with every rectangle because the page draws its title bar anew on a change of look: a page
+that was mounted while the pointer rested on the button has seen no event, and the rectangle it sends tells it. A
+hover begins only when Windows has accepted the request to say when the pointer leaves, and it ends with that
+message or when the rectangle is empty (the overlay hidden), which also ends a press that began on the button.
 
 ### 3.4 The page, in order
 

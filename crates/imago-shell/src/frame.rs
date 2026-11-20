@@ -3,7 +3,9 @@
 //! never paints lies over the HTML maximize button and answers `HTMAXBUTTON`: Windows 11 offers its
 //! layouts on hover, and a click maximizes or restores. It tells the page about hover and press
 //! (the `caption-maximize` event, `{ hover: bool, pressed: bool }`, sent to the window the overlay
-//! belongs to), so the HTML button draws them. The keyboard stays with the HTML button (Enter and
+//! belongs to), so the HTML button draws them. The event comes at every change and again at every
+//! rectangle the page reports, with the state as it is then, so a page that was drawn anew while
+//! the pointer rested on the button learns it. The keyboard stays with the HTML button (Enter and
 //! Space press it).
 //!
 //! The page reports where its maximize button is, in physical pixels of the client area, on every
@@ -70,7 +72,12 @@ pub fn install_snap_layouts<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Res
             let _ = runner.run_on_main_thread(job);
         };
         Ok(SnapLayouts {
-            overlay: Arc::new(win::Overlay::new(parent, report, run_on_main)),
+            overlay: Arc::new(win::Overlay::new(
+                parent,
+                report,
+                win::track_leave,
+                run_on_main,
+            )),
         })
     }
     #[cfg(not(windows))]
@@ -166,7 +173,8 @@ mod win {
             UI::{
                 HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
                 Input::KeyboardAndMouse::{
-                    TrackMouseEvent, TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT,
+                    TrackMouseEvent, TME_CANCEL, TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT,
+                    TRACKMOUSEEVENT_FLAGS,
                 },
                 WindowsAndMessaging::{
                     CreateWindowExW, DefWindowProcW, GetParent, GetPropW, IsWindow, IsZoomed,
@@ -200,11 +208,16 @@ mod win {
 
     /// One window's overlay: what the child window needs from its owner, and the hover and press
     /// it tracks.
+    ///
+    /// `hover` is true only while a request for the leave message is pending with Windows, which
+    /// is what ends it: `arm` makes the request (a test can answer for Windows), and a hover is
+    /// taken only when the request was accepted.
     pub struct Overlay {
         parent: isize,
         hover: AtomicBool,
         pressed: AtomicBool,
         report: Box<dyn Fn(bool, bool) + Send + Sync>,
+        arm: Box<dyn Fn(HWND) -> bool + Send + Sync>,
         run_on_main: Box<dyn Fn(Job) + Send + Sync>,
     }
 
@@ -212,6 +225,7 @@ mod win {
         pub fn new(
             parent: isize,
             report: impl Fn(bool, bool) + Send + Sync + 'static,
+            arm: impl Fn(HWND) -> bool + Send + Sync + 'static,
             run_on_main: impl Fn(Job) + Send + Sync + 'static,
         ) -> Self {
             Self {
@@ -219,6 +233,7 @@ mod win {
                 hover: AtomicBool::new(false),
                 pressed: AtomicBool::new(false),
                 report: Box::new(report),
+                arm: Box::new(arm),
                 run_on_main: Box::new(run_on_main),
             }
         }
@@ -231,10 +246,46 @@ mod win {
             );
         }
 
+        /// Ends hover and press, and tells the page only when one of them was on. The pointer
+        /// left, or the overlay is hidden: a press that began on the button is over with it.
+        fn release(&self) {
+            let was_hovered = self.hover.swap(false, Ordering::AcqRel);
+            let was_pressed = self.pressed.swap(false, Ordering::AcqRel);
+            if was_hovered || was_pressed {
+                self.report();
+            }
+        }
+
+        /// Ends hover and press without telling the page, for a window that is going.
         fn reset(&self) {
             self.hover.store(false, Ordering::Release);
             self.pressed.store(false, Ordering::Release);
         }
+    }
+
+    /// Asks Windows to send `WM_NCMOUSELEAVE` to `hwnd` when the pointer leaves it. Asking again
+    /// with the same window and flags only renews the request that is pending. True when Windows
+    /// accepted the request.
+    pub fn track_leave(hwnd: HWND) -> bool {
+        track_request(hwnd, TME_LEAVE | TME_NONCLIENT)
+    }
+
+    /// Withdraws the request `track_leave` made, so a window that is hidden is not told later
+    /// that the pointer left it.
+    fn cancel_leave(hwnd: HWND) {
+        track_request(hwnd, TME_CANCEL | TME_LEAVE | TME_NONCLIENT);
+    }
+
+    fn track_request(hwnd: HWND, flags: TRACKMOUSEEVENT_FLAGS) -> bool {
+        let mut track = TRACKMOUSEEVENT {
+            cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+            dwFlags: flags,
+            hwndTrack: hwnd,
+            dwHoverTime: 0,
+        };
+        // SAFETY: `track` is a live structure of the size it states; a window that is not valid
+        // makes the call fail, which is the result.
+        unsafe { TrackMouseEvent(&mut track) != 0 }
     }
 
     pub fn set_rect(overlay: &Arc<Overlay>, x: i32, y: i32, width: i32, height: i32) {
@@ -258,6 +309,10 @@ mod win {
             if is_empty_rect(width, height) {
                 if !overlay.is_null() {
                     ShowWindow(overlay, SW_HIDE);
+                    // A hidden window gets no more mouse messages, so nothing else would end a
+                    // hover or a press that was on the button: end them here.
+                    cancel_leave(overlay);
+                    owner.release();
                 }
                 return;
             }
@@ -317,6 +372,9 @@ mod win {
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
         }
+        // The page re-sends its rectangle when it is drawn again (another look, a page that was
+        // mounted anew) and has not seen the events before: it is told the state as it is now.
+        owner.report();
     }
 
     /// The state of an overlay, or `None` in the messages that come before it is attached.
@@ -340,14 +398,11 @@ mod win {
             match msg {
                 WM_NCHITTEST => {
                     if let Some(state) = state(hwnd) {
-                        if !state.hover.swap(true, Ordering::AcqRel) {
-                            let mut track = TRACKMOUSEEVENT {
-                                cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
-                                dwFlags: TME_LEAVE | TME_NONCLIENT,
-                                hwndTrack: hwnd,
-                                dwHoverTime: 0,
-                            };
-                            TrackMouseEvent(&mut track);
+                        // On every hit test: asking again is harmless, and a request that was
+                        // refused or lost is made anew. The pointer is a hover only once Windows
+                        // has promised to say when it leaves.
+                        let armed = (state.arm)(hwnd);
+                        if armed && !state.hover.swap(true, Ordering::AcqRel) {
                             state.report();
                         }
                     }
@@ -355,8 +410,7 @@ mod win {
                 }
                 WM_NCMOUSELEAVE => {
                     if let Some(state) = state(hwnd) {
-                        state.reset();
-                        state.report();
+                        state.release();
                     }
                     0
                 }
@@ -416,18 +470,28 @@ mod win {
     }
 
     /// The overlay on a real window procedure, over a window that is never shown (no display
-    /// needed): hover, press and release as Windows sends them, and what is left when the parent
-    /// goes.
+    /// needed): hover, press and release as Windows sends them, what the page is told, and what is
+    /// left when the parent goes. Windows' answer to the request for the leave message is the
+    /// test's to give.
     #[cfg(test)]
     mod tests {
         use super::*;
-        use std::sync::Mutex;
+        use std::sync::{atomic::AtomicUsize, Mutex, MutexGuard};
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             DestroyWindow, GetWindowLongW, GWL_STYLE, WS_OVERLAPPED,
         };
 
-        /// The `WM_SYSCOMMAND` commands the stand-in parent received.
-        static COMMANDS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+        /// The `WM_SYSCOMMAND` commands the stand-in parents received, with the parent that got
+        /// each. The tests run in parallel: each reads only the commands of its own parent.
+        static COMMANDS: Mutex<Vec<(isize, usize)>> = Mutex::new(Vec::new());
+        static PARENT_CLASS_REGISTERED: Once = Once::new();
+
+        fn received_commands() -> MutexGuard<'static, Vec<(isize, usize)>> {
+            // A test that failed while it held the lock must not fail the others.
+            COMMANDS
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+        }
 
         unsafe extern "system" fn parent_proc(
             hwnd: HWND,
@@ -436,8 +500,11 @@ mod win {
             lparam: LPARAM,
         ) -> LRESULT {
             if msg == WM_SYSCOMMAND {
-                COMMANDS.lock().unwrap().push(wparam & 0xFFF0);
+                received_commands().push((hwnd as isize, wparam & 0xFFF0));
                 return 0;
+            }
+            if msg == WM_NCDESTROY {
+                received_commands().retain(|&(parent, _)| parent != hwnd as isize);
             }
             // SAFETY: the default procedure of this live window.
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
@@ -448,101 +515,277 @@ mod win {
             unsafe { GetWindowLongW(overlay, GWL_STYLE) as u32 & WS_VISIBLE != 0 }
         }
 
-        #[test]
-        fn the_overlay_answers_the_hit_test_tells_the_page_and_maximizes() {
-            let reports = Arc::new(std::sync::Mutex::new(Vec::new()));
-            // SAFETY: Win32 calls on windows this test makes and destroys on its own thread.
-            unsafe {
-                let instance = GetModuleHandleW(std::ptr::null());
-                let class = WNDCLASSEXW {
-                    cbSize: size_of::<WNDCLASSEXW>() as u32,
-                    lpfnWndProc: Some(parent_proc),
-                    hInstance: instance,
-                    lpszClassName: w!("ImagoShellTestParent"),
-                    ..std::mem::zeroed()
+        /// An overlay over a stand-in for the app's window, with what it told the page and the
+        /// answer Windows gives to its request for the leave message.
+        struct Fixture {
+            parent: HWND,
+            state: Arc<Overlay>,
+            reports: Arc<Mutex<Vec<(bool, bool)>>>,
+            /// How many times the overlay asked Windows for the leave message.
+            asked: Arc<AtomicUsize>,
+            /// Whether Windows accepts that request.
+            accepts: Arc<AtomicBool>,
+            destroyed: bool,
+        }
+
+        impl Fixture {
+            fn new() -> Self {
+                let reports = Arc::new(Mutex::new(Vec::new()));
+                let asked = Arc::new(AtomicUsize::new(0));
+                let accepts = Arc::new(AtomicBool::new(true));
+                // SAFETY: Win32 calls on a window this fixture makes and destroys on its own thread.
+                let parent = unsafe {
+                    let instance = GetModuleHandleW(std::ptr::null());
+                    PARENT_CLASS_REGISTERED.call_once(|| {
+                        let class = WNDCLASSEXW {
+                            cbSize: size_of::<WNDCLASSEXW>() as u32,
+                            lpfnWndProc: Some(parent_proc),
+                            hInstance: instance,
+                            lpszClassName: w!("ImagoShellTestParent"),
+                            ..std::mem::zeroed()
+                        };
+                        RegisterClassExW(&class);
+                    });
+                    CreateWindowExW(
+                        0,
+                        w!("ImagoShellTestParent"),
+                        w!("test"),
+                        WS_OVERLAPPED,
+                        0,
+                        0,
+                        400,
+                        300,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        instance,
+                        std::ptr::null(),
+                    )
                 };
-                RegisterClassExW(&class);
-                let parent = CreateWindowExW(
-                    0,
-                    w!("ImagoShellTestParent"),
-                    w!("test"),
-                    WS_OVERLAPPED,
-                    0,
-                    0,
-                    400,
-                    300,
-                    std::ptr::null_mut(),
-                    std::ptr::null_mut(),
-                    instance,
-                    std::ptr::null(),
-                );
                 assert!(!parent.is_null(), "a window to stand in for the app's");
 
                 let seen = reports.clone();
+                let counted = asked.clone();
+                let answer = accepts.clone();
                 let state = Arc::new(Overlay::new(
                     parent as isize,
                     move |hover, pressed| seen.lock().unwrap().push((hover, pressed)),
+                    move |_| {
+                        counted.fetch_add(1, Ordering::AcqRel);
+                        answer.load(Ordering::Acquire)
+                    },
                     |job| job(),
                 ));
-                assert!(
-                    GetPropW(parent, OVERLAY_PROP).is_null(),
-                    "no child window before there is a button"
-                );
-
-                // The page reports its button: the child window is made, and shown.
-                set_rect(&state, 300, 0, 46, 32);
-                let overlay = GetPropW(parent, OVERLAY_PROP) as HWND;
-                assert!(!overlay.is_null());
-                assert!(visible(overlay));
-                assert_eq!(
-                    Arc::strong_count(&state),
-                    2,
-                    "the overlay holds one count of the state"
-                );
-
-                // The mouse reaches the button: Windows is told it is the maximize button, and the page is told once.
-                assert_eq!(
-                    SendMessageW(overlay, WM_NCHITTEST, 0, 0),
-                    HTMAXBUTTON as LRESULT
-                );
-                assert_eq!(
-                    SendMessageW(overlay, WM_NCHITTEST, 0, 0),
-                    HTMAXBUTTON as LRESULT
-                );
-                assert_eq!(*reports.lock().unwrap(), [(true, false)]);
-
-                // Pressed and released on the button: the parent is told to maximize.
-                SendMessageW(overlay, WM_NCLBUTTONDOWN, HTMAXBUTTON as WPARAM, 0);
-                SendMessageW(overlay, WM_NCLBUTTONUP, HTMAXBUTTON as WPARAM, 0);
-                assert_eq!(*COMMANDS.lock().unwrap(), [SC_MAXIMIZE as usize]);
-                assert_eq!(reports.lock().unwrap()[1..], [(true, true), (true, false)]);
-
-                // Leaving the button first cancels the click, as in Windows.
-                SendMessageW(overlay, WM_NCLBUTTONDOWN, HTMAXBUTTON as WPARAM, 0);
-                SendMessageW(overlay, WM_NCMOUSELEAVE, 0, 0);
-                SendMessageW(overlay, WM_NCLBUTTONUP, HTMAXBUTTON as WPARAM, 0);
-                assert_eq!(COMMANDS.lock().unwrap().len(), 1, "no second maximize");
-                assert_eq!(reports.lock().unwrap().last(), Some(&(false, false)));
-
-                // The button goes (another look): out of the hit test, and back when it returns.
-                set_rect(&state, 0, 0, 0, 0);
-                assert!(!visible(overlay));
-                set_rect(&state, 300, 0, 46, 32);
-                assert!(visible(overlay));
-                assert_eq!(
-                    GetPropW(parent, OVERLAY_PROP) as HWND,
-                    overlay,
-                    "the same window again"
-                );
-
-                // The parent goes: the child window with it, and the state is released.
-                DestroyWindow(parent);
-                assert_eq!(
-                    Arc::strong_count(&state),
-                    1,
-                    "the overlay released its count"
-                );
+                Self {
+                    parent,
+                    state,
+                    reports,
+                    asked,
+                    accepts,
+                    destroyed: false,
+                }
             }
+
+            /// The child window the page's first rectangle made, or null before that.
+            fn overlay(&self) -> HWND {
+                // SAFETY: the parent is alive until the fixture is destroyed.
+                unsafe { GetPropW(self.parent, OVERLAY_PROP) as HWND }
+            }
+
+            /// The page reports its maximize button.
+            fn show(&self) {
+                set_rect(&self.state, 300, 0, 46, 32);
+            }
+
+            /// The page reports no button (another look).
+            fn hide(&self) {
+                set_rect(&self.state, 0, 0, 0, 0);
+            }
+
+            fn send(&self, msg: u32, wparam: WPARAM) -> LRESULT {
+                // SAFETY: the overlay is alive until the fixture is destroyed.
+                unsafe { SendMessageW(self.overlay(), msg, wparam, 0) }
+            }
+
+            /// Windows asks the overlay what lies under the pointer.
+            fn hit_test(&self) -> LRESULT {
+                self.send(WM_NCHITTEST, 0)
+            }
+
+            fn press(&self) {
+                self.send(WM_NCLBUTTONDOWN, HTMAXBUTTON as WPARAM);
+            }
+
+            fn release_button(&self) {
+                self.send(WM_NCLBUTTONUP, HTMAXBUTTON as WPARAM);
+            }
+
+            /// Windows says the pointer left.
+            fn leave(&self) {
+                self.send(WM_NCMOUSELEAVE, 0);
+            }
+
+            /// What the page was told since the last call.
+            fn told(&self) -> Vec<(bool, bool)> {
+                std::mem::take(&mut *self.reports.lock().unwrap())
+            }
+
+            /// The `WM_SYSCOMMAND` commands this fixture's parent received.
+            fn commands(&self) -> Vec<usize> {
+                received_commands()
+                    .iter()
+                    .filter_map(|&(parent, command)| {
+                        (parent == self.parent as isize).then_some(command)
+                    })
+                    .collect()
+            }
+
+            fn destroy(&mut self) {
+                if !self.destroyed {
+                    self.destroyed = true;
+                    // SAFETY: the parent is alive until this call, which destroys its child too.
+                    unsafe { DestroyWindow(self.parent) };
+                }
+            }
+        }
+
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                self.destroy();
+            }
+        }
+
+        #[test]
+        fn the_overlay_answers_the_hit_test_tells_the_page_and_maximizes() {
+            let mut fixture = Fixture::new();
+            assert!(
+                fixture.overlay().is_null(),
+                "no child window before there is a button"
+            );
+
+            // The page reports its button: the child window is made, and shown.
+            fixture.show();
+            let overlay = fixture.overlay();
+            assert!(!overlay.is_null());
+            assert!(visible(overlay));
+            assert_eq!(
+                Arc::strong_count(&fixture.state),
+                2,
+                "the overlay holds one count of the state"
+            );
+            assert_eq!(fixture.told(), [(false, false)]);
+
+            // The mouse reaches the button: Windows is told it is the maximize button, and the page is told once.
+            assert_eq!(fixture.hit_test(), HTMAXBUTTON as LRESULT);
+            assert_eq!(fixture.hit_test(), HTMAXBUTTON as LRESULT);
+            assert_eq!(fixture.told(), [(true, false)]);
+
+            // Pressed and released on the button: the parent is told to maximize.
+            fixture.press();
+            fixture.release_button();
+            assert_eq!(fixture.commands(), [SC_MAXIMIZE as usize]);
+            assert_eq!(fixture.told(), [(true, true), (true, false)]);
+
+            // Leaving the button first cancels the click, as in Windows.
+            fixture.press();
+            fixture.leave();
+            fixture.release_button();
+            assert_eq!(fixture.commands().len(), 1, "no second maximize");
+            assert_eq!(fixture.told().last(), Some(&(false, false)));
+
+            // The button goes (another look): out of the hit test, and back when it returns.
+            fixture.hide();
+            assert!(!visible(overlay));
+            fixture.show();
+            assert!(visible(overlay));
+            assert_eq!(fixture.overlay(), overlay, "the same window again");
+
+            // The parent goes: the child window with it, and the state is released.
+            fixture.destroy();
+            assert_eq!(
+                Arc::strong_count(&fixture.state),
+                1,
+                "the overlay released its count"
+            );
+        }
+
+        #[test]
+        fn hiding_while_hovered_ends_hover_and_cancels_a_press() {
+            let fixture = Fixture::new();
+            fixture.show();
+            fixture.hit_test();
+            fixture.press();
+            assert_eq!(fixture.told().last(), Some(&(true, true)));
+
+            // The button goes while the pointer rests on it, pressed. A hidden window gets no
+            // mouse messages any more, so nothing but the hiding can end them.
+            fixture.hide();
+            assert_eq!(
+                fixture.told(),
+                [(false, false)],
+                "hover and press end with the window, and the page is told"
+            );
+            fixture.release_button();
+            assert!(
+                fixture.commands().is_empty(),
+                "a release after the hiding is not the end of a press: no maximize"
+            );
+            assert!(fixture.told().is_empty());
+
+            // Shown again, the pointer still there: it is a hover again, from the start.
+            fixture.show();
+            assert_eq!(fixture.told(), [(false, false)]);
+            fixture.hit_test();
+            assert_eq!(fixture.told(), [(true, false)]);
+        }
+
+        #[test]
+        fn a_refused_leave_request_is_not_a_hover() {
+            let fixture = Fixture::new();
+            fixture.show();
+            fixture.told();
+
+            // Windows refuses the request: nothing would end the hover, so there is none.
+            fixture.accepts.store(false, Ordering::Release);
+            assert_eq!(
+                fixture.hit_test(),
+                HTMAXBUTTON as LRESULT,
+                "it is still the maximize button for Windows"
+            );
+            assert!(fixture.told().is_empty());
+            assert!(!fixture.state.hover.load(Ordering::Acquire));
+
+            // The next hit test asks again, and Windows accepts.
+            fixture.accepts.store(true, Ordering::Release);
+            fixture.hit_test();
+            assert_eq!(fixture.told(), [(true, false)]);
+        }
+
+        #[test]
+        fn every_hit_test_arms_the_leave_request() {
+            let fixture = Fixture::new();
+            fixture.show();
+            fixture.told();
+
+            // Asking again with the same window and flags is harmless, so a request that was
+            // lost is made anew by the next hit test; the page is told once.
+            fixture.hit_test();
+            fixture.hit_test();
+            fixture.hit_test();
+            assert_eq!(fixture.asked.load(Ordering::Acquire), 3);
+            assert_eq!(fixture.told(), [(true, false)]);
+        }
+
+        #[test]
+        fn a_rect_report_tells_the_page_the_current_state() {
+            let fixture = Fixture::new();
+            fixture.show();
+            fixture.hit_test();
+            fixture.told();
+
+            // A page drawn anew (another look) sends its rectangle again and has seen none of
+            // the events: it is told what the state is.
+            fixture.show();
+            assert_eq!(fixture.told().last(), Some(&(true, false)));
         }
     }
 }
