@@ -7,11 +7,16 @@ export function breadcrumbs(doc: Document, label: string, segments: readonly { l
   for (const [index, segment] of segments.entries()) {
     const item = doc.createElement('li');
     const current = index === segments.length - 1;
-    const name = current ? doc.createElement('span') : doc.createElement('button');
-    if (name instanceof HTMLButtonElement) {
-      name.type = 'button';
-      name.onclick = () => reveal(segment.id);
-    } else name.setAttribute('aria-current', 'location');
+    let name: HTMLElement;
+    if (current) {
+      name = doc.createElement('span');
+      name.setAttribute('aria-current', 'location');
+    } else {
+      const button = doc.createElement('button');
+      button.type = 'button';
+      button.onclick = () => reveal(segment.id);
+      name = button;
+    }
     name.textContent = name.title = segment.label;
     item.append(name);
     list.append(item);

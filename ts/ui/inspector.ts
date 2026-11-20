@@ -18,11 +18,14 @@ export type Inspector = {
 };
 
 type Guard = { isDirty: () => boolean; ask: () => Promise<boolean> };
+const inspectors = new WeakMap<HTMLElement, Inspector>();
 
 export function inspector(shell: HTMLElement): Inspector {
   const found = shell.querySelector<HTMLElement>('.im-inspector');
   if (!found) throw new Error('inspector(): the shell has no .im-inspector region');
   const region: HTMLElement = found;
+  const existing = inspectors.get(region);
+  if (existing) return existing;
 
   let opener: HTMLElement | null = null;
   let guarded: Guard | null = null;
@@ -107,7 +110,7 @@ export function inspector(shell: HTMLElement): Inspector {
     });
   }
 
-  return {
+  const controller: Inspector = {
     push(content, from) {
       if (asking) return;
       if (!isOpen()) { show(content, from); return; }
@@ -141,4 +144,6 @@ export function inspector(shell: HTMLElement): Inspector {
       guarded = { isDirty: dirty, ask };
     },
   };
+  inspectors.set(region, controller);
+  return controller;
 }

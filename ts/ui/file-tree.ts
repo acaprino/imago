@@ -40,60 +40,100 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
   const canExpand = (entry: FileTreeEntry) => (childrenOf(entry)?.length ?? (entry.lazy ? 1 : 0)) > 0;
   let selected = options.selected;
   let active = options.active ?? selected ?? entries[0]?.id;
-  type Row = { entry: FileTreeEntry; parent?: string; element: HTMLLIElement };
-  let rows: Row[] = [];
+  type Row = { entry: FileTreeEntry; parent?: string; element: HTMLLIElement; level: number };
+  const byId = new Map<string, Row>();
+  const changed = new Set<string>();
+  const rowFor = (element: Element | null): Row | undefined => {
+    const id = (element as HTMLElement | null)?.dataset.imEntry;
+    return id === undefined ? undefined : byId.get(id);
+  };
 
-  function draw(focus = false): void {
-    const fragment = doc.createDocumentFragment();
-    rows = [];
-    function append(group: readonly FileTreeEntry[], level: number, parent?: string): void {
-      group.forEach((entry, index) => {
-        const row = doc.createElement('li');
-        row.className = 'im-tree-item';
-        row.dataset.imEntry = entry.id;
-        row.setAttribute('role', 'treeitem');
-        row.setAttribute('aria-level', String(level));
-        row.setAttribute('aria-posinset', String(index + 1));
-        row.setAttribute('aria-setsize', String(group.length));
-        row.setAttribute('aria-selected', String(selected === entry.id));
-        row.style.setProperty('--im-level', String(level - 1));
-        if (pending.has(entry.id)) row.setAttribute('aria-busy', 'true');
-        if (canExpand(entry)) row.setAttribute('aria-expanded', String(expanded.has(entry.id)));
-        row.tabIndex = entry.id === active ? 0 : -1;
-        const chevron = doc.createElement('span');
-        chevron.className = 'im-tree-chevron';
-        chevron.setAttribute('aria-hidden', 'true');
-        chevron.textContent = '▸';
-        const label = doc.createElement('span');
-        label.className = 'im-tree-label';
-        label.textContent = label.title = entry.name;
-        row.append(chevron, label);
-        fragment.append(row);
-        rows.push({ entry, parent, element: row });
-        if (expanded.has(entry.id)) append(childrenOf(entry) ?? [], level + 1, entry.id);
-      });
-    }
-    append(entries, 1);
-    if (rows.length && !rows.some(row => row.entry.id === active)) {
-      active = rows[0].entry.id;
-      rows[0].element.tabIndex = 0;
-    }
-    tree.replaceChildren(fragment);
-    if (focus) rows.find(row => row.entry.id === active)?.element.focus();
+  function setAttribute(row: HTMLElement, name: string, value: string | null) {
+    if (row.getAttribute(name) === value) return;
+    if (value === null) row.removeAttribute(name);
+    else row.setAttribute(name, value);
   }
 
-  function move(row?: Row): void {
+  function createRow(entry: FileTreeEntry, level: number, index: number, count: number, parent?: string): Row {
+    const element = doc.createElement('li');
+    element.className = 'im-tree-item';
+    element.dataset.imEntry = entry.id;
+    element.setAttribute('role', 'treeitem');
+    element.setAttribute('aria-level', String(level));
+    element.setAttribute('aria-posinset', String(index + 1));
+    element.setAttribute('aria-setsize', String(count));
+    element.style.setProperty('--im-level', String(level - 1));
+    const chevron = doc.createElement('span');
+    chevron.className = 'im-tree-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▸';
+    const label = doc.createElement('span');
+    label.className = 'im-tree-label';
+    label.textContent = label.title = entry.name;
+    element.append(chevron, label);
+    return { entry, parent, element, level };
+  }
+
+  function setFolderState({ entry, element }: Row) {
+    setAttribute(element, 'aria-busy', pending.has(entry.id) ? 'true' : null);
+    setAttribute(element, 'aria-expanded', canExpand(entry) ? String(expanded.has(entry.id)) : null);
+  }
+
+  function insert(group: readonly FileTreeEntry[], level: number, parent?: string, before: Element | null = null) {
+    const fragment = doc.createDocumentFragment();
+    function append(siblings: readonly FileTreeEntry[], depth: number, parentId?: string) {
+      siblings.forEach((entry, index) => {
+        const row = createRow(entry, depth, index, siblings.length, parentId);
+        byId.set(entry.id, row);
+        setFolderState(row);
+        row.element.setAttribute('aria-selected', String(selected === entry.id));
+        row.element.tabIndex = entry.id === active ? 0 : -1;
+        fragment.append(row.element);
+        if (expanded.has(entry.id)) append(childrenOf(entry) ?? [], depth + 1, entry.id);
+      });
+    }
+    append(group, level, parent);
+    tree.insertBefore(fragment, before);
+  }
+
+  function updateBranch(id: string) {
+    const row = byId.get(id);
     if (!row) return;
-    const previous = rows.find(item => item.entry.id === active);
+    setFolderState(row);
+    let next = rowFor(row.element.nextElementSibling);
+    if (expanded.has(id)) {
+      const children = childrenOf(row.entry);
+      if (children?.length && next?.parent !== id) insert(children, row.level + 1, id, row.element.nextElementSibling);
+    } else {
+      while (next && next.level > row.level) {
+        byId.delete(next.entry.id);
+        next.element.remove();
+        next = rowFor(row.element.nextElementSibling);
+      }
+    }
+  }
+
+  function scheduleBranch(id: string) {
+    if (!changed.size) queueMicrotask(() => {
+      if (!lifetime.signal.aborted) changed.forEach(updateBranch);
+      changed.clear();
+    });
+    changed.add(id);
+  }
+
+  function move(row?: Row, focus = true): void {
+    if (!row) return;
+    const previous = active !== undefined ? byId.get(active) : undefined;
     if (previous) previous.element.tabIndex = -1;
     active = row.entry.id;
     row.element.tabIndex = 0;
-    row.element.focus();
+    if (focus) row.element.focus();
   }
 
   function select(entry: FileTreeEntry): void {
+    if (selected !== undefined) byId.get(selected)?.element.setAttribute('aria-selected', 'false');
     selected = entry.id;
-    for (const row of rows) row.element.setAttribute('aria-selected', String(row.entry.id === selected));
+    byId.get(selected)?.element.setAttribute('aria-selected', 'true');
     options.onSelect?.(entry);
   }
 
@@ -114,9 +154,10 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
       return false;
     }).finally(() => {
       pending.delete(entry.id);
-      if (!lifetime.signal.aborted) draw(tree.contains(doc.activeElement));
+      if (!lifetime.signal.aborted) scheduleBranch(entry.id);
     });
     pending.set(entry.id, request);
+    scheduleBranch(entry.id);
     return request;
   }
 
@@ -128,11 +169,12 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
         if (ok && expanded.has(row.entry.id) && !lifetime.signal.aborted) loadExpanded(childrenOf(row.entry) ?? []);
       });
     }
-    draw(true);
+    updateBranch(row.entry.id);
+    move(row);
     options.onToggle?.(row.entry, expanded.has(row.entry.id));
   }
 
-  const fromEvent = (event: Event) => rows.find(row => row.element.contains(event.target as Node));
+  const fromEvent = (event: Event) => rowFor((event.target as Element).closest?.('[data-im-entry]') ?? null);
   tree.addEventListener('click', event => {
     const row = fromEvent(event);
     if (!row) return;
@@ -152,21 +194,21 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
     if (!row || event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.isComposing) return;
     navigation++;
-    const index = rows.indexOf(row);
+    const next = rowFor(row.element.nextElementSibling);
     switch (event.key) {
-      case 'ArrowDown': move(rows[index + 1]); break;
-      case 'ArrowUp': move(rows[index - 1]); break;
-      case 'Home': move(rows[0]); break;
-      case 'End': move(rows.at(-1)); break;
+      case 'ArrowDown': move(next); break;
+      case 'ArrowUp': move(rowFor(row.element.previousElementSibling)); break;
+      case 'Home': move(rowFor(tree.firstElementChild)); break;
+      case 'End': move(rowFor(tree.lastElementChild)); break;
       case 'ArrowRight':
         if (canExpand(row.entry)) {
-          if (expanded.has(row.entry.id)) move(rows[index + 1]?.parent === row.entry.id ? rows[index + 1] : undefined);
+          if (expanded.has(row.entry.id)) move(next?.parent === row.entry.id ? next : undefined);
           else toggle(row);
         }
         break;
       case 'ArrowLeft':
         if (canExpand(row.entry) && expanded.has(row.entry.id)) toggle(row);
-        else move(rows.find(item => item.entry.id === row.parent));
+        else if (row.parent !== undefined) move(byId.get(row.parent));
         break;
       case ' ': select(row.entry); break;
       case 'Enter':
@@ -180,8 +222,11 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
         prefix = now - typedAt < 700 ? prefix + letter : letter;
         typedAt = now;
         const needle = [...prefix].every(c => c === letter) ? letter : prefix;
-        const candidates = [...rows.slice(index + 1), ...rows.slice(0, index + 1)];
-        move(candidates.find(item => item.entry.name.toLocaleLowerCase().startsWith(needle)));
+        let candidate = row;
+        do {
+          candidate = rowFor(candidate.element.nextElementSibling ?? tree.firstElementChild)!;
+          if (candidate.entry.name.toLocaleLowerCase().startsWith(needle)) { move(candidate); break; }
+        } while (candidate !== row);
       }
     }
     event.preventDefault();
@@ -190,22 +235,30 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
   /** Resolve an ancestor-to-leaf chain of IDs, including folders that have never been read. */
   async function reveal(ids: readonly string[], focus = false): Promise<boolean> {
     const revision = ++navigation;
+    const origin = doc.activeElement;
+    let focusMoved = false;
+    const moved = () => { focusMoved = true; };
     let group = entries;
     for (const [index, id] of ids.entries()) {
       const entry = group.find(item => item.id === id);
       if (!entry || lifetime.signal.aborted || revision !== navigation) return false;
       if (index === ids.length - 1) {
-        active = id;
-        draw(focus || tree.contains(doc.activeElement));
+        const stillHere = !focusMoved && doc.activeElement === origin;
+        move(byId.get(id), stillHere && (focus || tree.contains(origin)));
         select(entry);
-        rows.find(row => row.entry.id === id)?.element.scrollIntoView({ block: 'nearest' });
+        if (stillHere) byId.get(id)?.element.scrollIntoView({ block: 'nearest' });
         return true;
       }
       if (!isFolder(entry)) return false;
       expanded.add(entry.id);
       const ready = load(entry);
-      draw(tree.contains(doc.activeElement));
-      if (!await ready) return false;
+      updateBranch(entry.id);
+      doc.addEventListener('focusin', moved, { once: true, capture: true, signal: lifetime.signal });
+      try {
+        if (!await ready) return false;
+      } finally {
+        doc.removeEventListener('focusin', moved, true);
+      }
       group = childrenOf(entry) ?? [];
     }
     return false;
@@ -221,6 +274,7 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
     }
   }
   loadExpanded(entries);
-  draw();
+  insert(entries, 1);
+  if (active === undefined || !byId.has(active)) move(rowFor(tree.firstElementChild), false);
   return { element: tree, reveal, destroy() { lifetime.abort(); tree.remove(); } };
 }

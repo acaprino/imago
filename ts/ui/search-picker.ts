@@ -158,15 +158,22 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
   }
   mark.onclick = toggle;
   input.oninput = () => { void refresh(); };
+  element.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || closed || event.isComposing || event.keyCode === 229) return;
+    close();
+    input.focus();
+    event.preventDefault();
+    event.stopPropagation();
+  });
   input.onkeydown = event => {
-    if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.key === 'Escape' && !closed) close();
-    else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       if (closed) void refresh();
       else if (rows.length) select(Math.min(rows.length - 1, Math.max(0, active + (event.key === 'ArrowDown' ? 1 : -1))), true);
-    } else if (event.key === 'Enter' && rows[active]) {
-      if (event.shiftKey && options.mark) toggle();
-      else options.onChoose(rows[active]);
+    } else if (event.key === 'Enter' && !closed) {
+      const item = rows[active];
+      if (item && event.shiftKey && options.mark) toggle();
+      else if (item) options.onChoose(item);
     } else return;
     event.preventDefault();
     event.stopPropagation();

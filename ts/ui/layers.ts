@@ -211,6 +211,7 @@ export function follow(place: () => void): () => void {
 
 type KeyLike = {
   key: string;
+  target?: EventTarget | null;
   repeat?: boolean;
   isComposing?: boolean;
   keyCode?: number;
@@ -242,6 +243,9 @@ export function attachLayers(shell: HTMLElement): () => void {
     if (event.key !== 'Escape' || event.repeat || event.isComposing || event.keyCode === 229) return;
     const top = topLayer();
     if (!top) return;
+    // The focused picker in this layer gets the first Escape to dismiss its own results.
+    const picker = (event.target as Element | null)?.closest?.('.im-search-picker');
+    if (picker && top.el.contains(picker) && picker.querySelector('input[role="combobox"][aria-expanded="true"]')) return;
     event.preventDefault?.();
     event.stopImmediatePropagation?.();
     top.close();

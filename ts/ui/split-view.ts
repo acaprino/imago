@@ -31,9 +31,13 @@ export function splitView(first: HTMLElement, second: HTMLElement, options: {
     },
   });
   element.append(first, handle.element, second);
-  function measure() {
-    const size = columns ? 'clientWidth' : 'clientHeight';
-    available = Math.max(0, element[size] - handle.element[size]);
+  function measure([entry]: ResizeObserverEntry[]) {
+    const extent = columns ? entry.contentRect.width : entry.contentRect.height;
+    const divider = columns ? handle.element.offsetWidth : handle.element.offsetHeight;
+    const style = doc.defaultView!.getComputedStyle(element);
+    const gap = columns ? style.columnGap : style.rowGap;
+    const gapSize = (parseFloat(gap) || 0) * (gap.endsWith('%') ? extent / 100 : 1);
+    available = Math.max(0, extent - divider - 2 * gapSize);
     // When both minima cannot fit, share the space in proportion to their minima.
     const scale = Math.min(1, available / (minFirst + minSecond || 1));
     handle.setBounds(Math.floor(minFirst * scale), available - Math.floor(minSecond * scale), available * fraction);

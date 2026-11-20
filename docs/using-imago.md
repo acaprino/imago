@@ -296,6 +296,12 @@ The Shinatama example in the gallery lets you move tabs between panes, search pr
 
 Dragging to the centre of a pane joins its tabs. Dragging to an edge requests a split. Dropping on the first or second half of a tab requests insertion before or after it. A focused tab enters move mode with Shift+Enter. The arrows visit available destinations, Enter commits and Escape cancels. The application applies each accepted move to its own layout model and restores focus after rendering.
 
+A tablist can also use `roving`. Its normal navigation resumes when move mode ends. Nested docking hosts own their own tabs and destinations. A destination must still be visible and valid when the user confirms. In a column split, the physical divider follows the pointer and the arrow keys in both LTR and RTL.
+
+While a search picker is expanded, Enter chooses the active result when one exists and leaves the enclosing form alone. In a sheet, the first Escape inside the picker collapses its results and focuses the input. A second Escape closes the sheet and restores focus to its opener.
+
+Calls to `inspector(shell)` share one controller for the same inspector region. A tree reveal can request focus. If focus moves elsewhere during loading, the tree still selects the file and leaves focus and scrolling with the user.
+
 For example, a Files view can connect its breadcrumb and tree to the same project-relative IDs.
 
 ```ts

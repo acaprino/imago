@@ -11,7 +11,7 @@ export function splitter(doc: Document, options: {
   onCommit?: (pixels: number) => void;
 }) {
   let { min, max } = options;
-  const { reverse = false, orientation = 'vertical' } = options;
+  const { orientation = 'vertical' } = options;
   if (![min, max, options.value].every(Number.isFinite) || min > max) throw new RangeError('Invalid splitter bounds');
   const element = doc.createElement('div');
   element.className = 'im-splitter';
@@ -23,7 +23,8 @@ export function splitter(doc: Document, options: {
   element.setAttribute('aria-valuemax', String(max));
   if (options.controls) element.setAttribute('aria-controls', options.controls);
   const vertical = orientation === 'vertical';
-  const sign = reverse ? -1 : 1;
+  // Direction is inherited from the host after mounting. An explicit reverse flag takes precedence.
+  const sign = () => (options.reverse ?? (vertical && doc.defaultView?.getComputedStyle(element).direction === 'rtl')) ? -1 : 1;
   let value = options.value;
   function setValue(pixels: number) {
     if (!Number.isFinite(pixels)) return;
@@ -32,7 +33,7 @@ export function splitter(doc: Document, options: {
     element.setAttribute('aria-valuetext', value + ' px');
     options.onResize(value);
   }
-  let drag: { id: number; start: number; value: number } | undefined;
+  let drag: { id: number; start: number; value: number; sign: number } | undefined;
   const position = (event: PointerEvent) => vertical ? event.clientX : event.clientY;
   function finish(commit: boolean) {
     if (!drag) return;
@@ -47,7 +48,7 @@ export function splitter(doc: Document, options: {
       finish(false);
     } else {
       if (drag || event.altKey || event.metaKey || event.ctrlKey) return;
-      const step = (event.shiftKey ? 32 : 8) * sign;
+      const step = (event.shiftKey ? 32 : 8) * sign();
       if (event.key === 'Home') setValue(min);
       else if (event.key === 'End') setValue(max);
       else if (event.key === (vertical ? 'ArrowLeft' : 'ArrowUp')) setValue(value - step);
@@ -62,14 +63,14 @@ export function splitter(doc: Document, options: {
     if (drag || event.button !== 0 || !event.isPrimary) return;
     element.focus();
     element.setPointerCapture(event.pointerId);
-    drag = { id: event.pointerId, start: position(event), value };
+    drag = { id: event.pointerId, start: position(event), value, sign: sign() };
   };
   element.onpointermove = event => {
-    if (drag?.id === event.pointerId) setValue(drag.value + sign * (position(event) - drag.start));
+    if (drag?.id === event.pointerId) setValue(drag.value + drag.sign * (position(event) - drag.start));
   };
   element.onpointerup = event => {
     if (drag?.id !== event.pointerId) return;
-    setValue(drag.value + sign * (position(event) - drag.start));
+    setValue(drag.value + drag.sign * (position(event) - drag.start));
     finish(true);
   };
   element.onpointercancel = element.onlostpointercapture = event => {

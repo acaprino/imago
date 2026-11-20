@@ -2,11 +2,14 @@
 export type DockPlacement = 'center' | 'left' | 'right' | 'top' | 'bottom' | 'before' | 'after';
 export interface DockMove { tab: string; pane: string; placement: DockPlacement; relativeTo?: string }
 
+const mounted = new WeakMap<HTMLElement, () => void>();
+
 export function dockTabs(host: HTMLElement, options: {
   move: (request: DockMove) => void;
   canMove?: (request: DockMove) => boolean;
   describe: (request: DockMove) => string;
 }) {
+  mounted.get(host)?.();
   const doc = host.ownerDocument;
   const listeners = new AbortController();
   const signal = listeners.signal;
@@ -14,23 +17,39 @@ export function dockTabs(host: HTMLElement, options: {
   live.className = 'im-dock-announcement';
   live.setAttribute('role', 'status');
   host.append(live);
-  type Target = { node: HTMLElement; move: DockMove };
-  let gesture: { tab: HTMLElement; pointer?: number; x: number; y: number; started: boolean } | undefined;
+  type Target = { node: HTMLElement; pane: HTMLElement; move: DockMove };
+  let gesture: { tab: HTMLElement; id: string; pointer?: number; x: number; y: number; started: boolean } | undefined;
   let preview: Target | undefined;
   let suppressClick = false;
-  const panes = () => [...host.querySelectorAll<HTMLElement>('[data-im-pane]')].filter(el => el.getClientRects().length);
+  function owns(el: Element | null) {
+    for (let node = el; node; node = node.parentElement) {
+      if (node === host) return true;
+      if (mounted.has(node as HTMLElement)) return false;
+    }
+    return false;
+  }
+  const available = (el: HTMLElement) => owns(el) && el.getClientRects().length > 0 &&
+    !el.closest('[inert], [hidden], [aria-disabled="true"]') && !el.matches(':disabled') &&
+    doc.defaultView?.getComputedStyle(el).visibility === 'visible';
+  const panes = () => [...host.querySelectorAll<HTMLElement>('[data-im-pane]')].filter(available);
   const tabs = (pane: HTMLElement) => [...pane.querySelectorAll<HTMLElement>('[data-im-dock-tab]')]
-    .filter(tab => tab.closest('[data-im-pane]') === pane && tab.getClientRects().length);
+    .filter(tab => tab.closest('[data-im-pane]') === pane && available(tab));
   function target(pane: HTMLElement, placement: DockPlacement, relative?: HTMLElement): Target | undefined {
     const source = gesture?.tab;
-    if (!source || !host.contains(source) || !host.contains(pane) || relative === source) return;
-    if (source.closest('[data-im-pane]') === pane && !relative && (placement === 'center' || tabs(pane).length === 1)) return;
+    if (!source || source.dataset.imDockTab !== gesture?.id || !available(source) ||
+        !pane.hasAttribute('data-im-pane') || !available(pane)) return;
+    const origin = source.closest<HTMLElement>('[data-im-pane]');
+    if (!owns(origin)) return;
+    if (relative && (relative === source || !relative.hasAttribute('data-im-dock-tab') ||
+        relative.closest('[data-im-pane]') !== pane || !available(relative))) return;
+    if (origin === pane && !relative && (placement === 'center' || tabs(pane).length === 1)) return;
     const move: DockMove = { tab: source.dataset.imDockTab!, pane: pane.dataset.imPane!, placement };
     if (relative) move.relativeTo = relative.dataset.imDockTab;
-    return options.canMove?.(move) === false ? undefined : { node: relative ?? pane, move };
+    return options.canMove?.(move) === false ? undefined : { node: relative ?? pane, pane, move };
   }
   function highlight(next?: Target) {
-    if (next?.node === preview?.node && next?.move.placement === preview?.move.placement) return;
+    if (next?.node === preview?.node && next?.pane === preview?.pane && next?.move.pane === preview?.move.pane &&
+        next?.move.relativeTo === preview?.move.relativeTo && next?.move.placement === preview?.move.placement) return;
     if (preview) delete preview.node.dataset.imDockTarget;
     preview = next;
     if (next) next.node.dataset.imDockTarget = next.move.placement;
@@ -38,19 +57,23 @@ export function dockTabs(host: HTMLElement, options: {
   }
   function end(commit = false) {
     if (!gesture) return;
-    const { tab, pointer } = gesture;
-    const request = preview?.move;
-    const valid = preview && host.contains(preview.node) && host.contains(tab);
+    const { pointer } = gesture;
+    const last = preview;
+    const current = commit && last
+      ? target(last.pane, last.move.placement, last.node === last.pane ? undefined : last.node)
+      : undefined;
     if (gesture.started && pointer !== undefined) suppressClick = true;
     gesture = undefined;
     if (pointer !== undefined && host.hasPointerCapture(pointer)) host.releasePointerCapture(pointer);
     highlight();
-    if (commit && valid && request && options.canMove?.(request) !== false) options.move(request);
+    if (current && last && current.move.pane === last.move.pane && current.move.relativeTo === last.move.relativeTo) {
+      options.move(current.move);
+    }
   }
   function fromPoint(x: number, y: number) {
     const el = doc.elementFromPoint(x, y);
     const pane = el?.closest<HTMLElement>('[data-im-pane]');
-    if (!pane || !host.contains(pane)) return;
+    if (!pane || !owns(el)) return;
     const tab = el?.closest<HTMLElement>('[data-im-dock-tab]');
     if (tab) {
       const r = tab.getBoundingClientRect();
@@ -65,16 +88,17 @@ export function dockTabs(host: HTMLElement, options: {
   }
 
   function tabAt(event: Event) {
-    if (!(event.target instanceof Element)) return;
-    const tab = event.target.closest<HTMLElement>('[data-im-dock-tab]');
-    const control = event.target.closest('button, input, a, select, textarea, [contenteditable=true]');
-    if (tab && (!control || control === tab) && host.contains(tab) && !tab.matches(':disabled, [aria-disabled=true]')) return tab;
+    const el = event.target as Element | null;
+    if (!el?.closest || !owns(el)) return;
+    const tab = el.closest<HTMLElement>('[data-im-dock-tab]');
+    const control = el.closest('button, input, a, select, textarea, [contenteditable=true]');
+    if (tab && (!control || control === tab) && available(tab) && owns(tab.closest('[data-im-pane]'))) return tab;
   }
   host.addEventListener('pointerdown', event => {
     suppressClick = false;
     const tab = tabAt(event);
     if (!tab || gesture || event.button !== 0 || !event.isPrimary) return;
-    gesture = { tab, pointer: event.pointerId, x: event.clientX, y: event.clientY, started: false };
+    gesture = { tab, id: tab.dataset.imDockTab!, pointer: event.pointerId, x: event.clientX, y: event.clientY, started: false };
   }, { signal });
   // Listen on the document before capture too: moving across the host boundary must end the gesture.
   doc.addEventListener('pointermove', event => {
@@ -112,11 +136,12 @@ export function dockTabs(host: HTMLElement, options: {
       return result.filter((item): item is Target => !!item);
     });
   }
-  doc.addEventListener('keydown', event => {
+  // The document's layer stack gets first refusal. Then move mode precedes the tablist's roving keys.
+  host.addEventListener('keydown', event => {
     if (event.isComposing || event.defaultPrevented) return;
     if (gesture && event.key === 'Escape') end();
     else if (gesture && gesture.pointer === undefined) {
-      if (event.key === 'Enter') end(true);
+      if (event.key === 'Enter') { if (!event.repeat) end(true); }
       else if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) {
         const all = keyTargets();
         const index = all.findIndex(t => t.node === preview?.node && t.move.placement === preview?.move.placement);
@@ -126,11 +151,18 @@ export function dockTabs(host: HTMLElement, options: {
     } else {
       const tab = tabAt(event);
       if (gesture || !tab || event.key !== 'Enter' || !event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
-      gesture = { tab, x: 0, y: 0, started: true };
+      if (event.repeat) { event.preventDefault(); event.stopPropagation(); return; }
+      gesture = { tab, id: tab.dataset.imDockTab!, x: 0, y: 0, started: true };
       const first = keyTargets()[0];
       if (!first) { end(); return; }
       highlight(first);
     }
+    event.preventDefault();
+    event.stopPropagation();
+  }, { capture: true, signal });
+  doc.addEventListener('keydown', event => {
+    if (gesture?.pointer === undefined || event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+    end();
     event.preventDefault();
     event.stopPropagation();
   }, { signal });
@@ -138,5 +170,12 @@ export function dockTabs(host: HTMLElement, options: {
     if (gesture && gesture.pointer === undefined && !gesture.tab.contains(event.relatedTarget as Node | null)) end();
   }, { signal });
   doc.defaultView?.addEventListener('blur', () => end(), { signal });
-  return () => { end(); listeners.abort(); live.remove(); };
+  function destroy() {
+    end();
+    listeners.abort();
+    live.remove();
+    if (mounted.get(host) === destroy) mounted.delete(host);
+  }
+  mounted.set(host, destroy);
+  return destroy;
 }
