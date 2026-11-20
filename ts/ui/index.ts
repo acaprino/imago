@@ -10,3 +10,6 @@ export * from './inspector.ts';
 export * from './sidebar.ts';
 export * from './palette.ts';
 export * from './panel-state.ts';
+export * from './file-tree.ts';
+export * from './file-selector.ts';
+export * from './progress.ts';

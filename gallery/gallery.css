@@ -67,3 +67,12 @@ h1 { margin: 0; font: 600 28px/1.15 var(--g-font-display); }
 .g-term { flex: 1; min-height: 0; margin: 0 12px 12px; padding: 12px 14px; overflow: auto; white-space: pre; font: 400 12.5px/1.55 var(--im-font-code); color: var(--im-text); background: var(--im-terminal); border: 1px solid var(--im-line-soft); border-radius: var(--im-r-sheet); }
 .g-t-a { color: var(--im-accent-text); } .g-t-ok { color: var(--im-ok); } .g-t-w { color: var(--im-warn); } .g-t-m { color: var(--im-muted); }
 .g-form { padding: 2px var(--im-s-4) 14px; gap: 14px; }
+
+.g-files {
+  display: grid;
+  gap: var(--im-s-3);
+  padding: var(--im-s-4);
+  background: var(--im-sheet);
+  color: var(--im-text);
+}
+.g-files > button { justify-self: start; }

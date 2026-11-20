@@ -180,3 +180,67 @@ export function sidebarCollapse(shell: HTMLElement, options: { collapsed?: boole
     observer?.disconnect();
   };
 }
+
+/** Add a pointer and keyboard splitter to a docked sidebar. The shell still owns its rail and drawer breakpoints. */
+export function sidebarResize(shell: HTMLElement, options: {
+  label: string; width?: number; onChange?: (width: number) => void;
+}): () => void {
+  const sidebar = shell.querySelector<HTMLElement>('.im-sidebar');
+  if (!sidebar) return () => {};
+  const doc = shell.ownerDocument;
+  const handle = doc.createElement('div');
+  handle.className = 'im-sidebar-splitter';
+  handle.tabIndex = 0;
+  handle.setAttribute('role', 'separator');
+  handle.setAttribute('aria-orientation', 'vertical');
+  handle.setAttribute('aria-label', options.label);
+  if (sidebar.id) handle.setAttribute('aria-controls', sidebar.id);
+  const min = 168;
+  const max = 420;
+  handle.setAttribute('aria-valuemin', String(min));
+  handle.setAttribute('aria-valuemax', String(max));
+  const previous = shell.style.getPropertyValue('--im-w-sidebar');
+  const token = doc.defaultView?.getComputedStyle(shell).getPropertyValue('--im-w-sidebar');
+  let width = Number.parseFloat(token || '') || 232;
+  function resize(value: number): void {
+    width = Math.round(Math.min(max, Math.max(min, value)));
+    shell.style.setProperty('--im-w-sidebar', width + 'px');
+    handle.setAttribute('aria-valuenow', String(width));
+    handle.setAttribute('aria-valuetext', width + ' px');
+  }
+  resize(Number.isFinite(options.width) ? options.width! : width);
+  handle.onkeydown = event => {
+    const step = event.shiftKey ? 32 : 8;
+    const values: Record<string, number> = { ArrowLeft: width - step, ArrowRight: width + step, Home: min, End: max };
+    if (!Object.hasOwn(values, event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resize(values[event.key]);
+    options.onChange?.(width);
+  };
+  let drag: { pointer: number; start: number; width: number } | undefined;
+  handle.onpointerdown = event => {
+    if (drag || event.button !== 0) return;
+    handle.setPointerCapture(event.pointerId);
+    drag = { pointer: event.pointerId, start: event.clientX, width };
+  };
+  handle.onpointermove = event => {
+    if (drag?.pointer === event.pointerId) resize(drag.width + event.clientX - drag.start);
+  };
+  handle.onpointerup = event => {
+    if (drag?.pointer !== event.pointerId) return;
+    resize(drag.width + event.clientX - drag.start);
+    drag = undefined;
+    options.onChange?.(width);
+  };
+  handle.onlostpointercapture = () => {
+    if (drag) resize(drag.width);
+    drag = undefined;
+  };
+  sidebar.append(handle);
+  return () => {
+    handle.remove();
+    if (previous) shell.style.setProperty('--im-w-sidebar', previous);
+    else shell.style.removeProperty('--im-w-sidebar');
+  };
+}
