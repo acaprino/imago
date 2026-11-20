@@ -323,8 +323,10 @@ sheet, dialog and palette, notice, menu. Escape closes the top surface only.
 - Tab moves between controls. Arrows move inside a list, a table, tabs or a menu, and each is one tab stop. `F6`
   moves between the sidebar, the content and the inspector; `Shift+F6` goes back.
 - Enter runs the primary action of the focused surface. Escape closes the top surface only.
-- A single-letter binding works only when focus is not in a field. A key pressed while an input method composes
-  text belongs to the input method.
+- In a text field (an input, a textarea, a select or an editable element) a binding without Ctrl or Alt does not run,
+  and does not cancel the key: the field keeps every key that types and every key that edits or moves in it (letters,
+  Space, Delete, Backspace, Home, End, the arrows, Enter, Tab). Escape and F1 to F24 stay available there, and so does
+  any binding with Ctrl or Alt. A key pressed while an input method composes text belongs to the input method.
 - A binding of Enter or Space is not made in the registry: the focused control's own activation would also fire.
   A button's key cap may show it.
 - `Ctrl+=`, `Ctrl+-` and `Ctrl+0` zoom from 50 to 200%, in steps of 10, saved per machine.
