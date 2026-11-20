@@ -89,6 +89,7 @@ function exportsOf(file: string, seen: Set<string> = new Set()): Set<string> {
 }
 
 const UI_EXPORTS = exportsOf('ts/ui/index.ts');
+const TAURI_EXPORTS = exportsOf('ts/tauri.ts');
 const SHELL_EXPORTS = exportsOf('ts/shell/index.ts');
 
 /** Rust names that are public items of the crate: types, functions and constants, and the variants of its enums. */
@@ -113,7 +114,7 @@ const TOKEN_NAMES = new Set([...TOKENS_CSS.matchAll(/^\s*(--im-[a-z0-9-]+)\s*:/g
 
 // Names that belong to someone else. Each entry is a name a document uses on purpose; nothing else goes here.
 const THEIRS_TS = new Set([
-  'getCurrentWindow', 'getCurrentWebview', 'setZoom', 'setTheme', 'build', 'matchMedia', 'getBoundingClientRect', 'oklch', 'showModal',
+  'getCurrentWebview', 'setZoom', 'setTheme', 'build', 'matchMedia', 'getBoundingClientRect', 'oklch', 'showModal',
 ]);
 const APP_OWNED_RUST = new Set(['set_window_theme', 'window_caption_maximize']); // the two commands an app registers (see desktop-shell.md)
 const THEIRS_RUST = new Set(['from_config']);
@@ -189,9 +190,11 @@ describe('exports', () => {
       for (const block of split(read(doc)).fences) {
         for (const match of block.matchAll(/import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+'(@acaprino\/imago\/[^']+)'/g)) {
           const [, list, from] = match;
-          const available = from === '@acaprino/imago/ui' ? UI_EXPORTS : from === '@acaprino/imago/shell' ? SHELL_EXPORTS : null;
+          const available = new Map([
+            ['@acaprino/imago/ui', UI_EXPORTS], ['@acaprino/imago/shell', SHELL_EXPORTS], ['@acaprino/imago/tauri', TAURI_EXPORTS],
+          ]).get(from);
           if (!available) {
-            problems.push(`import from ${from}: only /ui and /shell have names to import`);
+            problems.push(`import from ${from}: unknown module`);
             continue;
           }
           for (const part of list.split(',')) {
@@ -217,7 +220,7 @@ describe('exports', () => {
           const name = call[1];
           if (name.includes('_')) {
             if (!RUST_NAMES.has(name) && !APP_OWNED_RUST.has(name) && !THEIRS_RUST.has(name)) problems.push(`${span}: no pub ${name} in crates/imago-shell`);
-          } else if (!UI_EXPORTS.has(name) && !SHELL_EXPORTS.has(name) && !THEIRS_TS.has(name) && !MEMBER_NAMES.has(name)) {
+          } else if (!UI_EXPORTS.has(name) && !SHELL_EXPORTS.has(name) && !TAURI_EXPORTS.has(name) && !THEIRS_TS.has(name) && !MEMBER_NAMES.has(name)) {
             problems.push(`${span}: ${name} is not exported by ts/ui or ts/shell`);
           }
         }

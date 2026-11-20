@@ -1,9 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { applyLook, guardDesktop, mountWindowControls, mountZoom } from '../../ts/shell/index.ts';
-import type { WindowApi } from '../../ts/shell/index.ts';
+import { tauriWindowApi } from '../../ts/tauri.ts';
 import { notify } from '../../ts/ui/notice.ts';
 import type { MountContext } from '../main.ts';
 
@@ -45,36 +43,6 @@ function wirePage(first: MountContext): void {
   queueMicrotask(() => window.__imago?.set({ glass: true }));
 }
 
-/** The window as the page sees it. Every call that can fail returns its promise, so the title bar reports it. */
-function windowApi(fail: (what: string, error: unknown) => void): WindowApi {
-  const native = getCurrentWindow();
-  const stopOnResolve = (listening: Promise<() => void>): (() => void) => {
-    listening.catch((error: unknown) => fail('listen to the window', error));
-    return () => { void listening.then((unlisten) => unlisten(), () => {}); };
-  };
-  return {
-    minimize: () => native.minimize(),
-    toggleMaximize: () => native.toggleMaximize(),
-    close: () => native.close(),
-    reportMaximizeRect: (rect) => invoke('window_caption_maximize', rect),
-    onOsHover: (callback) => stopOnResolve(listen<{ hover: boolean; pressed: boolean }>('caption-maximize', ({ payload }) => {
-      callback(payload.pressed ? 'pressed' : payload.hover ? 'hover' : 'none');
-    })),
-    onMaximized: (callback) => {
-      let revision = 0;
-      let live = true;
-      // Several answers can be on their way at once (a window resized fast): only the last one asked is shown.
-      const sync = (): void => {
-        const mine = ++revision;
-        native.isMaximized().then((maximized) => { if (live && mine === revision) callback(maximized); }, (error: unknown) => fail('read whether it is maximized', error));
-      };
-      sync();
-      const stop = stopOnResolve(native.onResized(sync));
-      return () => { live = false; stop(); };
-    },
-  };
-}
-
 /** The title bar is the window's frame: its empty parts drag the window and a double click maximizes it. */
 function markDragRegion(titlebar: HTMLElement): void {
   for (const part of [titlebar, ...titlebar.querySelectorAll<HTMLElement>(':scope > .im-spacer, :scope > .im-brand, :scope > .im-brand *')]) {
@@ -99,7 +67,7 @@ export default function mount(ctx: MountContext): (() => void) | undefined {
   const titlebar = shell.querySelector<HTMLElement>('.im-titlebar');
   if (!titlebar) return undefined;
   markDragRegion(titlebar);
-  return mountWindowControls(titlebar, windowApi(fail), {
+  return mountWindowControls(titlebar, tauriWindowApi(fail), {
     onError: (action, error) => fail(action, error),
   });
 }

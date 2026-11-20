@@ -9,9 +9,10 @@
   },
   "exports": {
     "./css/*": "./css/*",
-    "./ui": "./ts/ui/index.ts",
-    "./shell": "./ts/shell/index.ts",
-    "./tokens": "./tokens/imago.tokens.json"
+    "./ui": "./lib/ui/index.js",
+    "./shell": "./lib/shell/index.js",
+    "./tokens": "./tokens/imago.tokens.json",
+    "./tauri": "./lib/tauri.js"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
@@ -24,7 +25,8 @@
     "demo:build": "cd examples/demo/src-tauri && tauri build --debug --no-bundle --features custom-protocol",
     "demo:fetch": "node examples/demo/fetch.mjs",
     "capture": "node examples/demo/capture.mjs",
-    "verify": "npm run tokens -- --check && npm test && npm run build && npm run test:gallery && cargo test -p imago-shell"
+    "verify": "npm run tokens -- --check && npm test && npm run build && npm run test:gallery && cargo test -p imago-shell",
+    "prepare": "tsc -p tsconfig.package.json"
   },
   "devDependencies": {
     "@tauri-apps/api": "2.12.4",
@@ -32,5 +34,20 @@
     "playwright": "1.63.0",
     "typescript": "7.0.2",
     "vite": "8.3.5"
-  }
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2.12.4"
+  },
+  "peerDependenciesMeta": {
+    "@tauri-apps/api": {
+      "optional": true
+    }
+  },
+  "files": [
+    "lib",
+    "css",
+    "docs",
+    "tokens",
+    "ts"
+  ]
 }

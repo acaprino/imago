@@ -8,7 +8,7 @@ What exists: the tokens and their CSS, the layout shell with its seven regions a
 in every state in two looks (Smooth and ONI, each dark and light) and five accents, the behaviour modules (command
 registry, keys, menus, sheets, dialogs, notices, the inspector, the palette, panel states, the sidebar), the page side
 of the desktop shell, the crate `imago-shell`, the gallery, and a demo app that shows the gallery in a real glass
-window. No app has adopted it yet. The version is set by the release workflow, not by hand.
+window. Mukade desktop uses it on its develop branch. The version is set by the release workflow, not by hand.
 
 ## The documents
 

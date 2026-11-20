@@ -1163,7 +1163,48 @@ async function failures(page) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+async function formDialogs(page) {
+  await fresh(page);
+  await anchor(page);
+  await page.focus('#anchor');
+  await page.evaluate(() => {
+    const shell = document.querySelector('.im-shell');
+    const { openFormDialog } = window.__imagoSurfaces;
+    const create = title => openFormDialog(shell, { title, closeLabel: 'Close', onClose: () => window.__log.push(title) });
+    const first = create('Import');
+    const input = document.createElement('input');
+    first.body.append(input);
+    first.lock(true);
+    const second = create('Settings');
+    window.__forms = { first, second };
+  });
+  assert.equal((await active(page)).text, 'Close', 'deferred focus belongs to the top form');
+  assert.equal(await page.getByRole('dialog', { name: 'Settings' }).count(), 1);
+  await press(page, 'Escape');
+  assert.equal(await page.getByRole('dialog', { name: 'Import' }).count(), 1);
+  await press(page, 'Tab', 'Escape');
+  assert.equal(await page.evaluate(() => {
+    const { first } = window.__forms;
+    first.root.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    return first.body.inert && first.foot.inert && !first.close() && document.activeElement === first.dialog;
+  }), true, 'the locked form retains focus and survives every dismissal path');
+  await page.evaluate(() => {
+    const { first } = window.__forms;
+    first.lock(false);
+    first.setTitle('Finished');
+    first.foot.append(document.createElement('button'));
+  });
+  assert.equal(await page.getByRole('dialog', { name: 'Finished' }).count(), 1);
+  await press(page, 'Shift+Tab');
+  assert.equal(await page.evaluate(() => window.__forms.first.foot.contains(document.activeElement)), true);
+  await press(page, 'Tab', 'Escape');
+  assert.equal((await active(page)).id, 'anchor');
+  assert.deepEqual(await log(page), ['Settings', 'Import']);
+  assert.equal(await count(page, '.im-scrim, .im-shell [inert]'), 0);
+}
+
 export default async (page, url) => {
+  await formDialogs(page);
   for (const look of LOOKS) {
     for (const theme of THEMES) {
       await menus(page, look, theme);

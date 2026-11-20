@@ -269,3 +269,25 @@
   .im-menu-item[aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
   .im-menu-item[aria-disabled="true"] { color: GrayText; border-color: GrayText; }
 }
+
+.im-form-dialog {
+  width: min(45rem, 96%);
+  padding: 0;
+  gap: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.im-form-dialog--wide { width: min(60rem, 96%); }
+.im-form-dialog-head, .im-form-dialog-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--im-s-2);
+  margin: 0;
+  padding: 12px 20px;
+}
+.im-form-dialog-head { border-bottom: 1px solid var(--im-line); }
+.im-form-dialog-head > button { margin-inline-start: auto; }
+.im-form-dialog-subtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--im-text-2); }
+.im-form-dialog-body { min-height: 0; overflow: auto; padding: 18px 20px; }
+.im-form-dialog-foot { border-top: 1px solid var(--im-line); }
+.im-form-dialog[aria-busy="true"] .im-form-dialog-body { opacity: .65; }

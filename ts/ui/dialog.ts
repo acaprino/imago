@@ -2,7 +2,7 @@
 // the HTML title bar inert too and leave a borderless window nobody can move or close. Instead the
 // regions under the title bar are made inert, focus starts on Cancel and stays inside, and Escape cancels.
 
-import { inertShell, pushLayer, trapTab, type Layer } from './layers.ts';
+import { inertShell, pushLayer, topLayer, trapTab } from './layers.ts';
 
 export type ConfirmOptions = {
   title: string;
@@ -19,8 +19,6 @@ let counter = 0;
 /** Resolves `true` when the user confirms and `false` on Cancel or Escape. */
 export function confirm(shell: HTMLElement, options: ConfirmOptions): Promise<boolean> {
   const doc = shell.ownerDocument;
-  const active = doc.activeElement;
-  const opener = active instanceof HTMLElement && active !== doc.body ? active : null;
   const id = `im-dialog-${++counter}`;
 
   const scrim = doc.createElement('div');
@@ -63,32 +61,124 @@ export function confirm(shell: HTMLElement, options: ConfirmOptions): Promise<bo
 
   return new Promise<boolean>((resolve) => {
     let done = false;
-    let release = (): void => {};
-    let pop = (): void => {};
+
 
     // Whatever closes the dialog (a button, Escape, the returned close) ends here: the page is released
     // before focus goes back, because an inert element cannot take it.
     function finish(result: boolean): void {
       if (done) return;
       done = true;
-      release();
-      pop();
-      scrim.remove();
+      unmount();
       resolve(result);
     }
 
     cancel.addEventListener('click', () => finish(false));
     ok.addEventListener('click', () => finish(true));
-    scrim.addEventListener('keydown', (event) => trapTab(event, dialog));
-    // A press on the dimmed page must not pull focus out of the dialog.
-    scrim.addEventListener('mousedown', (event) => {
-      if (event.target === scrim) event.preventDefault();
-    });
-
-    release = inertShell(shell);
-    shell.append(scrim);
-    const layer: Layer = { el: scrim, kind: 'dialog', close: () => finish(false) };
-    pop = pushLayer(layer, opener);
+    const unmount = mountDialog(shell, scrim, dialog, () => finish(false));
     cancel.focus();
   });
+}
+
+function mountDialog(shell: HTMLElement, root: HTMLElement, dialog: HTMLElement, dismiss: () => void): () => void {
+  const active = shell.ownerDocument.activeElement;
+  const opener = active instanceof HTMLElement && active !== shell.ownerDocument.body ? active : null;
+  root.addEventListener('keydown', event => trapTab(event, dialog));
+  root.addEventListener('mousedown', event => {
+    if (event.target === root) event.preventDefault();
+  });
+  const release = inertShell(shell);
+  shell.append(root);
+  const pop = pushLayer({ el: root, kind: 'dialog', close: dismiss }, opener);
+  return () => {
+    release();
+    pop();
+    root.remove();
+  };
+}
+
+export interface FormDialog {
+  root: HTMLElement;
+  dialog: HTMLElement;
+  body: HTMLElement;
+  foot: HTMLElement;
+  /** Returns true only when this call dismisses the form. */
+  close(): boolean;
+  lock(locked: boolean): void;
+  setTitle(title: string, subtitle?: string): void;
+}
+
+export interface FormDialogOptions {
+  title: string;
+  subtitle?: string;
+  icon?: Node;
+  wide?: boolean;
+  closeLabel: string;
+  onClose?: () => void;
+}
+
+/** A form with a scrollable body and persistent actions. Lock it while a write is in progress. */
+export function openFormDialog(shell: HTMLElement, options: FormDialogOptions): FormDialog {
+  const doc = shell.ownerDocument;
+  const root = doc.createElement('div');
+  root.className = 'im-scrim';
+  root.dataset.imLayer = 'dialog';
+  const dialog = doc.createElement('section');
+  dialog.className = 'im-float im-dialog im-form-dialog';
+  dialog.classList.toggle('im-form-dialog--wide', !!options.wide);
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.tabIndex = -1;
+  const head = doc.createElement('header');
+  head.className = 'im-form-dialog-head';
+  const title = doc.createElement('h2');
+  title.className = 'im-dialog-title';
+  title.id = `im-dialog-${++counter}-title`;
+  dialog.setAttribute('aria-labelledby', title.id);
+  const subtitle = doc.createElement('span');
+  subtitle.className = 'im-form-dialog-subtitle';
+  const dismiss = doc.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'im-btn';
+  dismiss.textContent = options.closeLabel;
+  if (options.icon) head.append(options.icon);
+  head.append(title, subtitle, dismiss);
+  const body = doc.createElement('div');
+  body.className = 'im-form-dialog-body';
+  const foot = doc.createElement('footer');
+  foot.className = 'im-dialog-actions im-form-dialog-foot';
+  dialog.append(head, body, foot);
+  root.append(dialog);
+  let locked = false;
+  let closed = false;
+  const unmount = mountDialog(shell, root, dialog, close);
+  function close(): boolean {
+    if (locked || closed) return false;
+    closed = true;
+    unmount();
+    options.onClose?.();
+    return true;
+  }
+  function setTitle(text: string, sub = ''): void {
+    title.textContent = text;
+    subtitle.textContent = sub;
+    subtitle.hidden = !sub;
+  }
+  setTitle(options.title, options.subtitle);
+  dismiss.addEventListener('click', close);
+  root.addEventListener('mousedown', event => { if (event.target === root) close(); });
+  dialog.focus();
+  queueMicrotask(() => {
+    if (closed || locked || topLayer()?.el !== root || doc.activeElement !== dialog) return;
+    (dialog.querySelector<HTMLElement>('[autofocus], input:not(:disabled):not([type=hidden]), select:not(:disabled), textarea:not(:disabled), .im-btn--primary:not(:disabled)') ?? dismiss).focus();
+  });
+  return {
+    root, dialog, body, foot, close, setTitle,
+    lock(value) {
+      if (closed || locked === value) return;
+      locked = value;
+      dismiss.disabled = body.inert = foot.inert = value;
+      dialog.setAttribute('aria-busy', String(value));
+      if (topLayer()?.el === root) (value ? dialog : dismiss).focus();
+    },
+  };
 }
