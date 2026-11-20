@@ -47,6 +47,14 @@ jobs:
       - name: Install the browser
         run: npx playwright install chromium
 
+      # The toolchain file installs rustfmt and clippy. This is the only place Rust is formatted and linted: nobody
+      # runs them on a developer's machine.
+      - name: Check the Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Lint the Rust
+        run: cargo clippy -p imago-shell --all-targets -- -D warnings
+
       - name: Verify
         run: npm run verify
 

@@ -16,9 +16,11 @@
 ## Rust is built and tested on GitHub only
 
 - Never run `cargo build`, `cargo test`, `cargo clippy`, `cargo check`, `cargo run`, `cargo doc`, `tauri dev` or
-  `tauri build` on this machine, and never run an npm script that calls them (`npm run verify`, `npm run demo`).
-- Rust is compiled, linted and tested only by the workflows in `.github/workflows/`. To know whether Rust code
-  is right, push to `develop` and read the run (`gh run watch`, `gh run view --log-failed`).
-- A program needed on this machine (the demo app for a screen capture) is taken from a workflow artifact
-  (`gh run download`), never built here.
+  `tauri build` on this machine, and never run an npm script that calls them (`npm run verify`, `npm run demo`,
+  `npm run demo:build`).
+- Rust is compiled, formatted, linted and tested only by the workflows in `.github/workflows/`. The Verify job runs
+  `cargo fmt --all --check` and `cargo clippy -p imago-shell --all-targets -- -D warnings`, then `npm run verify`.
+  To know whether Rust code is right, push to `develop` and read the run (`gh run watch`, `gh run view --log-failed`).
+- A program needed on this machine (the demo app for a screen capture) is taken from a workflow artifact with
+  `npm run demo:fetch` (the latest successful run on `develop`), never built here.
 - Node tests and the gallery tests (`npm test`, `node tests/gallery/run.mjs`) do run locally.
