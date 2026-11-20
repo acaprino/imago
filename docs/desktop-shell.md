@@ -120,7 +120,9 @@ A webview screenshot draws the acrylic as white: it cannot judge the glass. Phot
 screen. Imago's demo app (`examples/demo`) is the gallery in a real glass window, and `npm run capture` copies it
 from the screen in both looks and both themes over a dark and a bright window. The demo is never built on a
 developer's machine: the `demo` job of the Verify workflow builds it and keeps it as the artifact `imago-demo`. Run
-`npm run demo:fetch` first, which downloads the latest one to `examples/demo/app/`, then `npm run capture`.
+`npm run demo:fetch` first, which downloads the artifact of the latest successful run of a push to `develop` to
+`examples/demo/app/` (never one of a pull request, because the capture starts the program and clicks it), says which
+commit built it and warns when that is not the checkout's `HEAD`, then `npm run capture`.
 (`npm run demo` starts it in development and is for a machine where Rust may be built.)
 Shinatama's method still holds:
 

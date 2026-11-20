@@ -6,7 +6,9 @@
 //
 // Usage: npm run demo:fetch   (once, and after a change the Verify workflow has built)   then   npm run capture
 // The demo app is never built on this machine: the Verify workflow builds it and keeps it as the artifact
-// `imago-demo`, and `npm run demo:fetch` puts the latest one in examples/demo/app/. IMAGO_DEMO_EXE names another file.
+// `imago-demo`, and `npm run demo:fetch` puts the one of the latest successful run on develop in examples/demo/app/
+// (examples/demo/fetch.mjs: never an artifact of a pull request) and says which commit built it. IMAGO_DEMO_EXE names
+// another file.
 // Output: examples/demo/captures/<look>-<theme>-<over-dark|over-bright>.png (eight), snap-layouts-*.png, and the
 // title-bar pixel of each on the console. The exit code is 1 when a check fails.
 //

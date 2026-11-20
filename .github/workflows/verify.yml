@@ -51,7 +51,8 @@ jobs:
         run: npm run verify
 
   # The demo app is never built on a developer's machine: this job builds it, which is also the only place its Rust
-  # is compiled, and keeps the program for the screen capture (`npm run demo:fetch`, then `npm run capture`).
+  # is compiled, and keeps the program for the screen capture. `npm run demo:fetch` takes it from the latest successful
+  # run on develop, never from a pull request's, and `npm run capture` photographs it.
   demo:
     name: Demo app (Windows x64)
     runs-on: windows-latest
