@@ -459,25 +459,53 @@ export default async (page, url) => {
     }
   }
 
-  // Review Focus 1: at the 200% page zoom of a 1000px window the shell is 500 CSS px wide; nothing may overflow it.
-  const context = await page.context().browser().newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 2 });
+  // 200% page zoom. The window's minimum is 500 physical pixels, which at 200% is a shell of 250 CSS px; a window half-snapped on a
+  // 1366px screen is 683 physical px, 341 CSS px at 200%. The page is laid out in CSS px whatever the zoom, so the shell is
+  // given those widths. Nothing may be pushed outside it: not sideways (scrollWidth), not the primary action, and not the
+  // three window buttons, which the shell clips: lost, the person could not close the window by its own buttons.
+  const context = await page.context().browser().newContext({ viewport: { width: 320, height: 640 }, deviceScaleFactor: 2 });
   try {
     const zoomed = await context.newPage();
     await zoomed.goto(url);
     await zoomed.waitForFunction(() => Boolean(window.__imago?.ready));
     for (const look of LOOKS) {
       for (const app of APPS) {
-        await show(zoomed, { app, look, theme: 'dark', glass: false, width: 500 });
-        const fits = await zoomed.evaluate(() => {
-          const shell = document.querySelector('.im-shell').getBoundingClientRect();
-          const button = document.querySelector('.im-actions .im-btn--primary').getBoundingClientRect();
-          const el = document.querySelector('.im-shell');
-          return { scroll: el.scrollWidth, client: el.clientWidth, shell, button: { left: button.left, right: button.right, top: button.top, bottom: button.bottom } };
-        });
-        const label = `${look} ${app} at 500, zoom 2`;
-        assert.ok(fits.scroll <= fits.client, `${label}: scrollWidth ${fits.scroll} > clientWidth ${fits.client}`);
-        assert.ok(fits.button.left >= fits.shell.left && fits.button.right <= fits.shell.right, `${label}: the primary button is outside the shell horizontally`);
-        assert.ok(fits.button.top >= fits.shell.top && fits.button.bottom <= fits.shell.bottom, `${label}: the primary button is outside the shell vertically`);
+        for (const width of [250, 300, 340, 400, 450, 500]) {
+          await show(zoomed, { app, look, theme: 'dark', glass: false, width });
+          const fits = await zoomed.evaluate(() => {
+            const el = document.querySelector('.im-shell');
+            const rect = (node) => { const r = node.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width }; };
+            return {
+              shellWidth: el.getBoundingClientRect().width,
+              scroll: el.scrollWidth,
+              client: el.clientWidth,
+              shell: rect(el),
+              primary: rect(document.querySelector('.im-actions .im-btn--primary')),
+              views: rect(document.querySelector('.im-views-menu')),
+              toggle: document.querySelector('.im-sidebar-toggle') ? rect(document.querySelector('.im-sidebar-toggle')) : null,
+              windowButtons: [...document.querySelectorAll('.im-window-button')].map((button) => ({ name: button.dataset.imWindow, ...rect(button) })),
+            };
+          });
+          const label = `${look} ${app} at ${width}, zoom 2`;
+          const inside = (box) => box.left >= fits.shell.left - 0.5 && box.right <= fits.shell.right + 0.5 && box.top >= fits.shell.top - 0.5 && box.bottom <= fits.shell.bottom + 0.5;
+          assert.equal(fits.shellWidth, width, `${label}: the shell is ${fits.shellWidth}px wide`);
+          assert.ok(fits.scroll <= fits.client, `${label}: scrollWidth ${fits.scroll} > clientWidth ${fits.client}`);
+          assert.ok(inside(fits.primary), `${label}: the primary button is outside the shell (${JSON.stringify(fits.primary)} in ${JSON.stringify(fits.shell)})`);
+          assert.deepEqual(fits.windowButtons.map((button) => button.name), ['minimize', 'maximize', 'close'], `${label}: the three window buttons`);
+          for (const button of fits.windowButtons) {
+            assert.ok(inside(button), `${label}: the ${button.name} button is outside the shell (${button.left}..${button.right} in ${fits.shell.left}..${fits.shell.right})`);
+            assert.ok(button.width >= 44 - 0.5, `${label}: the ${button.name} button is only ${button.width}px wide`);
+          }
+          // What the person needs below 620 is still there and clear of the window buttons: the Views menu (the tabs are gone)
+          // and, in an app with a sidebar, the button that opens it.
+          const firstWindowButton = fits.windowButtons[0];
+          for (const [name, box] of [['Views menu', fits.views], ['sidebar button', fits.toggle]]) {
+            if (!box) continue;
+            assert.ok(inside(box) && box.right <= firstWindowButton.left + 0.5, `${label}: the ${name} is outside the shell or under the window buttons (${box.left}..${box.right}, window buttons from ${firstWindowButton.left})`);
+            assert.ok(box.width >= 24, `${label}: the ${name} is only ${box.width}px wide`);
+          }
+          assert.equal(fits.toggle !== null, app !== 'muro', `${label}: the sidebar button is there exactly when the app has a sidebar`);
+        }
       }
     }
   } finally {

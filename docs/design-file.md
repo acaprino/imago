@@ -198,6 +198,12 @@ not the screen.
 | 850 or more | The full sidebar, 232px. A button in its header (`im-sidebar-collapse`) folds it into the rail; the user's choice is kept by the app |
 | 620 to under 850 | The sidebar is the 56px rail: one icon per row (`im-rail-item`), each with a tooltip and an accessible name. The width forces it; the user's choice does not matter |
 | Under 620 | The sidebar is not in the layout. A title-bar button (`im-sidebar-toggle`) opens it as an overlay from the left edge. The view tabs become one "Views" menu (`im-views-menu`). The command button shrinks to its icon |
+| Under 450 | The command button is gone from the title bar (`Ctrl+K` still opens the palette) and the gaps of the bar close up. The name of the product gives way before the window buttons: it ends in an ellipsis |
+| Under 340 | The mark and the name are gone, and the Views menu is its chevron alone (its label stays its accessible name) |
+
+The minimum window is 500 physical pixels, so at 200% page zoom the shell is 250 CSS pixels wide (341 for a window half-snapped
+on a 1366px screen). At 250 and at every width up to 500 the three window buttons, the sidebar button, the Views menu and
+the primary action are never pushed out of the shell. The gallery's width control goes down to 250 to show it.
 
 In the rail a row shows only its `im-rail-item`, so every sidebar row needs one. It is the row's own icon (an `im-icon`),
 or, when the app has no icon that tells its rows apart, the initials of the row in an avatar (`im-avatar` with

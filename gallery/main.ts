@@ -20,7 +20,8 @@ export type MountContext = {
 };
 export type MountModule = { default?: (ctx: MountContext) => void | (() => void) };
 
-const MIN_WIDTH = 500;
+// The window's minimum is 500 physical pixels. At 200% page zoom that is 250 CSS pixels, which is what the shell is given then.
+const MIN_WIDTH = 250;
 const MAX_WIDTH = 1160;
 
 const state: GalleryState = { app: 'xiox', look: 'smooth', theme: 'dark', glass: false, width: MAX_WIDTH };

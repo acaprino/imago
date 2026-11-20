@@ -14,6 +14,9 @@
   --im-head-w: 600;
   position: relative;
   display: grid;
+  /* One column that may be as narrow as the shell: an implicit auto column grows to the min-content of what is in it
+     (283px in a 250px shell at 200% zoom), and the shell clips the rest, window buttons included. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--im-h-titlebar) minmax(0, 1fr);
   block-size: 100%;
   min-inline-size: 0;
@@ -30,7 +33,9 @@
   min-inline-size: 0;
   padding-inline-start: var(--im-s-3);
 }
-.im-brand { display: flex; flex: none; align-items: center; gap: var(--im-s-2); white-space: nowrap; }
+/* The brand gives way before the window buttons do: at the width of a 500px window at 200% zoom the name is cut with an
+   ellipsis, then goes. */
+.im-brand { display: flex; flex: 0 1 auto; align-items: center; gap: var(--im-s-2); min-inline-size: 0; white-space: nowrap; }
 .im-mark {
   display: grid;
   flex: none;
@@ -45,6 +50,9 @@
 }
 .im-mark svg { inline-size: 14px; block-size: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .im-wordmark {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font: 600 15px/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
@@ -97,6 +105,7 @@
 
 .im-work {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto var(--im-h-footer);
   min-inline-size: 0;
   min-block-size: 0;
@@ -316,4 +325,19 @@
   [data-im-look="smooth"] .im-shell[data-im-sidebar-open="true"] .im-sidebar { border-right: 1px solid var(--im-line); }
   /* flush against the window edge, ONI's cut corners would leave notches there */
   [data-im-look="oni"] .im-shell[data-im-sidebar-open="true"] .im-sidebar { clip-path: none; }
+}
+
+/* Below 450 (a 500px window at 200% zoom is 250, a half-snapped one 341) the title bar keeps what it cannot lose: the
+   sidebar button, the Views menu and the three window buttons, which are never pushed out of the shell. The command
+   button goes (Ctrl+K opens the palette all the same) and the gaps close up. */
+@container im-shell (width < 450px) {
+  .im-titlebar { gap: var(--im-s-2); padding-inline-start: var(--im-s-2); }
+  .im-titlebar-command { display: none; }
+}
+
+/* Below 340 the brand goes and the Views menu is its chevron alone (the label is still its name for assistive
+   technology): the sidebar button, the Views menu and the window buttons are what the person needs at 200% zoom. */
+@container im-shell (width < 340px) {
+  .im-brand { display: none; }
+  .im-titlebar .im-views-menu { font-size: 0; }
 }
