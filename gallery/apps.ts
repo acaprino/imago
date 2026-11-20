@@ -10,7 +10,15 @@ export const APP_HUES: Record<AppId, number> = { xiox: 75, shinatama: 355, mukad
 
 const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
-  min: '<path d="M5 12h14"/>', restore: '<path d="M8.5 8.5v-2h9v9h-2"/><rect x="6.5" y="8.5" width="9" height="9" rx="1.2"/>', max: '<rect x="5.5" y="5.5" width="13" height="13" rx="1.5"/>', list: '<path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/>', chev: '<path d="M7 10l5 5 5-5"/>',
+  min: '<path d="M5 12h14"/>', restore: '<path d="M8.5 8.5v-2h9v9h-2"/><rect x="6.5" y="8.5" width="9" height="9" rx="1.2"/>', max: '<rect x="5.5" y="5.5" width="13" height="13" rx="1.5"/>', list: '<path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/>', sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  folder: '<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/>',
+  window: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M4 9h16"/>',
+  globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.3 2.5 13.7 0 16M12 4c-2.5 2.3-2.5 13.7 0 16"/>',
+  code: '<path d="M8.5 8l-4 4 4 4M15.5 8l4 4-4 4"/>',
+  apps: '<rect x="4.5" y="4.5" width="6" height="6" rx="1"/><rect x="13.5" y="4.5" width="6" height="6" rx="1"/><rect x="4.5" y="13.5" width="6" height="6" rx="1"/><rect x="13.5" y="13.5" width="6" height="6" rx="1"/>',
+  lock: '<rect x="5.5" y="11" width="13" height="8.5" rx="1.5"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11"/>',
+  sidebar: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M9.5 5v14"/>',
+  chev: '<path d="M7 10l5 5 5-5"/>',
   reload: '<path d="M19 12a7 7 0 1 1-2.05-4.95M19 5v4h-4"/>', term: '<rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M7.5 10l3 2.5-3 2.5M12.5 15.5h4"/>',
   play: '<path d="M8 5.5v13l10-6.5z"/>', chat: '<path d="M5 6h14v9H10l-4 3.5V15H5z"/>', send: '<path d="M4 12l16-7-6 16-2.5-6.5z"/>',
 };
@@ -38,14 +46,14 @@ function button(text: string, o: ButtonOptions = {}): string {
 const iconButton = (name: string, label: string): string => `<button type="button" class="im-icon-btn" aria-label="${label}" title="${label}">${icon(name)}</button>`;
 const segmented = (items: string[], on = 0): string => `<div class="im-seg" role="tablist">${items.map((t, x) => `<button type="button" role="tab" aria-selected="${x === on}">${t}</button>`).join('')}</div>`;
 const check = (state: 'on' | 'off' | 'part', label: string): string => `<span class="im-check" role="checkbox" aria-checked="${state === 'on' ? 'true' : state === 'part' ? 'mixed' : 'false'}" aria-label="${label}"></span>`;
-const initials = (text: string): string => text.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
-type Row = { t: string; s?: string; m?: string; sel?: boolean; ck?: 'on' | 'off' | 'part'; av?: string; dot?: Tone; chip?: [string, Tone?] };
+type Row = { t: string; s?: string; m?: string; sel?: boolean; ck?: 'on' | 'off' | 'part'; av?: string; icon?: string; dot?: Tone; chip?: [string, Tone?] };
 function row(r: Row): string {
-  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.t}"><span class="im-avatar im-rail-item" aria-hidden="true">${initials(r.t)}</span>${r.ck ? check(r.ck, r.t) : ''}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
+  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.t}">${r.icon ? `<span class="im-rail-item" aria-hidden="true">${icon(r.icon)}</span>` : ''}${r.ck ? check(r.ck, r.t) : ''}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
 }
 type HeaderOptions = { n?: number; sub?: string; right?: string };
 const header = (title: string, o: HeaderOptions = {}): string => `<header class="im-panel-header"><h4 class="im-panel-title">${title}</h4>${count(o.n)}${o.sub ? `<span class="im-panel-sub">${o.sub}</span>` : ''}${spacer}${o.right ?? ''}</header>`;
+const collapseButton = (t: Strings): string => `<button type="button" class="im-icon-btn im-sidebar-collapse" aria-label="${t.collapse}" title="${t.collapse}" aria-expanded="true" aria-controls="g-sidebar" data-im-label-collapse="${t.collapse}" data-im-label-expand="${t.expand}">${icon('sidebar')}</button>`;
 const facts = (rows: [string, string, boolean?][]): string => `<dl class="im-facts">${rows.map(([k, v, code]) => `<dt>${k}</dt><dd${code ? ' class="im-facts-code"' : ''}>${v}</dd>`).join('')}</dl>`;
 const two = (title: string, sub: string): string => `<span class="im-cell-title">${title}</span><span class="im-cell-sub">${sub}</span>`;
 
@@ -59,7 +67,7 @@ function table(cols: Column[], rows: TableRow[]): string {
 
 // ---- the five apps ---------------------------------------------------------------------------------------------
 
-type Strings = { cancel: string; undo: string; commands: string; views: string };
+type Strings = { cancel: string; undo: string; commands: string; views: string; collapse: string; expand: string };
 type App = {
   name: string; tabs: string[]; on?: number;
   primary: { text: string; keys?: string; icon?: string; act?: string };
@@ -70,7 +78,7 @@ type App = {
   strings: Strings;
 };
 
-const EN: Strings = { cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views' };
+const EN: Strings = { cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views', collapse: 'Collapse sidebar', expand: 'Expand sidebar' };
 
 export const APPS: Record<AppId, App> = {
   xiox: {
@@ -79,9 +87,9 @@ export const APPS: Record<AppId, App> = {
     status: ['Analysis done', 'ok', '13.48 GB to delete · 46,999 files', 'administrator · RAM 32 GB'],
     footer: 'Winapp2 260915 loaded · 70 items', keys: [['↑↓', 'move'], ['space', 'toggle'], ['↵', 'clean']],
     side: { title: 'Categories', n: 7, rows: [
-      { ck: 'part', t: 'System', s: '6 items · 4 selected', m: '11.29 GB' }, { ck: 'off', t: 'Explorer', s: '1 item · 0 selected', m: '180.0 MB' },
-      { ck: 'off', t: 'Windows', s: '8 items · 0 selected', m: '21.21 GB', sel: true }, { ck: 'part', t: 'Browser', s: '5 items · 2 selected', m: '1.54 GB' },
-      { ck: 'off', t: 'Development & AI', s: '4 items · 0 selected', m: '19.85 GB' }, { ck: 'part', t: 'Applications', s: '44 items · 2 selected', m: '4.16 GB' }] },
+      { ck: 'part', icon: 'sliders', t: 'System', s: '6 items · 4 selected', m: '11.29 GB' }, { ck: 'off', icon: 'folder', t: 'Explorer', s: '1 item · 0 selected', m: '180.0 MB' },
+      { ck: 'off', icon: 'window', t: 'Windows', s: '8 items · 0 selected', m: '21.21 GB', sel: true }, { ck: 'part', icon: 'globe', t: 'Browser', s: '5 items · 2 selected', m: '1.54 GB' },
+      { ck: 'off', icon: 'code', t: 'Development & AI', s: '4 items · 0 selected', m: '19.85 GB' }, { ck: 'part', icon: 'apps', t: 'Applications', s: '44 items · 2 selected', m: '4.16 GB' }] },
     content: () => `${header('Cleanup', { sub: '70 items · 8 selected', right: segmented(['All', 'Selected', 'Caution']) })}<div class="im-panel-tools"><label class="im-input" style="flex:1">${icon('search')}<input type="text" placeholder="Search this view" aria-label="Search this view">${key('Ctrl F')}</label></div><div class="im-panel-body">${table([{ check: true }, { t: 'Item' }, { t: 'Level' }, { t: 'Files', n: true }, { t: 'Size', n: true }], [
       { c: [check('on', 'Mozilla Firefox – Cache'), two('Mozilla Firefox – Cache', 'Pages and images Firefox saved to load faster'), chip('Recommended', 'ok'), '5,300', '1.50 GB'] },
       { c: [check('on', 'Cookies'), two('Cookies', 'Sites in your keep list stay signed in'), chip('Caution', 'warn'), '6,410', '40.0 MB'] },
@@ -99,8 +107,8 @@ export const APPS: Record<AppId, App> = {
     status: ['Service running', 'ok', 'http://127.0.0.1:47631/mcp', 'checked every 3 s'],
     footer: '6 installations · 16 sessions', keys: [['↑↓', 'move'], ['n', 'new room'], ['l', 'launch']],
     side: { title: 'Rooms', n: 3, rows: [
-      { t: 'hop-review', s: '4 members · 11 events · 12:02', chip: ['open', 'ok'], sel: true }, { t: 'desktop-spec', s: '2 members · 4 events · 11:03', chip: ['open', 'ok'] },
-      { t: 'codex-code-mode', s: '1 member · 3 events · Nov 17', chip: ['closed'] }] },
+      { icon: 'chat', t: 'hop-review', s: '4 members · 11 events · 12:02', chip: ['open', 'ok'], sel: true }, { icon: 'chat', t: 'desktop-spec', s: '2 members · 4 events · 11:03', chip: ['open', 'ok'] },
+      { icon: 'lock', t: 'codex-code-mode', s: '1 member · 3 events · Nov 17', chip: ['closed'] }] },
     content: () => `${header('hop-review', { sub: '11 events', right: segmented(['Graph', 'Lanes', 'Feed'], 2) })}<div class="im-panel-body g-feed">
         <article class="g-msg"><span class="im-avatar">CB</span><div class="g-msg-head"><b>codex-b</b><time>11:41</time></div><p class="im-content-text">The hop wrote three Codex threads for the review.</p><div class="g-msg-foot">${chip('done', 'ok')}to claude-a</div></article>
         <article class="g-msg"><span class="im-avatar">CA</span><div class="g-msg-head"><b>claude-a</b><time>11:53</time></div><p class="im-content-text">Keep the review on the hop branch. Codex lists the Plan threads, OpenCode checks the child sessions.</p><div class="g-msg-foot">to everyone</div></article>
@@ -115,9 +123,9 @@ export const APPS: Record<AppId, App> = {
     status: ['Local runtime', 'ok', 'resources available', '4 terminals'],
     footer: 'Local runtime · 4 terminals · 268 MiB', keys: [['Ctrl ⇧ T', 'new session'], ['F6', 'next region']],
     side: { title: 'Threads', n: 9, rows: [
-      { dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
-      { dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { t: 'Dunning emails', s: '1 session', m: '6m' },
-      { t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
+      { dot: 'ok', icon: 'term', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', icon: 'term', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
+      { dot: 'ok', icon: 'term', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { icon: 'term', t: 'Dunning emails', s: '1 session', m: '6m' },
+      { icon: 'term', t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { icon: 'term', t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
     content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
 
 I will hand the tasks to implementer, and keep reviewer for the diff:
@@ -159,15 +167,15 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
     status: ['Demo in pausa', 'warn', 'Avanzamento dimostrativo 64%', 'acaprino/daodan · main'],
     footer: 'Prototipo locale · il codice resta sul tuo disco', keys: [['space', 'pausa'], ['g', 'grafo']],
     side: { title: 'Progetti', n: 4, rows: [
-      { av: 'DA', t: 'daodan', s: 'main · pubblica', m: '64%', sel: true }, { av: 'SH', t: 'shinatama', s: 'develop · privata', m: '100%' },
-      { av: 'MU', t: 'mukade', s: 'develop · privata', m: '—' }, { av: 'XI', t: 'xiox', s: 'main · privata', m: '—' }] },
+      { av: 'DA', icon: 'folder', t: 'daodan', s: 'main · pubblica', m: '64%', sel: true }, { av: 'SH', icon: 'folder', t: 'shinatama', s: 'develop · privata', m: '100%' },
+      { av: 'MU', icon: 'folder', t: 'mukade', s: 'develop · privata', m: '—' }, { av: 'XI', icon: 'folder', t: 'xiox', s: 'main · privata', m: '—' }] },
     content: () => `${header('Pipeline di analisi', { sub: 'acaprino/daodan · main', right: chip('Demo', 'accent') })}<div class="im-panel-body">${table([{ t: 'Fase' }, { t: 'Stato' }, { t: 'Passo', n: true }, { t: 'Durata', n: true }], [
       { c: [two('Scan', 'Inventario e pre-mappa'), chip('Completata', 'ok'), '1 / 4', '0:42'] },
       { c: [two('Analyze', 'Analyzer per tecnologia'), chip('In pausa', 'warn'), '2 / 4', '2:10'], sel: true },
       { c: [two('Dynamic', 'Osservazione dei test · esclusa dalla demo'), chip('Prevista'), '3 / 4', none] },
       { c: [two('Union', 'Collegamento dei grafi'), chip('In attesa'), '4 / 4', none] }])}</div>`,
     inspector: () => `${header('Grafo', { n: 18 })}<div class="im-panel-body">${facts([['Nodi', '10 / 18'], ['Relazioni', '23 / 43'], ['Inventario', '5e49ee96e', true], ['Snapshot', '42a63a9ac071', true]])}</div><div class="im-panel-foot">${button('Elimina analisi', { danger: true, act: 'kill' })}</div>`,
-    strings: { cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste' },
+    strings: { cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale' },
   },
 };
 
@@ -179,7 +187,7 @@ export function shellMarkup(id: AppId): string {
   const on = a.on ?? 0;
   const tabs = a.tabs.map((t, x) => `<button type="button" role="tab" class="im-tab" aria-selected="${x === on}">${t}</button>`).join('');
   const side = a.side
-    ? `<section class="im-panel im-sidebar" id="g-sidebar" aria-label="${a.side.title}">${header(a.side.title, { n: a.side.n })}<div class="im-panel-body im-list" role="listbox" aria-label="${a.side.title}">${a.side.rows.map(row).join('')}</div></section>`
+    ? `<section class="im-panel im-sidebar" id="g-sidebar" aria-label="${a.side.title}">${header(a.side.title, { n: a.side.n, right: collapseButton(a.strings) })}<div class="im-panel-body im-list" role="listbox" aria-label="${a.side.title}">${a.side.rows.map(row).join('')}</div></section>`
     : '';
   const keys = a.keys.map(([k, label]) => `<span>${key(k)}${label}</span>`).join('');
   return `<div class="im-shell" data-im-sidebar="${a.side ? 'on' : 'off'}">

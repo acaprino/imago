@@ -221,12 +221,57 @@ export default async (page, url) => {
       await page.waitForFunction(() => !!document.activeElement?.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0');
       await at(610);
 
+      // From 850 up the user folds the sidebar into the rail of icons with the button in its header, and unfolds it.
+      await at(1160);
+      const fold = page.locator('.im-sidebar-collapse');
+      assert.equal(await visible(page, '.im-sidebar-collapse'), true, where('the fold button at 1160'));
+      assert.equal(await fold.getAttribute('aria-expanded'), 'true', where('the sidebar is unfolded at rest'));
+      const foldName = await fold.getAttribute('aria-label');
+      assert.ok(foldName && (await fold.getAttribute('title')) === foldName, where('the fold button has a name and the same title'));
+      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('unfolded sidebar width'));
+      const unfolded = await box(page, '.im-content');
+      await fold.focus();
+      await page.keyboard.press('Enter');
+      near((await box(page, '.im-sidebar')).width, widths.rail, where('folded sidebar width'));
+      assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-collapsed'), 'true', where('the shell says it is folded'));
+      assert.equal(await fold.getAttribute('aria-expanded'), 'false', where('the button says it is folded'));
+      assert.notEqual(await fold.getAttribute('aria-label'), foldName, where('the button is renamed when folded'));
+      assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('im-sidebar-collapse')), true, where('focus stays on the fold button'));
+      assert.equal(await visible(page, '.im-sidebar .im-panel-title'), false, where('only the button is left of the header'));
+      assert.ok((await box(page, '.im-content')).width > unfolded.width, where('the content takes the room'));
+      const foldedRows = page.locator('.im-sidebar [role="option"]');
+      for (let i = 0; i < (await foldedRows.count()); i++) {
+        const item = foldedRows.nth(i);
+        assert.equal(await item.locator('.im-rail-item svg').isVisible(), true, where(`folded row ${i} shows an icon`));
+        assert.ok(((await item.getAttribute('title')) ?? '').trim(), where(`folded row ${i} has a title`));
+        assert.ok(/option "([^"]+)"/.test(await item.ariaSnapshot()), where(`folded row ${i} has an accessible name`));
+      }
+      const strokes = await page.evaluate(() => [...document.querySelectorAll('.im-sidebar [role="option"]')].map((r) => ({ on: r.getAttribute('aria-selected') === 'true', w: parseFloat(getComputedStyle(r.querySelector('.im-rail-item svg')).strokeWidth) })));
+      assert.ok(Math.max(...strokes.filter((s) => s.on).map((s) => s.w)) > Math.max(...strokes.filter((s) => !s.on).map((s) => s.w)), where('the selected icon is drawn heavier'));
+      // The choice outlives a redraw; below 850 the rail is forced and the button is gone; below 620 the drawer is whole.
+      await show(page, { app: 'mukade', look, theme, glass: false, width: 1160 });
+      near((await box(page, '.im-sidebar')).width, widths.rail, where('still folded after a redraw'));
+      await at(840, 'mukade');
+      assert.equal(await visible(page, '.im-sidebar-collapse'), false, where('no fold button at 840'));
+      await at(610, 'mukade');
+      assert.equal(await visible(page, '.im-sidebar-collapse'), false, where('no fold button at 610'));
+      await page.locator('.im-sidebar-toggle').click();
+      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('the drawer shows the whole sidebar although it is folded'));
+      assert.equal(await visible(page, '.im-sidebar .im-panel-title'), true, where('the drawer has its title'));
+      await page.keyboard.press('Escape');
+      await at(1160, 'mukade');
+      await page.locator('.im-sidebar-collapse').click();
+      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('unfolded again'));
+      assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-collapsed'), null, where('the shell is not folded'));
+      assert.equal(await page.locator('.im-sidebar-collapse').getAttribute('aria-label'), foldName, where('the button has its first name back'));
+
       // Muro has no sidebar and no button for it, at any width.
       for (const width of [1160, 990, 840, 610, 500]) {
         await at(width, 'muro');
         assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar'), 'off');
         assert.equal(await visible(page, '.im-sidebar'), false, where(`Muro has no sidebar at ${width}`));
         assert.equal(await page.locator('.im-sidebar-toggle').count(), 0, where(`Muro has no sidebar button at ${width}`));
+        assert.equal(await page.locator('.im-sidebar-collapse').count(), 0, where(`Muro has no fold button at ${width}`));
         const offset = (await box(page, '.im-content')).left - (await box(page, '.im-work')).left;
         assert.ok(offset >= 0 && offset <= 2.5, where(`Muro's content starts at its work area at ${width} (offset ${offset})`));
       }

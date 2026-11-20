@@ -104,3 +104,35 @@ export function sidebarDrawer(shell: HTMLElement): () => void {
     observer?.disconnect();
   };
 }
+
+/**
+ * From 850 up the sidebar can be folded into the 56px rail of icons and unfolded again by the button in its header
+ * (`.im-sidebar-collapse`). The state is `data-im-sidebar-collapsed` on the shell, so the CSS needs no script; the app
+ * stores the choice and passes it back as `collapsed` the next time. The button's label and `aria-expanded` follow the
+ * state: its `data-im-label-collapse` and `data-im-label-expand` hold the two names. Returns the function that removes
+ * the listener.
+ */
+export function sidebarCollapse(shell: HTMLElement, options: { collapsed?: boolean; onChange?: (collapsed: boolean) => void } = {}): () => void {
+  const button = shell.querySelector<HTMLElement>('.im-sidebar-collapse');
+  if (!button) return () => {};
+
+  const show = (collapsed: boolean): void => {
+    if (collapsed) shell.dataset.imSidebarCollapsed = 'true';
+    else delete shell.dataset.imSidebarCollapsed;
+    const label = (collapsed ? button.dataset.imLabelExpand : button.dataset.imLabelCollapse) ?? '';
+    if (label) {
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
+    button.setAttribute('aria-expanded', String(!collapsed));
+  };
+  const onClick = (): void => {
+    const collapsed = shell.dataset.imSidebarCollapsed !== 'true';
+    show(collapsed);
+    options.onChange?.(collapsed);
+  };
+
+  show(options.collapsed ?? shell.dataset.imSidebarCollapsed === 'true');
+  button.addEventListener('click', onClick);
+  return () => button.removeEventListener('click', onClick);
+}
