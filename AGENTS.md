@@ -12,3 +12,13 @@
   back into `develop`. Nothing is published when `npm run verify` fails.
 - Never change the version or create release tags by hand: the workflow does it (`.github/release.json` lists
   the version files, `.github/scripts/release.mjs` writes them).
+
+## Rust is built and tested on GitHub only
+
+- Never run `cargo build`, `cargo test`, `cargo clippy`, `cargo check`, `cargo run`, `cargo doc`, `tauri dev` or
+  `tauri build` on this machine, and never run an npm script that calls them (`npm run verify`, `npm run demo`).
+- Rust is compiled, linted and tested only by the workflows in `.github/workflows/`. To know whether Rust code
+  is right, push to `develop` and read the run (`gh run watch`, `gh run view --log-failed`).
+- A program needed on this machine (the demo app for a screen capture) is taken from a workflow artifact
+  (`gh run download`), never built here.
+- Node tests and the gallery tests (`npm test`, `node tests/gallery/run.mjs`) do run locally.
