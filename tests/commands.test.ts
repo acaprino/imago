@@ -1,0 +1,227 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createRegistry, formatKeys, isTextTarget } from '../ts/ui/commands.ts';
+import type { Command, KeyEventLike } from '../ts/ui/commands.ts';
+
+const press = (key: string, extra: Partial<KeyEventLike> = {}): KeyEventLike => ({
+  key,
+  ctrlKey: false,
+  shiftKey: false,
+  altKey: false,
+  metaKey: false,
+  ...extra,
+});
+
+const command = (id: string, keys?: string, extra: Partial<Command> = {}): Command => ({
+  id,
+  title: id,
+  keys,
+  run: () => {},
+  ...extra,
+});
+
+const input = { tagName: 'INPUT', isContentEditable: false };
+
+test('match finds Ctrl+K and Ctrl+Shift+T and not Ctrl+T', () => {
+  const registry = createRegistry();
+  registry.register(command('palette', 'Ctrl+K'));
+  registry.register(command('reopen', 'Ctrl+Shift+T'));
+
+  assert.equal(registry.match(press('k', { ctrlKey: true }))?.id, 'palette');
+  assert.equal(registry.match(press('K', { ctrlKey: true }))?.id, 'palette');
+  assert.equal(registry.match(press('T', { ctrlKey: true, shiftKey: true }))?.id, 'reopen');
+  assert.equal(registry.match(press('t', { ctrlKey: true })), undefined);
+  assert.equal(registry.match(press('k')), undefined);
+  assert.equal(registry.match(press('k', { ctrlKey: true, altKey: true })), undefined);
+  assert.equal(registry.match(press('k', { ctrlKey: true, metaKey: true })), undefined);
+});
+
+test('a single-letter binding does not match in a text target and does elsewhere', () => {
+  const registry = createRegistry();
+  registry.register(command('add', 'a'));
+
+  assert.equal(registry.match(press('a', { target: input }))?.id, undefined);
+  assert.equal(registry.match(press('a', { target: { tagName: 'TEXTAREA' } })), undefined);
+  assert.equal(registry.match(press('a', { target: { tagName: 'DIV', isContentEditable: true } })), undefined);
+  assert.equal(registry.match(press('a', { target: { tagName: 'BUTTON', isContentEditable: false } }))?.id, 'add');
+  assert.equal(registry.match(press('a', { target: undefined }))?.id, 'add');
+  assert.equal(registry.match(press('a'))?.id, 'add');
+});
+
+test('a binding with Ctrl does match inside a text target', () => {
+  const registry = createRegistry();
+  registry.register(command('palette', 'Ctrl+K'));
+  assert.equal(registry.match(press('k', { ctrlKey: true, target: input }))?.id, 'palette');
+});
+
+test('Escape and the function keys match inside a text target', () => {
+  const registry = createRegistry();
+  registry.register(command('close', 'Escape'));
+  registry.register(command('next-pane', 'F6'));
+  assert.equal(registry.match(press('Escape', { target: input }))?.id, 'close');
+  assert.equal(registry.match(press('F6', { target: input }))?.id, 'next-pane');
+});
+
+test('Enter does not match while an IME composes', () => {
+  const registry = createRegistry();
+  registry.register(command('confirm', 'Enter'));
+
+  assert.equal(registry.match(press('Enter'))?.id, 'confirm');
+  assert.equal(registry.match(press('Enter', { isComposing: true })), undefined);
+  assert.equal(registry.match(press('Enter', { keyCode: 229 })), undefined);
+  assert.equal(registry.match(press('Enter', { isComposing: false, keyCode: 13 }))?.id, 'confirm');
+});
+
+test('a command whose when() is false is hidden from list() and match()', () => {
+  const registry = createRegistry();
+  let enabled = false;
+  registry.register(command('save', 'Ctrl+S', { when: () => enabled }));
+  registry.register(command('open', 'Ctrl+O'));
+
+  assert.deepEqual(registry.list().map((c) => c.id), ['open']);
+  assert.equal(registry.match(press('s', { ctrlKey: true })), undefined);
+
+  enabled = true;
+  assert.deepEqual(registry.list().map((c) => c.id), ['save', 'open']);
+  assert.equal(registry.match(press('s', { ctrlKey: true }))?.id, 'save');
+});
+
+test('get returns a command by id, also while when() hides it', () => {
+  const registry = createRegistry();
+  const hidden = command('hidden', undefined, { when: () => false });
+  registry.register(hidden);
+  assert.equal(registry.get('hidden'), hidden);
+  assert.equal(registry.get('missing'), undefined);
+});
+
+test('a duplicate id throws and leaves the first command in place', () => {
+  const registry = createRegistry();
+  const first = command('save', 'Ctrl+S');
+  registry.register(first);
+  assert.throws(() => registry.register(command('save', 'Ctrl+Shift+S')), /save/);
+  assert.equal(registry.get('save'), first);
+  assert.equal(registry.match(press('s', { ctrlKey: true, shiftKey: true })), undefined);
+});
+
+test('two commands with the same keys throw at register', () => {
+  const registry = createRegistry();
+  registry.register(command('palette', 'Ctrl+K'));
+  registry.register(command('reopen', 'Ctrl+Shift+T'));
+  assert.throws(() => registry.register(command('other', 'Ctrl+K')), /Ctrl\+K/);
+  assert.throws(() => registry.register(command('other', 'ctrl+k')), /ctrl\+k/);
+  assert.throws(() => registry.register(command('other', 'Shift+Ctrl+T')), /Shift\+Ctrl\+T/);
+  assert.equal(registry.get('other'), undefined);
+});
+
+test('the same keys may differ by modifier and commands without keys never clash', () => {
+  const registry = createRegistry();
+  registry.register(command('a', 'Ctrl+K'));
+  registry.register(command('b', 'Ctrl+Shift+K'));
+  registry.register(command('c'));
+  registry.register(command('d'));
+  assert.deepEqual(registry.list().map((c) => c.id), ['a', 'b', 'c', 'd']);
+});
+
+test('keys that cannot match anything throw at register', () => {
+  const registry = createRegistry();
+  for (const keys of ['', 'Ctrl+', 'Ctrl', 'Ctrl-K', 'Ctrl+K+L', 'Ctrl+Shift']) {
+    assert.throws(() => registry.register(command(`bad ${keys}`, keys)), /keys/, keys);
+  }
+  assert.deepEqual(registry.list(), []);
+});
+
+test('the key names of the grammar match', () => {
+  const registry = createRegistry();
+  registry.register(command('zoom-in', 'Ctrl+='));
+  registry.register(command('plus', 'Ctrl++'));
+  registry.register(command('pick', 'Space'));
+  registry.register(command('up', 'ArrowUp'));
+
+  assert.equal(registry.match(press('=', { ctrlKey: true }))?.id, 'zoom-in');
+  assert.equal(registry.match(press('+', { ctrlKey: true }))?.id, 'plus');
+  assert.equal(registry.match(press(' '))?.id, 'pick');
+  assert.equal(registry.match(press('ArrowUp'))?.id, 'up');
+});
+
+test('unregister removes the command, frees its id and keys, and is safe to call twice', () => {
+  const registry = createRegistry();
+  const unregister = registry.register(command('palette', 'Ctrl+K'));
+  unregister();
+  assert.equal(registry.get('palette'), undefined);
+  assert.equal(registry.match(press('k', { ctrlKey: true })), undefined);
+
+  const second = command('palette', 'Ctrl+K');
+  registry.register(second);
+  unregister();
+  assert.equal(registry.get('palette'), second, 'a stale unregister must not remove its successor');
+  assert.equal(registry.match(press('k', { ctrlKey: true })), second);
+});
+
+const fakeTarget = () => {
+  const listeners = new Map<string, (event: unknown) => void>();
+  return {
+    listeners,
+    addEventListener: (type: string, listener: (event: unknown) => void) => void listeners.set(type, listener),
+    removeEventListener: (type: string, listener: (event: unknown) => void) => {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+    dispatch: (type: string, event: unknown) => listeners.get(type)?.(event),
+  };
+};
+
+test('attach runs a matching command once and prevents the default action', () => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('palette', 'Ctrl+K', { run: () => void runs++ }));
+  const target = fakeTarget();
+  registry.attach(target);
+
+  let prevented = 0;
+  target.dispatch('keydown', { ...press('k', { ctrlKey: true }), preventDefault: () => void prevented++ });
+  assert.equal(runs, 1);
+  assert.equal(prevented, 1);
+
+  target.dispatch('keydown', { ...press('x', { ctrlKey: true }), preventDefault: () => void prevented++ });
+  assert.equal(runs, 1);
+  assert.equal(prevented, 1, 'an event that matches nothing keeps its default action');
+});
+
+test('attach listens to keydown only and the returned detach removes the listener', () => {
+  const registry = createRegistry();
+  registry.register(command('palette', 'Ctrl+K'));
+  const target = fakeTarget();
+  const detach = registry.attach(target);
+  assert.deepEqual([...target.listeners.keys()], ['keydown']);
+  detach();
+  assert.equal(target.listeners.size, 0);
+});
+
+test('isTextTarget is true for input, textarea, select and contenteditable only', () => {
+  assert.equal(isTextTarget({ tagName: 'INPUT' }), true);
+  assert.equal(isTextTarget({ tagName: 'input' }), true);
+  assert.equal(isTextTarget({ tagName: 'TEXTAREA' }), true);
+  assert.equal(isTextTarget({ tagName: 'SELECT' }), true);
+  assert.equal(isTextTarget({ tagName: 'DIV', isContentEditable: true }), true);
+  assert.equal(isTextTarget({ tagName: 'DIV', isContentEditable: false }), false);
+  assert.equal(isTextTarget({ tagName: 'BUTTON' }), false);
+  assert.equal(isTextTarget({}), false);
+  assert.equal(isTextTarget(null), false);
+  assert.equal(isTextTarget(undefined), false);
+  assert.equal(isTextTarget('input'), false);
+});
+
+test('formatKeys turns a binding into key caps', () => {
+  assert.deepEqual(formatKeys('Ctrl+Shift+T'), ['Ctrl', '⇧', 'T']);
+  assert.deepEqual(formatKeys('Enter'), ['↵']);
+  assert.deepEqual(formatKeys('Escape'), ['Esc']);
+  assert.deepEqual(formatKeys('Space'), ['Space']);
+  assert.deepEqual(formatKeys('Alt+ArrowUp'), ['Alt', '↑']);
+  assert.deepEqual(formatKeys('ArrowDown'), ['↓']);
+  assert.deepEqual(formatKeys('ArrowLeft'), ['←']);
+  assert.deepEqual(formatKeys('ArrowRight'), ['→']);
+  assert.deepEqual(formatKeys('a'), ['A']);
+  assert.deepEqual(formatKeys('ctrl+k'), ['Ctrl', 'K']);
+  assert.deepEqual(formatKeys('Ctrl+='), ['Ctrl', '=']);
+  assert.deepEqual(formatKeys('F6'), ['F6']);
+  assert.deepEqual(formatKeys('Shift+Ctrl+Alt+Delete'), ['Ctrl', '⇧', 'Alt', 'Delete']);
+});
