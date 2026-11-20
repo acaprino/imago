@@ -29,6 +29,12 @@ imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 - A release of an app, the merge into its `main`, pins a **tag** of Imago: `v<x>`.
 - While an app migrates, its `develop` may pin a **commit** of Imago's `develop`: `github:acaprino/imago#<commit>`
   in npm, and `rev = "<commit>"` in place of `tag` in Cargo. The release pins a tag again.
+- **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
+  `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`: the
+  versions Shinatama's `Cargo.lock` resolves, so that the apps of the suite link one copy of each and the executable
+  holds one WebView2 binding. The app's own `tauri` requirement must allow 2.12.5 (`"2"` and `"2.12"` do, `"2.13"` does
+  not), and `Cargo.lock` moves to the pinned versions when the crate is added. A newer Tauri waits for a release of
+  Imago that raises the pins.
 - The package ships TypeScript source, not built JavaScript. Its files import each other with the `.ts` extension, so
   the app's bundler (Vite) compiles it, and the app's `tsconfig.json` needs `"allowImportingTsExtensions": true` with
   `"noEmit": true`.
@@ -372,7 +378,8 @@ app's tests pass at the end of each.
 
 **Part 1: tokens, controls and shell, with the layout unchanged.**
 
-1. Add the dependency, pinned to a commit of Imago's `develop`, and the three imports.
+1. Add the dependency, pinned to a commit of Imago's `develop`, and the three imports. The crate pins Tauri and its
+   neighbours: the app's `tauri` must resolve to exactly 2.12.5 (section 1), so check that before anything else.
 2. Set the root attributes with `applyLook`. Map the app's own variables to `--im-*` in one place, or replace them.
    Delete the app's copies of what the package now has.
 3. Replace the app's controls with the package's classes, one family at a time (buttons, fields, tabs, rows, tables,
