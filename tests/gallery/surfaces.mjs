@@ -861,6 +861,41 @@ async function paneSheets(page) {
   assert.equal(await page.evaluate(() => document.activeElement.id), 'again', 'giving focus back to its control');
 }
 
+// Where focus goes when a sheet closes. A pane takes no focus, so a sheet docked to a pane returns focus to what had it
+// when the sheet opened.
+async function sheetOpeners(page) {
+  await fresh(page);
+  await page.evaluate(() => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'in-pane';
+    button.className = 'im-btn';
+    button.textContent = 'In the pane';
+    document.querySelector('.im-content').append(button);
+  });
+  const openOnPane = (placement) =>
+    page.evaluate((placement) => {
+      window.__imagoSurfaces.openSheet(document.querySelector('.im-content'), Object.assign(document.createElement('div'), { textContent: 'On the pane' }), { placement });
+    }, placement);
+
+  for (const placement of ['pane-top', 'pane-bottom']) {
+    const where = (text) => `${placement}: ${text}`;
+    await page.focus('#in-pane');
+    await openOnPane(placement);
+    assert.equal(await count(page, '.im-sheet'), 1, where('the sheet is open'));
+    assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest('.im-sheet'))), true, where('focus is in the sheet'));
+    await press(page, 'Escape');
+    assert.equal(await count(page, '.im-sheet'), 0, where('Escape closes the sheet'));
+    assert.equal((await active(page)).id, 'in-pane', where('focus goes back to what had it, not to the body'));
+
+    // Nothing had focus when it opened: there is nothing to go back to, and nothing breaks.
+    await page.evaluate(() => document.activeElement?.blur());
+    await openOnPane(placement);
+    await press(page, 'Escape');
+    assert.equal(await count(page, '.im-sheet'), 0, where('a sheet opened with no focus closes with Escape'));
+  }
+}
+
 // Dialogs in the corners: an opener that left the document, two dialogs released in either order, a notice under a dialog.
 async function dialogEdges(page) {
   await fresh(page);
@@ -1120,6 +1155,7 @@ export default async (page, url) => {
   await everyApp(page);
   await viewsMenu(page);
   await paneSheets(page);
+  await sheetOpeners(page);
   await dialogEdges(page);
   await literalText(page);
   await failures(page);

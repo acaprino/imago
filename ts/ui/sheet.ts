@@ -75,7 +75,11 @@ export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { 
   // Under a control, the control toggles the sheet. Docked to a pane, the anchor is the whole pane: a press in it,
   // outside the sheet, closes the sheet and still reaches what was pressed.
   const layer: Layer = { el: sheet, kind: 'sheet', toggles: placement === 'below', close };
-  pop = pushLayer(layer, anchor);
+  // Focus goes back to the opener on close. Under a control that is the control. A pane takes no focus, so a sheet
+  // docked to one goes back to what had focus when it opened (read after the sheet it replaced has given focus back).
+  const focused = doc.activeElement as HTMLElement | null;
+  const opener = placement === 'below' ? anchor : focused && focused !== doc.body ? focused : null;
+  pop = pushLayer(layer, opener);
   anchor.setAttribute('aria-expanded', 'true');
   stopFollowing = follow(() => {
     if (!anchor.isConnected) close(); // the control it hangs from is gone: nothing left to dock to

@@ -243,7 +243,7 @@ What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. Th
 | `formatKeys(keys)`, `keyCaps(document, keys)` | The key caps of a binding, as text and as `im-key` elements |
 | `attachLayers(shell)` | Escape closes the top surface only, and a press outside closes a menu or a sheet. Call it once for each shell. `confirm` and `openPalette` rely on it for Escape. Its returned function also closes every open surface |
 | `openMenu(anchor, items)` | A menu under `anchor`. An item is `{ label, keys?, disabled?, danger?, run }` or `'separator'`. `disabled` is the reason, shown as the item's tooltip |
-| `openSheet(anchor, content, { placement })` | A sheet docked to `anchor`. `placement` is `below` (the default), `pane-top` or `pane-bottom` |
+| `openSheet(anchor, content, { placement })` | A sheet docked to `anchor`. `placement` is `below` (the default), `pane-top` or `pane-bottom`. Closing it gives focus back to `anchor`, or, for a pane placement (a pane takes no focus), to what had focus when the sheet opened |
 | `confirm(shell, options)` | A dialog. Resolves `true` on the confirming button, `false` on Cancel or Escape. `options` is `{ title, body, confirm, cancel, danger? }` |
 | `notify(shell, text, options)` | A notice. `options` is `{ tone?: 'err', action?: { label, run }, timeoutMs?, errorWord?, dismissLabel? }`. An error stays until it is dismissed |
 | `inspector(shell)` | The inspector of the shell: `open(content, opener?)`, `close()`, `isOpen()`, and `guard(isDirty, ask)`, which asks once before the content is closed or replaced while it has unsaved changes |
