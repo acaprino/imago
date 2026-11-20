@@ -57,13 +57,15 @@ export function roving(container: HTMLElement, options: RovingOptions): () => vo
     if (el.getAttribute('tabindex') !== value) el.setAttribute('tabindex', value);
   };
 
-  // The stop leaves an item that is disabled, and, while the list itself is on screen, one that is hidden.
-  // A list hidden as a whole (by a breakpoint) keeps its stop: nothing tells us when it comes back.
+  // The stop leaves an item that is disabled, and, while the list itself is live, one that is hidden.
+  // A list that is hidden as a whole (by a breakpoint) or sits under an inert or invisible ancestor (a dialog
+  // is open) keeps its stop: nothing tells us when it comes back.
   const sync = () => {
     const rows = items();
     const present = new Set(rows);
     for (const el of original.keys()) if (!present.has(el)) original.delete(el);
-    const usable = container.getClientRects().length > 0 ? canFocus : isEnabled;
+    const live = isRendered(container) && container.closest('[inert]') === null;
+    const usable = live ? canFocus : isEnabled;
     if (!stop || !present.has(stop) || !usable(stop)) {
       const candidates = rows.filter(usable);
       stop = candidates.find((el) => el.getAttribute('aria-selected') === 'true') ?? candidates[0] ?? null;

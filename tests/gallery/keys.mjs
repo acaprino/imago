@@ -228,6 +228,7 @@ async function scratch(page) {
         <section class="im-sidebar"><button id="m1" type="button">m1</button></section>
         <section class="im-content" id="region" tabindex="0"><button id="inside" type="button">inside</button></section>
       </div>
+      <div id="wrap"><div id="inertlist"><button class="yy" id="y1" type="button">y1</button><button class="yy" id="y2" type="button">y2</button></div></div>
       <div id="stoplist">
         <button class="st" id="x1" type="button">x1</button>
         <button class="st" id="x2" type="button">x2</button>
@@ -239,6 +240,7 @@ async function scratch(page) {
       nested: window.__imagoKeys.roving(document.getElementById('nested'), { item: '.it', orientation: 'vertical' }),
       mini: window.__imagoKeys.regions(document.getElementById('mini')),
       mini2: window.__imagoKeys.regions(document.getElementById('mini2')),
+      inertlist: window.__imagoKeys.roving(document.getElementById('inertlist'), { item: '.yy', orientation: 'vertical' }),
       stoplist: window.__imagoKeys.roving(document.getElementById('stoplist'), { item: '.st', orientation: 'vertical' }),
     };
   });
@@ -340,6 +342,35 @@ async function scratch(page) {
   await page.evaluate(() => (document.getElementById('x1').disabled = false));
   await waitStops(['0', '-1', '-1']);
 
+  // A list whose ancestor is inert or invisible keeps its stop, like a list hidden by a breakpoint: a dialog
+  // makes the shell inert, a change arrives in the list, and nothing tells it when the dialog closes.
+  const ys = () => page.evaluate(() => [...document.querySelectorAll('#inertlist .yy')].map((el) => el.getAttribute('tabindex')));
+  assert.deepEqual(await ys(), ['0', '-1']);
+  for (const [mode, late] of [['inert', 'y3'], ['visibility: hidden', 'y4']]) {
+    await page.evaluate(
+      ([how, id]) => {
+        const wrap = document.getElementById('wrap');
+        if (how === 'inert') wrap.inert = true;
+        else wrap.style.visibility = 'hidden';
+        const extra = document.createElement('button');
+        extra.className = 'yy';
+        extra.id = id;
+        extra.type = 'button';
+        document.getElementById('inertlist').append(extra);
+      },
+      [mode, late],
+    );
+    await page.waitForFunction((id) => document.getElementById(id).getAttribute('tabindex') === '-1', late);
+    await page.evaluate((how) => {
+      const wrap = document.getElementById('wrap');
+      if (how === 'inert') wrap.inert = false;
+      else wrap.style.visibility = '';
+    }, mode);
+    const now = await ys();
+    assert.equal(now.filter((value) => value === '0').length, 1, `a list under an ancestor with ${mode} keeps one tab stop (${now.join(',')})`);
+    assert.equal(now[0], '0');
+  }
+
   // F6 from a field outside any shell is not ours.
   await page.focus('#outside');
   await press(page, 'F6');
@@ -352,6 +383,7 @@ async function scratch(page) {
     window.__scratch.mini();
     window.__scratch.mini2();
     window.__scratch.stoplist();
+    window.__scratch.inertlist();
   });
   assert.deepEqual(
     await page.evaluate(() => ['a', 'b', 'c', 'd', 'e', 'row', 'row2'].map((id) => document.getElementById(id).getAttribute('tabindex'))),
