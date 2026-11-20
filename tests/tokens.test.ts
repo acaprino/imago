@@ -116,6 +116,10 @@ for (const look of looks) {
         const chip = over(lookColor(look, theme, 'chip'), lookColor(look, theme, 'sheet'));
         need('muted on chip', lookColor(look, theme, 'muted'), chip);
         need('chip-text on chip', lookColor(look, theme, 'chip-text'), chip);
+        // A key cap in a button and a placeholder in a field are muted text on a control, which may be translucent.
+        for (const control of ['button', 'field']) {
+          need(`muted on ${control}`, lookColor(look, theme, 'muted'), over(lookColor(look, theme, control), lookColor(look, theme, 'sheet')));
+        }
         assert.deepEqual(failures, []);
       });
     }
