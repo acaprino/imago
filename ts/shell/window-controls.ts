@@ -10,9 +10,10 @@
 export type WindowRect = { x: number; y: number; width: number; height: number };
 
 export type WindowApi = {
-  minimize(): void;
-  toggleMaximize(): void;
-  close(): void;
+  /** `minimize`, `toggleMaximize` and `close` may be asynchronous: a throw or a rejection goes to the `onError` of `mountWindowControls`. */
+  minimize(): void | Promise<unknown>;
+  toggleMaximize(): void | Promise<unknown>;
+  close(): void | Promise<unknown>;
   /**
    * The maximize button's rectangle in physical pixels. A call that throws or rejects is sent again at the next
    * change (the native overlay may not exist yet at the first one).
@@ -76,12 +77,27 @@ function reportMaximizeRect(maximize: HTMLElement, doc: Document, report: Window
   };
 }
 
+export type WindowControlsOptions = {
+  /**
+   * Where a failed window action goes: the action's name and the error, from a throw or a rejection of the api's call.
+   * Without it the failure is swallowed, never left as an unhandled rejection; an app passes one that shows it.
+   */
+  onError?: (action: 'minimize' | 'maximize' | 'close', error: unknown) => void;
+};
+
 /** Wires the title bar's buttons to the window. Returns the function that lets go of all of it. */
-export function mountWindowControls(titlebar: HTMLElement, api: WindowApi): () => void {
+export function mountWindowControls(titlebar: HTMLElement, api: WindowApi, options: WindowControlsOptions = {}): () => void {
   const cleanups: (() => void)[] = [];
-  const button = (name: 'minimize' | 'maximize' | 'close', action: () => void): HTMLElement | null => {
+  const fail = (action: 'minimize' | 'maximize' | 'close', error: unknown): void => {
+    // A reporter that itself fails must not turn a click into an uncaught error.
+    try { options.onError?.(action, error); } catch { /* nothing left to tell */ }
+  };
+  const button = (name: 'minimize' | 'maximize' | 'close', run: () => void | Promise<unknown>): HTMLElement | null => {
     const element = titlebar.querySelector<HTMLElement>(`[data-im-window="${name}"]`);
     if (!element) return null;
+    const action = (): void => {
+      try { Promise.resolve(run()).catch((error: unknown) => { fail(name, error); }); } catch (error) { fail(name, error); }
+    };
     element.addEventListener('click', action);
     cleanups.push(() => element.removeEventListener('click', action));
     return element;

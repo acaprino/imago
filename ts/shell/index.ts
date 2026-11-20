@@ -5,6 +5,6 @@ export type { WindowTheme } from './window-theme.ts';
 export { clampZoom, mountZoom, stepZoom, wheelPixels, zoomDirection } from './zoom.ts';
 export type { ZoomOptions } from './zoom.ts';
 export { mountWindowControls } from './window-controls.ts';
-export type { WindowRect, WindowApi } from './window-controls.ts';
+export type { WindowApi, WindowControlsOptions, WindowRect } from './window-controls.ts';
 export { guardDesktop } from './desktop-guard.ts';
 export type { KeyLike } from './desktop-guard.ts';

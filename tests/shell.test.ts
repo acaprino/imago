@@ -526,6 +526,87 @@ test('the maximize button says what it will do', () => {
   assert.equal(t.buttons.maximize.getAttribute('data-im-maximized'), 'false');
 });
 
+/** What escapes while `run` and the turns after it go by: unhandled rejections and errors thrown out of listeners. */
+async function escapedWhile(run: () => void): Promise<unknown[]> {
+  const seen: unknown[] = [];
+  const note = (reason: unknown): void => { seen.push(reason); };
+  process.on('unhandledRejection', note);
+  process.on('uncaughtException', note);
+  try {
+    run();
+    await settle();
+    await settle();
+  } finally {
+    process.off('unhandledRejection', note);
+    process.off('uncaughtException', note);
+  }
+  return seen;
+}
+
+test('a window button whose action rejects reports it once to onError', async () => {
+  const t = setup();
+  const failure = new Error('window is gone');
+  const errors: [string, unknown][] = [];
+  mountWindowControls(t.titlebar, { ...t.api, close: () => Promise.reject(failure) }, { onError: (action, error) => { errors.push([action, error]); } });
+  const escaped = await escapedWhile(() => { t.buttons.close.click(); });
+  assert.deepEqual(errors, [['close', failure]]);
+  assert.deepEqual(escaped, []);
+});
+
+test('a window button whose action throws reports it once to onError', async () => {
+  const t = setup();
+  const failure = new Error('no window');
+  const errors: [string, unknown][] = [];
+  mountWindowControls(t.titlebar, { ...t.api, minimize: () => { throw failure; } }, { onError: (action, error) => { errors.push([action, error]); } });
+  const escaped = await escapedWhile(() => { t.buttons.minimize.click(); });
+  assert.deepEqual(errors, [['minimize', failure]]);
+  assert.deepEqual(escaped, []);
+});
+
+test('the maximize button names itself maximize when its action fails', async () => {
+  const t = setup();
+  const failure = new Error('cannot maximize');
+  const errors: [string, unknown][] = [];
+  mountWindowControls(t.titlebar, { ...t.api, toggleMaximize: () => Promise.reject(failure) }, { onError: (action, error) => { errors.push([action, error]); } });
+  await escapedWhile(() => { t.buttons.maximize.click(); });
+  assert.deepEqual(errors, [['maximize', failure]]);
+});
+
+test('a window button that works does not report', async () => {
+  const t = setup();
+  const errors: unknown[] = [];
+  mountWindowControls(t.titlebar, { ...t.api, close: () => Promise.resolve('closed') }, { onError: (...args) => { errors.push(args); } });
+  const escaped = await escapedWhile(() => { t.buttons.minimize.click(); t.buttons.close.click(); });
+  assert.deepEqual(errors, []);
+  assert.deepEqual(escaped, []);
+});
+
+test('without onError a failing window button leaves no unhandled rejection and no thrown error', async () => {
+  const t = setup();
+  const api = {
+    ...t.api,
+    minimize: () => { throw new Error('no window'); },
+    toggleMaximize: () => Promise.reject(new Error('refused')),
+    close: () => Promise.reject(new Error('window is gone')),
+  };
+  mountWindowControls(t.titlebar, api);
+  const escaped = await escapedWhile(() => {
+    t.buttons.minimize.click();
+    t.buttons.maximize.click();
+    t.buttons.close.click();
+  });
+  assert.deepEqual(escaped, []);
+});
+
+test('an onError that itself throws does not turn the click into an uncaught error', async () => {
+  const t = setup();
+  mountWindowControls(t.titlebar, { ...t.api, close: () => Promise.reject(new Error('window is gone')), minimize: () => { throw new Error('no window'); } }, {
+    onError: () => { throw new Error('reporter failed'); },
+  });
+  const escaped = await escapedWhile(() => { t.buttons.close.click(); t.buttons.minimize.click(); });
+  assert.deepEqual(escaped, []);
+});
+
 test('a window api without maximize notifications still mounts', () => {
   const t = setup();
   const { onMaximized: _unused, ...api } = t.api;
