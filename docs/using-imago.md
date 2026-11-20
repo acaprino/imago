@@ -292,7 +292,9 @@ The package does not do these. Each is a place where an app that forgets looks d
 6. **Register the commands.** `Ctrl+K` opens the palette and `Ctrl+F` searches the current view, in every app: the
    app registers both, and the palette lists what the registry holds. Do not bind Enter or Space to a command: the
    focused control's own activation would also fire, and the registry does not look at what holds focus for those two
-   keys. A button's key cap may show `↵`.
+   keys. A button's key cap may show `↵`. `registry.attach(document)` runs no command while a dialog or the palette is
+   open, so a key never acts behind a pending confirmation; an app that wants otherwise passes
+   `{ runUnderModal: true }` as the second argument.
 7. **Keep the choices:** the look, the theme and whether the sidebar is folded. The zoom is kept by `mountZoom`.
 8. **Give the words.** The package's own words are English: `errorWord` and `dismissLabel` of a notice, `placeholder`
    and `empty` of the palette, `errorWord` of an error state, the labels of the confirm dialog. An app in another

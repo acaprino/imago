@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { createRegistry, formatKeys, isTextTarget } from '../ts/ui/commands.ts';
 import type { Command, KeyEventLike } from '../ts/ui/commands.ts';
+import { pushLayer, type LayerKind } from '../ts/ui/layers.ts';
 
 const press = (key: string, extra: Partial<KeyEventLike> = {}): KeyEventLike => ({
   key,
@@ -252,6 +254,75 @@ test('attach listens to keydown only and the returned detach removes the listene
   assert.deepEqual([...target.listeners.keys()], ['keydown']);
   detach();
   assert.equal(target.listeners.size, 0);
+});
+
+// A layer of this kind on the stack, as a surface would push it. Returns the function that removes it.
+const openLayer = (kind: LayerKind): (() => void) => {
+  let pop = (): void => {};
+  pop = pushLayer({ el: {} as unknown as HTMLElement, kind, close: () => pop() }, null);
+  return pop;
+};
+
+// Presses Ctrl+K on a registry attached to a fake target; says whether the command ran and the key was cancelled.
+const pressK = (options?: { runUnderModal?: boolean }, open: LayerKind[] = []) => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('palette', 'Ctrl+K', { run: () => void runs++ }));
+  const target = fakeTarget();
+  const detach = registry.attach(target, options);
+  const pops = open.map(openLayer);
+  let prevented = 0;
+  target.dispatch('keydown', { ...press('k', { ctrlKey: true }), preventDefault: () => void prevented++ });
+  pops.forEach((pop) => pop());
+  detach();
+  return { runs, prevented };
+};
+
+test('attach does not run a command under an open dialog or palette, and leaves the key alone', () => {
+  assert.deepEqual(pressK(undefined, ['dialog']), { runs: 0, prevented: 0 });
+  assert.deepEqual(pressK(undefined, ['palette']), { runs: 0, prevented: 0 });
+  assert.deepEqual(pressK(undefined, ['menu', 'dialog']), { runs: 0, prevented: 0 });
+});
+
+test('attach still runs a command under a menu or a sheet, which are not modal', () => {
+  assert.deepEqual(pressK(undefined, ['menu']), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressK(undefined, ['sheet']), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressK(), { runs: 1, prevented: 1 });
+});
+
+test('attach runs commands again once the modal layer has closed', () => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('palette', 'Ctrl+K', { run: () => void runs++ }));
+  const target = fakeTarget();
+  registry.attach(target);
+  const key = () => target.dispatch('keydown', { ...press('k', { ctrlKey: true }), preventDefault: () => {} });
+
+  const close = openLayer('dialog');
+  key();
+  assert.equal(runs, 0);
+  close();
+  key();
+  assert.equal(runs, 1);
+});
+
+test('attach with runUnderModal runs commands under a dialog too', () => {
+  assert.deepEqual(pressK({ runUnderModal: true }, ['dialog']), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressK({ runUnderModal: true }, ['palette']), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressK({ runUnderModal: false }, ['dialog']), { runs: 0, prevented: 0 });
+});
+
+test('match does not look at the layers: it answers for the key alone', () => {
+  const registry = createRegistry();
+  registry.register(command('palette', 'Ctrl+K'));
+  const close = openLayer('dialog');
+  assert.equal(registry.match(press('k', { ctrlKey: true }))?.id, 'palette');
+  close();
+});
+
+test('commands.ts may import layers.ts: layers.ts imports no module, so there is no cycle', () => {
+  const layers = readFileSync(new URL('../ts/ui/layers.ts', import.meta.url), 'utf8');
+  assert.deepEqual(layers.match(/^\s*(?:import|export)\b.*\bfrom\s+['"][^'"]+['"]/gm) ?? [], []);
 });
 
 test('isTextTarget is true for input, textarea, select and contenteditable only', () => {

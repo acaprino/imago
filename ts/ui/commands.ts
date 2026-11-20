@@ -2,6 +2,8 @@
 // whether it is available now. Key bindings, key caps, menus and the palette all read it.
 // No DOM types and nothing touched at import time, so it also runs under plain Node.
 
+import { hasModal } from './layers.ts';
+
 export type Command = {
   id: string;
   title: string;
@@ -32,6 +34,14 @@ export type KeyEventTarget = {
   removeEventListener(type: 'keydown', listener: (event: KeyDownEvent) => void): void;
 };
 
+export type AttachOptions = {
+  /**
+   * By default no command runs while a dialog or the palette is open: the key belongs to that surface, and a
+   * command behind a pending confirmation must not act. Set this for an app that wants its commands to run anyway.
+   */
+  runUnderModal?: boolean;
+};
+
 export type Registry = {
   /** Returns the unregister function. Throws on a duplicate id, on keys already bound, and on keys that cannot match. */
   register(command: Command): () => void;
@@ -41,8 +51,11 @@ export type Registry = {
   get(id: string): Command | undefined;
   /** The available command bound to this key event. */
   match(event: KeyEventLike): Command | undefined;
-  /** Runs the matching command on `keydown` and cancels the browser's own action. Returns detach. */
-  attach(target: KeyEventTarget): () => void;
+  /**
+   * Runs the matching command on `keydown` and cancels the browser's own action, except while a dialog or the
+   * palette is open (see `AttachOptions`). Returns detach.
+   */
+  attach(target: KeyEventTarget, options?: AttachOptions): () => void;
 };
 
 type Chord = { ctrl: boolean; shift: boolean; alt: boolean; name: string };
@@ -122,8 +135,9 @@ export function createRegistry(): Registry {
     list: () => [...byId.values()].map((entry) => entry.command).filter(available),
     get: (id) => byId.get(id)?.command,
     match,
-    attach(target) {
+    attach(target, options = {}) {
       const onKeyDown = (event: KeyDownEvent): void => {
+        if (!options.runUnderModal && hasModal()) return;
         const command = match(event);
         if (!command) return;
         event.preventDefault();
