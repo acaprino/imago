@@ -54,6 +54,8 @@ relative link.
 | `npm run demo:fetch` | Downloads the demo app that the Verify workflow built (the artifact `imago-demo`) to `examples/demo/app/`, from the latest successful run of a push to `develop` and no other (a pull request's artifact is never taken: `capture` starts the program and clicks it). Prints the run and the commit it was built from, and warns when that is not this checkout's `HEAD`; `-- --dry-run` only says which. Needs the `gh` CLI, signed in. |
 | `npm run capture` | Photographs the demo window from the screen in both looks and themes over a dark and a bright window, and checks the frame is glass. Run `npm run demo:fetch` first. Needs a Windows 11 desktop session. |
 | `npm run demo` | Starts the demo app in development. It builds Rust, so only on a machine where Rust may be built; the Verify workflow builds it otherwise. Needs a Windows 11 desktop session. |
+| `npm run demo:build` | Builds the demo program with `tauri build` (it builds Rust). It is the Verify workflow's `demo` job: for CI, not for a developer's machine. |
+| `npm run demo:web` | Builds the gallery as the page the demo program embeds, into `examples/demo/dist`. `demo:build` runs it first, so it is for CI too; it builds no Rust. |
 | `npm run verify` | The checks of CI: tokens, tests, build, the gallery tests and `cargo test -p imago-shell`. |
 
 ## The gallery
