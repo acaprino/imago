@@ -36,7 +36,13 @@
   cursor: default;
 }
 
-/* ---------- the focus ring: 2px, in the accent text colour, 2px off, drawn with outline so forced colours keep it ---------- */
+/* ---------- the focus ring ----------
+   2px wide, in the accent text colour, drawn with outline so forced colours keep it. How far off it sits depends on what
+   surrounds the control; this is the whole rule, and tests/gallery/controls.mjs asserts it for every control in both looks:
+     a control that stands alone (button, icon button, select, checkbox, radio, switch)   2px outside
+     a field (input, search): its edge turns to the accent too, as in the approved preview   1px outside
+     an item of a list, table, tree, menu, tab strip or segmented control: its container scrolls and clips   2px inside
+     an ONI chamfered button (looks/oni.css): a clip-path cuts an outer ring   5px inside */
 
 :where(.im-btn, .im-icon-btn, .im-select, .im-check, .im-radio, .im-switch, .im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
 [data-im-force="focus"] {
@@ -44,7 +50,7 @@
   outline-offset: 2px;
 }
 
-/* Rows, tabs and menu items sit in a panel that scrolls and clips: the ring is drawn inside them. */
+/* The items of a container that clips: the ring is drawn inside them. */
 :where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
 :where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item)[data-im-force="focus"] {
   outline-offset: -2px;
@@ -386,12 +392,14 @@
   border-color: var(--im-text-2);
 }
 
-.im-input:is(:focus-within, [data-im-force="focus"]),
-.im-select:is(:focus-visible, [data-im-force="focus"]) {
+.im-input:is(:focus-within, [data-im-force="focus"]) {
   border-color: var(--im-accent-text);
   outline: 2px solid var(--im-accent-text);
   outline-offset: 1px;
 }
+
+/* The select stands alone: its edge turns accent and its ring is the one of the focus section, 2px outside. */
+.im-select:is(:focus-visible, [data-im-force="focus"]) { border-color: var(--im-accent-text); }
 
 .im-input:has(> input[aria-invalid="true"]),
 .im-select[aria-invalid="true"] {
@@ -789,6 +797,8 @@
   border-color: var(--im-line);
 }
 
+.im-tree-item[aria-disabled="true"] > .im-tree-label { color: var(--im-muted); }
+
 /* ---------- table: no zebra, no header band, a missing value is a grey dash ---------- */
 
 .im-table {
@@ -1079,10 +1089,9 @@
   color: var(--im-err);
 }
 
-/* ---------- menu items in the matrix: css/surfaces.css draws them, this lets them answer a forced state ---------- */
+/* ---------- menu items in the matrix: css/surfaces.css draws them, this lets them answer a forced hover ---------- */
 
 .im-menu-item[data-im-force="hover"] { background: var(--im-hover); }
-.im-menu-item[data-im-force="press"] { background: var(--im-press); }
 
 /* ---------- reduced motion: states change at once ---------- */
 
@@ -1122,15 +1131,25 @@
   .im-icon-btn:is(:disabled, [aria-disabled="true"]),
   .im-tab:is(:disabled, [aria-disabled="true"]),
   .im-row[aria-disabled="true"],
+  .im-tree-item[aria-disabled="true"],
   :is(.im-check, .im-radio, .im-switch)[aria-disabled="true"] {
     color: GrayText;
     border-color: GrayText;
   }
 
-  /* selected and checked: a system-colour outline or fill, never a background colour alone */
+  /* the text inside a disabled item has a colour of its own, which the system would replace */
+  .im-row[aria-disabled="true"] :is(.im-row-title, .im-row-sub, .im-row-meta),
+  .im-tree-item[aria-disabled="true"] > .im-tree-label,
+  .im-option:has([aria-disabled="true"]) { color: GrayText; }
+
+  /* Selected: a Highlight edge, on the start side of a row or a tree item and all round a segment. It is a border and not an
+     outline: the outline is the focus ring, and a focused selected item must still show both. */
   .im-row[aria-selected="true"],
-  .im-tree-item[aria-selected="true"],
-  .im-seg > button[aria-selected="true"],
+  .im-tree-item[aria-selected="true"] { border-inline-start: 4px solid Highlight; }
+
+  .im-seg > button[aria-selected="true"] { border: 2px solid Highlight; }
+
+  /* A step is not focusable, so its mark may be an outline. */
   .im-steps > li[aria-current="step"] {
     outline: 2px solid Highlight;
     outline-offset: -2px;

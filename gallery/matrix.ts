@@ -253,7 +253,7 @@ export function matrixMarkup(): string {
     const cells = COLUMNS.map(({ state }) =>
       states.includes(state)
         ? `<td data-control="${id}" data-state="${state}">${cellMarkup(id, state)}</td>`
-        : '<td class="g-mx-na"><span aria-label="Does not apply">—</span></td>',
+        : '<td class="g-mx-na"><span role="img" aria-label="Does not apply">—</span></td>',
     ).join('');
     return `<tr><th scope="row">${LABELS[id] ?? id}</th>${cells}</tr>`;
   }).join('');

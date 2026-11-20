@@ -44,6 +44,17 @@ const CONTROL_HEIGHT = [...BUTTONS, 'icon-button', 'field', 'search', 'select', 
 // css/surfaces.css draws the menu item: its edge is not ours to assert.
 const NO_EDGE = ['menu-item'];
 
+// Where the focus ring sits, in px (negative: inside). The rule is in the focus section of css/controls.css:
+// a control that stands alone 2 outside; a field 1 outside; an item of a list, table, tree, menu, tab strip or
+// segmented control 2 inside (its container clips); an ONI chamfered button 5 inside (a clip-path cuts an outer ring).
+const RING_OFFSET = (() => {
+  const alone = { 'icon-button': 2, select: 2, checkbox: 2, radio: 2, switch: 2 };
+  const field = { field: 1, search: 1 };
+  const item = { tab: -2, segmented: -2, row: -2, tree: -2, 'table-row': -2, 'menu-item': -2 };
+  const buttons = (offset) => Object.fromEntries(BUTTONS.map((id) => [id, offset]));
+  return { smooth: { ...buttons(2), ...alone, ...field, ...item }, oni: { ...buttons(-5), ...alone, ...field, ...item } };
+})();
+
 const show = async (page, state) => {
   await page.evaluate((s) => window.__imago.set(s), state);
   await page.waitForSelector('#im-gallery-matrix [data-control][data-state]', { state: 'attached' });
@@ -103,6 +114,8 @@ const measureAll = (page) =>
         }
         return worst;
       };
+      const surface = document.querySelector('#im-gallery-matrix .g-mx-surface');
+      const muted = flatten([getComputedStyle(surface).getPropertyValue('--im-muted').trim()]).join(',');
       const out = [];
       for (const cell of document.querySelectorAll('#im-gallery-matrix [data-control][data-state]')) {
         const control = cell.dataset.control;
@@ -130,6 +143,7 @@ const measureAll = (page) =>
           boxShadow: s.boxShadow,
           fontWeight: Number(t.fontWeight),
           textColor: ink.join(','),
+          muted,
           fill: fill.join(','),
           contrast: ratio(ink, fill),
           worst: worstText(cell),
@@ -173,6 +187,7 @@ export default async (page) => {
         if (!states.includes('disabled')) continue;
         const cell = at(id, 'disabled');
         assert.ok(cell.contrast >= 4.5, where(`${id} disabled text is ${cell.contrast.toFixed(2)}:1`));
+        assert.equal(cell.textColor, cell.muted, where(`${id} disabled text is the muted colour`));
         assert.equal(cell.opacity, 1, where(`${id} disabled is not shown with opacity`));
         if (!NO_EDGE.includes(id)) assert.equal(cell.borderStyle, 'dashed', where(`${id} disabled has a dashed border`));
       }
@@ -183,25 +198,21 @@ export default async (page) => {
         .map((row) => `${row.control} ${row.state}: "${row.worst.text}" is ${row.worst.ratio.toFixed(2)}:1 (${row.worst.color} on ${row.worst.fill})`);
       assert.deepEqual(unreadable, [], where('text under 4.5:1'));
 
-      // Focus: a ring 2px wide, drawn with outline (which forced colours keep).
-      for (const { id, states } of CONTROLS) {
-        if (!states.includes('focus')) continue;
+      // Focus: a ring 2px wide, drawn with outline (which forced colours keep), at the offset of RING_OFFSET.
+      const offsets = RING_OFFSET[look];
+      const focusable = CONTROLS.filter(({ states }) => states.includes('focus')).map(({ id }) => id);
+      assert.deepEqual(Object.keys(offsets).sort(), [...focusable].sort(), where('RING_OFFSET names every control that has a focus state'));
+      for (const id of focusable) {
         assert.equal(rest(id).outlineStyle, 'none', where(`${id} has no ring at rest`));
         const cell = at(id, 'focus');
         assert.equal(cell.outlineWidth, '2px', where(`${id} focus ring width`));
         assert.notEqual(cell.outlineStyle, 'none', where(`${id} focus ring is drawn`));
+        assert.equal(cell.outlineOffset, offsets[id], where(`${id} ring offset is ${cell.outlineOffset}px, the rule says ${offsets[id]}px`));
       }
 
-      // The ring of a chamfered button is inside the cut corners: a clip-path cuts an outer ring.
+      // An ONI button is chamfered: a clip-path cuts an outer ring, which is why its ring is inside.
       for (const id of BUTTONS) {
-        const focus = at(id, 'focus');
-        if (look === 'oni') {
-          assert.ok(focus.outlineOffset < 0, where(`${id} ring offset is ${focus.outlineOffset}, it must be inside`));
-          assert.notEqual(focus.clipPath, 'none', where(`${id} is chamfered`));
-        } else {
-          assert.ok(focus.outlineOffset > 0, where(`${id} ring offset is ${focus.outlineOffset}, it must be outside`));
-          assert.equal(focus.clipPath, 'none', where(`${id} is not clipped`));
-        }
+        assert.equal(at(id, 'focus').clipPath === 'none', look === 'smooth', where(`${id} is chamfered in ONI only`));
       }
 
       // Hover, pressed and focus are each a picture of their own, and pressed is not hover.
@@ -298,17 +309,59 @@ export default async (page) => {
       assert.ok(Math.abs(long.tab.height - rest('tab').height) <= 0.5, where('a long tab keeps its height'));
       assert.ok(Math.abs(long.row.height - rest('row').height) <= 0.5, where('a long row keeps its height'));
 
-      // Forced colours: the ring and the edge survive when the system takes the fills away.
+      // Forced colours: the system takes the fills away, so the ring, the edges and the system colours carry every state.
       await page.emulateMedia({ forcedColors: 'active' });
       const forced = await page.evaluate(() => {
-        const ring = getComputedStyle(document.querySelector('[data-control="button-secondary"][data-state="focus"] .im-btn'));
-        const edge = getComputedStyle(document.querySelector('[data-control="field"][data-state="rest"] .im-input'));
-        return { outlineStyle: ring.outlineStyle, outlineWidth: ring.outlineWidth, borderWidth: parseFloat(edge.borderTopWidth), borderStyle: edge.borderTopStyle };
+        const cell = (control, state) => document.querySelector(`[data-control="${control}"][data-state="${state}"]`);
+        const style = (el) => getComputedStyle(el);
+        const system = (name) => {
+          const probe = document.createElement('i');
+          probe.style.color = name;
+          document.body.append(probe);
+          const value = getComputedStyle(probe).color;
+          probe.remove();
+          return value;
+        };
+        const ring = (el) => ({ style: style(el).outlineStyle, width: style(el).outlineWidth });
+        const ringOf = (control, selector) => ring(cell(control, 'focus').querySelector(selector));
+        // A selected item, alone and then focused too: the selection must not be drawn with the outline the ring uses.
+        const selected = {};
+        for (const [control, selector] of [['row', '.im-row'], ['tree', '.im-tree-item'], ['segmented', '.im-seg > button']]) {
+          const el = cell(control, 'selected').querySelector(selector);
+          const own = { ring: ring(el), edge: style(el).borderLeftColor, edgeWidth: parseFloat(style(el).borderLeftWidth) };
+          el.setAttribute('data-im-force', 'focus');
+          const focused = ring(el);
+          el.removeAttribute('data-im-force');
+          selected[control] = { own, focused };
+        }
+        const field = style(cell('field', 'rest').querySelector('.im-input'));
+        return {
+          highlight: system('Highlight'),
+          grayText: system('GrayText'),
+          button: ringOf('button-secondary', '.im-btn'),
+          field: { width: parseFloat(field.borderTopWidth), style: field.borderTopStyle },
+          selected,
+          disabledRow: style(cell('row', 'disabled').querySelector('.im-row-title')).color,
+          progressFill: getComputedStyle(cell('progress', 'rest').querySelector('.im-progress'), '::before').backgroundColor,
+          checked: style(cell('checkbox', 'selected').querySelector('.im-check')).backgroundColor,
+        };
       });
       await page.emulateMedia({ forcedColors: 'none' });
-      assert.notEqual(forced.outlineStyle, 'none', where('forced colours: a focused button keeps its outline'));
-      assert.equal(forced.outlineWidth, '2px', where('forced colours: the ring is 2px'));
-      assert.ok(forced.borderWidth >= 1 && forced.borderStyle !== 'none', where('forced colours: a field keeps its border'));
+      assert.notEqual(forced.button.style, 'none', where('forced colours: a focused button keeps its outline'));
+      assert.equal(forced.button.width, '2px', where('forced colours: the ring is 2px'));
+      assert.ok(forced.field.width >= 1 && forced.field.style !== 'none', where('forced colours: a field keeps its border'));
+      // A selected row, tree item or segment is a Highlight edge (a border), so its outline stays free for the focus ring.
+      for (const [control, { own, focused }] of Object.entries(forced.selected)) {
+        assert.equal(own.ring.style, 'none', where(`forced colours: a selected ${control} is not drawn with an outline`));
+        assert.equal(own.edge, forced.highlight, where(`forced colours: a selected ${control} has a Highlight edge`));
+        assert.ok(own.edgeWidth >= 2, where(`forced colours: the edge of a selected ${control} is ${own.edgeWidth}px`));
+        assert.notEqual(focused.style, 'none', where(`forced colours: a focused selected ${control} shows its focus ring`));
+        assert.equal(focused.width, '2px', where(`forced colours: the ring of a selected ${control} is 2px`));
+        assert.notEqual(`${focused.style} ${focused.width}`, `${own.ring.style} ${own.ring.width}`, where(`forced colours: focus and selection of a ${control} differ`));
+      }
+      assert.equal(forced.disabledRow, forced.grayText, where('forced colours: a disabled row is GrayText'));
+      assert.equal(forced.progressFill, forced.highlight, where('forced colours: the progress fill is Highlight'));
+      assert.equal(forced.checked, forced.highlight, where('forced colours: a checked box is Highlight'));
     }
   }
 

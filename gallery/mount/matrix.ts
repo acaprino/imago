@@ -1,14 +1,5 @@
 import { matrixMarkup, MATRIX_CSS } from '../matrix.ts';
-
-interface MountContext {
-  shell: HTMLElement;
-  root: HTMLElement;
-  app: string;
-  look: string;
-  theme: string;
-  /** An empty element under the window where a module adds its own sections; older callers may not pass it. */
-  sections?: HTMLElement;
-}
+import type { MountContext } from '../main.ts';
 
 const CONTAINER_ID = 'im-gallery-matrix';
 
@@ -16,7 +7,7 @@ const CONTAINER_ID = 'im-gallery-matrix';
 // shell, not inside it, so it carries the same root attributes (`data-im-app|look|theme`, and `im-glass`) for the
 // tokens to apply.
 export default function mount(ctx: MountContext): () => void {
-  const parent = ctx.sections ?? ctx.root.parentElement ?? document.body;
+  const parent = ctx.sections;
   let section = document.getElementById(CONTAINER_ID);
   if (!section) {
     section = document.createElement('section');
