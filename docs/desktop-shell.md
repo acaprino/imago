@@ -180,7 +180,11 @@ example. [using-imago.md](using-imago.md) has the page side with signatures.
 
 A window built again after a lost browser process goes through this again.
 
-1. `disable_browser_accelerators(&window)` in a release build only (a development build keeps reload and DevTools).
+1. `disable_browser_accelerators(&window)` in a release build only: a development build keeps the engine's own reload and
+   DevTools keys. That is the Rust side. The page's `guardDesktop` (section 3.4) refuses F5, F12, Ctrl+R and
+   Ctrl+Shift+I, J and C in every build, so under `tauri dev` it takes reload and DevTools away too: an app calls it
+   only outside development (`if (!import.meta.env.DEV) guardDesktop(document)`), as the sketch in
+   [using-imago.md](using-imago.md), section 5, does.
 2. `watch_process_failures(&window, handler)`. The handler calls `recovery_action` (section 4).
 3. `install_snap_layouts(&window)`, and keep the `SnapLayouts` it returns **per window label**, replacing the entry
    when the window is rebuilt. A `Mutex<HashMap<String, SnapLayouts>>` in the app's state does it. Tauri's `manage`
@@ -215,7 +219,7 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 ### 3.4 The page, in order
 
 1. `applyLook` on the root, before the first paint, with `glass: true` in the desktop app.
-2. `guardDesktop(document)`.
+2. `guardDesktop(document)`, outside development only (section 3.2, step 1).
 3. `mountZoom(document, { apply })`, with `getCurrentWebview().setZoom` as `apply`.
 4. `mountWindowControls(titlebar, api, { onError })`.
 5. The behaviour modules: `attachLayers`, the registry's `attach`, `regions`, the sidebar functions.

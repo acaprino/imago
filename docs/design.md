@@ -237,7 +237,9 @@ an app may have its own where it needs them.
 - Tab moves between regions' controls; arrows move inside a list, a table, tabs or a menu (one tab
   stop each). `F6` moves between regions.
 - Enter runs the primary action of the focused surface. Escape closes the top surface only.
-- Single-letter keys work only when focus is not in a field. Enter respects IME composition.
+- In a text field (an input, a textarea, a select, editable content) a key pressed without Ctrl or Alt belongs to the
+  field: a letter, Space, Delete, Backspace, Home, End, the arrows, Enter and Tab are never taken by a command there.
+  Escape, F1 to F24 and every binding with Ctrl or Alt still run. Enter respects IME composition.
 - `Ctrl+=`, `Ctrl+-`, `Ctrl+0` zoom from 50 to 200%, saved per machine.
 
 **Destructive actions.**
@@ -364,5 +366,8 @@ and why. Where [design-file.md](design-file.md) differs from this file, it wins.
   window's state.
 - **2026-11-20, the repository is public.** The text said the repository starts private and the owner makes it public
   when ready. It is public, so an app's CI reads it with no credential.
+- **2026-11-20, keys in a text field.** The text held back only single-letter keys from the command registry while
+  focus is in a field, so a command bound to Delete or an arrow broke editing in every search box. Every binding
+  without Ctrl or Alt is held back in a text field, except Escape and F1 to F24.
 - **2026-11-20, names.** The design file is `docs/design-file.md`, not `docs/DESIGN.md`: on Windows both names are one
   file. The proposal is `reference/proposal.html`; the link to it named a file that is not there.
