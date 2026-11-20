@@ -3,7 +3,8 @@ name: Release
 # A release at every merge of develop into main. The same workflow is in Shinatama, Mukade, Xiox, Muro, Ethel
 # and artcraft-web, except that Imago has no program to build or package: its build is `npm run verify`, and
 # a release has no assets, and except that the plan job fails when it cannot read the merged pull request (the others
-# fall back to patch) and that the push is `git push --atomic`: the two are for the others to take. What is
+# fall back to patch), that the push is `git push --atomic` and that checkout and setup-node are v7, on Node 24, pinned
+# by commit as in verify.yml (the others still have v4, on Node 20): the three are for the others to take. What is
 # project-specific is in .github/release.json, the version logic in .github/scripts/release.mjs.
 #   1. the merged pull request's label chooses the step: release:major, release:minor, otherwise patch;
 #   2. the next version is written in every version file (and the project's Cargo.lock entries);
@@ -48,7 +49,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: plan
         shell: pwsh
         run: |
@@ -85,11 +88,12 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      # The credentials stay: this job pushes the release commit, the tag and develop.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
 
