@@ -250,7 +250,7 @@ What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. Th
 | `openPalette(shell, registry, { placeholder, empty })` | The command palette over the shell: every available command of the registry, filtered as the user types |
 | `roving(container, { item, orientation, onSelect })` | One tab stop for a list, and the arrows, Home and End inside it. This is how an app's own list takes the common keys |
 | `regions(shell)` | `F6` and `Shift+F6` move focus between the sidebar, the content and the inspector |
-| `setPanelState(panel, state)` | A panel is `ready`, `loading` with `rows`, `empty` with a sentence and an action, or `error` with a sentence and a Retry. The panel keeps its header and frame |
+| `setPanelState(panel, state)` | A panel is `ready`, `loading` with `rows`, `empty` with a sentence and an action, or `error` with a sentence and a Retry. The panel keeps its header and frame. Focus that was in the layer being replaced (a pressed Retry) moves to the new layer's button, or to the panel body when it has none |
 | `showAfter(delayMs, show)` | Runs `show` after a delay and returns the function that cancels it. `showAfter(LOADING_DELAY_MS, …)` is how a loading state shows only after 300ms |
 | `sidebarDrawer(shell)` | Below 620 the title-bar toggle opens the sidebar as an overlay and moves focus into it. A second press of the toggle, or Escape, closes it and gives focus back to the toggle. A press outside, or focus moving elsewhere, closes it and leaves focus where it went |
 | `sidebarCollapse(shell, { collapsed, onChange })` | From 850 up, the button in the sidebar header folds the sidebar into the 56px rail of icons and back. See below |

@@ -378,4 +378,101 @@ async function check(page, label) {
     });
   });
   assert.deepEqual(fallback, ['Error', 'Error'], at('a missing or empty errorWord still says "Error"'));
+
+  // 10. Focus does not fall to <body> when the layer that holds it is replaced. Retry, then loading, then ready is the main
+  // error flow: the pressed Retry goes with the error layer, so focus goes to the new layer's button, or to the panel body.
+  const pressed = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    const panel = panels.error;
+    window.__retried = 0;
+    setPanelState(panel, {
+      kind: 'error',
+      text: 'Failed.',
+      retry: { label: 'Retry now', run: () => { window.__retried++; setPanelState(panel, { kind: 'loading', rows: 2 }); } },
+    });
+    panel.querySelector('[data-im-state-layer] button').focus();
+    return document.activeElement.textContent;
+  });
+  assert.equal(pressed, 'Retry now', at('the Retry button takes focus'));
+  await page.keyboard.press('Enter'); // the keyboard presses Retry: run() puts the panel in loading
+  const afterRetry = await inPage(page, () => {
+    const body = window.__imagoPanelState.panels.error.querySelector(':scope > .im-panel-body');
+    return {
+      retried: window.__retried,
+      layer: body.querySelector(':scope > [data-im-state-layer]')?.getAttribute('data-im-state-layer') ?? null,
+      onDocumentBody: document.activeElement === document.body,
+      onPanelBody: document.activeElement === body,
+      tabindex: body.getAttribute('tabindex'),
+    };
+  });
+  assert.equal(afterRetry.retried, 1, at('Enter on the focused Retry calls retry.run once'));
+  assert.equal(afterRetry.layer, 'loading', at('the panel is loading after Retry'));
+  assert.equal(afterRetry.onDocumentBody, false, at('pressing Retry does not drop focus to the document body'));
+  assert.equal(afterRetry.onPanelBody, true, at('a loading layer has no button: focus is on the panel body'));
+  assert.equal(afterRetry.tabindex, '-1', at('the panel body is focusable by script only'));
+  const afterReady = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    setPanelState(panels.error, { kind: 'ready' });
+    const body = panels.error.querySelector(':scope > .im-panel-body');
+    return { onPanelBody: document.activeElement === body, onDocumentBody: document.activeElement === document.body };
+  });
+  assert.equal(afterReady.onPanelBody, true, at('focus stays on the panel body when the data lands'));
+  assert.equal(afterReady.onDocumentBody, false, at('the data landing does not drop focus either'));
+
+  const replaced = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    const panel = panels.error;
+    const body = panel.querySelector(':scope > .im-panel-body');
+    const run = () => {};
+    const active = () => {
+      const element = document.activeElement;
+      if (element === document.body) return 'document body';
+      if (element === body) return 'panel body';
+      return `${element.tagName.toLowerCase()}:${element.textContent}`;
+    };
+    const seen = {};
+    setPanelState(panel, { kind: 'error', text: 'Failed.', retry: { label: 'Retry', run } });
+    panel.querySelector('[data-im-state-layer] button').focus();
+    setPanelState(panel, { kind: 'error', text: 'Failed again.', retry: { label: 'Retry again', run } });
+    seen.errorToError = active();
+    setPanelState(panel, { kind: 'empty', text: 'Nothing.', action: { label: 'Add one', run } });
+    seen.errorToEmptyWithAction = active();
+    setPanelState(panel, { kind: 'empty', text: 'Nothing at all.' });
+    seen.emptyToEmptyWithoutAction = active();
+    setPanelState(panel, { kind: 'error', text: 'Failed.', retry: { label: 'Retry', run } });
+    seen.fromThePanelBody = active();
+
+    // Focus that is not in the layer is left where it is.
+    const outside = document.createElement('button');
+    outside.textContent = 'Outside';
+    panel.after(outside);
+    outside.focus();
+    setPanelState(panel, { kind: 'loading', rows: 1 });
+    setPanelState(panel, { kind: 'ready' });
+    seen.outside = active();
+    outside.remove();
+
+    // A panel body the app made focusable itself keeps its own tabindex.
+    const own = document.createElement('section');
+    own.className = 'im-panel';
+    const ownBody = document.createElement('div');
+    ownBody.className = 'im-panel-body';
+    ownBody.tabIndex = 0;
+    own.append(document.createElement('header'), ownBody);
+    panel.after(own);
+    setPanelState(own, { kind: 'error', text: 'Failed.', retry: { label: 'Retry', run } });
+    own.querySelector('[data-im-state-layer] button').focus();
+    setPanelState(own, { kind: 'loading', rows: 1 });
+    seen.ownTabindex = ownBody.getAttribute('tabindex');
+    seen.ownHoldsFocus = document.activeElement === ownBody;
+    own.remove();
+    return seen;
+  });
+  assert.equal(replaced.errorToError, 'button:Retry again', at('a new error layer: focus goes to its Retry'));
+  assert.equal(replaced.errorToEmptyWithAction, 'button:Add one', at('an empty layer with an action: focus goes to the action'));
+  assert.equal(replaced.emptyToEmptyWithoutAction, 'panel body', at('a layer without a button: focus goes to the panel body'));
+  assert.equal(replaced.fromThePanelBody, 'panel body', at('focus on the panel body stays there when a layer arrives'));
+  assert.equal(replaced.outside, 'button:Outside', at('focus outside the panel is never taken'));
+  assert.equal(replaced.ownTabindex, '0', at('a panel body that already had a tabindex keeps it'));
+  assert.equal(replaced.ownHoldsFocus, true, at('and holds the focus'));
 }

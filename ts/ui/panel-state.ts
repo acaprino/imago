@@ -115,16 +115,32 @@ function buildLayer(doc: Document, state: Exclude<PanelState, { kind: 'ready' }>
   }
 }
 
+// The layer that held focus (a pressed Retry, a pressed empty-state action) is gone, and focus on a removed element
+// falls to <body>: keyboard use would start over from the top of the window. Focus goes to the new layer's first
+// button, else to the panel body, which is focusable by script when the app has not made it focusable itself.
+function keepFocus(body: HTMLElement, layer?: HTMLElement): void {
+  const button = layer?.querySelector<HTMLElement>('button');
+  if (button) {
+    button.focus();
+    return;
+  }
+  if (!body.hasAttribute('tabindex')) body.tabIndex = -1;
+  body.focus();
+}
+
 /**
  * Puts a panel into a state. It owns one element, the state layer, the first child of
  * `.im-panel-body`; the header, tools and footer are never touched. While a layer shows, the other
- * children of the body (the real content) are taken out of the layout, and `ready` puts them back.
+ * children of the body (the real content) are taken out of the layout, and `ready` puts them back. Focus that
+ * was inside the layer it replaces moves to the new layer's first button, or to the panel body.
  */
 export function setPanelState(panel: HTMLElement, state: PanelState): void {
   const body = panel.querySelector<HTMLElement>(':scope > .im-panel-body');
   if (!body) throw new Error('setPanelState: the panel has no .im-panel-body');
 
-  body.querySelector(`:scope > [${LAYER}]`)?.remove();
+  const previous = body.querySelector(`:scope > [${LAYER}]`);
+  const holdsFocus = previous?.contains(panel.ownerDocument.activeElement) ?? false;
+  previous?.remove();
   for (const content of body.querySelectorAll<HTMLElement>(`:scope > [${HIDDEN_BY_STATE}]`)) {
     content.style.display = content.getAttribute(HIDDEN_BY_STATE) ?? '';
     content.removeAttribute(HIDDEN_BY_STATE);
@@ -132,6 +148,7 @@ export function setPanelState(panel: HTMLElement, state: PanelState): void {
 
   if (state.kind === 'ready') {
     panel.removeAttribute('aria-busy');
+    if (holdsFocus) keepFocus(body);
     return;
   }
 
@@ -147,4 +164,6 @@ export function setPanelState(panel: HTMLElement, state: PanelState): void {
 
   if (state.kind === 'loading') panel.setAttribute('aria-busy', 'true');
   else panel.removeAttribute('aria-busy');
+
+  if (holdsFocus) keepFocus(body, layer);
 }
