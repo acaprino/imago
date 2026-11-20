@@ -141,7 +141,13 @@ export function createRegistry(): Registry {
         const command = match(event);
         if (!command) return;
         event.preventDefault();
-        void command.run();
+        // Reporting a failure is the app's job; it must not become an unhandled rejection (the palette does the same).
+        const failed = (error: unknown): void => console.warn(`Command "${command.id}" failed`, error);
+        try {
+          void Promise.resolve(command.run()).catch(failed);
+        } catch (error) {
+          failed(error);
+        }
       };
       target.addEventListener('keydown', onKeyDown);
       return () => target.removeEventListener('keydown', onKeyDown);

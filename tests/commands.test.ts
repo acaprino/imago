@@ -246,6 +246,47 @@ test('attach runs a matching command once and prevents the default action', () =
   assert.equal(prevented, 1, 'an event that matches nothing keeps its default action');
 });
 
+// What a failing command leaves behind: the warnings it wrote and the rejections nobody handled.
+async function pressAndWatch(run: () => void | Promise<void>): Promise<{ warnings: unknown[][]; unhandled: unknown[] }> {
+  const registry = createRegistry();
+  registry.register(command('flaky', 'Ctrl+K', { run }));
+  const target = fakeTarget();
+  registry.attach(target);
+
+  const warnings: unknown[][] = [];
+  const unhandled: unknown[] = [];
+  const warn = console.warn;
+  const onUnhandled = (reason: unknown): void => void unhandled.push(reason);
+  console.warn = (...args: unknown[]): void => void warnings.push(args);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    target.dispatch('keydown', { ...press('k', { ctrlKey: true }), preventDefault: () => {} });
+    await new Promise((done) => setTimeout(done, 20)); // the rejection is reported once the microtasks have run
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    console.warn = warn;
+  }
+  return { warnings, unhandled };
+}
+
+test('attach reports a command that rejects as a warning, not as an unhandled rejection', async () => {
+  const failure = new Error('disk full');
+  const { warnings, unhandled } = await pressAndWatch(() => Promise.reject(failure));
+  assert.deepEqual(unhandled, []);
+  assert.deepEqual(warnings, [['Command "flaky" failed', failure]]);
+});
+
+test('attach reports a command that throws as a warning too, and a command that succeeds says nothing', async () => {
+  const failure = new Error('bad state');
+  const thrown = await pressAndWatch(() => {
+    throw failure;
+  });
+  assert.deepEqual(thrown.warnings, [['Command "flaky" failed', failure]]);
+
+  const fine = await pressAndWatch(async () => {});
+  assert.deepEqual(fine, { warnings: [], unhandled: [] });
+});
+
 test('attach listens to keydown only and the returned detach removes the listener', () => {
   const registry = createRegistry();
   registry.register(command('palette', 'Ctrl+K'));
