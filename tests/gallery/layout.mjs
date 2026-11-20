@@ -25,6 +25,65 @@ const visible = (page, selector) => page.evaluate((s) => {
 const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) <= 0.5, `${label}: expected ${expected}, got ${actual}`);
 const token = (page, name) => page.evaluate((n) => parseFloat(getComputedStyle(document.querySelector('.im-shell')).getPropertyValue(n)), name);
 
+/** A tools row and a foot, as a sidebar may have: shown while it is whole, not in a rail. */
+const addSidebarParts = (page) =>
+  page.evaluate(() => {
+    const sidebar = document.querySelector('.im-sidebar');
+    for (const part of ['tools', 'foot']) {
+      const el = document.createElement('div');
+      el.className = `im-panel-${part}`;
+      el.dataset.test = part;
+      el.textContent = part;
+      sidebar.append(el);
+    }
+  });
+const removeSidebarParts = (page) => page.evaluate(() => document.querySelectorAll('.im-sidebar [data-test]').forEach((el) => el.remove()));
+
+// What the sidebar is in the rail, whether the width forced it (840) or the user folded it (1160): the rail's width, an
+// icon or the initials for every row, the row's text kept for the accessible name (the name is longer than the title
+// tooltip, which is what a name falls back to when the text is gone), the selection told by weight or ring as well as by
+// fill, and neither tools nor foot.
+async function checkRail(page, where, widths, label) {
+  near((await box(page, '.im-sidebar')).width, widths.rail, where(`${label}: rail width`));
+  const rows = page.locator('.im-sidebar [role="option"]');
+  const total = await rows.count();
+  assert.ok(total >= 3, where(`${label}: the sidebar has rows`));
+  for (let i = 0; i < total; i++) {
+    const row = rows.nth(i);
+    const title = ((await row.getAttribute('title')) ?? '').trim();
+    assert.ok(title, where(`${label}: row ${i} has a title`));
+    const name = /option "([^"]+)"/.exec(await row.ariaSnapshot())?.[1] ?? '';
+    assert.ok(name.startsWith(title) && name.length > title.length, where(`${label}: row ${i} is named by its text, not only by its title (${name})`));
+    const item = row.locator('.im-rail-item');
+    assert.equal(await item.isVisible(), true, where(`${label}: row ${i} shows its rail item`));
+    if (await item.locator('svg').count()) assert.equal(await item.locator('svg').isVisible(), true, where(`${label}: row ${i} shows its icon`));
+    else assert.ok(((await item.innerText()) ?? '').trim(), where(`${label}: row ${i} shows its initials`));
+  }
+  const looks = await page.evaluate(() =>
+    [...document.querySelectorAll('.im-sidebar [role="option"]')].map((row) => {
+      const item = row.querySelector('.im-rail-item');
+      const style = getComputedStyle(item);
+      const svg = item.querySelector('svg');
+      return { on: row.getAttribute('aria-selected') === 'true', icon: !!svg, stroke: svg ? parseFloat(getComputedStyle(svg).strokeWidth) : 0, ring: style.borderTopColor, box: item.getBoundingClientRect().width };
+    }));
+  for (const icon of [true, false]) {
+    const on = looks.filter((l) => l.on && l.icon === icon);
+    const off = looks.filter((l) => !l.on && l.icon === icon);
+    if (!on.length || !off.length) continue;
+    if (icon) assert.ok(Math.min(...on.map((l) => l.stroke)) > Math.max(...off.map((l) => l.stroke)), where(`${label}: the selected icon is drawn heavier`));
+    else assert.ok(on.every((l) => off.every((o) => o.ring !== l.ring)), where(`${label}: the selected avatar has a ring`));
+  }
+  assert.ok(looks.filter((l) => l.icon).every((l) => l.box === 20), where(`${label}: an icon sits in the rail's 20px box`));
+  const rail = await box(page, '.im-sidebar');
+  const centres = await page.evaluate(() => [...document.querySelectorAll('.im-sidebar .im-rail-item')].filter((el) => el.getClientRects().length).map((el) => el.getBoundingClientRect()).map((r) => r.left + r.width / 2));
+  assert.ok(centres.length >= 3 && centres.every((x) => Math.abs(x - (rail.left + rail.width / 2)) <= 1.5), where(`${label}: the rail items are centred in the rail`));
+  // a tools row and a foot in the sidebar are not for a rail
+  await addSidebarParts(page);
+  assert.equal(await visible(page, '[data-test="tools"]'), false, where(`${label}: no tools row`));
+  assert.equal(await visible(page, '[data-test="foot"]'), false, where(`${label}: no foot`));
+  await removeSidebarParts(page);
+}
+
 export default async (page, url) => {
   for (const look of LOOKS) {
     for (const theme of THEMES) {
@@ -94,18 +153,10 @@ export default async (page, url) => {
       assert.ok(drawer.left > cover.left && drawer.left < cover.right, where('inspector overlaps the content at 990'));
       near(cover.right, work.right, where('content reaches the work area at 990'));
 
-      // 840: the sidebar is a 56px rail; each item has a title and an accessible name.
+      // 840: the sidebar is a 56px rail of icons; each row has a title and a name made of its text.
       await at(840);
-      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 840'));
-      const items = page.locator('.im-sidebar [role="option"]');
-      const total = await items.count();
-      assert.ok(total >= 3, where('the sidebar has rows'));
-      for (let i = 0; i < total; i++) {
-        const item = items.nth(i);
-        assert.ok(((await item.getAttribute('title')) ?? '').trim(), where(`rail item ${i} has a title`));
-        const name = /option "([^"]+)"/.exec(await item.ariaSnapshot())?.[1] ?? '';
-        assert.ok(name.trim(), where(`rail item ${i} has an accessible name`));
-      }
+      await checkRail(page, where, widths, 'forced rail at 840');
+      assert.equal(await visible(page, '.im-sidebar .im-panel-header'), false, where('the forced rail has no header'));
       assert.equal(await visible(page, '.im-views-menu'), false, where('no Views menu at 840'));
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 840'));
 
@@ -221,7 +272,7 @@ export default async (page, url) => {
       await page.waitForFunction(() => !!document.activeElement?.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0');
       await at(610);
 
-      // From 850 up the user folds the sidebar into the rail of icons with the button in its header, and unfolds it.
+      // From 850 up the user folds the sidebar into the rail with the button in its header, and unfolds it.
       await at(1160);
       const fold = page.locator('.im-sidebar-collapse');
       assert.equal(await visible(page, '.im-sidebar-collapse'), true, where('the fold button at 1160'));
@@ -230,27 +281,37 @@ export default async (page, url) => {
       assert.ok(foldName && (await fold.getAttribute('title')) === foldName, where('the fold button has a name and the same title'));
       near((await box(page, '.im-sidebar')).width, widths.sidebar, where('unfolded sidebar width'));
       const unfolded = await box(page, '.im-content');
+      await addSidebarParts(page); // shown while unfolded, so that their absence in the rail means something
+      assert.equal(await visible(page, '[data-test="tools"]'), true, where('a tools row shows in the unfolded sidebar'));
+      assert.equal(await visible(page, '[data-test="foot"]'), true, where('a foot shows in the unfolded sidebar'));
+      await removeSidebarParts(page);
       await fold.focus();
       await page.keyboard.press('Enter');
-      near((await box(page, '.im-sidebar')).width, widths.rail, where('folded sidebar width'));
       assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-collapsed'), 'true', where('the shell says it is folded'));
       assert.equal(await fold.getAttribute('aria-expanded'), 'false', where('the button says it is folded'));
-      assert.notEqual(await fold.getAttribute('aria-label'), foldName, where('the button is renamed when folded'));
+      const unfoldName = await fold.getAttribute('aria-label');
+      assert.ok(unfoldName && unfoldName !== foldName, where('the button is renamed when folded'));
+      assert.equal(await fold.getAttribute('title'), unfoldName, where('the title follows the name when folded'));
       assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('im-sidebar-collapse')), true, where('focus stays on the fold button'));
       assert.equal(await visible(page, '.im-sidebar .im-panel-title'), false, where('only the button is left of the header'));
       assert.ok((await box(page, '.im-content')).width > unfolded.width, where('the content takes the room'));
-      const foldedRows = page.locator('.im-sidebar [role="option"]');
-      for (let i = 0; i < (await foldedRows.count()); i++) {
-        const item = foldedRows.nth(i);
-        assert.equal(await item.locator('.im-rail-item svg').isVisible(), true, where(`folded row ${i} shows an icon`));
-        assert.ok(((await item.getAttribute('title')) ?? '').trim(), where(`folded row ${i} has a title`));
-        assert.ok(/option "([^"]+)"/.test(await item.ariaSnapshot()), where(`folded row ${i} has an accessible name`));
-      }
-      const strokes = await page.evaluate(() => [...document.querySelectorAll('.im-sidebar [role="option"]')].map((r) => ({ on: r.getAttribute('aria-selected') === 'true', w: parseFloat(getComputedStyle(r.querySelector('.im-rail-item svg')).strokeWidth) })));
-      assert.ok(Math.max(...strokes.filter((s) => s.on).map((s) => s.w)) > Math.max(...strokes.filter((s) => !s.on).map((s) => s.w)), where('the selected icon is drawn heavier'));
-      // The choice outlives a redraw; below 850 the rail is forced and the button is gone; below 620 the drawer is whole.
+      await checkRail(page, where, widths, 'folded');
+      // the header keeps the button when it sits in a group
+      await page.evaluate(() => {
+        const button = document.querySelector('.im-sidebar-collapse');
+        const group = document.createElement('span');
+        group.id = 'test-group';
+        button.replaceWith(group);
+        group.append(button);
+      });
+      assert.equal(await visible(page, '.im-sidebar-collapse'), true, where('a folded header keeps a group that holds the button'));
+      await page.evaluate(() => document.getElementById('test-group').replaceWith(...document.getElementById('test-group').childNodes));
+      // The choice outlives a redraw (and rows without an icon show their initials); below 850 the rail is forced and
+      // the button is gone; below 620 the drawer is the whole sidebar.
       await show(page, { app: 'mukade', look, theme, glass: false, width: 1160 });
-      near((await box(page, '.im-sidebar')).width, widths.rail, where('still folded after a redraw'));
+      await checkRail(page, where, widths, 'folded after a redraw, Mukade');
+      assert.equal(await page.locator('.im-sidebar [role="option"]').nth(0).locator('.im-avatar').innerText(), 'H', where('a row without an icon shows its initials'));
+      assert.equal(await page.locator('.im-sidebar [role="option"]').nth(2).locator('svg').count(), 1, where('a row with an icon shows it (the closed room keeps its lock)'));
       await at(840, 'mukade');
       assert.equal(await visible(page, '.im-sidebar-collapse'), false, where('no fold button at 840'));
       await at(610, 'mukade');
@@ -258,12 +319,79 @@ export default async (page, url) => {
       await page.locator('.im-sidebar-toggle').click();
       near((await box(page, '.im-sidebar')).width, widths.sidebar, where('the drawer shows the whole sidebar although it is folded'));
       assert.equal(await visible(page, '.im-sidebar .im-panel-title'), true, where('the drawer has its title'));
+      assert.equal(await visible(page, '.im-sidebar .im-row-sub'), true, where('the drawer shows the rows whole'));
       await page.keyboard.press('Escape');
       await at(1160, 'mukade');
       await page.locator('.im-sidebar-collapse').click();
       near((await box(page, '.im-sidebar')).width, widths.sidebar, where('unfolded again'));
       assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-collapsed'), null, where('the shell is not folded'));
       assert.equal(await page.locator('.im-sidebar-collapse').getAttribute('aria-label'), foldName, where('the button has its first name back'));
+      assert.equal(await page.locator('.im-sidebar-collapse').getAttribute('title'), foldName, where('and its first title'));
+
+      // Narrowing under 850 takes the fold button away with the header: focus moves to the sidebar's tab stop, or to the
+      // drawer's button when the sidebar is off screen.
+      await page.focus('.im-sidebar-collapse');
+      await at(800, 'mukade');
+      await page.waitForFunction(() => !!document.activeElement?.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0', null, { timeout: 5000 });
+      await at(1160, 'mukade');
+      await page.focus('.im-sidebar-collapse');
+      await at(610, 'mukade');
+      await page.waitForFunction(() => document.activeElement?.classList.contains('im-sidebar-toggle'), null, { timeout: 5000 });
+      await at(1160, 'mukade');
+
+      // The cleanup that sidebarCollapse returns takes its listener away.
+      const cleaned = await page.evaluate(() => {
+        const clone = document.querySelector('.im-shell').cloneNode(true);
+        clone.removeAttribute('data-im-sidebar-collapsed');
+        document.querySelector('#g-sections').append(clone);
+        const button = clone.querySelector('.im-sidebar-collapse');
+        const stop = window.__imagoSidebar.sidebarCollapse(clone);
+        button.click();
+        const folded = clone.dataset.imSidebarCollapsed === 'true';
+        stop();
+        button.click();
+        const stillFolded = clone.dataset.imSidebarCollapsed === 'true';
+        clone.remove();
+        return { folded, stillFolded };
+      });
+      assert.deepEqual(cleaned, { folded: true, stillFolded: true }, where('after its cleanup the fold button does nothing'));
+
+      // The fold alone, on a copy of the shell that has no drawer wired (so nothing else moves the focus): when the
+      // width takes the button away, focus goes to the sidebar's tab stop, and to the drawer's button under 620.
+      const moved = await page.evaluate(async () => {
+        const root = document.createElement('div');
+        Object.assign(root.dataset, document.querySelector('#g-window').dataset);
+        root.style.cssText = 'width:1000px;height:640px;position:relative';
+        const clone = document.querySelector('.im-shell').cloneNode(true);
+        clone.removeAttribute('data-im-sidebar-collapsed');
+        root.append(clone);
+        document.querySelector('#g-sections').append(root);
+        const stop = window.__imagoSidebar.sidebarCollapse(clone);
+        const frames = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+        await frames();
+        const result = {};
+        clone.querySelector('.im-sidebar-collapse').focus();
+        root.style.width = '800px';
+        await frames();
+        result.stop = clone.contains(document.activeElement) && !!document.activeElement.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0';
+        root.style.width = '1000px';
+        await frames();
+        clone.querySelector('.im-sidebar-collapse').focus();
+        root.style.width = '610px';
+        await frames();
+        result.toggle = document.activeElement === clone.querySelector('.im-sidebar-toggle');
+        stop();
+        root.remove();
+        return result;
+      });
+      assert.deepEqual(moved, { stop: true, toggle: true }, where('the fold alone moves focus off its button when the width takes it away'));
+
+      // Without a roving tab stop (and with the fold button off screen) the drawer puts focus on the sidebar itself.
+      await at(610, 'mukade');
+      await page.evaluate(() => document.querySelectorAll('.im-sidebar [tabindex]').forEach((el) => el.removeAttribute('tabindex')));
+      await page.locator('.im-sidebar-toggle').click();
+      assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('im-sidebar')), true, where('with no tab stop in it, focus goes to the sidebar, not to a hidden button'));
+      await page.keyboard.press('Escape');
 
       // Muro has no sidebar and no button for it, at any width.
       for (const width of [1160, 990, 840, 610, 500]) {
@@ -275,6 +403,12 @@ export default async (page, url) => {
         const offset = (await box(page, '.im-content')).left - (await box(page, '.im-work')).left;
         assert.ok(offset >= 0 && offset <= 2.5, where(`Muro's content starts at its work area at ${width} (offset ${offset})`));
       }
+      // A shell without a sidebar is never in the rail, whatever attribute is left on it.
+      await at(1160, 'muro');
+      await page.evaluate(() => { document.querySelector('.im-shell').dataset.imSidebarCollapsed = 'true'; });
+      assert.ok((await box(page, '.im-work')).width > (await box(page, '.im-shell')).width - 30, where('Muro with a stale fold attribute keeps its whole width'));
+      await page.evaluate(() => { delete document.querySelector('.im-shell').dataset.imSidebarCollapsed; });
+
       if (look === 'smooth') {
         await at(610, 'muro');
         assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.im-work')).marginInlineStart), '0px', where('Muro below 620: the sheet has no margin'));

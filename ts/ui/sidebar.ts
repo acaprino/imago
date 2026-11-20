@@ -1,17 +1,36 @@
-// Below 620 the sidebar is not in the layout: a title-bar button (`.im-sidebar-toggle`) opens it as an overlay from the
-// left edge (CSS: `[data-im-sidebar-open="true"]` on the shell). The object list of an app must stay reachable at the
-// minimum window width and at 200% zoom, by keyboard and by pointer.
+// Two behaviours of the sidebar that need a little script; the layout itself is CSS (css/primitives.css).
 //
-// Opening moves focus into the sidebar. A second click on the button, Escape (from anywhere), or a press outside it
-// closes it and gives focus back to the button. When focus moves out of the sidebar to anything but the button, it
-// closes too and leaves the focus where it went. A floating layer opened from the sidebar (a menu) is not outside.
-// Widening the shell to 620 or more clears the open state: the sidebar is then a column or a rail again, and focus
-// follows what the width change hides.
+// The drawer, `sidebarDrawer`. Below 620 the sidebar is not in the layout: a title-bar button (`.im-sidebar-toggle`) opens
+// it as an overlay from the left edge (`data-im-sidebar-open` on the shell). The object list of an app must stay
+// reachable at the minimum window width and at 200% zoom, by keyboard and by pointer. Opening moves focus into the
+// sidebar. A second click on the button, Escape (from anywhere), or a press outside it closes it and gives focus back to
+// the button. When focus moves out of the sidebar to anything but the button, it closes too and leaves the focus where
+// it went. A floating layer opened from the sidebar (a menu) is not outside. Widening the shell to 620 or more clears
+// the open state: the sidebar is then a column or a rail again.
+//
+// The fold, `sidebarCollapse`. From 850 up a button in the sidebar's header (`.im-sidebar-collapse`) folds the sidebar
+// into the 56px rail of icons and unfolds it (`data-im-sidebar-collapsed` on the shell). The app keeps the choice.
+//
+// Both follow the width: a width change never leaves focus on what it hides. Narrowing below 620 moves focus from the
+// sidebar to the drawer's button; widening to 620 moves it from that button to the sidebar's tab stop; narrowing below
+// 850 moves it from the fold button, which goes with the header, to the sidebar's tab stop or, with no sidebar on
+// screen, to the drawer's button.
 
 /** The shell is narrow below this width; the CSS says the same with `@container im-shell (width < 620px)`. */
 const NARROW_BELOW = 620;
+/** The fold button is there from this width; the CSS says the same with `@container im-shell (width >= 850px)`. */
+const FOLD_FROM = 850;
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const FLOATING = '[data-im-layer], [data-im-notices]';
+
+/** An element that is not rendered (it, or an ancestor, is `display: none`) has no box: focus() on it does nothing. */
+const isRendered = (element: Element): boolean => element.getClientRects().length > 0;
+
+/** The sidebar's tab stop that is on screen: its `[tabindex="0"]`, else its first focusable element; null when none. */
+function sidebarStop(sidebar: HTMLElement): HTMLElement | null {
+  const onScreen = (selector: string): HTMLElement | null => Array.from(sidebar.querySelectorAll<HTMLElement>(selector)).find(isRendered) ?? null;
+  return onScreen('[tabindex="0"]') ?? onScreen(FOCUSABLE);
+}
 
 /** Wires the sidebar drawer of one shell. Returns the function that removes every listener and the observer. */
 export function sidebarDrawer(shell: HTMLElement): () => void {
@@ -35,9 +54,9 @@ export function sidebarDrawer(shell: HTMLElement): () => void {
     return element?.closest(FLOATING) != null;
   };
 
-  /** Focus goes to the sidebar's tab stop, else its first focusable element, else the sidebar itself. */
+  /** Focus goes to the sidebar's tab stop that is on screen, else to the sidebar itself. */
   const focusSidebar = (): void => {
-    const target = sidebar.querySelector<HTMLElement>('[tabindex="0"]') ?? sidebar.querySelector<HTMLElement>(FOCUSABLE);
+    const target = sidebarStop(sidebar);
     if (target) {
       target.focus();
       return;
@@ -109,12 +128,16 @@ export function sidebarDrawer(shell: HTMLElement): () => void {
  * From 850 up the sidebar can be folded into the 56px rail of icons and unfolded again by the button in its header
  * (`.im-sidebar-collapse`). The state is `data-im-sidebar-collapsed` on the shell, so the CSS needs no script; the app
  * stores the choice and passes it back as `collapsed` the next time. The button's label and `aria-expanded` follow the
- * state: its `data-im-label-collapse` and `data-im-label-expand` hold the two names. Returns the function that removes
- * the listener.
+ * state: its `data-im-label-collapse` and `data-im-label-expand` hold the two names. Under 850 the button goes with the
+ * header; if it had focus, focus moves on (see the top of this file). Returns the function that removes the listener
+ * and the observer.
  */
 export function sidebarCollapse(shell: HTMLElement, options: { collapsed?: boolean; onChange?: (collapsed: boolean) => void } = {}): () => void {
   const button = shell.querySelector<HTMLElement>('.im-sidebar-collapse');
-  if (!button) return () => {};
+  const sidebar = button?.closest<HTMLElement>('.im-sidebar');
+  if (!button || !sidebar) return () => {};
+  const doc = shell.ownerDocument;
+  const win = doc.defaultView;
 
   const show = (collapsed: boolean): void => {
     if (collapsed) shell.dataset.imSidebarCollapsed = 'true';
@@ -134,5 +157,24 @@ export function sidebarCollapse(shell: HTMLElement, options: { collapsed?: boole
 
   show(options.collapsed ?? shell.dataset.imSidebarCollapsed === 'true');
   button.addEventListener('click', onClick);
-  return () => button.removeEventListener('click', onClick);
+
+  let wide: boolean | null = null;
+  const observer = win
+    ? new win.ResizeObserver((entries) => {
+        const width = entries[entries.length - 1]?.contentRect.width;
+        if (width === undefined) return;
+        const wasWide = wide;
+        wide = width >= FOLD_FROM;
+        if (wasWide === null || wasWide === wide || wide || doc.activeElement !== button) return;
+        // the button is gone with the header: the sidebar's tab stop, or the drawer's button when no sidebar is on screen
+        const toggle = shell.querySelector<HTMLElement>('.im-sidebar-toggle');
+        (sidebarStop(sidebar) ?? (toggle && isRendered(toggle) ? toggle : null))?.focus();
+      })
+    : null;
+  observer?.observe(shell);
+
+  return () => {
+    button.removeEventListener('click', onClick);
+    observer?.disconnect();
+  };
 }

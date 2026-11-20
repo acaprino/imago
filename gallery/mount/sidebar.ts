@@ -1,5 +1,13 @@
 import { sidebarCollapse, sidebarDrawer } from '../../ts/ui/sidebar.ts';
 
+declare global {
+  interface Window {
+    /** For tests/gallery/layout.mjs: the two functions, to try them on a copy of the shell. */
+    __imagoSidebar?: { sidebarDrawer: typeof sidebarDrawer; sidebarCollapse: typeof sidebarCollapse };
+  }
+}
+window.__imagoSidebar = { sidebarDrawer, sidebarCollapse };
+
 // The choice to fold the sidebar into its rail outlives a redraw of the gallery, as an app would store it.
 let collapsed = false;
 

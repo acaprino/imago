@@ -47,9 +47,10 @@ const iconButton = (name: string, label: string): string => `<button type="butto
 const segmented = (items: string[], on = 0): string => `<div class="im-seg" role="tablist">${items.map((t, x) => `<button type="button" role="tab" aria-selected="${x === on}">${t}</button>`).join('')}</div>`;
 const check = (state: 'on' | 'off' | 'part', label: string): string => `<span class="im-check" role="checkbox" aria-checked="${state === 'on' ? 'true' : state === 'part' ? 'mixed' : 'false'}" aria-label="${label}"></span>`;
 
+const initials = (text: string): string => text.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 type Row = { t: string; s?: string; m?: string; sel?: boolean; ck?: 'on' | 'off' | 'part'; av?: string; icon?: string; dot?: Tone; chip?: [string, Tone?] };
 function row(r: Row): string {
-  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.t}">${r.icon ? `<span class="im-rail-item" aria-hidden="true">${icon(r.icon)}</span>` : ''}${r.ck ? check(r.ck, r.t) : ''}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
+  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.t}">${r.icon ? `<span class="im-rail-item" aria-hidden="true">${icon(r.icon)}</span>` : `<span class="im-avatar im-rail-item" aria-hidden="true">${initials(r.t)}</span>`}${r.ck ? check(r.ck, r.t) : ''}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
 }
 type HeaderOptions = { n?: number; sub?: string; right?: string };
 const header = (title: string, o: HeaderOptions = {}): string => `<header class="im-panel-header"><h4 class="im-panel-title">${title}</h4>${count(o.n)}${o.sub ? `<span class="im-panel-sub">${o.sub}</span>` : ''}${spacer}${o.right ?? ''}</header>`;
@@ -107,7 +108,7 @@ export const APPS: Record<AppId, App> = {
     status: ['Service running', 'ok', 'http://127.0.0.1:47631/mcp', 'checked every 3 s'],
     footer: '6 installations · 16 sessions', keys: [['↑↓', 'move'], ['n', 'new room'], ['l', 'launch']],
     side: { title: 'Rooms', n: 3, rows: [
-      { icon: 'chat', t: 'hop-review', s: '4 members · 11 events · 12:02', chip: ['open', 'ok'], sel: true }, { icon: 'chat', t: 'desktop-spec', s: '2 members · 4 events · 11:03', chip: ['open', 'ok'] },
+      { t: 'hop-review', s: '4 members · 11 events · 12:02', chip: ['open', 'ok'], sel: true }, { t: 'desktop-spec', s: '2 members · 4 events · 11:03', chip: ['open', 'ok'] },
       { icon: 'lock', t: 'codex-code-mode', s: '1 member · 3 events · Nov 17', chip: ['closed'] }] },
     content: () => `${header('hop-review', { sub: '11 events', right: segmented(['Graph', 'Lanes', 'Feed'], 2) })}<div class="im-panel-body g-feed">
         <article class="g-msg"><span class="im-avatar">CB</span><div class="g-msg-head"><b>codex-b</b><time>11:41</time></div><p class="im-content-text">The hop wrote three Codex threads for the review.</p><div class="g-msg-foot">${chip('done', 'ok')}to claude-a</div></article>
@@ -123,9 +124,9 @@ export const APPS: Record<AppId, App> = {
     status: ['Local runtime', 'ok', 'resources available', '4 terminals'],
     footer: 'Local runtime · 4 terminals · 268 MiB', keys: [['Ctrl ⇧ T', 'new session'], ['F6', 'next region']],
     side: { title: 'Threads', n: 9, rows: [
-      { dot: 'ok', icon: 'term', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', icon: 'term', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
-      { dot: 'ok', icon: 'term', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { icon: 'term', t: 'Dunning emails', s: '1 session', m: '6m' },
-      { icon: 'term', t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { icon: 'term', t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
+      { dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
+      { dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { t: 'Dunning emails', s: '1 session', m: '6m' },
+      { t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
     content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
 
 I will hand the tasks to implementer, and keep reviewer for the diff:
@@ -167,8 +168,8 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
     status: ['Demo in pausa', 'warn', 'Avanzamento dimostrativo 64%', 'acaprino/daodan · main'],
     footer: 'Prototipo locale · il codice resta sul tuo disco', keys: [['space', 'pausa'], ['g', 'grafo']],
     side: { title: 'Progetti', n: 4, rows: [
-      { av: 'DA', icon: 'folder', t: 'daodan', s: 'main · pubblica', m: '64%', sel: true }, { av: 'SH', icon: 'folder', t: 'shinatama', s: 'develop · privata', m: '100%' },
-      { av: 'MU', icon: 'folder', t: 'mukade', s: 'develop · privata', m: '—' }, { av: 'XI', icon: 'folder', t: 'xiox', s: 'main · privata', m: '—' }] },
+      { av: 'DA', t: 'daodan', s: 'main · pubblica', m: '64%', sel: true }, { av: 'SH', t: 'shinatama', s: 'develop · privata', m: '100%' },
+      { av: 'MU', t: 'mukade', s: 'develop · privata', m: '—' }, { av: 'XI', t: 'xiox', s: 'main · privata', m: '—' }] },
     content: () => `${header('Pipeline di analisi', { sub: 'acaprino/daodan · main', right: chip('Demo', 'accent') })}<div class="im-panel-body">${table([{ t: 'Fase' }, { t: 'Stato' }, { t: 'Passo', n: true }, { t: 'Durata', n: true }], [
       { c: [two('Scan', 'Inventario e pre-mappa'), chip('Completata', 'ok'), '1 / 4', '0:42'] },
       { c: [two('Analyze', 'Analyzer per tecnologia'), chip('In pausa', 'warn'), '2 / 4', '2:10'], sel: true },

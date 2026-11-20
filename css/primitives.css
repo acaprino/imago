@@ -7,6 +7,7 @@
 /* ---------- the shell ---------- */
 .im-shell {
   --im-pane-pad: var(--im-s-4);
+  --im-rail-icon: 20px;
   --im-list-pad: var(--im-s-2);
   --im-status-h: 40px;
   --im-head-c: var(--im-text-hi);
@@ -248,14 +249,29 @@
   }
 }
 
-/* From 620 to 849 the sidebar is a 56px rail: one icon per row, the row's text kept, hidden, for the accessible name. */
+/* The rail: the sidebar is 56px wide and a row shows one icon (its initials in the small avatar when the app gave it no
+   icon); the row's text stays, visually hidden, for the accessible name. Two things put the shell in it: the width,
+   from 620 to 849 (no room for the sidebar), and from 850 up the user's choice (data-im-sidebar-collapsed, set by
+   sidebarCollapse in ts/ui/sidebar.ts). Each of them only sets --im-rail on the body, with the body's first column; the
+   rules that make the rail are written once, in the style query at the end of this block. A shell without a sidebar
+   is never in the rail. */
 @container im-shell (620px <= width < 850px) {
-  .im-shell:not([data-im-sidebar="off"]) .im-body { grid-template-columns: var(--im-w-rail) minmax(0, 1fr); }
-  .im-sidebar .im-panel-header,
+  .im-shell:not([data-im-sidebar="off"]) .im-body { --im-rail: 1; grid-template-columns: var(--im-w-rail) minmax(0, 1fr); }
+  .im-sidebar .im-panel-header { display: none; }
+}
+@container im-shell (width >= 850px) {
+  .im-sidebar .im-sidebar-collapse { display: inline-grid; }
+  .im-shell[data-im-sidebar-collapsed="true"]:not([data-im-sidebar="off"]) .im-body { --im-rail: 1; grid-template-columns: var(--im-w-rail) minmax(0, 1fr); }
+  /* folded, the header keeps the button that unfolds it (alone or in a group) and nothing else */
+  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-panel-header { justify-content: center; padding-inline: 0; }
+  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-panel-header > :not(.im-sidebar-collapse, :has(.im-sidebar-collapse)) { display: none; }
+}
+@container style(--im-rail: 1) {
   .im-sidebar .im-panel-tools,
   .im-sidebar .im-panel-foot { display: none; }
   .im-sidebar .im-row > :not(.im-rail-item, .im-row-text) { display: none; }
-  .im-sidebar .im-row > .im-rail-item { display: grid; place-items: center; inline-size: 20px; block-size: 20px; }
+  .im-sidebar .im-row > .im-rail-item { display: grid; }
+  .im-sidebar .im-row > .im-rail-item:not(.im-avatar) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
   .im-sidebar .im-row > .im-row-text {
     position: absolute;
     inline-size: 1px;
@@ -265,37 +281,11 @@
     white-space: nowrap;
   }
   .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
-  /* the selection is a heavier line as well as a fill */
+  /* the selection is a heavier line, or a ringed avatar, as well as a fill */
   .im-sidebar .im-row[aria-selected="true"] > .im-rail-item .im-icon { stroke-width: 2.4; }
+  .im-sidebar .im-row[aria-selected="true"] > .im-avatar.im-rail-item { border-color: var(--im-accent-text); font-weight: 700; }
   .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
-}
-
-/* From 850 up the user can fold the sidebar into the same rail (data-im-sidebar-collapsed on the shell, set by
-   sidebarCollapse in ts/ui/sidebar.ts). The header stays for the button that unfolds it; below 850 the rail is
-   forced and the choice does not matter, below 620 the drawer shows the whole sidebar. */
-@container im-shell (width >= 850px) {
-  .im-sidebar .im-sidebar-collapse { display: inline-grid; }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-body { grid-template-columns: var(--im-w-rail) minmax(0, 1fr); }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-panel-header { justify-content: center; padding-inline: 0; }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-panel-header > :not(.im-sidebar-collapse) { display: none; }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-panel-tools,
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-panel-foot { display: none; }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-row > :not(.im-rail-item, .im-row-text) { display: none; }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-row > .im-rail-item { display: grid; place-items: center; inline-size: 20px; block-size: 20px; }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-row > .im-row-text {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
-  /* the selection is a heavier line as well as a fill */
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-row[aria-selected="true"] > .im-rail-item .im-icon { stroke-width: 2.4; }
-  .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
-  [data-im-look="oni"] .im-shell[data-im-sidebar-collapsed="true"] .im-sidebar { clip-path: none; }
 }
 
 /* Below 620 the view tabs become one "Views" menu and the sidebar leaves the layout: a title-bar button opens it as an
