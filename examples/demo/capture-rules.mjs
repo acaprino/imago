@@ -24,10 +24,11 @@ export const TOLERANCE = 12;
 const SOLID = 1;
 
 /**
- * How much the backdrop must show through the frame: the material is translucent, not a solid fallback. Measured
- * for the dark themes only: a light acrylic moves by about 17 levels between a black and a white window behind it
- * (212 and 229 under Smooth's frost), and the frost lets 12 % (Smooth) or 10 % (ONI) of it through, which is 2 levels
- * at most: no more than the rounding of the compositor.
+ * How much the backdrop must show through the frame: the material is translucent, not a solid fallback. Run 2
+ * (docs/verification.md) measured the same frame over a black and over a white window: the dark frames moved 17
+ * levels (Smooth, 23,26,35 against 40,43,52) and 13 (ONI, 17,12,27 against 30,25,40), the light frosts 11 (Smooth,
+ * 233,234,236 against 244,245,247) and 8 (ONI, 225,229,238 against 233,237,246). A frame that moves by fewer than 3
+ * levels is the rounding of the compositor: a solid fill, in a dark theme and in a light one.
  */
 export const SHOW_THROUGH = 3;
 
@@ -56,11 +57,10 @@ export function judgeTitleBar({ look, theme, backdrop, pixel }) {
 
 /**
  * The glass lets the backdrop through: the same frame photographed over a dark and over a bright window differs.
- * A window that was inactive (Windows drops the material then) or a frame painted solid is the same in both. Dark themes only.
+ * A window that was inactive (Windows drops the material then) or a frame painted solid is the same in both.
  * @returns {string[]}
  */
-export function judgeShowThrough({ theme, overDark, overBright }) {
-  if (theme !== 'dark') return [];
+export function judgeShowThrough({ overDark, overBright }) {
   if (apart(overDark, overBright) >= SHOW_THROUGH) return [];
   return [`the frame is ${overDark.join(',')} over a dark window and ${overBright.join(',')} over a bright one: the backdrop does not show through`];
 }

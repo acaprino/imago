@@ -7,9 +7,7 @@ param(
   # Extra room below the demo window, for the flyout that Snap Layouts opens under the maximize button.
   [int]$Below = 0,
   # It closes itself after this long, so a run that dies leaves nothing on the screen.
-  [int]$Seconds = 240,
-  # Experiments: lay the backdrop in the ordinary band instead of the topmost one.
-  [switch]$NotTopmost
+  [int]$Seconds = 240
 )
 # A plain window of one colour behind the demo window, for the glass to blur: the acrylic is a blur of what lies
 # behind the window, so the same glass is photographed over a dark and over a bright one. It never takes the
@@ -46,7 +44,7 @@ $form.StartPosition = 'Manual'
 $form.ShowInTaskbar = $false
 # Topmost like the demo window (which capture.ps1 raises above it): another window the person activates meanwhile
 # must not come up between the two.
-$form.TopMost = -not $NotTopmost
+$form.TopMost = $true
 $form.BackColor = [System.Drawing.Color]::FromArgb($r, $g, $b)
 $form.Bounds = New-Object System.Drawing.Rectangle ($rect.L - $Margin), ($rect.T - $Margin), (($rect.Rr - $rect.L) + 2 * $Margin), (($rect.B - $rect.T) + 2 * $Margin + $Below)
 $form.Show()

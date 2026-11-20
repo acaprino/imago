@@ -13,6 +13,15 @@
 // The look and the theme are switched through `window.__imago.set` in the page (the WebView2 debugging port), never
 // by reloading. Raising can fail now and then: a capture whose pixels are not the app's is the window in front;
 // repeat the run.
+//
+// The restart check leaves the window in the theme OPPOSITE to Windows' own apps theme before it closes it: a page
+// that took no saved theme shows Windows' theme, so only a saved theme that differs from it can prove that the saved
+// one reached the first frame. When Windows' theme cannot be read the check says it cannot tell.
+//
+// `launch` also records in the page what it was pressed on (pointer, click, key: `demoPressed`, the `pressed` console
+// lines) and prints the last of them when the demo ends by itself. It stays on purpose: it is what showed that the
+// demo of run 2 was closed by keys typed on the keyboard meanwhile (docs/verification.md, "Notes on the runs").
+// A `launch` that fails stops the process it started, so no window is left on the screen.
 import { chromium } from 'playwright';
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -85,28 +94,36 @@ async function launch(fixture) {
   const exited = new Promise((accept) => app.once('exit', accept));
   app.once('exit', (code) => { if (!closing.has(app)) note(`(the demo ended by itself with exit code ${code}; the page was last pressed on: ${demoPressed.get(app)?.slice(-6).join(' | ') || 'nothing'})`); });
   let browser;
-  for (let attempt = 0; attempt < 80 && !browser; attempt++) {
-    try { browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 1000 }); } catch { await delay(500); }
-  }
-  if (!browser) throw new Error('the demo window did not open its debugging port');
-  const page = async () => {
-    for (const deadline = Date.now() + 30000; Date.now() < deadline; await delay(250)) {
-      const found = browser.contexts()[0]?.pages().find((candidate) => /tauri\.localhost/.test(candidate.url()));
-      if (found) return found;
+  try {
+    for (let attempt = 0; attempt < 80 && !browser; attempt++) {
+      try { browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 1000 }); } catch { await delay(500); }
     }
-    throw new Error('the demo window shows no page of its own');
-  };
-  const view = await page();
-  // What the page was pressed on, kept here: when the demo ends by itself this says whether a pointer or a key did it.
-  const pressed = [];
-  view.on('console', (message) => { if (message.text().startsWith('pressed ')) pressed.push(message.text().slice(8)); });
-  await view.evaluate(() => {
-    const say = (event) => console.debug(`pressed ${event.type} ${event.target?.closest?.('[data-im-window]')?.getAttribute('data-im-window') ?? event.target?.tagName ?? event.key}`);
-    for (const type of ['pointerdown', 'click', 'keydown']) document.addEventListener(type, say, true);
-  });
-  await view.waitForFunction(() => window.__imago?.ready && document.querySelector('#g-window')?.classList.contains('im-glass'), null, { timeout: 30000 });
-  demoPressed.set(app, pressed);
-  return { app, pid: app.pid, page: view, exited, pressed, close: () => browser.close().catch(() => {}) };
+    if (!browser) throw new Error('the demo window did not open its debugging port');
+    const page = async () => {
+      for (const deadline = Date.now() + 30000; Date.now() < deadline; await delay(250)) {
+        const found = browser.contexts()[0]?.pages().find((candidate) => /tauri\.localhost/.test(candidate.url()));
+        if (found) return found;
+      }
+      throw new Error('the demo window shows no page of its own');
+    };
+    const view = await page();
+    // What the page was pressed on, kept here: when the demo ends by itself this says whether a pointer or a key did it.
+    const pressed = [];
+    view.on('console', (message) => { if (message.text().startsWith('pressed ')) pressed.push(message.text().slice(8)); });
+    await view.evaluate(() => {
+      const say = (event) => console.debug(`pressed ${event.type} ${event.target?.closest?.('[data-im-window]')?.getAttribute('data-im-window') ?? event.target?.tagName ?? event.key}`);
+      for (const type of ['pointerdown', 'click', 'keydown']) document.addEventListener(type, say, true);
+    });
+    await view.waitForFunction(() => window.__imago?.ready && document.querySelector('#g-window')?.classList.contains('im-glass'), null, { timeout: 30000 });
+    demoPressed.set(app, pressed);
+    return { app, pid: app.pid, page: view, exited, pressed, close: () => browser.close().catch(() => {}) };
+  } catch (error) {
+    // The window is already on the screen: a launch that fails (first start or restart) must not leave it there.
+    closing.add(app);
+    await browser?.close().catch(() => {});
+    killTree(app.pid);
+    throw error;
+  }
 }
 
 /** Where the window is kept on the screen for the run: the backdrop lies under this place, and every capture puts the window back. */
@@ -197,7 +214,7 @@ async function photographs(demo, fixture) {
       const dark = taken[`${look}-${theme}-over-dark`];
       const bright = taken[`${look}-${theme}-over-bright`];
       if (!dark || !bright) continue;
-      check(`${look}-${theme}`, judgeShowThrough({ theme, overDark: dark.title, overBright: bright.title }));
+      check(`${look}-${theme}`, judgeShowThrough({ overDark: dark.title, overBright: bright.title }));
       if (look === 'smooth') {
         check(`${look}-${theme}`, judgeSheetDenser({ frame: { overDark: dark.title, overBright: bright.title }, sheet: { overDark: dark.sheet, overBright: bright.sheet } }));
       }
@@ -269,8 +286,9 @@ async function interaction(demo, fixture) {
   }
 }
 
-async function zoomTwice(demo, fixture) {
-  await select(demo, fixture, 'smooth', 'light');
+/** Presses Ctrl+= twice and leaves the window in the theme `saved.theme`, the one the restart must find again. */
+async function zoomTwice(demo, fixture, saved) {
+  await select(demo, fixture, 'smooth', saved.theme);
   const ratio = () => demo.page.evaluate(() => window.devicePixelRatio);
   const base = await ratio();
   for (let press = 1; press <= 2; press++) {
@@ -296,17 +314,31 @@ async function closeWindow(demo) {
 
 // ---- phase 3: the restart ---------------------------------------------------------------------------------------------
 
+/** Whether Windows' apps are dark: true or false, null when the registry cannot be read. */
 const systemPrefersDark = () => {
   try { return !/0x1\s*$/.test(execFileSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', '/v', 'AppsUseLightTheme'], { encoding: 'utf8' }).trim()); } catch { return null; }
 };
 
-async function restart(fixture, base) {
+/**
+ * The theme the window is left in before the restart: the opposite of Windows' own, because a page with no saved theme
+ * at all shows Windows' theme and would pass the check whether the saved one reached the first frame or not. When
+ * Windows' theme cannot be read the run ends on light as it used to, and `tells` is false: the check cannot tell.
+ */
+function themeToSave() {
+  const dark = systemPrefersDark();
+  if (dark === null) return { theme: 'light', windows: 'unknown', tells: false };
+  return { theme: dark ? 'light' : 'dark', windows: dark ? 'dark' : 'light', tells: true };
+}
+
+async function restart(fixture, base, saved) {
   const demo = await launch(fixture);
   try {
     const seen = await demo.page.evaluate(() => ({ ratio: window.devicePixelRatio, level: localStorage.getItem('imago.zoom'), light: matchMedia('(prefers-color-scheme: light)').matches }));
-    note(`restart: devicePixelRatio ${seen.ratio} (x${(seen.ratio / base).toFixed(2)} of ${base}), saved level ${seen.level}, the page's colour scheme is ${seen.light ? 'light' : 'dark'} (Windows apps are ${systemPrefersDark() ? 'dark' : 'light'}; the window theme kept was light)`);
+    const scheme = seen.light ? 'light' : 'dark';
+    note(`restart: devicePixelRatio ${seen.ratio} (x${(seen.ratio / base).toFixed(2)} of ${base}), saved level ${seen.level}; the window theme saved was ${saved.theme}, the page's colour scheme is ${scheme}, Windows' apps are ${saved.windows}`);
+    if (!saved.tells) note(`(Windows' apps theme could not be read: the saved theme ${saved.theme} may be Windows' own, so this check cannot tell the saved theme from Windows')`);
     if (Math.abs(seen.ratio / base - 1.2) > 0.02) fail(`after a restart the zoom is x${(seen.ratio / base).toFixed(2)}, not the x1.2 that was kept`);
-    if (!seen.light) fail('after a restart the page is not light: the saved window theme did not reach the first frame');
+    if (scheme !== saved.theme) fail(`after a restart the page is ${scheme}, not ${saved.theme}: the saved window theme did not reach the first frame`);
   } finally {
     await closeWindow(demo);
   }
@@ -330,10 +362,11 @@ try {
   demo = await launch(fixture);
   await photographs(demo, fixture);
   await interaction(demo, fixture);
-  const base = await zoomTwice(demo, fixture);
+  const saved = themeToSave();
+  const base = await zoomTwice(demo, fixture, saved);
   await closeWindow(demo);
   demo = undefined;
-  await restart(fixture, base);
+  await restart(fixture, base, saved);
 } catch (error) {
   fail(`the run stopped: ${String(error.stack ?? error).split('\n').slice(0, 3).join(' | ')}`);
 } finally {

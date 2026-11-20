@@ -44,15 +44,23 @@ test('one level of rounding off the ground is still the ground, five levels is g
 });
 
 test('the backdrop shows through a dark frame: the same pixel over both windows is a solid fallback', () => {
-  assert.deepEqual(judgeShowThrough({ theme: 'dark', overDark: [23, 26, 37], overBright: [29, 32, 44] }), []);
-  const solid = judgeShowThrough({ theme: 'dark', overDark: [24, 27, 38], overBright: [24, 27, 38] });
+  assert.deepEqual(judgeShowThrough({ overDark: [23, 26, 37], overBright: [29, 32, 44] }), []);
+  const solid = judgeShowThrough({ overDark: [24, 27, 38], overBright: [24, 27, 38] });
   assert.equal(solid.length, 1);
   assert.match(solid[0], /does not show through/);
-  assert.equal(judgeShowThrough({ theme: 'dark', overDark: [24, 27, 38], overBright: [26, 28, 39] }).length, 1, 'two levels is rounding, not the backdrop');
+  assert.equal(judgeShowThrough({ overDark: [24, 27, 38], overBright: [26, 28, 39] }).length, 1, 'two levels is rounding, not the backdrop');
 });
 
-test('a light frost is not judged by the backdrop: its acrylic moves too little for two windows to tell', () => {
-  assert.deepEqual(judgeShowThrough({ theme: 'light', overDark: [242, 243, 245], overBright: [242, 243, 245] }), []);
+test('the backdrop shows through a light frost as it was measured: 11 levels under Smooth, 8 under ONI', () => {
+  assert.deepEqual(judgeShowThrough({ overDark: [233, 234, 236], overBright: [244, 245, 247] }), [], 'Smooth light, run 2');
+  assert.deepEqual(judgeShowThrough({ overDark: [225, 229, 238], overBright: [233, 237, 246] }), [], 'ONI light, run 2');
+});
+
+test('a light frost that is the same over both windows is a solid fallback, as a dark one is', () => {
+  const solid = judgeShowThrough({ overDark: [242, 243, 245], overBright: [242, 243, 245] });
+  assert.equal(solid.length, 1);
+  assert.match(solid[0], /does not show through/);
+  assert.equal(judgeShowThrough({ overDark: [242, 243, 245], overBright: [243, 244, 246] }).length, 1, 'two levels is rounding, not the backdrop');
 });
 
 test('the work sheet is denser than the frame when the backdrop moves it less', () => {
