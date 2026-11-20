@@ -1,0 +1,282 @@
+// Panel states, in the browser: a panel that is empty, loading or failed keeps its header and frame.
+// The gallery mounts three panels (gallery/mount/panel-state.ts) and exposes window.__imagoPanelState.
+import assert from 'node:assert/strict';
+
+const LOOKS = ['smooth', 'oni'];
+const THEMES = ['dark', 'light'];
+
+// Picks the look and the theme the way the gallery's pickers do; the page draws again and mounts again.
+async function pick(page, look, theme) {
+  await page.evaluate(([l, th]) => window.__imago.set({ look: l, theme: th }), [look, theme]);
+  await page.waitForFunction(
+    ([l, th]) => {
+      const box = document.getElementById('im-gallery-panel-states');
+      return box?.getAttribute('data-im-look') === l && box.getAttribute('data-im-theme') === th && Boolean(window.__imagoPanelState);
+    },
+    [look, theme],
+  );
+}
+
+// Everything runs in the page: the panels are live elements there.
+async function inPage(page, fn, arg) {
+  return page.evaluate(fn, arg);
+}
+
+async function frames(page) {
+  // The header of every panel keeps its place and size in every state, the panel keeps its place and width.
+  return inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    const box = (element) => {
+      const r = element.getBoundingClientRect();
+      return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height };
+    };
+    const states = [
+      { kind: 'ready' },
+      { kind: 'loading', rows: 3 },
+      { kind: 'empty', text: 'Nothing here yet.', action: { label: 'Add one', keys: 'N', run() {} } },
+      { kind: 'error', text: 'It failed.', retry: { label: 'Retry', run() {} } },
+      { kind: 'ready' },
+    ];
+    const out = [];
+    for (const [name, panel] of Object.entries(panels)) {
+      const header = () => panel.querySelector(':scope > .im-panel-header');
+      const before = { header: box(header()), panel: box(panel) };
+      for (const state of states) {
+        setPanelState(panel, state);
+        const now = header();
+        out.push({
+          name,
+          state: state.kind,
+          hasHeader: Boolean(now),
+          headerBox: now ? box(now) : null,
+          panelBox: box(panel),
+          before,
+        });
+      }
+    }
+    return out;
+  });
+}
+
+export default async function (page) {
+  for (const look of LOOKS) {
+    for (const theme of THEMES) {
+      await pick(page, look, theme);
+      const label = `${look}/${theme}`;
+      await check(page, label);
+    }
+  }
+}
+
+async function check(page, label) {
+  const at = (what) => `${label}: ${what}`;
+
+  // The three panels are mounted, each in the state the gallery gave it.
+  const initial = await inPage(page, () => {
+    const { panels } = window.__imagoPanelState;
+    return Object.fromEntries(
+      Object.entries(panels).map(([name, panel]) => [
+        name,
+        panel.querySelector(':scope > .im-panel-body > [data-im-state-layer]')?.getAttribute('data-im-state-layer') ?? null,
+      ]),
+    );
+  });
+  assert.deepEqual(initial, { empty: 'empty', loading: 'loading', error: 'error' }, at('the gallery starts the panels empty, loading and failed'));
+
+  // 1. Header and frame stay in every state.
+  for (const frame of await frames(page)) {
+    const where = at(`${frame.name} panel, state ${frame.state}`);
+    assert.ok(frame.hasHeader, `${where}: the panel header is gone`);
+    for (const key of ['x', 'y', 'width', 'height']) {
+      assert.ok(Math.abs(frame.headerBox[key] - frame.before.header[key]) < 0.01, `${where}: the header's ${key} changed from ${frame.before.header[key]} to ${frame.headerBox[key]}`);
+    }
+    for (const key of ['x', 'y', 'width']) {
+      assert.ok(Math.abs(frame.panelBox[key] - frame.before.panel[key]) < 0.01, `${where}: the panel's ${key} changed`);
+    }
+  }
+
+  // 2. Loading: aria-busy, `rows` skeleton rows at --im-h-row-2, flat bars, nothing animated, the real content out of the way.
+  const loading = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    const panel = panels.loading;
+    const body = panel.querySelector(':scope > .im-panel-body');
+    const probe = (css) => {
+      const element = document.createElement('div');
+      element.style.cssText = `position:absolute;visibility:hidden;${css}`;
+      body.append(element);
+      const style = getComputedStyle(element);
+      const result = { height: element.getBoundingClientRect().height, background: style.backgroundColor };
+      element.remove();
+      return result;
+    };
+    const rowHeight = probe('height:var(--im-h-row-2)').height;
+    const skeletonColor = probe('background:var(--im-skeleton)').background;
+    const measure = (rows) => {
+      setPanelState(panel, { kind: 'loading', rows });
+      const layer = body.querySelector(':scope > [data-im-state-layer="loading"]');
+      const rowElements = layer ? [...layer.querySelectorAll(':scope > .im-row')] : [];
+      const bars = layer ? [...layer.querySelectorAll('.im-skeleton')] : [];
+      const everyElement = [panel, ...panel.querySelectorAll('*')];
+      return {
+        ariaBusy: panel.getAttribute('aria-busy'),
+        layers: body.querySelectorAll(':scope > [data-im-state-layer]').length,
+        rowHeights: rowElements.map((row) => row.getBoundingClientRect().height),
+        barCount: bars.length,
+        barColors: [...new Set(bars.map((bar) => getComputedStyle(bar).backgroundColor))],
+        barImages: [...new Set(bars.map((bar) => getComputedStyle(bar).backgroundImage))],
+        animatedNames: [...new Set(everyElement.map((element) => getComputedStyle(element).animationName))],
+        runningAnimations: panel.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length,
+        contentDisplay: [...body.querySelectorAll(':scope > .im-row')].map((row) => getComputedStyle(row).display),
+        layerAriaHidden: layer?.getAttribute('aria-hidden') ?? null,
+      };
+    };
+    return { rowHeight, skeletonColor, three: measure(3), five: measure(5), none: measure(0) };
+  });
+  assert.ok(loading.rowHeight > 0, at('--im-h-row-2 has a height'));
+  assert.equal(loading.three.ariaBusy, 'true', at('loading sets aria-busy="true" on the panel'));
+  assert.equal(loading.three.rowHeights.length, 3, at('loading renders `rows` skeleton rows'));
+  for (const height of loading.three.rowHeights) {
+    assert.ok(Math.abs(height - loading.rowHeight) < 0.01, at(`a skeleton row is ${height}px tall, --im-h-row-2 is ${loading.rowHeight}px`));
+  }
+  assert.equal(loading.five.rowHeights.length, 5, at('rows: 5 renders five rows'));
+  assert.equal(loading.none.rowHeights.length, 0, at('rows: 0 renders none'));
+  assert.equal(loading.three.layers, 1, at('one state layer at a time'));
+  assert.ok(loading.three.barCount >= 3, at('the rows are made of skeleton bars'));
+  assert.deepEqual(loading.three.barColors, [loading.skeletonColor], at('the bars are one flat colour, --im-skeleton'));
+  assert.deepEqual(loading.three.barImages, ['none'], at('the bars have no gradient (no shimmer)'));
+  assert.deepEqual(loading.three.animatedNames, ['none'], at('no element in the panel has an animation'));
+  assert.equal(loading.three.runningAnimations, 0, at('no animation is running in the panel'));
+  assert.deepEqual(loading.three.contentDisplay, ['none', 'none', 'none'], at('the real rows are out of the way while loading'));
+  assert.equal(loading.three.layerAriaHidden, 'true', at('the bars are decorative for assistive technology'));
+
+  // 3. Nothing moves when the data lands: loading -> ready keeps the panel's height, and the aria-busy goes.
+  const landing = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    const panel = panels.loading;
+    const body = panel.querySelector(':scope > .im-panel-body');
+    setPanelState(panel, { kind: 'loading', rows: 3 });
+    const during = panel.getBoundingClientRect().height;
+    const bodyDuring = body.getBoundingClientRect().height;
+    setPanelState(panel, { kind: 'ready' });
+    return {
+      during,
+      after: panel.getBoundingClientRect().height,
+      bodyDuring,
+      bodyAfter: body.getBoundingClientRect().height,
+      ariaBusy: panel.getAttribute('aria-busy'),
+      layers: body.querySelectorAll('[data-im-state-layer]').length,
+      contentDisplay: [...body.querySelectorAll(':scope > .im-row')].map((row) => getComputedStyle(row).display),
+    };
+  });
+  assert.ok(Math.abs(landing.during - landing.after) < 0.01, at(`the panel is ${landing.during}px tall loading and ${landing.after}px ready`));
+  assert.ok(Math.abs(landing.bodyDuring - landing.bodyAfter) < 0.01, at(`the panel body is ${landing.bodyDuring}px loading and ${landing.bodyAfter}px ready`));
+  assert.equal(landing.ariaBusy, null, at('ready removes aria-busy'));
+  assert.equal(landing.layers, 0, at('ready removes the state layer'));
+  assert.deepEqual(landing.contentDisplay.map((display) => display !== 'none'), [true, true, true], at('ready shows the real rows again'));
+
+  // 4. Error: the word "Error", the text, a Retry that calls retry.run; it stays inside the panel that failed.
+  const failure = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    window.__retry = 0;
+    const neighbours = [panels.empty, panels.loading].map((panel) => panel.innerHTML);
+    setPanelState(panels.error, { kind: 'error', text: "Couldn't load the sessions.", retry: { label: 'Retry now', run: () => void window.__retry++ } });
+    const layer = panels.error.querySelector(':scope > .im-panel-body > [data-im-state-layer="error"]');
+    const box = layer.getBoundingClientRect();
+    const frame = panels.error.getBoundingClientRect();
+    const header = panels.error.querySelector(':scope > .im-panel-header').getBoundingClientRect();
+    const button = layer.querySelector('button');
+    return {
+      text: layer.textContent,
+      word: layer.querySelector('b')?.textContent ?? null,
+      buttonLabel: button?.textContent ?? null,
+      buttonType: button?.type ?? null,
+      inside: box.left >= frame.left && box.right <= frame.right && box.top >= header.bottom && box.bottom <= frame.bottom,
+      neighboursUntouched: [panels.empty, panels.loading].every((panel, index) => panel.innerHTML === neighbours[index]),
+      ariaBusy: panels.error.getAttribute('aria-busy'),
+      role: layer.getAttribute('role'),
+    };
+  });
+  assert.equal(failure.word, 'Error', at('the error says "Error" in words'));
+  assert.ok(failure.text.includes("Couldn't load the sessions."), at('the error shows its text'));
+  assert.equal(failure.buttonLabel, 'Retry now', at('the error has a retry button'));
+  assert.equal(failure.buttonType, 'button', at('the retry button never submits a form'));
+  assert.ok(failure.inside, at('the error sits inside the panel that failed, below its header'));
+  assert.ok(failure.neighboursUntouched, at('the other panels are untouched by one panel failing'));
+  assert.equal(failure.ariaBusy, null, at('an error is not busy'));
+  assert.equal(failure.role, 'alert', at('the error is announced'));
+  await page.locator('#im-gallery-panel-states [data-g-panel="error"]').getByRole('button', { name: 'Retry now' }).click();
+  assert.equal(await page.evaluate(() => window.__retry), 1, at('clicking Retry calls retry.run once'));
+  const localized = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    setPanelState(panels.error, { kind: 'error', text: 'Non riesco a caricare le sessioni.', errorWord: 'Errore', retry: { label: 'Riprova', run() {} } });
+    return panels.error.querySelector('[data-im-state-layer] b').textContent;
+  });
+  assert.equal(localized, 'Errore', at('errorWord replaces the word'));
+
+  // 5. Empty: the text and the action sit where the rows would be.
+  const empty = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    window.__acted = 0;
+    const panel = panels.empty;
+    const body = panel.querySelector(':scope > .im-panel-body');
+    setPanelState(panel, { kind: 'ready' });
+    const firstRow = body.querySelector(':scope > .im-row').getBoundingClientRect();
+    setPanelState(panel, { kind: 'empty', text: 'No rooms yet.', action: { label: 'New room', keys: 'N', run: () => void window.__acted++ } });
+    const layer = body.querySelector(':scope > [data-im-state-layer="empty"]');
+    const box = layer.getBoundingClientRect();
+    const header = panel.querySelector(':scope > .im-panel-header').getBoundingClientRect();
+    const button = layer.querySelector('button');
+    const withoutAction = (() => {
+      setPanelState(panel, { kind: 'empty', text: 'Nothing yet.' });
+      return panel.querySelectorAll('[data-im-state-layer] button').length;
+    })();
+    return {
+      text: layer.textContent,
+      buttonLabel: button?.querySelector('span')?.textContent ?? null,
+      key: button?.querySelector('kbd.im-key')?.textContent ?? null,
+      belowHeader: box.top >= header.bottom,
+      startsWhereRowsStart: box.top >= firstRow.top && box.top < firstRow.bottom,
+      withoutAction,
+    };
+  });
+  assert.ok(empty.text.includes('No rooms yet.'), at('empty shows its text'));
+  assert.equal(empty.buttonLabel, 'New room', at('empty shows the action'));
+  assert.equal(empty.key, 'N', at('the action shows its keys in an im-key'));
+  assert.ok(empty.belowHeader, at('empty sits below the header'));
+  assert.ok(empty.startsWhereRowsStart, at('empty starts where the first row would'));
+  assert.equal(empty.withoutAction, 0, at('empty without an action has no button'));
+  await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    setPanelState(panels.empty, { kind: 'empty', text: 'No rooms yet.', action: { label: 'New room', keys: 'N', run: () => void window.__acted++ } });
+  });
+  await page.locator('#im-gallery-panel-states [data-g-panel="empty"]').getByRole('button', { name: 'New room' }).click();
+  assert.equal(await page.evaluate(() => window.__acted), 1, at('clicking the action calls its run once'));
+
+  // 6. The layer is replaced, never stacked; content hidden by the page itself stays hidden; a panel without a body throws.
+  const housekeeping = await inPage(page, () => {
+    const { setPanelState, panels } = window.__imagoPanelState;
+    const panel = panels.loading;
+    const body = panel.querySelector(':scope > .im-panel-body');
+    const kept = document.createElement('div');
+    kept.hidden = true;
+    kept.dataset.kept = '';
+    body.append(kept);
+    for (const state of [{ kind: 'loading', rows: 2 }, { kind: 'loading', rows: 4 }, { kind: 'empty', text: 'x' }, { kind: 'loading', rows: 1 }]) setPanelState(panel, state);
+    const layers = body.querySelectorAll(':scope > [data-im-state-layer]').length;
+    const first = body.firstElementChild?.hasAttribute('data-im-state-layer') ?? false;
+    setPanelState(panel, { kind: 'ready' });
+    const stillHidden = kept.hidden;
+    kept.remove();
+    let message = null;
+    try {
+      setPanelState(document.createElement('section'), { kind: 'loading', rows: 1 });
+    } catch (error) {
+      message = error.message;
+    }
+    return { layers, first, stillHidden, message };
+  });
+  assert.equal(housekeeping.layers, 1, at('the state layer is replaced, never stacked'));
+  assert.ok(housekeeping.first, at('the state layer is the first child of the body'));
+  assert.ok(housekeeping.stillHidden, at('ready does not show what the page itself hid'));
+  assert.match(housekeeping.message ?? '', /im-panel-body/, at('a panel without a body says so'));
+}
