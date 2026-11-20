@@ -3,3 +3,25 @@ name = "imago-shell"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "The Rust side of Imago's desktop shell: glass window, window theme, Snap Layouts, navigation guard, WebView2 recovery and window state"
+
+# Every version is the one Shinatama's Cargo.lock resolves (2026-11-20), so the apps of the suite
+# link one copy of each. Features are the ones Shinatama's desktop crate enables.
+[dependencies]
+tauri = "=2.12.5"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+
+# The Snap Layouts child window (src/frame.rs): the Win32 areas it calls, and no more.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+tempfile = "=3.27.0"
