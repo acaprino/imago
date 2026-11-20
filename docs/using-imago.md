@@ -32,9 +32,18 @@ imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 - The package ships TypeScript source, not built JavaScript. Its files import each other with the `.ts` extension, so
   the app's bundler (Vite) compiles it, and the app's `tsconfig.json` needs `"allowImportingTsExtensions": true` with
   `"noEmit": true`.
+- **A Node unit test of the app cannot import the package.** The `exports` point at `.ts` files, and Node 24 refuses
+  to strip types from a file under `node_modules`: `node --experimental-strip-types --test` throws
+  `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` on `import { createRegistry } from '@acaprino/imago/ui'`, and also on
+  a path into `node_modules/@acaprino/imago/ts/`. `import type { Registry } from '@acaprino/imago/ui'` is erased and
+  loads nothing, so a module may take its types from the package. For the rest, inject what the package gives: the
+  module under test receives the registry, the `document` or the `WindowApi` as an argument, and the test passes its
+  own object. A test that must run the package's code goes through a runner that bundles it, such as Vitest with
+  `server.deps.inline: ['@acaprino/imago']`.
 - Not verified in an app yet: no app has adopted the package. The first one confirms the two lines above, the
-  compiler setting, and that `node_modules/@acaprino/imago/docs/` holds this folder (it does for a git dependency
-  that has no `files` list in its `package.json`).
+  compiler setting, that `node_modules/@acaprino/imago/docs/` holds this folder (it does for a git dependency that
+  has no `files` list in its `package.json`), and the Vitest setting above (the refusal itself, and the erased
+  `import type`, were run with Node 24.14.1 on a copy of the package under `node_modules`).
 
 ## 2. The three imports
 
