@@ -211,6 +211,9 @@ export default async function workspace(page) {
     await page.mouse.up();
     assert.equal(await demo.locator('[data-im-pane]').count(), 2);
     const horizontal = demo.locator('[role=separator][aria-orientation=horizontal]');
+    // ResizeObserver supplies the new split's keyboard bounds after its first layout.
+    await page.waitForFunction(() =>
+      Number(document.querySelector('.im-split-view[data-im-axis="rows"] > [role=separator]')?.getAttribute('aria-valuemax')) > 0);
     await horizontal.press('End');
     await horizontal.press('ArrowUp');
     assert.equal(Number(await horizontal.getAttribute('aria-valuenow')), Number(await horizontal.getAttribute('aria-valuemax')) - 8);
