@@ -2,8 +2,9 @@ name: Release
 
 # A release at every merge of develop into main. The same workflow is in Shinatama, Mukade, Xiox, Muro, Ethel
 # and artcraft-web, except that Imago has no program to build or package: its build is `npm run verify`, and
-# a release has no assets. What is project-specific is in .github/release.json, the version logic in
-# .github/scripts/release.mjs.
+# a release has no assets, and except that the plan job fails when it cannot read the merged pull request (the others
+# fall back to patch) and that the push is `git push --atomic`: the two are for the others to take. What is
+# project-specific is in .github/release.json, the version logic in .github/scripts/release.mjs.
 #   1. the merged pull request's label chooses the step: release:major, release:minor, otherwise patch;
 #   2. the next version is written in every version file (and the project's Cargo.lock entries);
 #   3. `npm run verify` runs on the project's runner (windows-latest unless release.json says otherwise);
@@ -55,7 +56,18 @@ jobs:
           $runner = if ($config.runner) { $config.runner } else { 'windows-latest' }
           $step = '${{ inputs.step }}'
           if ('${{ github.event_name }}' -eq 'push') {
-            $labels = @(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '.[0].labels[].name')
+            # The step comes from the label of the pull request this push merged. When that cannot be read, or there is
+            # none, the job fails: guessing patch would publish v0.0.1 where the label asked for v0.1.0.
+            $response = gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls"
+            if ($LASTEXITCODE) { Write-Error 'gh api could not list the pull requests of this commit, so the version step is unknown: run the workflow again'; exit 1 }
+            $merged = @(($response -join "`n") | ConvertFrom-Json | Where-Object { $_.merged_at })
+            if ($merged.Count -eq 0) {
+              Write-Host "gh api returned: $($response -join ' ')"
+              Write-Error 'This push to main has no merged pull request (GitHub can be slow to link it: run the workflow again), so the version step is unknown. A release is the pull request develop to main; by hand, Run workflow takes the step'
+              exit 1
+            }
+            $labels = @($merged[0].labels | ForEach-Object { $_.name })
+            Write-Host "Pull request #$($merged[0].number), labels: $($labels -join ', ')"
             $step = if ($labels -contains 'release:major') { 'major' } elseif ($labels -contains 'release:minor') { 'minor' } else { 'patch' }
           }
           "runner=$runner" >> $env:GITHUB_OUTPUT
@@ -120,7 +132,7 @@ jobs:
           git add -- @(node .github/scripts/release.mjs paths)
           git commit -m "release $tag"
           git tag -a $tag -m "${{ steps.version.outputs.app }} ${{ steps.version.outputs.version }}"
-          git push origin "HEAD:refs/heads/main" "refs/tags/$tag"
+          git push --atomic origin "HEAD:refs/heads/main" "refs/tags/$tag"
           if ($LASTEXITCODE) { exit 1 }
           gh release create $tag --repo '${{ github.repository }}' --verify-tag --title "${{ steps.version.outputs.app }} ${{ steps.version.outputs.version }}" --generate-notes
           if ($LASTEXITCODE) { exit 1 }
