@@ -146,7 +146,7 @@ Shinatama's method still holds:
 | Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, panels, notices and code are selectable | `css/base.css` |
 | Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `mountZoom` |
 | Theme | The window theme from the look, saved for the first frame (1.2) | `applyLook`, `parse_theme`, `apply_theme`, `save_theme`, `saved_theme` |
-| Place of the window | Position, size and maximized state saved, and brought back inside the monitors there are now | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
+| Place of the window | The pieces to save the position, size and maximized state and to bring them back inside the monitors there are now. The crate gives the pieces and the app wires them, as the paragraph below says; the demo does not | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
 
 The place of the window is Xiox's, moved into the shell. Xiox saves it in `window.json` in the data folder with the
 fields `x`, `y`, `width`, `height` and `maximized`, and the crate reads that file as it is. `WindowState` is that
@@ -154,6 +154,15 @@ record, `Rect` a rectangle in physical pixels and `Screen` a monitor with its wo
 reports the position (-32000, -32000) and a size of 0: `state_to_save` keeps the last normal state instead, and
 `load_state` gives back what the file holds, so the app always passes it through `clamp_to_screens` before it uses
 it. Pass the primary monitor first: a window whose corner is on no monitor goes to the first.
+
+The crate does not watch the window: the app does the wiring. At start it reads the monitors (the primary first, with
+their work areas and the minimum multiplied by the monitor's scale, all in physical pixels), passes the loaded state
+through `clamp_to_screens` and applies the position, the size and the maximized state when it builds the window. While
+the window lives it keeps the last state it saw while the window was neither maximized nor minimized (from the move
+and resize events), and when the window closes it passes that, the two flags and a way to measure the window to
+`state_to_save`, and gives the result to `save_state`. The demo app (`examples/demo`) wires none of this: it never
+reads or saves the place of its window, so the place of the window has not been run on a real window, and
+[verification.md](verification.md) lists it as not run. The crate's own tests cover the arithmetic and the file.
 
 ## 3. The wiring of an app, in order
 
@@ -305,7 +314,10 @@ inert and leaves a borderless window that cannot be moved, minimized or closed.
 [using-imago.md](using-imago.md) says how an app depends on the package and in what order it adopts it. For the
 shell in short:
 
-1. Depend on the package (`@acaprino/imago` and `imago-shell`) at one version.
+1. Depend on the package (`@acaprino/imago` and `imago-shell`) at one version. The crate pins `tauri = "=2.12.5"`, and
+   `serde`, `serde_json`, `webview2-com` and `windows-core` exactly too (the versions Shinatama's lock resolves, so the
+   apps of the suite link one copy of each): the app's `tauri` must resolve to exactly 2.12.5, and an app that asks for a
+   newer one does not build until the crate moves.
 2. Declare the window as in section 1.1 by building it from `glass_window_config`.
 3. Add the two commands of section 3.3 and the wiring of section 3.
 4. Set the three root attributes and the root class `im-glass` with `applyLook`, in the desktop app only, so a

@@ -85,4 +85,7 @@ Smooth dark title bar at 28,31,40 over a dark window then, the same over a brigh
 - The WebView2 failure watcher and what follows a failure: the reload of a renderer that stopped, the rebuild of the
   windows after the browser process died, the question after three reloads in a minute.
 - The "Reload interface" item of the window menu.
+- The place of the window (`load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens`). The
+  crate gives the pieces and an app wires them; the demo app wires none of them, so nothing here saved, read or
+  brought back the place of a real window. Only the crate's own tests (run by CI) cover the arithmetic and the file.
 - Several displays, a scale other than 100%, battery saver, transparency effects off, high contrast, Windows 10.
