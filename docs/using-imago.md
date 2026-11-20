@@ -41,6 +41,8 @@ imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 
 ## 2. Package imports
 
+For positioned nodes, directed edges, groups and keyboard navigation, see [Directed graphs](graphs.md).
+
 | Import | What it is |
 |---|---|
 | `@acaprino/imago/css/imago.css` | The stylesheet: tokens, base, layout primitives, controls, surfaces and the ONI look. Import it once, first |

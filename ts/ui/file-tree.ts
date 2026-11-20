@@ -10,6 +10,9 @@ export interface FileTreeEntry {
 export interface FileTreeOptions {
   label: string;
   expanded?: readonly string[];
+  selected?: string;
+  active?: string;
+  onToggle?: (entry: FileTreeEntry, expanded: boolean) => void;
   onSelect?: (entry: FileTreeEntry) => void;
   onOpen?: (entry: FileTreeEntry) => void;
   loadChildren?: (entry: FileTreeEntry, signal: AbortSignal) => Promise<readonly FileTreeEntry[]>;
@@ -35,8 +38,8 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
   const childrenOf = (entry: FileTreeEntry) => entry.children ?? loaded.get(entry.id);
   const isFolder = (entry: FileTreeEntry) => entry.children !== undefined || entry.lazy === true;
   const canExpand = (entry: FileTreeEntry) => (childrenOf(entry)?.length ?? (entry.lazy ? 1 : 0)) > 0;
-  let selected: string | undefined;
-  let active = entries[0]?.id;
+  let selected = options.selected;
+  let active = options.active ?? selected ?? entries[0]?.id;
   type Row = { entry: FileTreeEntry; parent?: string; element: HTMLLIElement };
   let rows: Row[] = [];
 
@@ -47,6 +50,7 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
       group.forEach((entry, index) => {
         const row = doc.createElement('li');
         row.className = 'im-tree-item';
+        row.dataset.imEntry = entry.id;
         row.setAttribute('role', 'treeitem');
         row.setAttribute('aria-level', String(level));
         row.setAttribute('aria-posinset', String(index + 1));
@@ -70,6 +74,10 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
       });
     }
     append(entries, 1);
+    if (rows.length && !rows.some(row => row.entry.id === active)) {
+      active = rows[0].entry.id;
+      rows[0].element.tabIndex = 0;
+    }
     tree.replaceChildren(fragment);
     if (focus) rows.find(row => row.entry.id === active)?.element.focus();
   }
@@ -121,6 +129,7 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
       });
     }
     draw(true);
+    options.onToggle?.(row.entry, expanded.has(row.entry.id));
   }
 
   const fromEvent = (event: Event) => rows.find(row => row.element.contains(event.target as Node));

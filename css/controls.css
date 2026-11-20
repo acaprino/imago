@@ -1215,6 +1215,19 @@
   gap: 8px;
 }
 .im-loader { display: inline-flex; }
+textarea.im-input { height: auto; display: block; padding-block: var(--im-s-2); resize: vertical; }
+.im-steps > li:has(> button:only-child) { padding: 0; }
+.im-steps > li > button:only-child {
+  display: flex; align-items: center; gap: var(--im-s-2); inline-size: 100%; min-block-size: var(--im-h-control);
+  padding: var(--im-s-2); text-align: start; color: inherit; font: inherit; background: transparent; border: 0; border-radius: inherit;
+}
+.im-steps > li > button:not(:disabled):hover { background: var(--im-hover); }
+.im-steps > li:has(> button:disabled) { border-style: dashed; }
+.im-input:is(input, textarea)[aria-invalid="true"] { border-color: var(--im-err); }
+.im-input:is(input, textarea):disabled { border-style: dashed; color: var(--im-muted); }
+.im-steps > li[data-im-step="failed"] .im-step-index { color: var(--im-err); border-color: currentColor; }
+.im-steps > li[data-im-step="skipped"] .im-step-text { color: var(--im-muted); }
+.im-steps .im-step-sub { white-space: normal; overflow-wrap: anywhere; }
 .im-path-field > .im-input { flex: 1; min-width: 0; }
 .im-file-selector { max-width: 100%; font: inherit; color: var(--im-text); }
 .im-file-selector::file-selector-button {

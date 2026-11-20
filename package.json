@@ -12,7 +12,8 @@
     "./ui": "./lib/ui/index.js",
     "./shell": "./lib/shell/index.js",
     "./tokens": "./tokens/imago.tokens.json",
-    "./tauri": "./lib/tauri.js"
+    "./tauri": "./lib/tauri.js",
+    "./graph": "./lib/graph.js"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
@@ -33,6 +34,8 @@
   "devDependencies": {
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/cli": "2.12.4",
+    "@types/d3-selection": "3.0.12",
+    "@types/d3-zoom": "3.0.9",
     "playwright": "1.63.0",
     "typescript": "7.0.2",
     "vite": "8.3.5"
@@ -51,5 +54,9 @@
     "docs",
     "tokens",
     "ts"
-  ]
+  ],
+  "dependencies": {
+    "d3-selection": "3.0.1",
+    "d3-zoom": "3.0.1"
+  }
 }

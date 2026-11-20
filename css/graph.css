@@ -1,0 +1,42 @@
+/* Positions come from the caller's layout. The viewport and all states follow the active Imago look. */
+.im-graph, .im-graph-pane { position: relative; inline-size: 100%; block-size: 100%; min-inline-size: 0; min-block-size: 0; }
+.im-graph-pane {
+  overflow: clip;
+  touch-action: none;
+  background: radial-gradient(var(--im-line) 1px, transparent 1px) 0 0 / 18px 18px var(--im-ground);
+}
+.im-graph-world { position: absolute; inset: 0 auto auto 0; transform-origin: 0 0; }
+.im-graph-world > svg { position: absolute; inline-size: 1px; block-size: 1px; overflow: visible; pointer-events: none; }
+.im-graph-group, .im-graph-card { position: absolute; border-radius: var(--im-r-sheet); }
+.im-graph-group { border: 1px dashed var(--im-line-strong); background: var(--im-hover); }
+.im-graph-card {
+  display: flex; align-items: stretch; background: var(--im-sheet-solid); color: var(--im-text);
+  border: 1px solid var(--im-line-strong); font: 400 13px/1.4 var(--im-font-text);
+}
+.im-graph-card[data-im-external] { border-style: dashed; }
+.im-graph-card:has([aria-pressed="true"]) { border-color: var(--im-accent-text); box-shadow: 0 0 0 2px var(--im-accent-text); }
+.im-graph-card[data-im-tone] { border-color: var(--im-tone); }
+.im-graph [data-im-dimmed] { opacity: .48; }
+.im-graph [data-im-dimmed]:focus-within { opacity: 1; }
+.im-graph-node {
+  display: flex; align-items: center; gap: var(--im-s-2); padding: var(--im-s-2);
+  flex: 1; min-width: 0; text-align: start; color: inherit; font: inherit; border: 0; border-radius: inherit; background: transparent;
+}
+.im-graph-node:hover { background: var(--im-hover); }
+.im-graph-node:focus-visible { outline-offset: -3px; }
+.im-graph-open { align-self: center; flex: none; }
+.im-graph-edge { color: var(--im-tone, var(--im-line-strong)); }
+.im-graph-edge > path { stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.im-graph-edge[data-im-tone] > path { stroke-width: 2.4; }
+.im-graph-edge text {
+  text-anchor: middle; dominant-baseline: central; font: 12px var(--im-font-text); fill: var(--im-text);
+  stroke: var(--im-ground); stroke-width: 5px; stroke-linejoin: round; paint-order: stroke;
+}
+.im-graph-tools {
+  position: absolute; inset: auto auto var(--im-s-2) var(--im-s-2); display: flex; gap: var(--im-s-1);
+  padding: var(--im-s-1); background: var(--im-sheet-solid); border: 1px solid var(--im-line); border-radius: var(--im-r-control);
+}
+@media (forced-colors: active) {
+  .im-graph-card:has([aria-pressed="true"]) { outline: 2px solid Highlight; }
+  .im-graph-edge { color: CanvasText; }
+}
