@@ -69,7 +69,8 @@ grey in Shinatama before 2026-11-19. The rule, as `windowThemeFor(look, choice)`
 
 `set_theme` reaches DWM through tao, and tauri-runtime-wry passes the new theme to WebView2's
 `PreferredColorScheme`. A custom app command needs no extra capability; the JavaScript `setTheme()` would need
-`core:window:allow-set-theme` and cannot save the choice for the first frame.
+`core:window:allow-set-theme` and cannot save the choice for the first frame. The calls the page makes on the window
+itself (minimize, maximize, close, drag, zoom, listening to an event) do need permissions: see section 3.5.
 
 ### 1.3 The layers
 
@@ -117,7 +118,11 @@ has been captured on a real window with Imago's CSS unless [verification.md](ver
 
 A webview screenshot draws the acrylic as white: it cannot judge the glass. Photograph the real window from the
 screen. Imago's demo app (`examples/demo`) is the gallery in a real glass window, and `npm run capture` copies it
-from the screen in both looks and both themes over a dark and a bright window. Shinatama's method still holds:
+from the screen in both looks and both themes over a dark and a bright window. The demo is never built on a
+developer's machine: the `demo` job of the Verify workflow builds it and keeps it as the artifact `imago-demo`. Run
+`npm run demo:fetch` first, which downloads the latest one to `examples/demo/app/`, then `npm run capture`.
+(`npm run demo` starts it in development and is for a machine where Rust may be built.)
+Shinatama's method still holds:
 
 - Raise the window once (topmost) and keep it there for every capture of a run. A window lowered between captures
   ends up behind the window in use.
@@ -131,7 +136,7 @@ from the screen in both looks and both themes over a dark and a bright window. S
 | No white flash | Transparent window, clear background; wry gives WebView2 a transparent default background | `glass_window_config` |
 | Windows built after the app state | `"create": false` in the window's config, built in `setup` once every service is managed | the app's `main.rs` |
 | HTML title bar with Snap Layouts | No decorations. A child window that never paints lies over the HTML maximize button and answers `HTMAXBUTTON`; the page reports the button's rectangle | `install_snap_layouts`, `SnapLayouts::set_rect`, `mountWindowControls` |
-| Dragging | `data-tauri-drag-region` on the draggable part of the title bar; its children ignore the pointer | the app's markup |
+| Dragging | `data-tauri-drag-region` on each element that should drag: the title bar, its spacer, and the brand with everything inside it. Tauri starts a drag only when the pressed element itself carries the attribute, and nothing in `css/` changes what a child does with the pointer. Buttons, tabs and fields are left unmarked, so they take their clicks. Needs the permissions of section 3.5 | the app's markup; `markDragRegion` in `gallery/mount/desktop.ts` |
 | Snap zones | A minimum width of 500 | `glass_window_config` |
 | Not a web page | Navigation limited to the app's own origin; new windows refused; browser accelerators off in a release build; browser keys, the page menu and the mouse's back and forward buttons refused in the page | `guard_navigation`, `disable_browser_accelerators`, `guardDesktop` |
 | Reload when hung | A "Reload interface" item in the window menu (Alt+Space) | `install_reload_menu` |
@@ -181,7 +186,7 @@ Each window also needs its own `Recovery`, kept per label and across rebuilds.
 |---|---|---|
 | The window theme | the command `set_window_theme(theme: String)` | page to Rust. The app registers it: the crate has no command of its own |
 | The maximize button's rectangle | the command `window_caption_maximize(window, x, y, width, height)` | page to Rust. It finds the window's `SnapLayouts` by `window.label()` and calls `set_rect` with the four numbers unchanged |
-| Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay | Rust to page. Listening needs `core:event:default`, which is part of `core:default` |
+| Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay | Rust to page. Listening needs `core:event:allow-listen` and `core:event:allow-unlisten` (section 3.5) |
 
 The page sends the rectangle as `getBoundingClientRect()` times `devicePixelRatio`, rounded. The zoom of the page
 and the monitor's scale are both part of `devicePixelRatio`, so the numbers are already physical pixels of the
@@ -198,6 +203,24 @@ The page's `onOsHover` wants `none`, `hover` or `pressed`: `pressed` when `press
 3. `mountZoom(document, { apply })`, with `getCurrentWebview().setZoom` as `apply`.
 4. `mountWindowControls(titlebar, api, { onError })`.
 5. The behaviour modules: `attachLayers`, the registry's `attach`, `regions`, the sidebar functions.
+
+### 3.5 The capabilities
+
+Tauri 2 refuses every call of the page on the window, the webview or an event until a capability file allows it. The
+page side of this document needs nine permissions, for the label of every window that carries the title bar:
+
+| Permission | What needs it |
+|---|---|
+| `core:window:allow-minimize`, `core:window:allow-close` | The window buttons: `win.minimize()` and `win.close()` |
+| `core:window:allow-toggle-maximize` | The maximize button: `win.toggleMaximize()` |
+| `core:window:allow-is-maximized` | The state of the maximize button: `win.isMaximized()`, read when the window is resized |
+| `core:window:allow-start-dragging`, `core:window:allow-internal-toggle-maximize` | The drag regions of section 2: a press drags the window, and a double click on one maximizes it |
+| `core:webview:allow-set-webview-zoom` | `mountZoom`: `getCurrentWebview().setZoom` |
+| `core:event:allow-listen`, `core:event:allow-unlisten` | The event `caption-maximize` and the resize events, and the function that stops listening |
+
+The app's own commands (`set_window_theme`, `window_caption_maximize`) are not on this list. The file that works is
+`examples/demo/src-tauri/capabilities/default.json`; it grants these nine and nothing else, and its `windows` names
+the label `main`. [using-imago.md](using-imago.md), section 5, shows the file's shape.
 
 ## 4. WebView2 recovery
 

@@ -91,16 +91,6 @@ function exportsOf(file: string, seen: Set<string> = new Set()): Set<string> {
 const UI_EXPORTS = exportsOf('ts/ui/index.ts');
 const SHELL_EXPORTS = exportsOf('ts/shell/index.ts');
 
-/**
- * Exports that exist in their own file but that the index does not carry yet. The document names them as imports from
- * '@acaprino/imago/ui'. The day the index exports one, the test below fails: delete the name here, and the check on the
- * index is the strict one again.
- */
-const PENDING_IN_UI_INDEX: Record<string, string> = {
-  sidebarDrawer: 'ts/ui/sidebar.ts',
-  sidebarCollapse: 'ts/ui/sidebar.ts',
-};
-
 /** Rust names that are public items of the crate: types, functions and constants, and the variants of its enums. */
 const RUST_TEXT = textOf(RUST_FILES);
 const RUST_NAMES = new Set<string>();
@@ -193,13 +183,6 @@ describe('exports', () => {
     for (const name of ['applyLook', 'mountWindowControls', 'mountZoom', 'guardDesktop']) assert.ok(SHELL_EXPORTS.has(name), `ts/shell/index.ts does not export ${name}`);
   });
 
-  test('a name accepted from its own file is not exported by the index yet', () => {
-    for (const [name, file] of Object.entries(PENDING_IN_UI_INDEX)) {
-      assert.ok(exportsOf(file).has(name), `${file} does not export ${name}`);
-      assert.ok(!UI_EXPORTS.has(name), `ts/ui/index.ts now exports ${name}: delete it from PENDING_IN_UI_INDEX in tests/docs.test.ts`);
-    }
-  });
-
   for (const doc of OWN_DOCS.filter((file) => existsSync(join(root, file)))) {
     test(`every import from @acaprino/imago in ${doc} is a real export`, () => {
       const problems: string[] = [];
@@ -214,8 +197,7 @@ describe('exports', () => {
           for (const part of list.split(',')) {
             const name = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim();
             if (!name) continue;
-            const pending = from === '@acaprino/imago/ui' ? PENDING_IN_UI_INDEX[name] : undefined;
-            if (!available.has(name) && !pending) problems.push(`${name} is not exported by ${from}`);
+            if (!available.has(name)) problems.push(`${name} is not exported by ${from}`);
           }
         }
       }
@@ -235,7 +217,7 @@ describe('exports', () => {
           const name = call[1];
           if (name.includes('_')) {
             if (!RUST_NAMES.has(name) && !APP_OWNED_RUST.has(name) && !THEIRS_RUST.has(name)) problems.push(`${span}: no pub ${name} in crates/imago-shell`);
-          } else if (!UI_EXPORTS.has(name) && !SHELL_EXPORTS.has(name) && !PENDING_IN_UI_INDEX[name] && !THEIRS_TS.has(name) && !MEMBER_NAMES.has(name)) {
+          } else if (!UI_EXPORTS.has(name) && !SHELL_EXPORTS.has(name) && !THEIRS_TS.has(name) && !MEMBER_NAMES.has(name)) {
             problems.push(`${span}: ${name} is not exported by ts/ui or ts/shell`);
           }
         }
@@ -310,6 +292,27 @@ describe('the package', () => {
     const folders = [...section[1].matchAll(/^\|\s*`([^`]+\/)`/gm)].map((match) => match[1]);
     assert.ok(folders.length >= 6, 'the table names fewer folders than the package has');
     assert.deepEqual(folders.filter((folder) => !existsSync(join(root, folder))), []);
+  });
+});
+
+describe('the capabilities', () => {
+  // The permissions the wiring needs are the ones of the demo's capability file, the working example the documents point at.
+  const FILE = 'examples/demo/src-tauri/capabilities/default.json';
+  const granted = (JSON.parse(read(FILE)) as { permissions: string[] }).permissions;
+  const named = (text: string): string[] => [...new Set([...text.matchAll(/core:[a-z]+:[a-z-]+/g)].map((match) => match[0]))];
+
+  test('the demo capability file lists the permissions the test reads (the test would pass on an empty list otherwise)', () => {
+    assert.ok(granted.length >= 9 && granted.every((name) => /^core:[a-z]+:[a-z-]+$/.test(name)), `${FILE} lost permissions, or the test lost its pattern`);
+    assert.ok(read('docs/using-imago.md').includes(FILE), `docs/using-imago.md does not point at ${FILE}`);
+  });
+
+  test('docs/using-imago.md writes exactly the permissions the demo grants', () => {
+    assert.deepEqual(named(read('docs/using-imago.md')).sort(), [...granted].sort());
+  });
+
+  test('docs/desktop-shell.md says what each of them is for', () => {
+    const written = named(read('docs/desktop-shell.md'));
+    assert.deepEqual(granted.filter((name) => !written.includes(name)), [], 'docs/desktop-shell.md does not name these permissions');
   });
 });
 

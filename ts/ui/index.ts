@@ -7,5 +7,6 @@ export * from './sheet.ts';
 export * from './dialog.ts';
 export * from './notice.ts';
 export * from './inspector.ts';
+export * from './sidebar.ts';
 export * from './palette.ts';
 export * from './panel-state.ts';

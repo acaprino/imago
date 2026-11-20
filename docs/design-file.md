@@ -265,6 +265,7 @@ it. How far it sits from the control depends on what surrounds the control:
 | A control that stands alone: button, icon button, select, checkbox, radio, switch | 2px outside |
 | A field: input, search. Its edge also turns to the accent | 1px outside |
 | An item of a list, table, tree, menu, tab strip or segmented control. Their container scrolls and clips | 2px inside |
+| The field of the command palette (the ring is round the field while its input has focus), and the three window buttons of the title bar | 2px inside |
 | An ONI chamfered button. A clip-path would cut an outer ring | 5px inside |
 
 `tests/gallery/controls.mjs` measures the ring of every control in both looks.
@@ -373,6 +374,7 @@ in [desktop-shell.md](desktop-shell.md). The rules:
 - Hover and pressed fills stay translucent on glass (`--im-hover`, `--im-press`).
 - Terminals and tables stay dense. Text contrast on them must not depend on the desktop behind.
 - Check contrast on the composited colour, not on the token alone.
-- The glass values are Shinatama's, which it measured on screen on 2026-11-19, where Shinatama measured them.
-  What the demo app captured on a real window is in [verification.md](verification.md). A look that file does not
-  list is not measured on screen.
+- Of the glass values, only the Smooth dark ground is Shinatama's tint, which Shinatama measured on screen on
+  2026-11-19. The Smooth light ground and the grounds of ONI are not Shinatama's: [desktop-shell.md](desktop-shell.md)
+  says which, in section 1.3. What the demo app captured on a real window is in [verification.md](verification.md). A
+  look that file does not list is not measured on screen.

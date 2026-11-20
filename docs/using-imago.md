@@ -80,7 +80,7 @@ sidebar sets `data-im-sidebar="off"` and writes none.
 ```html
 <div class="im-shell" data-im-sidebar="on">
   <header class="im-titlebar" data-tauri-drag-region>
-    <div class="im-brand"><span class="im-mark"><svg viewBox="0 0 24 24" aria-hidden="true">…</svg></span><span class="im-wordmark">Name</span></div>
+    <div class="im-brand" data-tauri-drag-region><span class="im-mark" data-tauri-drag-region><svg viewBox="0 0 24 24" aria-hidden="true" data-tauri-drag-region>…</svg></span><span class="im-wordmark" data-tauri-drag-region>Name</span></div>
     <button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="sidebar">…</button>
     <nav class="im-tabs" role="tablist" aria-label="Views">
       <button type="button" role="tab" class="im-tab" aria-selected="true">First view</button>
@@ -131,8 +131,11 @@ The real, complete markup of all five apps is `shellMarkup` in `gallery/apps.ts`
   markup above, or, when the app has no icon that tells its rows apart, an avatar with the row's initials
   (`<span class="im-avatar im-rail-item">CA</span>`). A row without one is blank in the rail. The row's `title` is the
   tooltip, and its text stays in the rail, hidden, as the accessible name.
-- Tauri starts a window drag only when the pressed element itself carries `data-tauri-drag-region`. Put it on the
-  title bar, on the spacer, and on the brand and everything inside it, as `gallery/mount/desktop.ts` does. Whether
+- Tauri starts a window drag only when the pressed element itself carries `data-tauri-drag-region`, and nothing in
+  `css/` changes what a child does with the pointer. Put the attribute on each element that should drag: the title
+  bar, the spacer, and the brand with everything inside it (`im-brand`, `im-mark`, the `svg` and each of its shapes,
+  `im-wordmark`), as `markDragRegion` in `gallery/mount/desktop.ts` does with `.im-brand *`. Leave the buttons, the
+  tabs and the command field unmarked. The drag needs two permissions: see "The capabilities" in section 5. Whether
   the window drags on a real window is in [verification.md](verification.md).
 - The inspector is closed with `hidden`; the content then takes its room. `inspector(shell).open(content)` opens it.
 - A panel that shows an empty, loading or error state needs `im-panel-body`: `setPanelState` puts its layer there.
@@ -147,7 +150,7 @@ one of them by `data-im-maximized`.
 
 ## 5. The calls
 
-A call that sets something up returns the function that undoes it. The calls that give something else back are `createRegistry` (the registry), `confirm` (a promise), `inspector` (the inspector), `showAfter` (the function that cancels it), `setPanelState` and `applyLook` (nothing), and the `parse`, `resolve` and `windowThemeFor` functions (a value).
+A call that sets something up returns the function that undoes it. The calls that give something else back are `createRegistry` (the registry), `confirm` (a promise), `inspector` (the inspector), `showAfter` (the function that cancels it), `formatKeys` (a `string[]`), `keyCaps` (an element), `setPanelState` and `applyLook` (nothing), and the `parse`, `resolve` and `windowThemeFor` functions (a value).
 
 ### `@acaprino/imago/shell`
 
@@ -164,7 +167,8 @@ A call that sets something up returns the function that undoes it. The calls tha
 
 `WindowApi` is what the page needs of the window, so the module needs no Tauri: `minimize()`, `toggleMaximize()` and
 `close()` (each may return a promise), `reportMaximizeRect(rect)`, `onOsHover(callback)`, and optionally
-`onMaximized(callback)`. With Tauri 2:
+`onMaximized(callback)`. With Tauri 2, as a sketch and not a file to paste (`look`, `theme` and `shell` are the app's
+own values, and `notify` is imported from `@acaprino/imago/ui`):
 
 ```ts
 import { invoke } from '@tauri-apps/api/core';
@@ -201,6 +205,35 @@ This is the wiring the package was written for. The demo app, `examples/demo`, i
 window; where the two differ, the demo is right. The two commands `set_window_theme` and `window_caption_maximize`,
 and the event `caption-maximize`, are the app's side of the contract and are described in
 [desktop-shell.md](desktop-shell.md), section 3.3.
+
+#### The capabilities
+
+Tauri 2 lets the page call the window, the webview or an event only when a capability file grants it. The app needs a
+file in `src-tauri/capabilities/` with these nine permissions, for the buttons, the drag, the zoom and the events.
+Without them Tauri refuses the call, and `mountWindowControls` passes the refusal to `onError`. `windows` lists the
+label of every window that carries the title bar.
+
+```json
+{
+  "identifier": "default",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:webview:allow-set-webview-zoom"
+  ]
+}
+```
+
+What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
+`examples/demo/src-tauri/capabilities/default.json`. The app's own commands, `set_window_theme` and
+`window_caption_maximize`, need no permission of this list.
 
 ### `@acaprino/imago/ui`
 

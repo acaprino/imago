@@ -21,8 +21,10 @@ window. No app has adopted it yet. The version is set by the release workflow, n
 | [docs/design.md](docs/design.md) | The approved design with its reasons, and the corrections made after the build |
 | `docs/reference/` | The proposal and the toolkit preview the design came from |
 
-`tests/docs.test.ts` checks the documents against the code: every `--im-*` name, every `im-` class, every export and
-every Rust name they write exists.
+`tests/docs.test.ts` checks the documents against the code: every `--im-*` name, every `im-` class and `data-im-*`
+attribute, every export they import or call, every Rust name they write as `name(` or `Type::name`, every item the
+crate re-exports from its root (the documents must name it), the permissions of the demo's capability file, and every
+relative link.
 
 ## What is where
 
@@ -49,8 +51,9 @@ every Rust name they write exists.
 | `npm run gallery` | Serves the gallery with Vite. |
 | `npm run build` | Type-checks, then builds the gallery. |
 | `npm run test:gallery` | Opens the gallery in a browser and checks every control, contrast included. |
-| `npm run demo` | Starts the demo app in development. Needs a Windows 11 desktop session. |
-| `npm run capture` | Photographs the demo window from the screen in both looks and themes over a dark and a bright window, and checks the frame is glass. Needs a Windows 11 desktop session. |
+| `npm run demo:fetch` | Downloads the demo app that the Verify workflow built (the artifact `imago-demo`, the latest run) to `examples/demo/app/`. Needs the `gh` CLI, signed in. |
+| `npm run capture` | Photographs the demo window from the screen in both looks and themes over a dark and a bright window, and checks the frame is glass. Run `npm run demo:fetch` first. Needs a Windows 11 desktop session. |
+| `npm run demo` | Starts the demo app in development. It builds Rust, so only on a machine where Rust may be built; the Verify workflow builds it otherwise. Needs a Windows 11 desktop session. |
 | `npm run verify` | The checks of CI: tokens, tests, build, the gallery tests and `cargo test -p imago-shell`. |
 
 ## The gallery
@@ -65,7 +68,9 @@ row is complete and its contrast test passes.
 
 `examples/demo` loads the gallery in a Tauri window built with `glass_window_config`, with the wiring of
 [docs/desktop-shell.md](docs/desktop-shell.md), section 3. It is the executable example for an app that adopts the
-shell, and what `npm run capture` photographs. What it showed on a real window is in
+shell, and what `npm run capture` photographs. It is never built on a developer's machine: the `demo` job of the
+Verify workflow builds it and keeps it as the artifact `imago-demo`, `npm run demo:fetch` downloads the latest one,
+and `npm run capture` photographs that program. What it showed on a real window is in
 [docs/verification.md](docs/verification.md).
 
 ## Using it
