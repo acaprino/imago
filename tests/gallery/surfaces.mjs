@@ -113,9 +113,37 @@ async function menus(page, look, theme) {
   await page.waitForTimeout(50);
   assert.equal(await count(page, '.im-shell .im-menu'), 0, where('and it does not come back'));
 
+  // A press that never clicks (released elsewhere, cancelled) leaves nothing behind: the next click on the anchor,
+  // from the keyboard, opens the menu.
+  await page.click('#anchor');
+  await page.evaluate(() => {
+    const button = document.getElementById('anchor');
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    button.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+  });
+  assert.equal(await count(page, '.im-shell .im-menu'), 0, where('a press on the anchor closed the menu'));
+  await page.waitForTimeout(40);
+  await page.evaluate(() => document.getElementById('anchor').click());
+  assert.equal(await count(page, '.im-shell .im-menu'), 1, where('the click that came later, with no press before it, is not swallowed'));
+  await press(page, 'Escape');
+
   // A disabled item is not run and says why in its tooltip.
   await page.click('#anchor');
   const disabled = page.locator('.im-shell .im-menu-item', { hasText: 'Rename' });
+  const edge = await page.evaluate(() => {
+    const item = [...document.querySelectorAll('.im-shell .im-menu-item')].find((el) => el.textContent.includes('Rename'));
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--im-muted)';
+    item.append(probe);
+    const muted = getComputedStyle(probe).color;
+    probe.remove();
+    const style = getComputedStyle(item);
+    return { borderStyle: style.borderTopStyle, borderWidth: style.borderTopWidth, color: style.color, muted, opacity: style.opacity };
+  });
+  assert.equal(edge.borderStyle, 'dashed', where('a disabled item has the dashed edge of every disabled control'));
+  assert.equal(edge.borderWidth, '1px', where('one pixel wide'));
+  assert.equal(edge.color, edge.muted, where('its text stays at the muted colour'));
+  assert.equal(edge.opacity, '1', where('and is never faded'));
   assert.equal(await disabled.getAttribute('title'), 'Select one item first', where('the reason is the title'));
   assert.equal(await disabled.getAttribute('aria-disabled'), 'true', where('the item is aria-disabled'));
   await disabled.click({ force: true });
@@ -331,6 +359,12 @@ async function notices(page, url) {
     assert.ok((await timed.locator('.im-notice').innerText()).startsWith('Errore'), 'errorWord');
     assert.equal(await count(timed, '.im-notice [aria-label="Chiudi"]'), 1, 'dismissLabel');
     await timed.click('.im-notice [aria-label="Chiudi"]');
+
+    // An empty word still says "Error": the colour alone must not carry it.
+    await timed.evaluate(() => window.__imagoSurfaces.notify(document.querySelector('.im-shell'), 'nothing to say', { tone: 'err', errorWord: '', dismissLabel: '' }));
+    assert.ok((await timed.locator('.im-notice').innerText()).startsWith('Error:'), 'an empty errorWord falls back to Error');
+    assert.equal(await count(timed, '.im-notice [aria-label="Dismiss"]'), 1, 'and an empty dismissLabel to Dismiss');
+    await timed.click('.im-notice [aria-label="Dismiss"]');
 
     // The action runs once and closes the notice; so does a second call on the same notice.
     await timed.evaluate(() => {
@@ -774,6 +808,305 @@ async function viewsMenu(page) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+const fresh = async (page) => {
+  await show(page, { app: 'daodan', look: 'smooth', theme: 'dark', width: 1160 });
+  await show(page, { app: 'xiox', look: 'smooth', theme: 'dark', width: 1160 });
+};
+
+// A sheet docked to a pane: a press in the pane outside the sheet closes the sheet and still reaches what was pressed.
+async function paneSheets(page) {
+  await fresh(page);
+  await page.evaluate(() => {
+    window.__rowClicks = 0;
+    document.querySelector('.im-content tbody tr:nth-child(4)').addEventListener('click', () => window.__rowClicks++);
+  });
+  for (const placement of ['pane-top', 'pane-bottom']) {
+    const where = (text) => `${placement}: ${text}`;
+    await page.evaluate((placement) => {
+      window.__rowClicks = 0;
+      window.__imagoSurfaces.openSheet(document.querySelector('.im-content'), Object.assign(document.createElement('div'), { textContent: 'On the pane' }), { placement });
+    }, placement);
+    assert.equal(await count(page, '.im-sheet'), 1, where('the sheet is open'));
+    await page.click('.im-content tbody tr:nth-child(4)');
+    assert.equal(await count(page, '.im-sheet'), 0, where('a press in the pane closes the sheet'));
+    assert.equal(await page.evaluate(() => window.__rowClicks), 1, where('and the row was clicked once, at the first press'));
+  }
+
+  // A sheet under its control still toggles: the control closes it and its click does not open it again.
+  await anchor(page, { id: 'anchor', left: 260, top: 120, text: 'Rename' });
+  await page.evaluate(() => {
+    const button = document.getElementById('anchor');
+    button.addEventListener('click', () => window.__imagoSurfaces.openSheet(button, Object.assign(document.createElement('div'), { textContent: 'Below' })));
+  });
+  await page.click('#anchor');
+  await page.click('#anchor');
+  await page.waitForTimeout(50);
+  assert.equal(await count(page, '.im-sheet'), 0, 'a sheet below its control is toggled by the control');
+
+  // The control the sheet hangs from leaves the document: the sheet goes with it.
+  await page.click('#anchor');
+  assert.equal(await count(page, '.im-sheet'), 1, 'open');
+  await page.evaluate(() => document.getElementById('anchor').remove());
+  await page.waitForFunction(() => !document.querySelector('.im-shell .im-sheet'));
+  assert.equal(await count(page, '.im-sheet'), 0, 'a sheet whose anchor is gone closes');
+  await press(page, 'Escape'); // nothing is left on the stack: no error
+  await anchor(page, { id: 'again', left: 260, top: 120, text: 'Again' });
+  await page.evaluate(() => {
+    const button = document.getElementById('again');
+    window.__imagoSurfaces.openSheet(button, Object.assign(document.createElement('div'), { textContent: 'Another' }));
+  });
+  assert.equal(await count(page, '.im-sheet'), 1, 'and a new sheet opens normally afterwards');
+  await press(page, 'Escape');
+  assert.equal(await count(page, '.im-sheet'), 0, 'and closes with Escape');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'again', 'giving focus back to its control');
+}
+
+// Dialogs in the corners: an opener that left the document, two dialogs released in either order, a notice under a dialog.
+async function dialogEdges(page) {
+  await fresh(page);
+  await page.evaluate(() => {
+    window.__results = [];
+    window.__ask = (name) =>
+      window.__imagoSurfaces
+        .confirm(document.querySelector('.im-shell'), { title: `Dialog ${name}`, body: 'Sure?', confirm: `Yes ${name}`, cancel: `No ${name}` })
+        .then((value) => window.__results.push(`${name}:${value}`));
+  });
+  const nothingInert = async (text) => {
+    assert.equal(await count(page, '[inert]'), 0, text);
+    assert.equal(await count(page, '.im-scrim'), 0, text);
+  };
+
+  // The opener leaves the document while the dialog is open: closing still releases the page and does not throw.
+  await anchor(page, { id: 'gone', left: 300, top: 120, text: 'Gone' });
+  await page.focus('#gone');
+  await page.evaluate(() => void window.__ask('A'));
+  assert.equal(await count(page, '.im-dialog'), 1, 'the dialog is open');
+  await page.evaluate(() => document.getElementById('gone').remove());
+  await press(page, 'Escape');
+  await page.waitForFunction(() => window.__results.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__results), ['A:false'], 'Escape resolves false');
+  await nothingInert('the page is released although the opener is gone');
+  assert.equal(await page.evaluate(() => document.activeElement === document.body), true, 'and focus is on the page, with nowhere to go back to');
+
+  // Two dialogs, released top first: the page stays inert until the last one is gone.
+  await page.evaluate(() => {
+    window.__results = [];
+    void window.__ask('A');
+    void window.__ask('B');
+  });
+  assert.equal(await count(page, '.im-dialog'), 2, 'two dialogs are stacked');
+  assert.equal(await inertAt(page, '.im-content'), true, 'the page is inert');
+  await press(page, 'Escape');
+  assert.equal(await count(page, '.im-dialog'), 1, 'Escape closes the top dialog only');
+  assert.equal(await inertAt(page, '.im-content'), true, 'the page stays inert under the one left');
+  assert.equal(await inertAt(page, '.im-dialog'), false, 'and the dialog left is live again');
+  await press(page, 'Escape');
+  await page.waitForFunction(() => window.__results.length === 2);
+  assert.deepEqual(await page.evaluate(() => window.__results), ['B:false', 'A:false'], 'B answered first');
+  await nothingInert('both closed: the page is released');
+
+  // Released bottom first: the dialog under closes, the one on top and the inert page stay.
+  await page.evaluate(() => {
+    window.__results = [];
+    void window.__ask('A');
+    void window.__ask('B');
+  });
+  await page.evaluate(() => document.querySelectorAll('.im-shell .im-dialog')[0].querySelector('.im-btn').click());
+  await page.waitForFunction(() => window.__results.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__results), ['A:false'], 'the dialog under answered');
+  assert.equal(await count(page, '.im-dialog'), 1, 'the one on top is still there');
+  assert.equal(await inertAt(page, '.im-content'), true, 'the page is still inert');
+  assert.equal(await page.evaluate(() => document.querySelector('.im-dialog').contains(document.activeElement)), true, 'focus stays in the dialog on top');
+  await press(page, 'Escape');
+  await page.waitForFunction(() => window.__results.length === 2);
+  assert.deepEqual(await page.evaluate(() => window.__results), ['A:false', 'B:false']);
+  await nothingInert('both closed in the other order: the page is released');
+
+  // The first notice of a shell arrives under a dialog: its host is made under the dialog and is inert from the start.
+  await fresh(page);
+  assert.equal(await count(page, '.im-notices'), 0, 'a new shell has no notice host yet');
+  await page.evaluate(() => void window.__ask('A'));
+  await page.evaluate(() => window.__imagoSurfaces.notify(document.querySelector('.im-shell'), 'First of all', { tone: 'err' }));
+  assert.equal(await inertAt(page, '.im-notices'), true, 'a host made under a dialog is inert');
+  await press(page, 'Escape');
+  assert.equal(await inertAt(page, '.im-notices'), false, 'and live when the dialog is gone');
+  await page.click('.im-notice [aria-label="Dismiss"]');
+
+  // A notice shows under a pending dialog but cannot be pressed; it is live again afterwards.
+  await page.evaluate(() => {
+    window.__log = [];
+    window.__imagoSurfaces.notify(document.querySelector('.im-shell'), 'Room closed', { timeoutMs: 600000, action: { label: 'Undo', run: () => window.__log.push('undo') } });
+    void window.__ask('A');
+  });
+  assert.equal(await inertAt(page, '.im-notices'), true, 'the notices are inert under a dialog');
+  const undo = await box(page, '.im-notice .im-btn');
+  assert.ok(undo && undo.width > 0, 'but still shown');
+  await page.mouse.click(undo.left + undo.width / 2, undo.top + undo.height / 2);
+  assert.deepEqual(await log(page), [], 'Undo cannot be pressed over a pending confirm');
+  assert.equal(await count(page, '.im-dialog'), 1, 'the dialog is still waiting');
+  await page.evaluate(() => window.__imagoSurfaces.notify(document.querySelector('.im-shell'), 'Late', { tone: 'err' }));
+  assert.equal(await inertAt(page, '.im-notice[role="alert"]'), true, 'a notice that arrives under the dialog is inert too');
+  await press(page, 'Escape');
+  assert.equal(await inertAt(page, '.im-notices'), false, 'the notices are live again when the dialog is gone');
+  await page.click('.im-notice .im-btn');
+  assert.deepEqual(await log(page), ['undo'], 'and Undo works');
+  await page.click('.im-notice [aria-label="Dismiss"]');
+  await nothingInert('nothing is left');
+}
+
+// Text that looks like markup is text: shown as typed, creating no element.
+async function literalText(page) {
+  await fresh(page);
+  const bait = '<img src=x onerror="window.__pwned=1"><b>bold</b>';
+  await page.evaluate(() => {
+    window.__pwned = undefined;
+  });
+
+  // A dialog: title, body and both buttons.
+  await page.evaluate((bait) => void window.__imagoSurfaces.confirm(document.querySelector('.im-shell'), { title: bait, body: bait, confirm: bait, cancel: bait, danger: true }), bait);
+  assert.equal(await page.locator('.im-dialog-title').textContent(), bait, 'the dialog title is shown literally');
+  assert.equal(await page.locator('.im-dialog-body').textContent(), bait, 'and so is its body');
+  assert.deepEqual(await page.locator('.im-dialog .im-btn').allTextContents(), [bait, bait], 'and its buttons');
+  assert.equal(await count(page, '.im-dialog img, .im-dialog b'), 0, 'no element comes out of it');
+  await press(page, 'Escape');
+
+  // A menu: the label and the reason.
+  await anchor(page, { id: 'anchor' });
+  await page.evaluate((bait) => {
+    window.__imagoSurfaces.openMenu(document.getElementById('anchor'), [{ label: bait, run() {} }, { label: 'Off', disabled: bait, run() {} }]);
+  }, bait);
+  assert.equal(await page.locator('.im-shell .im-menu-item span').first().textContent(), bait, 'a menu label is shown literally');
+  assert.equal(await page.locator('.im-shell .im-menu-item').nth(1).getAttribute('title'), bait, 'and a reason too');
+  assert.equal(await count(page, '.im-shell .im-menu img, .im-shell .im-menu b'), 0, 'no element comes out of the menu');
+  await press(page, 'Escape');
+
+  // A notice: the text, the action and the error word.
+  await page.evaluate((bait) => {
+    const shell = document.querySelector('.im-shell');
+    window.__imagoSurfaces.notify(shell, bait, { timeoutMs: 600000, action: { label: bait, run() {} } });
+    window.__imagoSurfaces.notify(shell, bait, { tone: 'err', errorWord: bait, dismissLabel: bait });
+  }, bait);
+  assert.equal(await page.locator('.im-notice[role="status"] .im-notice-text').textContent(), bait, 'a notice is shown literally');
+  assert.equal(await page.locator('.im-notice[role="status"] .im-btn').textContent(), bait, 'and its action');
+  assert.equal(await page.locator('.im-notice[role="alert"] .im-notice-text').textContent(), `${bait}: ${bait}`, 'and an error, with its word');
+  assert.equal(await count(page, '.im-notice img, .im-notice b:not(.im-notice-word)'), 0, 'no element comes out of a notice');
+  assert.equal(await count(page, '.im-notice-word b'), 0, 'not even out of the error word');
+  await page.evaluate(() => document.querySelector('.im-notice[role="alert"] .im-icon-btn').click());
+
+  // A command title in the palette, and the palette's own words.
+  await page.evaluate((bait) => {
+    window.__unregister = window.__imagoSurfaces.registry.register({ id: 'test:bait', title: bait, run() {} });
+    window.__imagoSurfaces.openPalette(document.querySelector('.im-shell'), window.__imagoSurfaces.registry, { placeholder: bait, empty: bait });
+  }, bait);
+  const titles = await page.locator('.im-palette-list [role="option"] > span:first-child').allTextContents();
+  assert.ok(titles.includes(bait), 'a command title is shown literally');
+  assert.equal(await count(page, '.im-palette img, .im-palette b'), 0, 'no element comes out of the palette');
+  assert.equal(await page.getAttribute('.im-palette-input', 'placeholder'), bait, 'the placeholder is an attribute');
+  await page.fill('.im-palette-input', 'zzzzzz');
+  assert.equal(await page.locator('.im-palette-empty').textContent(), bait, 'the empty text is shown literally');
+  assert.equal(await count(page, '.im-palette img, .im-palette b'), 0, 'and creates nothing either');
+  await press(page, 'Escape');
+  await page.evaluate(() => window.__unregister());
+
+  await page.waitForTimeout(150); // an image that was created would have failed to load by now
+  assert.equal(await page.evaluate(() => window.__pwned), undefined, 'no handler of the text ran');
+  assert.equal(await count(page, 'img[src="x"]'), 0, 'and no image exists');
+}
+
+// Failures that belong to the app's code: a `when()` that throws, a command or a question that rejects.
+async function failures(page) {
+  await fresh(page);
+  await page.evaluate(() => {
+    window.__unhandled = [];
+    window.__thrown = [];
+    if (!window.__failureListeners) {
+      window.__failureListeners = true;
+      window.addEventListener('unhandledrejection', (event) => {
+        event.preventDefault();
+        window.__unhandled.push(String(event.reason));
+      });
+      window.addEventListener('error', (event) => {
+        event.preventDefault();
+        window.__thrown.push(event.message);
+      });
+    }
+    window.__whenThrows = false;
+    window.__unregister = window.__imagoSurfaces.registry.register({ id: 'test:when', title: 'Fragile', when: () => { if (window.__whenThrows) throw new Error('when failed'); return true; }, run() {} });
+  });
+  const opener = '.im-actions .im-btn:not(.im-btn--primary)';
+
+  // `when()` throws while the list is built: the palette closes cleanly, the page is released and the error goes on.
+  await page.focus(opener);
+  const message = await page.evaluate(() => {
+    window.__whenThrows = true;
+    try {
+      window.__imagoSurfaces.openPalette(document.querySelector('.im-shell'), window.__imagoSurfaces.registry);
+      return 'it did not throw';
+    } catch (error) {
+      return error.message;
+    } finally {
+      window.__whenThrows = false;
+    }
+  });
+  assert.equal(message, 'when failed', 'the error of the app reaches the caller');
+  assert.equal(await count(page, '.im-palette, .im-scrim, [inert]'), 0, 'the palette is gone and the page is released');
+  assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, 'and focus is back where it was');
+  await page.evaluate(() => window.__imagoSurfaces.openPalette(document.querySelector('.im-shell'), window.__imagoSurfaces.registry));
+  assert.equal(await count(page, '.im-palette'), 1, 'a palette opens normally afterwards');
+
+  // The same while typing: the list is built again on every key.
+  await page.evaluate(() => (window.__whenThrows = true));
+  await page.keyboard.type('f');
+  await page.waitForFunction(() => window.__thrown.length > 0);
+  assert.deepEqual(await page.evaluate(() => window.__thrown.map((m) => m.includes('when failed'))), [true], 'the error went on');
+  await page.evaluate(() => (window.__whenThrows = false));
+  assert.equal(await count(page, '.im-palette, .im-scrim, [inert]'), 0, 'the palette closed itself and released the page');
+
+  // A command that rejects or throws is the app's: no unhandled rejection, the palette is already closed.
+  await page.evaluate(() => {
+    window.__unregisterRejects = window.__imagoSurfaces.registry.register({ id: 'test:rejects', title: 'Rejects', run: () => Promise.reject(new Error('nope')) });
+    window.__unregisterThrows = window.__imagoSurfaces.registry.register({ id: 'test:throws', title: 'Throws', run: () => { throw new Error('boom'); } });
+  });
+  for (const name of ['Rejects', 'Throws']) {
+    await press(page, 'Control+k');
+    await page.fill('.im-palette-input', name);
+    await press(page, 'Enter');
+    await page.waitForTimeout(60);
+    assert.equal(await count(page, '.im-palette, [inert]'), 0, `${name}: the palette is closed and the page released`);
+  }
+  assert.deepEqual(await page.evaluate(() => window.__unhandled), [], 'no unhandled rejection');
+  assert.equal(await page.evaluate(() => window.__thrown.length), 1, 'and nothing was thrown that the palette did not catch');
+
+  // The inspector's question rejects: the form is not thrown away, and the next close can ask again.
+  await page.evaluate((s) => {
+    const content = document.createElement('div');
+    content.innerHTML = '<input id="name" type="text">';
+    const api = window.__imagoSurfaces.inspector;
+    window.__asks = 0;
+    window.__answer = 'reject';
+    api.open(content, document.querySelector(s));
+    api.guard(() => true, () => { window.__asks++; return window.__answer === 'reject' ? Promise.reject(new Error('ask failed')) : Promise.resolve(true); });
+    api.close();
+  }, opener);
+  await page.waitForTimeout(40);
+  assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), true, 'a question that fails keeps the inspector open');
+  assert.deepEqual(await page.evaluate(() => window.__unhandled), [], 'with no unhandled rejection');
+  await page.evaluate(() => {
+    window.__answer = 'yes';
+    window.__imagoSurfaces.inspector.close();
+  });
+  await page.waitForTimeout(40);
+  assert.equal(await page.evaluate(() => window.__asks), 2, 'it asks again, once');
+  assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), false, 'and closes on a yes');
+
+  await page.evaluate(() => {
+    window.__unregister();
+    window.__unregisterRejects();
+    window.__unregisterThrows();
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 export default async (page, url) => {
   for (const look of LOOKS) {
     for (const theme of THEMES) {
@@ -786,5 +1119,9 @@ export default async (page, url) => {
   }
   await everyApp(page);
   await viewsMenu(page);
+  await paneSheets(page);
+  await dialogEdges(page);
+  await literalText(page);
+  await failures(page);
   await notices(page, url);
 };

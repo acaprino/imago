@@ -99,7 +99,7 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[]): () => void {
 
   shell.append(menu);
   placeBelow(shell, anchor, menu);
-  const layer: Layer = { el: menu, kind: 'menu', close };
+  const layer: Layer = { el: menu, kind: 'menu', toggles: true, close };
   pop = pushLayer(layer, anchor);
   anchor.setAttribute('aria-haspopup', 'menu');
   anchor.setAttribute('aria-expanded', 'true');

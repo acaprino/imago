@@ -1,6 +1,8 @@
 // A notice: a short result, bottom centre above the footer. It never takes focus. A plain one goes away
 // after a few seconds; an error stays until it is dismissed and says "Error" in words, not only in colour.
 
+import { hasModal } from './layers.ts';
+
 export type NoticeOptions = {
   tone?: 'err';
   action?: { label: string; run: () => void };
@@ -25,6 +27,7 @@ function hostOf(shell: HTMLElement): HTMLElement {
   const host = shell.ownerDocument.createElement('div');
   host.className = 'im-notices';
   host.dataset.imNotices = '';
+  host.inert = hasModal(); // a notice that arrives under a pending dialog is shown, but cannot be pressed
   shell.append(host);
   return host;
 }
@@ -56,7 +59,7 @@ export function notify(shell: HTMLElement, text: string, options: NoticeOptions 
   if (err) {
     const word = doc.createElement('b');
     word.className = 'im-notice-word';
-    word.textContent = `${options.errorWord ?? 'Error'}:`;
+    word.textContent = `${options.errorWord || 'Error'}:`;
     message.append(word, ' ');
   }
   message.append(text);
@@ -94,7 +97,7 @@ export function notify(shell: HTMLElement, text: string, options: NoticeOptions 
     const dismiss = doc.createElement('button');
     dismiss.type = 'button';
     dismiss.className = 'im-icon-btn';
-    dismiss.title = options.dismissLabel ?? 'Dismiss';
+    dismiss.title = options.dismissLabel || 'Dismiss';
     dismiss.setAttribute('aria-label', dismiss.title);
     dismiss.innerHTML = CROSS;
     dismiss.addEventListener('click', entry.close);

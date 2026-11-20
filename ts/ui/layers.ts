@@ -8,6 +8,12 @@ export type LayerKind = 'menu' | 'sheet' | 'dialog' | 'palette';
 export type Layer = {
   el: HTMLElement;
   kind: LayerKind;
+  /**
+   * The opener is a control that toggles the layer (a menu, or a sheet docked below its control): pressing it
+   * closes the layer and swallows the click that follows, so it is not opened again. Left out for a layer docked
+   * to a pane, where a press in the pane outside the layer closes it and still reaches what was pressed.
+   */
+  toggles?: boolean;
   /** Removes the layer from the screen and pops it. Closing twice does nothing. */
   close: () => void;
 };
@@ -15,11 +21,14 @@ export type Layer = {
 type Entry = { layer: Layer; opener: HTMLElement | null };
 
 const stack: Entry[] = [];
+// The document the layers live in, to find the notice hosts that a modal layer makes inert.
+let layerDocument: Document | null = null;
 
 const isModal = (layer: Layer): boolean => layer.kind === 'dialog' || layer.kind === 'palette';
 
 // A layer under a modal one cannot be reached: it stays on screen but is inert until the modal closes.
 // A layer above the modal (a menu opened from inside a dialog) stays live.
+// Notices keep showing under a modal layer but cannot be pressed: an Undo must not act over a pending confirm.
 function sync(): void {
   let modal = -1;
   stack.forEach((entry, index) => {
@@ -28,6 +37,15 @@ function sync(): void {
   stack.forEach((entry, index) => {
     entry.layer.el.inert = index < modal;
   });
+  const hosts = layerDocument?.querySelectorAll?.<HTMLElement>('[data-im-notices]');
+  hosts?.forEach((host) => {
+    host.inert = modal >= 0;
+  });
+}
+
+/** Whether a dialog or the palette is open: what is under the title bar, notices included, cannot be reached. */
+export function hasModal(): boolean {
+  return stack.some((entry) => isModal(entry.layer));
 }
 
 // Focus goes back to the opener only when the popped layer was the top one and focus is stranded:
@@ -45,6 +63,7 @@ function restoreFocus({ layer, opener }: Entry): void {
 export function pushLayer(layer: Layer, opener: HTMLElement | null): () => void {
   const entry: Entry = { layer, opener };
   stack.push(entry);
+  layerDocument = layer.el.ownerDocument ?? layerDocument;
   sync();
   return function pop() {
     const index = stack.indexOf(entry);
@@ -174,12 +193,18 @@ export function placeBelow(shell: HTMLElement, anchor: HTMLElement, el: HTMLElem
 /** Calls `place` on every frame until the returned function stops it: the anchor moves with splitters and resizes. */
 export function follow(place: () => void): () => void {
   let frame = 0;
+  let stopped = false;
   const tick = () => {
+    if (stopped) return;
     place();
-    frame = requestAnimationFrame(tick);
+    // `place` may stop the loop (a sheet whose anchor left the document closes itself).
+    if (!stopped) frame = requestAnimationFrame(tick);
   };
   frame = requestAnimationFrame(tick);
-  return () => cancelAnimationFrame(frame);
+  return () => {
+    stopped = true;
+    cancelAnimationFrame(frame);
+  };
 }
 
 type KeyLike = {
@@ -202,7 +227,7 @@ type EventHost = {
 
 /**
  * Escape closes the top layer and nothing else: the press stops there, so no other handler also acts on it.
- * A press outside closes a menu or a sheet, and a press on the control that opened it closes it and swallows
+ * A press outside closes a menu or a sheet, and a press on the control that toggles it closes it and swallows
  * the click that follows, so the control does not open it again. The returned function detaches the listeners
  * and closes every layer still open (the shell they belong to is going away).
  */
@@ -211,6 +236,7 @@ export function attachLayers(shell: HTMLElement): () => void {
   let swallow: Node | null = null;
 
   const onKeyDown = (event: KeyLike): void => {
+    swallow = null; // a key press is not the click that follows a press on an opener
     if (event.key !== 'Escape' || event.repeat || event.isComposing || event.keyCode === 229) return;
     const top = topLayer();
     if (!top) return;
@@ -225,12 +251,20 @@ export function attachLayers(shell: HTMLElement): () => void {
     if (!entry || (entry.layer.kind !== 'menu' && entry.layer.kind !== 'sheet')) return;
     const target = event.target;
     if (!isNode(target) || entry.layer.el.contains(target)) return;
-    const onOpener = entry.opener?.contains(target) === true;
+    const onOpener = entry.layer.toggles === true && entry.opener?.contains(target) === true;
     // The window frame is not "outside" a sheet: pressing the title bar to move the window keeps it.
     const pressed = target instanceof Element ? target : target.parentElement;
     if (!onOpener && entry.layer.kind === 'sheet' && pressed?.closest('.im-titlebar')) return;
     entry.layer.close();
     if (onOpener) swallow = entry.opener;
+  };
+
+  // The click follows the release at once. A press that never clicks (released elsewhere, cancelled) must not
+  // leave the opener's next click, from the keyboard, to be eaten.
+  const onRelease = (): void => {
+    setTimeout(() => {
+      swallow = null;
+    }, 0);
   };
 
   const onClick = (event: PressLike & { preventDefault(): void; stopImmediatePropagation(): void }): void => {
@@ -245,10 +279,14 @@ export function attachLayers(shell: HTMLElement): () => void {
   doc.addEventListener('keydown', onKeyDown, true);
   doc.addEventListener('pointerdown', onPointerDown, true);
   doc.addEventListener('click', onClick, true);
+  doc.addEventListener('pointerup', onRelease, true);
+  doc.addEventListener('pointercancel', onRelease, true);
   return () => {
     doc.removeEventListener('keydown', onKeyDown, true);
     doc.removeEventListener('pointerdown', onPointerDown, true);
     doc.removeEventListener('click', onClick, true);
+    doc.removeEventListener('pointerup', onRelease, true);
+    doc.removeEventListener('pointercancel', onRelease, true);
     swallow = null;
     for (const entry of [...stack].reverse()) entry.layer.close();
   };

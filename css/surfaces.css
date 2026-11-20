@@ -41,7 +41,7 @@
   text-align: start;
   color: var(--im-text);
   background: transparent;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--im-r-control);
   appearance: none;
 }
@@ -72,7 +72,12 @@
   box-shadow: inset 2px 0 0 var(--im-accent-text);
 }
 
-.im-menu-item[aria-disabled="true"] { color: var(--im-muted); }
+/* Disabled, like every control: the muted text colour and a dashed edge, never an opacity. */
+.im-menu-item[aria-disabled="true"] {
+  color: var(--im-muted);
+  border-style: dashed;
+  border-color: var(--im-line);
+}
 .im-menu-item[aria-disabled="true"]:hover { background: transparent; }
 
 .im-menu-item[data-im-tone="danger"] { color: var(--im-err); }
@@ -262,5 +267,5 @@
   .im-menu-item:hover,
   .im-menu-item:focus-visible,
   .im-menu-item[aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
-  .im-menu-item[aria-disabled="true"] { color: GrayText; }
+  .im-menu-item[aria-disabled="true"] { color: GrayText; border-color: GrayText; }
 }

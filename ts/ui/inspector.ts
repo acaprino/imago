@@ -37,6 +37,10 @@ export function inspector(shell: HTMLElement): Inspector {
     asking = true;
     try {
       return await guarded.ask();
+    } catch (error) {
+      // A question that fails is not a yes: nothing is thrown away, and the inspector stays as it was.
+      console.warn('The inspector could not ask whether to leave', error);
+      return false;
     } finally {
       asking = false;
     }

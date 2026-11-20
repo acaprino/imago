@@ -72,10 +72,15 @@ export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { 
 
   shell.append(sheet);
   place(shell, anchor, sheet, placement);
-  const layer: Layer = { el: sheet, kind: 'sheet', close };
+  // Under a control, the control toggles the sheet. Docked to a pane, the anchor is the whole pane: a press in it,
+  // outside the sheet, closes the sheet and still reaches what was pressed.
+  const layer: Layer = { el: sheet, kind: 'sheet', toggles: placement === 'below', close };
   pop = pushLayer(layer, anchor);
   anchor.setAttribute('aria-expanded', 'true');
-  stopFollowing = follow(() => place(shell, anchor, sheet, placement));
+  stopFollowing = follow(() => {
+    if (!anchor.isConnected) close(); // the control it hangs from is gone: nothing left to dock to
+    else place(shell, anchor, sheet, placement);
+  });
   (tabbables(sheet)[0] ?? sheet).focus();
   return close;
 }

@@ -110,9 +110,16 @@ export function openPalette(shell: HTMLElement, registry: Registry, options: Pal
     }
   }
 
+  // The palette is closed before the command runs. A command that fails, by throwing or by rejecting, is the
+  // app's to report: it must not become an unhandled rejection, and the palette is already gone either way.
   function run(command: Command): void {
     close();
-    void command.run();
+    const failed = (error: unknown): void => console.warn(`Command "${command.id}" failed`, error);
+    try {
+      void Promise.resolve(command.run()).catch(failed);
+    } catch (error) {
+      failed(error);
+    }
   }
 
   function draw(): void {
@@ -141,9 +148,20 @@ export function openPalette(shell: HTMLElement, registry: Registry, options: Pal
   const optionAt = (target: EventTarget | null): number =>
     target instanceof Element ? Array.from(list.children).indexOf(target.closest('.im-menu-item') as Element) : -1;
 
+  // Listing the commands calls every `when()`, which is the app's code: if one throws, the palette closes
+  // cleanly (the page is released, focus goes back) and the error goes on.
+  function redraw(): void {
+    try {
+      draw();
+    } catch (error) {
+      close();
+      throw error;
+    }
+  }
+
   input.addEventListener('input', () => {
     highlighted = 0;
-    draw();
+    redraw();
   });
   input.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -184,7 +202,7 @@ export function openPalette(shell: HTMLElement, registry: Registry, options: Pal
   const layer: Layer = { el: scrim, kind: 'palette', close };
   pop = pushLayer(layer, opener);
   closeOpen = close;
-  draw();
+  redraw();
   input.focus();
   return close;
 }

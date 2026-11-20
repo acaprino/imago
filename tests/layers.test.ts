@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { attachLayers, closeLayers, hasDialog, pushLayer, topLayer, type Layer, type LayerKind } from '../ts/ui/layers.ts';
+import { attachLayers, closeLayers, hasDialog, hasModal, pushLayer, topLayer, type Layer, type LayerKind } from '../ts/ui/layers.ts';
 
 // Plain objects stand in for elements: the module must not need a DOM.
 type Fake = { inert?: boolean; contains?: (other: unknown) => boolean };
@@ -27,21 +27,24 @@ function fakeShell() {
       if (listeners.get(type) === listener) listeners.delete(type);
     },
   };
-  const press = (key: string, extra: Record<string, unknown> = {}) => {
-    const event = { key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; }, stopped: false, ...extra };
-    listeners.get('keydown')?.(event);
+  // Fires a recorded event; `stopped` tells whether a handler consumed it.
+  const fire = (type: string, extra: Record<string, unknown> = {}) => {
+    const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; }, stopped: false, ...extra };
+    listeners.get(type)?.(event);
     return event as { defaultPrevented: boolean; stopped: boolean };
   };
-  return { shell: { ownerDocument: doc } as unknown as HTMLElement, listeners, press };
+  const press = (key: string, extra: Record<string, unknown> = {}) => fire('keydown', { key, ...extra });
+  return { shell: { ownerDocument: doc } as unknown as HTMLElement, listeners, press, fire };
 }
 
 // A layer whose close pops it, as the real surfaces do; `closed` counts the calls.
-function fakeLayer(kind: LayerKind, from: FakeOpener | null = null) {
-  const el: Fake = {};
+function fakeLayer(kind: LayerKind, from: FakeOpener | null = null, made: { el?: unknown; toggles?: boolean } = {}) {
+  const el: Fake = (made.el as Fake | undefined) ?? {};
   const state = { closed: 0, pop: () => {} };
   const layer: Layer = {
     el: el as unknown as HTMLElement,
     kind,
+    toggles: made.toggles,
     close() {
       state.closed++;
       state.pop();
@@ -170,6 +173,143 @@ test('detaching closes every layer still open', () => {
   assert.equal(b.state.closed, 1);
   assert.equal(topLayer(), undefined);
   assert.equal(listeners.size, 0, 'every listener is removed');
+});
+
+// A small tree of fake nodes, so that a press has a target inside a control, inside a layer, or outside both.
+class FakeNode {
+  children: FakeNode[] = [];
+  parent: FakeNode | null;
+  constructor(parent: FakeNode | null = null) {
+    this.parent = parent;
+    parent?.children.push(this);
+  }
+  get parentElement() {
+    return this.parent;
+  }
+  contains(other: unknown): boolean {
+    return other === this || this.children.some((child) => child.contains(other));
+  }
+  closest() {
+    return null;
+  }
+}
+class FakeElement extends FakeNode {}
+
+// `layers.ts` reads `Node` and `Element` when a press arrives: stand-ins for the two, taken away afterwards.
+async function withFakeDom(run: () => Promise<void> | void) {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const saved = { Node: globals.Node, Element: globals.Element };
+  globals.Node = FakeNode;
+  globals.Element = FakeElement;
+  try {
+    await run();
+  } finally {
+    globals.Node = saved.Node;
+    globals.Element = saved.Element;
+  }
+}
+
+function parts() {
+  const root = new FakeElement();
+  const control = new FakeElement(root);
+  return { control, inControl: new FakeElement(control), layerEl: new FakeElement(root), elsewhere: new FakeElement(root) };
+}
+
+// The control is the layer's opener; the tests pass the fake as the element it stands for.
+const asOpener = (node: FakeNode) => node as unknown as FakeOpener;
+
+test('a press on a control that toggles its layer closes it and swallows the click that follows', async () => {
+  await withFakeDom(() => {
+    const { shell, fire } = fakeShell();
+    const detach = attachLayers(shell);
+    const { control, inControl, layerEl } = parts();
+    const menu = fakeLayer('menu', asOpener(control), { el: layerEl, toggles: true });
+    fire('pointerdown', { target: inControl });
+    assert.equal(menu.state.closed, 1, 'the press closed the menu');
+    assert.equal(fire('click', { target: inControl }).stopped, true, 'the click on the control is swallowed');
+    assert.equal(fire('click', { target: inControl }).stopped, false, 'and only that one click');
+    detach();
+  });
+});
+
+test('a press in a pane that a sheet is docked to closes the sheet and still reaches what was pressed', async () => {
+  await withFakeDom(() => {
+    const { shell, fire } = fakeShell();
+    const detach = attachLayers(shell);
+    const { control, inControl, layerEl } = parts();
+    // The anchor is the whole pane: the layer does not toggle.
+    const sheet = fakeLayer('sheet', asOpener(control), { el: layerEl });
+    fire('pointerdown', { target: inControl });
+    assert.equal(sheet.state.closed, 1, 'a press in the pane closes the sheet');
+    const click = fire('click', { target: inControl });
+    assert.equal(click.stopped, false, 'the click is not swallowed');
+    assert.equal(click.defaultPrevented, false);
+    detach();
+  });
+});
+
+test('a press inside the layer keeps it, and a press elsewhere closes it without swallowing the click', async () => {
+  await withFakeDom(() => {
+    const { shell, fire } = fakeShell();
+    const detach = attachLayers(shell);
+    const { control, layerEl, elsewhere } = parts();
+    const inside = new FakeElement(layerEl);
+    const menu = fakeLayer('menu', asOpener(control), { el: layerEl, toggles: true });
+    fire('pointerdown', { target: inside });
+    assert.equal(menu.state.closed, 0, 'a press inside keeps the menu');
+    fire('pointerdown', { target: elsewhere });
+    assert.equal(menu.state.closed, 1, 'a press elsewhere closes it');
+    assert.equal(fire('click', { target: elsewhere }).stopped, false, 'and the click is not swallowed');
+    detach();
+  });
+});
+
+test('a press that never clicks does not leave the next click on the control to be swallowed', async () => {
+  await withFakeDom(async () => {
+    const { shell, fire } = fakeShell();
+    const detach = attachLayers(shell);
+
+    // Pressed and released with no click after it: the keyboard clicks the control later.
+    const first = parts();
+    fakeLayer('menu', asOpener(first.control), { el: first.layerEl, toggles: true });
+    fire('pointerdown', { target: first.inControl });
+    fire('pointerup', { target: first.inControl });
+    await new Promise((done) => setTimeout(done, 5));
+    assert.equal(fire('click', { target: first.inControl }).stopped, false, 'after a release the swallow is gone');
+
+    // A key press in between does the same.
+    const second = parts();
+    fakeLayer('menu', asOpener(second.control), { el: second.layerEl, toggles: true });
+    fire('pointerdown', { target: second.inControl });
+    fire('keydown', { key: 'Enter' });
+    assert.equal(fire('click', { target: second.inControl }).stopped, false, 'after a key press the swallow is gone');
+
+    // The ordinary order still swallows: the click comes right after the release.
+    const third = parts();
+    fakeLayer('menu', asOpener(third.control), { el: third.layerEl, toggles: true });
+    fire('pointerdown', { target: third.inControl });
+    fire('pointerup', { target: third.inControl });
+    assert.equal(fire('click', { target: third.inControl }).stopped, true, 'a click right after the release is swallowed');
+    detach();
+  });
+});
+
+test('a modal layer makes the notice hosts inert, and its removal gives them back', () => {
+  const hosts = [{ inert: false }, { inert: false }];
+  const doc = { querySelectorAll: () => hosts };
+  const sheet = fakeLayer('sheet', null, { el: { ownerDocument: doc } });
+  assert.equal(hasModal(), false);
+  assert.deepEqual(hosts.map((host) => host.inert), [false, false], 'a sheet leaves the notices alone');
+  const dialog = fakeLayer('dialog', null, { el: { ownerDocument: doc } });
+  assert.equal(hasModal(), true);
+  assert.deepEqual(hosts.map((host) => host.inert), [true, true], 'a dialog makes them inert');
+  const palette = fakeLayer('palette');
+  dialog.state.pop();
+  assert.deepEqual(hosts.map((host) => host.inert), [true, true], 'still inert under the palette');
+  palette.state.pop();
+  assert.deepEqual(hosts.map((host) => host.inert), [false, false], 'live again when no modal layer is left');
+  assert.equal(hasModal(), false);
+  sheet.state.pop();
 });
 
 // Source files that call the native modal: it makes the HTML title bar inert.
