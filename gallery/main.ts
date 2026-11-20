@@ -66,7 +66,7 @@ let cleanups: (() => void)[] = [];
 function describeWidth(width: number, hasSidebar: boolean): string[] {
   return [
     width >= 1000 ? 'Inspector docked at the right' : 'Inspector over the content',
-    !hasSidebar ? 'This app has no sidebar' : width >= 850 ? 'Full sidebar, 232 px' : width >= 620 ? 'Sidebar as a 56 px rail' : 'Sidebar on request',
+    !hasSidebar ? 'This app has no sidebar' : width >= 850 ? 'Full sidebar, 232 px' : width >= 620 ? 'Sidebar as a 56 px rail' : 'Sidebar opens from a title-bar button',
     width >= 620 ? 'View tabs in the title bar' : 'View tabs in the "Views" menu',
   ];
 }

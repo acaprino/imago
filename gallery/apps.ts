@@ -10,7 +10,7 @@ export const APP_HUES: Record<AppId, number> = { xiox: 75, shinatama: 355, mukad
 
 const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
-  min: '<path d="M5 12h14"/>', restore: '<path d="M8.5 8.5v-2h9v9h-2"/><rect x="6.5" y="8.5" width="9" height="9" rx="1.2"/>', max: '<rect x="5.5" y="5.5" width="13" height="13" rx="1.5"/>', chev: '<path d="M7 10l5 5 5-5"/>',
+  min: '<path d="M5 12h14"/>', restore: '<path d="M8.5 8.5v-2h9v9h-2"/><rect x="6.5" y="8.5" width="9" height="9" rx="1.2"/>', max: '<rect x="5.5" y="5.5" width="13" height="13" rx="1.5"/>', list: '<path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/>', chev: '<path d="M7 10l5 5 5-5"/>',
   reload: '<path d="M19 12a7 7 0 1 1-2.05-4.95M19 5v4h-4"/>', term: '<rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M7.5 10l3 2.5-3 2.5M12.5 15.5h4"/>',
   play: '<path d="M8 5.5v13l10-6.5z"/>', chat: '<path d="M5 6h14v9H10l-4 3.5V15H5z"/>', send: '<path d="M4 12l16-7-6 16-2.5-6.5z"/>',
 };
@@ -179,14 +179,15 @@ export function shellMarkup(id: AppId): string {
   const on = a.on ?? 0;
   const tabs = a.tabs.map((t, x) => `<button type="button" role="tab" class="im-tab" aria-selected="${x === on}">${t}</button>`).join('');
   const side = a.side
-    ? `<section class="im-panel im-sidebar" aria-label="${a.side.title}">${header(a.side.title, { n: a.side.n })}<div class="im-panel-body im-list" role="listbox" aria-label="${a.side.title}">${a.side.rows.map(row).join('')}</div></section>`
+    ? `<section class="im-panel im-sidebar" id="g-sidebar" aria-label="${a.side.title}">${header(a.side.title, { n: a.side.n })}<div class="im-panel-body im-list" role="listbox" aria-label="${a.side.title}">${a.side.rows.map(row).join('')}</div></section>`
     : '';
   const keys = a.keys.map(([k, label]) => `<span>${key(k)}${label}</span>`).join('');
   return `<div class="im-shell" data-im-sidebar="${a.side ? 'on' : 'off'}">
   <header class="im-titlebar">
     <div class="im-brand"><span class="im-mark"><svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[id]}</svg></span><span class="im-wordmark">${a.name}</span></div>
+    ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('list')}</button>` : ''}
     <nav class="im-tabs" role="tablist" aria-label="${a.strings.views}">${tabs}</nav>
-    <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu">${a.strings.views}${icon('chev')}</button>
+    <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">${a.strings.views}${icon('chev')}</button>
     ${spacer}
     <button type="button" class="im-titlebar-command" data-act="pal" aria-label="${a.strings.commands}">${icon('search')}<b>${a.strings.commands}</b>${key('Ctrl K')}</button>
     <div class="im-window-buttons"><button type="button" class="im-window-button" data-im-window="minimize" aria-label="Minimize window" title="Minimize">${icon('min')}</button><button type="button" class="im-window-button" data-im-window="maximize" aria-label="Maximize window" title="Maximize">${icon('max')}${icon('restore')}</button><button type="button" class="im-window-button" data-im-window="close" aria-label="Close window" title="Close">${icon('x')}</button></div>

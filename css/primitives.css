@@ -51,7 +51,8 @@
 .im-titlebar .im-tabs { align-self: stretch; align-items: center; }
 .im-titlebar .im-tab { block-size: 100%; border-radius: 0; }
 .im-titlebar .im-tab:hover { background: none; }
-.im-titlebar .im-views-menu { display: none; }
+.im-titlebar .im-views-menu,
+.im-titlebar .im-sidebar-toggle { display: none; }
 .im-titlebar-command {
   display: inline-flex;
   flex: none;
@@ -244,8 +245,8 @@
   }
 }
 
-/* Below 850 the sidebar is a 56px rail: one avatar per row, the row's title kept for the accessible name. */
-@container im-shell (max-width: 849px) {
+/* From 620 to 849 the sidebar is a 56px rail: one avatar per row, the row's title kept for the accessible name. */
+@container im-shell (min-width: 620px) and (max-width: 849px) {
   .im-shell:not([data-im-sidebar="off"]) .im-body { grid-template-columns: var(--im-w-rail) minmax(0, 1fr); }
   .im-sidebar .im-panel-header,
   .im-sidebar .im-panel-tools,
@@ -265,7 +266,8 @@
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
 }
 
-/* Below 620 the sidebar opens on request and the view tabs become one "Views" menu. */
+/* Below 620 the view tabs become one "Views" menu and the sidebar leaves the layout: a title-bar button opens it as an
+   overlay from the left edge, under the title bar, above the content, which it neither pushes nor shrinks. */
 @container im-shell (max-width: 619px) {
   .im-shell:not([data-im-sidebar="off"]) .im-body { grid-template-columns: minmax(0, 1fr); }
   .im-sidebar,
@@ -275,6 +277,21 @@
   .im-footer-keys,
   .im-status > .im-status-end { display: none; }
   .im-titlebar .im-views-menu { display: inline-flex; }
+  .im-titlebar .im-sidebar-toggle { display: inline-grid; }
   .im-titlebar-command { padding: 0 6px; border-color: transparent; }
-  [data-im-look="smooth"] .im-work { border-left: 0; border-radius: 0; }
+  [data-im-look="smooth"] .im-work,
+  [data-im-look="smooth"] .im-shell[data-im-sidebar="off"] .im-work { margin-inline-start: 0; border-left: 0; border-radius: 0; }
+  .im-shell[data-im-sidebar-open="true"] .im-sidebar {
+    position: absolute;
+    inset-block: var(--im-h-titlebar) 0;
+    inset-inline-start: 0;
+    z-index: 4;
+    display: flex;
+    inline-size: min(var(--im-w-sidebar), 88%);
+    background: var(--im-float);
+    box-shadow: 18px 0 40px var(--im-shadow);
+  }
+  [data-im-look="smooth"] .im-shell[data-im-sidebar-open="true"] .im-sidebar { border-right: 1px solid var(--im-line); }
+  /* flush against the window edge, ONI's cut corners would leave notches there */
+  [data-im-look="oni"] .im-shell[data-im-sidebar-open="true"] .im-sidebar { clip-path: none; }
 }

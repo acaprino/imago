@@ -2,7 +2,8 @@
 //
 // Builds the gallery with Vite into a fresh temporary folder (never the shared dist/), serves it on a free port,
 // opens each test file in a fresh browser context and page, and calls its default export `async (page, url) => void`.
-// With no argument it runs every tests/gallery/*.mjs except this file. One line per file; exit code 1 on any failure.
+// With no argument it runs every tests/gallery/*.mjs except this file. One line per file; exit code 1 on any failure,
+// on a file that runs longer than 120 seconds, and when there is no test file to run.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -13,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..', '..');
 const self = basename(fileURLToPath(import.meta.url));
+const FILE_TIMEOUT_MS = 120_000;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -84,12 +86,20 @@ async function runFile(browser, file, url) {
   page.on('console', (message) => {
     if (message.type() === 'error') problems.push(`console error: ${message.text()}`);
   });
+  let timer;
   try {
-    const test = (await import(pathToFileURL(file).href)).default;
-    if (typeof test !== 'function') throw new Error('the default export is not a function');
-    await page.goto(url);
-    await page.waitForFunction(() => Boolean(window.__imago && window.__imago.ready));
-    await test(page, url);
+    const attempt = (async () => {
+      const test = (await import(pathToFileURL(file).href)).default;
+      if (typeof test !== 'function') throw new Error('the default export is not a function');
+      await page.goto(url);
+      await page.waitForFunction(() => Boolean(window.__imago && window.__imago.ready));
+      await test(page, url);
+    })();
+    attempt.catch(() => {}); // after a timeout the page is closed under it: that failure is not reported a second time
+    const timeout = new Promise((_, fail) => {
+      timer = setTimeout(() => fail(new Error(`timed out after ${FILE_TIMEOUT_MS / 1000}s`)), FILE_TIMEOUT_MS);
+    });
+    await Promise.race([attempt, timeout]);
     if (problems.length) throw new Error(problems.join('\n'));
     console.log(`ok   ${label}`);
     return true;
@@ -99,15 +109,25 @@ async function runFile(browser, file, url) {
     if (problems.length && !String(error?.message ?? '').includes(problems[0])) console.log(`      ${problems.join('\n      ')}`);
     return false;
   } finally {
-    await context.close();
+    clearTimeout(timer);
+    await context.close().catch(() => {});
   }
 }
 
 const files = testFiles(process.argv.slice(2));
+if (files.length === 0) {
+  console.log('FAIL no test file found: name one of tests/gallery/*.mjs, or add one');
+  process.exit(1);
+}
+
 const outDir = mkdtempSync(join(tmpdir(), 'imago-gallery-'));
 let server;
 let browser;
 let failed = false;
+const cleanupFailed = (what, error) => {
+  console.log(`FAIL cleanup of the ${what}: ${error?.message ?? error}`);
+  failed = true;
+};
 try {
   await build(outDir);
   const served = await serve(outDir);
@@ -122,8 +142,24 @@ try {
   console.log(`FAIL ${String(error?.stack ?? error).split('\n').slice(0, 20).join('\n      ')}`);
   failed = true;
 } finally {
-  await browser?.close();
-  if (server) { server.closeAllConnections(); await new Promise((done) => server.close(done)); }
-  rmSync(outDir, { recursive: true, force: true });
+  // Each step is in its own try: one that fails must not skip the next.
+  try {
+    await browser?.close();
+  } catch (error) {
+    cleanupFailed('browser', error);
+  }
+  try {
+    if (server) {
+      server.closeAllConnections();
+      await new Promise((done) => server.close(done));
+    }
+  } catch (error) {
+    cleanupFailed('server', error);
+  }
+  try {
+    rmSync(outDir, { recursive: true, force: true });
+  } catch (error) {
+    cleanupFailed('temporary folder', error);
+  }
 }
 process.exit(failed ? 1 : 0);

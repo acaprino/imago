@@ -31,21 +31,48 @@ export default async (page, url) => {
       const at = (width, app = 'xiox') => show(page, { app, look, theme, glass: false, width });
       const where = (text) => `${look} ${theme}: ${text}`;
 
-      // 1160: sidebar 232, inspector 300 to 360 on the right of the content, content 420 or more.
+      // The widths of the layout are the tokens': sidebar 232, rail 56, inspector 300 to 360.
       await at(1160);
+      const widths = { sidebar: await token(page, '--im-w-sidebar'), rail: await token(page, '--im-w-rail'), inspector: await token(page, '--im-w-inspector') };
+      assert.equal(widths.sidebar, 232, where('--im-w-sidebar'));
+      assert.equal(widths.rail, 56, where('--im-w-rail'));
+      assert.ok(widths.inspector >= 300 && widths.inspector <= 360, where(`--im-w-inspector is ${widths.inspector}`));
+
+      // 1160: the sidebar, the docked inspector and a content of 420 or more, as the tokens say.
       const side = await box(page, '.im-sidebar');
       const content = await box(page, '.im-content');
       const inspector = await box(page, '.im-inspector');
-      near(side.width, 232, where('sidebar width at 1160'));
-      assert.ok(inspector.width >= 300 && inspector.width <= 360, where(`inspector width at 1160 is ${inspector.width}`));
+      near(side.width, widths.sidebar, where('sidebar width at 1160'));
+      near(inspector.width, widths.inspector, where('inspector width at 1160'));
       assert.ok(inspector.left >= content.right - 0.5, where('inspector is on the right of the content at 1160'));
       assert.ok(content.width >= 420, where(`content width at 1160 is ${content.width}`));
+      assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 1160'));
 
-      // 1000 is the last width where the inspector is docked: the content keeps 420.
+      // The breakpoints, pinned on both sides of each edge: 1000/999, 850/849, 620/619.
       await at(1000);
       const docked = await box(page, '.im-content');
       assert.ok(docked.width >= 420, where(`content width at 1000 is ${docked.width}`));
       assert.ok((await box(page, '.im-inspector')).left >= docked.right - 0.5, where('inspector is docked at 1000'));
+      await at(999);
+      const covered = await box(page, '.im-content');
+      const over = await box(page, '.im-inspector');
+      assert.ok(over.left > covered.left && over.left < covered.right, where('inspector overlaps the content at 999'));
+
+      await at(850);
+      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('sidebar width at 850'));
+      await at(849);
+      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 849'));
+
+      await at(620);
+      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 620'));
+      assert.equal(await visible(page, '.im-titlebar .im-tabs'), true, where('title-bar tabs at 620'));
+      assert.equal(await visible(page, '.im-views-menu'), false, where('no Views menu at 620'));
+      assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 620'));
+      await at(619);
+      assert.equal(await visible(page, '.im-sidebar'), false, where('sidebar hidden at 619'));
+      assert.equal(await visible(page, '.im-titlebar .im-tabs'), false, where('title-bar tabs hidden at 619'));
+      assert.equal(await visible(page, '.im-views-menu'), true, where('Views menu at 619'));
+      assert.equal(await visible(page, '.im-sidebar-toggle'), true, where('sidebar button at 619'));
 
       // 990: the inspector covers the content's right edge; the content reaches the work area's right edge.
       await at(990);
@@ -57,7 +84,7 @@ export default async (page, url) => {
 
       // 840: the sidebar is a 56px rail; each item has a title and an accessible name.
       await at(840);
-      near((await box(page, '.im-sidebar')).width, 56, where('rail width at 840'));
+      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 840'));
       const items = page.locator('.im-sidebar [role="option"]');
       const total = await items.count();
       assert.ok(total >= 3, where('the sidebar has rows'));
@@ -68,20 +95,90 @@ export default async (page, url) => {
         assert.ok(name.trim(), where(`rail item ${i} has an accessible name`));
       }
       assert.equal(await visible(page, '.im-views-menu'), false, where('no Views menu at 840'));
+      assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 840'));
 
-      // 610: no sidebar, no tabs in the title bar, the Views menu instead.
+      // 610: no sidebar, no tabs in the title bar, the Views menu instead (a menu button that is closed).
       await at(610);
       assert.equal(await visible(page, '.im-sidebar'), false, where('sidebar hidden at 610'));
       assert.equal(await visible(page, '.im-titlebar .im-tabs'), false, where('title-bar tabs hidden at 610'));
       assert.equal(await visible(page, '.im-views-menu'), true, where('Views menu shown at 610'));
+      assert.equal(await page.locator('.im-views-menu').getAttribute('aria-haspopup'), 'menu', where('Views menu announces a menu'));
+      assert.equal(await page.locator('.im-views-menu').getAttribute('aria-expanded'), 'false', where('Views menu is closed at rest'));
 
-      // Muro has no sidebar at any width.
+      // 610: the sidebar's objects stay reachable. A title-bar button, named after the sidebar and a tab stop right
+      // after the brand, opens it over the content; the keyboard and the pointer close it again.
+      const toggle = page.locator('.im-sidebar-toggle');
+      const sidebarName = await page.locator('.im-sidebar').getAttribute('aria-label');
+      const sidebarId = await page.locator('.im-sidebar').getAttribute('id');
+      assert.equal(await visible(page, '.im-sidebar-toggle'), true, where('sidebar button at 610'));
+      assert.equal(await toggle.getAttribute('aria-label'), sidebarName, where('the sidebar button is named after the sidebar'));
+      assert.equal(await toggle.getAttribute('title'), sidebarName, where('the sidebar button has the same title'));
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'false', where('the sidebar button is closed at rest'));
+      assert.ok(sidebarId && (await toggle.getAttribute('aria-controls')) === sidebarId, where('the sidebar button controls the sidebar'));
+      const focused = () => page.evaluate(() => {
+        const el = document.activeElement;
+        return { toggle: !!el?.classList.contains('im-sidebar-toggle'), inSidebar: !!el?.closest('.im-sidebar'), role: el?.getAttribute('role') ?? null };
+      });
+      const closed = async (label) => {
+        assert.equal(await visible(page, '.im-sidebar'), false, where(`sidebar hidden ${label}`));
+        assert.equal(await toggle.getAttribute('aria-expanded'), 'false', where(`sidebar button closed ${label}`));
+        assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-open'), null, where(`shell not open ${label}`));
+      };
+      const contentBefore = await box(page, '.im-content');
+      await page.focus('#g-width'); // the last control before the window, in the page's order
+      await page.keyboard.press('Tab');
+      assert.equal((await focused()).toggle, true, where('Tab from the page reaches the sidebar button first'));
+      await page.keyboard.press('Enter');
+      assert.equal(await visible(page, '.im-sidebar'), true, where('Enter opens the sidebar'));
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'true', where('the button says it is open'));
+      const now = await focused();
+      assert.ok(now.inSidebar && now.role === 'option', where('focus is on a row of the sidebar'));
+      const drawn = await box(page, '.im-sidebar');
+      const shellBox = await box(page, '.im-shell');
+      const barBox = await box(page, '.im-titlebar');
+      near(drawn.left, shellBox.left, where('the sidebar starts at the left edge'));
+      near(drawn.top, barBox.bottom, where('the sidebar starts under the title bar'));
+      near(drawn.width, widths.sidebar, where('the sidebar is --im-w-sidebar wide'));
+      const contentOpen = await box(page, '.im-content');
+      near(contentOpen.left, contentBefore.left, where('the content does not move when the sidebar opens'));
+      near(contentOpen.width, contentBefore.width, where('the content does not shrink when the sidebar opens'));
+      const onTop = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.im-sidebar'), { x: drawn.left + drawn.width / 2, y: drawn.top + drawn.height / 2 });
+      assert.equal(onTop, true, where('the sidebar is above the content'));
+      await page.keyboard.press('Escape');
+      await closed('after Escape');
+      assert.equal((await focused()).toggle, true, where('Escape gives focus back to the button'));
+
+      await toggle.click();
+      assert.equal(await visible(page, '.im-sidebar'), true, where('a click opens the sidebar'));
+      await toggle.click();
+      await closed('after a second click');
+      assert.equal((await focused()).toggle, true, where('a second click leaves focus on the button'));
+
+      await toggle.click();
+      const status = await box(page, '.im-status');
+      await page.mouse.click(status.right - 24, status.top + status.height / 2); // empty space of the status row
+      await closed('after a press outside');
+      await page.waitForFunction(() => document.activeElement?.classList.contains('im-sidebar-toggle'));
+
+      await toggle.click();
+      await at(700); // 620 or more: the sidebar is a rail again and the open state is gone
+      await page.waitForFunction(() => !document.querySelector('.im-shell').hasAttribute('data-im-sidebar-open'));
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'false', where('widening clears the open state'));
+      await at(610);
+
+      // Muro has no sidebar and no button for it, at any width.
       for (const width of [1160, 990, 840, 610, 500]) {
         await at(width, 'muro');
         assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar'), 'off');
         assert.equal(await visible(page, '.im-sidebar'), false, where(`Muro has no sidebar at ${width}`));
+        assert.equal(await page.locator('.im-sidebar-toggle').count(), 0, where(`Muro has no sidebar button at ${width}`));
         const offset = (await box(page, '.im-content')).left - (await box(page, '.im-work')).left;
         assert.ok(offset >= 0 && offset <= 2.5, where(`Muro's content starts at its work area at ${width} (offset ${offset})`));
+      }
+      if (look === 'smooth') {
+        await at(610, 'muro');
+        assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.im-work')).marginInlineStart), '0px', where('Muro below 620: the sheet has no margin'));
+        near((await box(page, '.im-work')).left, (await box(page, '.im-shell')).left, where('Muro below 620: the sheet starts at the window edge'));
       }
 
       // The title bar names the product, at every width, for every app.
