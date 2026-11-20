@@ -101,3 +101,9 @@
 [data-im-look="oni"] .im-steps > li { border-color: var(--im-line); }
 
 [data-im-look="oni"] .im-steps > li[aria-current="step"] { border-color: var(--im-line-strong); }
+
+/* ---------- forced colours: the fills of a selected tab vanish, so ONI keeps the line that Smooth draws ---------- */
+
+@media (forced-colors: active) {
+  [data-im-look="oni"] .im-tab[aria-selected="true"]::after { display: block; }
+}

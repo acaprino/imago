@@ -165,6 +165,74 @@ const index = (rows) => {
 // What the eye tells one state of a control from another by: the fill, the text, the edge and the wash.
 const picture = (cell) => [cell.fill, cell.textColor, cell.borderColor, cell.boxShadow, cell.fontWeight].join('|');
 
+// The items that mark their selection with a bar of their own in forced colours: where the bar is drawn (a pseudo-element of
+// the host) and which element carries the focus ring.
+const MARKED = [
+  { id: 'row', item: '.im-row', text: '.im-row-title', host: null, pseudo: '::before' },
+  { id: 'tree', item: '.im-tree-item', text: '.im-tree-label', host: null, pseudo: '::before' },
+  { id: 'segmented', item: '.im-seg > button', text: null, host: null, pseudo: '::after' },
+  // The tab's line is always there; it is scaled to nothing until the tab is selected.
+  { id: 'tab', item: '.im-tab', text: null, host: null, pseudo: '::after', scaled: true },
+  { id: 'table-row', item: 'tbody tr', text: '.im-cell-title', host: ':scope > :first-child', pseudo: '::before' },
+];
+
+// The box and the text start of the item at rest and selected. Self-contained: Playwright sends its source to the page.
+const shapesOf = (marked) => {
+  const cell = (control, state) => document.querySelector(`[data-control="${control}"][data-state="${state}"]`);
+  const shape = (el, textSelector) => {
+    const box = el.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(textSelector ? el.querySelector(textSelector) : el);
+    return { width: box.width, height: box.height, textStart: range.getBoundingClientRect().left - box.left };
+  };
+  const out = {};
+  for (const m of marked) {
+    out[m.id] = {
+      rest: shape(cell(m.id, 'rest').querySelector(m.item), m.text),
+      selected: shape(cell(m.id, 'selected').querySelector(m.item), m.text),
+    };
+  }
+  return out;
+};
+
+// In forced colours: the bar that marks the selected item, the ring of the same item once focused, and where they sit.
+const marksOf = (marked) => {
+  const cell = (control, state) => document.querySelector(`[data-control="${control}"][data-state="${state}"]`);
+  const px = (value) => parseFloat(value);
+  const out = {};
+  for (const m of marked) {
+    const item = cell(m.id, 'selected').querySelector(m.item);
+    const restItem = cell(m.id, 'rest').querySelector(m.item);
+    const host = m.host ? item.querySelector(m.host) : item;
+    const restHost = m.host ? restItem.querySelector(m.host) : restItem;
+    const bar = getComputedStyle(host, m.pseudo);
+    const box = host.getBoundingClientRect();
+    const mark = {
+      x: box.left + px(getComputedStyle(host).borderLeftWidth) + px(bar.left),
+      y: box.top + px(getComputedStyle(host).borderTopWidth) + px(bar.top),
+      width: px(bar.width),
+      height: px(bar.height),
+    };
+    const own = getComputedStyle(item).outlineStyle;
+    item.setAttribute('data-im-force', 'focus');
+    const ring = getComputedStyle(item);
+    const focused = { style: ring.outlineStyle, width: ring.outlineWidth, offset: px(ring.outlineOffset) };
+    item.removeAttribute('data-im-force');
+    const itemBox = item.getBoundingClientRect();
+    out[m.id] = {
+      content: bar.content,
+      restContent: getComputedStyle(restHost, m.pseudo).content,
+      color: bar.backgroundColor,
+      transform: bar.transform,
+      mark,
+      own,
+      focused,
+      ring: { left: itemBox.left, top: itemBox.top, right: itemBox.right, bottom: itemBox.bottom },
+    };
+  }
+  return out;
+};
+
 export default async (page) => {
   const expected = CONTROLS.flatMap(({ id, states }) => states.map((state) => `${id}|${state}`)).sort();
 
@@ -310,6 +378,7 @@ export default async (page) => {
       assert.ok(Math.abs(long.row.height - rest('row').height) <= 0.5, where('a long row keeps its height'));
 
       // Forced colours: the system takes the fills away, so the ring, the edges and the system colours carry every state.
+      const normal = await page.evaluate(shapesOf, MARKED);
       await page.emulateMedia({ forcedColors: 'active' });
       const forced = await page.evaluate(() => {
         const cell = (control, state) => document.querySelector(`[data-control="${control}"][data-state="${state}"]`);
@@ -322,46 +391,59 @@ export default async (page) => {
           probe.remove();
           return value;
         };
-        const ring = (el) => ({ style: style(el).outlineStyle, width: style(el).outlineWidth });
-        const ringOf = (control, selector) => ring(cell(control, 'focus').querySelector(selector));
-        // A selected item, alone and then focused too: the selection must not be drawn with the outline the ring uses.
-        const selected = {};
-        for (const [control, selector] of [['row', '.im-row'], ['tree', '.im-tree-item'], ['segmented', '.im-seg > button']]) {
-          const el = cell(control, 'selected').querySelector(selector);
-          const own = { ring: ring(el), edge: style(el).borderLeftColor, edgeWidth: parseFloat(style(el).borderLeftWidth) };
-          el.setAttribute('data-im-force', 'focus');
-          const focused = ring(el);
-          el.removeAttribute('data-im-force');
-          selected[control] = { own, focused };
-        }
+        const ring = cell('button-secondary', 'focus').querySelector('.im-btn');
         const field = style(cell('field', 'rest').querySelector('.im-input'));
         return {
           highlight: system('Highlight'),
           grayText: system('GrayText'),
-          button: ringOf('button-secondary', '.im-btn'),
+          button: { style: style(ring).outlineStyle, width: style(ring).outlineWidth },
           field: { width: parseFloat(field.borderTopWidth), style: field.borderTopStyle },
-          selected,
           disabledRow: style(cell('row', 'disabled').querySelector('.im-row-title')).color,
           progressFill: getComputedStyle(cell('progress', 'rest').querySelector('.im-progress'), '::before').backgroundColor,
           checked: style(cell('checkbox', 'selected').querySelector('.im-check')).backgroundColor,
         };
       });
+      const marks = await page.evaluate(marksOf, MARKED);
+      const shapes = await page.evaluate(shapesOf, MARKED);
       await page.emulateMedia({ forcedColors: 'none' });
       assert.notEqual(forced.button.style, 'none', where('forced colours: a focused button keeps its outline'));
       assert.equal(forced.button.width, '2px', where('forced colours: the ring is 2px'));
       assert.ok(forced.field.width >= 1 && forced.field.style !== 'none', where('forced colours: a field keeps its border'));
-      // A selected row, tree item or segment is a Highlight edge (a border), so its outline stays free for the focus ring.
-      for (const [control, { own, focused }] of Object.entries(forced.selected)) {
-        assert.equal(own.ring.style, 'none', where(`forced colours: a selected ${control} is not drawn with an outline`));
-        assert.equal(own.edge, forced.highlight, where(`forced colours: a selected ${control} has a Highlight edge`));
-        assert.ok(own.edgeWidth >= 2, where(`forced colours: the edge of a selected ${control} is ${own.edgeWidth}px`));
-        assert.notEqual(focused.style, 'none', where(`forced colours: a focused selected ${control} shows its focus ring`));
-        assert.equal(focused.width, '2px', where(`forced colours: the ring of a selected ${control} is 2px`));
-        assert.notEqual(`${focused.style} ${focused.width}`, `${own.ring.style} ${own.ring.width}`, where(`forced colours: focus and selection of a ${control} differ`));
-      }
       assert.equal(forced.disabledRow, forced.grayText, where('forced colours: a disabled row is GrayText'));
       assert.equal(forced.progressFill, forced.highlight, where('forced colours: the progress fill is Highlight'));
       assert.equal(forced.checked, forced.highlight, where('forced colours: a checked box is Highlight'));
+
+      // A selected item is a Highlight bar inside the item. It is not the outline, which is the focus ring, and the ring
+      // (the outer band of the item) does not cover it: a focused selected item shows both.
+      for (const { id, scaled } of MARKED) {
+        const m = marks[id];
+        const said = (message) => where(`forced colours: ${id} ${message}`);
+        if (scaled) assert.ok(!m.transform.startsWith('matrix(0,'), said(`selected line is scaled to nothing (${m.transform})`));
+        else assert.equal(m.restContent, 'none', said('has no bar when it is not selected'));
+        assert.notEqual(m.content, 'none', said('selected has a bar'));
+        assert.equal(m.color, forced.highlight, said('selected bar is Highlight'));
+        assert.ok(m.mark.width >= 2 && m.mark.height >= 2, said(`bar is ${m.mark.width}x${m.mark.height}`));
+        assert.equal(m.own, 'none', said('selected alone has no outline'));
+        assert.notEqual(m.focused.style, 'none', said('focused selected shows its ring'));
+        assert.equal(m.focused.width, '2px', said('ring is 2px'));
+        // With a negative offset the ring's inner edge is inset by -offset from the border box; the bar must lie inside it.
+        const inset = Math.max(0, -m.focused.offset);
+        const inside =
+          m.mark.x >= m.ring.left + inset - 0.01 && m.mark.x + m.mark.width <= m.ring.right - inset + 0.01 &&
+          m.mark.y >= m.ring.top + inset - 0.01 && m.mark.y + m.mark.height <= m.ring.bottom - inset + 0.01;
+        assert.ok(inside || m.focused.offset >= 0, said(`ring (${inset}px band) covers the bar ${JSON.stringify(m.mark)} in ${JSON.stringify(m.ring)}`));
+      }
+
+      // Selecting takes no layout: the height and the start of the text are the same selected and not, and the width differs
+      // only by what the heavier weight needs, as it does without forced colours.
+      for (const { id } of MARKED) {
+        const [a, b] = [shapes[id].rest, shapes[id].selected];
+        const [na, nb] = [normal[id].rest, normal[id].selected];
+        const said = (message) => where(`forced colours: ${id} ${message}`);
+        assert.ok(Math.abs(a.height - b.height) <= 0.5, said(`selected is ${b.height}px high, not selected ${a.height}px`));
+        assert.ok(Math.abs(a.textStart - b.textStart) <= 0.5, said(`text starts at ${b.textStart}px selected and ${a.textStart}px not`));
+        assert.ok(Math.abs(b.width - a.width - (nb.width - na.width)) <= 0.5, said(`selected grows by ${b.width - a.width}px, without forced colours by ${nb.width - na.width}px`));
+      }
     }
   }
 

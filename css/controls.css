@@ -1142,12 +1142,36 @@
   .im-tree-item[aria-disabled="true"] > .im-tree-label,
   .im-option:has([aria-disabled="true"]) { color: GrayText; }
 
-  /* Selected: a Highlight edge, on the start side of a row or a tree item and all round a segment. It is a border and not an
-     outline: the outline is the focus ring, and a focused selected item must still show both. */
+  /* Selected: a Highlight bar drawn inside the item (a bar along the start of a row, a tree item and a table row, along the
+     bottom of a segment and a tab). A bar takes no layout, so the box and the text of the item do not move when it is
+     selected, and it is not the outline: the outline is the focus ring, which is the outer 2px of the item, so a focused
+     selected item shows both. The bars stay 3px, or 2px for the segment, inside that ring. */
   .im-row[aria-selected="true"],
-  .im-tree-item[aria-selected="true"] { border-inline-start: 4px solid Highlight; }
+  .im-tree-item[aria-selected="true"],
+  .im-seg > button[aria-selected="true"],
+  .im-table tbody tr[aria-selected="true"] > :first-child { position: relative; }
 
-  .im-seg > button[aria-selected="true"] { border: 2px solid Highlight; }
+  .im-row[aria-selected="true"]::before,
+  .im-tree-item[aria-selected="true"]::before,
+  .im-table tbody tr[aria-selected="true"] > :first-child::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: 4px;
+    background: Highlight;
+  }
+
+  .im-seg > button[aria-selected="true"]::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 2px;
+    height: 2px;
+    background: Highlight;
+  }
 
   /* A step is not focusable, so its mark may be an outline. */
   .im-steps > li[aria-current="step"] {
@@ -1155,9 +1179,12 @@
     outline-offset: -2px;
   }
 
-  .im-table tbody tr[aria-selected="true"] td { border-bottom: 2px solid Highlight; }
+  /* the tab's line sits above the ring of a focused tab */
+  .im-tab::after {
+    bottom: 2px;
+    background: Highlight;
+  }
 
-  .im-tab::after,
   .im-progress::before { background: Highlight; }
 
   .im-check[aria-checked="true"],
