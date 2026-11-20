@@ -1,1 +1,1161 @@
-/* css/controls.css: written by its task. */
+/* Controls: every control of the set and every state it can be in. Smooth is drawn here; looks/oni.css redraws what
+   ONI does differently (chamfered buttons, outlined chips, capitals), on the same classes and the same attributes.
+
+   States are real attributes and pseudo-classes, never extra classes:
+     hover :hover   pressed :active   focus :focus-visible   selected [aria-selected="true"]
+     checked [aria-checked]   disabled :disabled or [aria-disabled="true"]   busy [aria-busy="true"]
+     invalid [aria-invalid="true"] (on the input)   read-only [readonly] (on the input)
+   The gallery forces a pseudo-state with data-im-force="hover|press|focus"; each rule below that answers a pseudo-class
+   answers the attribute with the same selector, so a forced cell and a real one cannot drift apart.
+
+   Disabled is a dashed border and the muted text colour, which passes 4.5:1 on every surface. Never an opacity.
+
+   Markup the rules expect:
+     button    <button class="im-btn im-btn--primary"> [<svg class="im-icon"> | <span class="im-spinner">] <span>Label</span> [<kbd class="im-key">]
+     field     <div class="im-field"><label class="im-field-label">..</label><span class="im-input"><input aria-invalid aria-describedby></span>
+               <span class="im-field-hint">..</span><span class="im-field-error" id>Error: ..</span></div>
+     select    <button class="im-select" aria-haspopup="listbox"><span>Value</span><svg class="im-icon"></button>
+     option    <span class="im-option"><span class="im-check" role="checkbox" aria-checked tabindex></span>Label</span>
+     tab       <button class="im-tab" role="tab" aria-selected>Label</button> inside .im-tabs
+     row       <div class="im-row" role="option" aria-selected title><span class="im-row-text"><span class="im-row-title"></span><span class="im-row-sub"></span></span><span class="im-row-meta"></span></div>
+     tree      <ul class="im-tree" role="tree"><li class="im-tree-item" role="treeitem" aria-level aria-expanded style="--im-level: 0"><svg class="im-icon im-tree-chevron"><span class="im-tree-label">
+     steps     <ol class="im-steps"><li data-im-step="done|now|todo" aria-current="step"><span class="im-step-index"><span class="im-step-text">
+     progress  <div class="im-progress" role="progressbar" aria-valuenow style="--im-progress: 64"></div>; without aria-valuenow it is indeterminate
+   A label that can be longer than its room (button, tab, row, cell) has an ellipsis; the app gives the element a title. */
+
+/* ---------- reset of the elements a control is made of ---------- */
+
+:where(.im-btn, .im-icon-btn, .im-tab, .im-seg > button, .im-select, .im-check, .im-radio, .im-switch) {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  background: none;
+  border: 0;
+  cursor: default;
+}
+
+/* ---------- the focus ring: 2px, in the accent text colour, 2px off, drawn with outline so forced colours keep it ---------- */
+
+:where(.im-btn, .im-icon-btn, .im-select, .im-check, .im-radio, .im-switch, .im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
+[data-im-force="focus"] {
+  outline: 2px solid var(--im-accent-text);
+  outline-offset: 2px;
+}
+
+/* Rows, tabs and menu items sit in a panel that scrolls and clips: the ring is drawn inside them. */
+:where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
+:where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item)[data-im-force="focus"] {
+  outline-offset: -2px;
+}
+
+/* ---------- atoms ---------- */
+
+.im-key {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font: 500 11px/1 var(--im-font-code);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  color: var(--im-muted);
+  border: 1px solid var(--im-line);
+  border-radius: var(--im-r-chip);
+}
+
+.im-count {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  flex: none;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  font: 600 11px/1 var(--im-font-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--im-chip-text);
+  background: var(--im-chip);
+  border-radius: 999px;
+}
+
+/* A tone always comes with a word or an icon with a name next to it: never the colour alone. */
+[data-im-tone="ok"] { --im-tone: var(--im-ok); }
+[data-im-tone="warn"] { --im-tone: var(--im-warn); }
+[data-im-tone="err"] { --im-tone: var(--im-err); }
+[data-im-tone="info"] { --im-tone: var(--im-info); }
+[data-im-tone="accent"] { --im-tone: var(--im-accent-text); }
+
+/* A chip never wraps and never shrinks. */
+.im-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 20px;
+  padding: 0 7px;
+  white-space: nowrap;
+  font: 600 11.5px/1 var(--im-font-head);
+  letter-spacing: var(--im-track);
+  text-transform: var(--im-case);
+  color: var(--im-chip-text);
+  background: var(--im-chip);
+  border-radius: var(--im-r-chip);
+}
+
+.im-chip[data-im-tone] {
+  color: var(--im-tone);
+  background: color-mix(in srgb, var(--im-tone) 14%, transparent);
+}
+
+.im-chip[data-im-tone]::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.im-avatar {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  font: 700 10.5px/1 var(--im-font-head);
+  letter-spacing: 0.04em;
+  color: var(--im-text-2);
+  background: var(--im-chip);
+  border: 1px solid var(--im-line);
+  border-radius: var(--im-r-control);
+}
+
+/* The progress mark of a busy control: the size of an icon, so the control keeps its width. */
+.im-spinner {
+  display: inline-block;
+  box-sizing: border-box;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: im-spin 0.8s linear infinite;
+}
+
+@keyframes im-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- button ---------- */
+
+.im-btn {
+  --im-btn-bg: var(--im-button);
+  --im-btn-border: var(--im-line-strong);
+  --im-btn-fg: var(--im-text);
+  --im-btn-wash: transparent;
+  --im-btn-bw: 1px;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  height: var(--im-h-control);
+  padding: 0 12px;
+  overflow: hidden;
+  vertical-align: middle;
+  white-space: nowrap;
+  font: 500 13px/1 var(--im-font-head);
+  letter-spacing: var(--im-track);
+  text-transform: var(--im-case);
+  color: var(--im-btn-fg);
+  background: var(--im-btn-bg);
+  border: var(--im-btn-bw) solid var(--im-btn-border);
+  border-radius: var(--im-r-control);
+  box-shadow: inset 0 0 0 99px var(--im-btn-wash);
+  transition:
+    background-color var(--im-t-fast) var(--im-ease),
+    border-color var(--im-t-fast) var(--im-ease),
+    color var(--im-t-fast) var(--im-ease);
+}
+
+/* The label: a long one gets an ellipsis, not a taller or wider button. */
+.im-btn > span:not(.im-spinner) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.im-btn > .im-key { margin-right: -4px; }
+
+.im-btn--primary {
+  --im-btn-bg: var(--im-accent);
+  --im-btn-border: var(--im-accent);
+  --im-btn-fg: var(--im-accent-on);
+  font-weight: 600;
+}
+
+.im-btn--primary > .im-key {
+  color: inherit;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.im-btn--ghost {
+  --im-btn-bg: transparent;
+  --im-btn-border: transparent;
+  --im-btn-fg: var(--im-text-2);
+}
+
+/* Outlined at rest: red text and an edge of it, no fill. */
+.im-btn--danger {
+  --im-btn-bg: transparent;
+  --im-btn-border: color-mix(in srgb, var(--im-err) 60%, transparent);
+  --im-btn-fg: var(--im-err);
+}
+
+/* The only filled red: the button that confirms a destructive dialog, with text at 4.5:1. */
+.im-btn--confirm-danger {
+  --im-btn-bg: var(--im-danger);
+  --im-btn-border: var(--im-danger);
+  --im-btn-fg: var(--im-danger-on);
+  font-weight: 600;
+}
+
+.im-btn--sm {
+  height: var(--im-h-control-sm);
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* hover: a translucent wash, the box does not change */
+.im-btn:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"])):is(:hover, [data-im-force="hover"]) {
+  --im-btn-wash: var(--im-hover);
+}
+
+.im-btn--primary:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"])):is(:hover, [data-im-force="hover"]) {
+  --im-btn-bg: var(--im-accent-hover);
+  --im-btn-border: var(--im-accent-hover);
+  --im-btn-wash: transparent;
+}
+
+/* pressed: one step darker than hover */
+.im-btn:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"])):is(:active, [data-im-force="press"]) {
+  --im-btn-wash: var(--im-press);
+}
+
+.im-btn--primary:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"])):is(:active, [data-im-force="press"]) {
+  --im-btn-bg: color-mix(in srgb, var(--im-accent) 78%, #000000);
+  --im-btn-border: color-mix(in srgb, var(--im-accent) 78%, #000000);
+  --im-btn-wash: transparent;
+}
+
+/* busy: the label and the width stay, the spinner takes the icon's place, a second press does nothing */
+.im-btn[aria-busy="true"] { pointer-events: none; }
+
+.im-btn:is(:disabled, [aria-disabled="true"]) {
+  --im-btn-bg: transparent;
+  --im-btn-border: var(--im-line);
+  --im-btn-fg: var(--im-muted);
+  --im-btn-wash: transparent;
+  border-style: dashed;
+  font-weight: 500;
+}
+
+/* ---------- icon button ---------- */
+
+.im-icon-btn {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--im-h-control);
+  height: var(--im-h-control);
+  color: var(--im-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--im-r-control);
+  transition:
+    background-color var(--im-t-fast) var(--im-ease),
+    color var(--im-t-fast) var(--im-ease);
+}
+
+.im-icon-btn:where(:not(:disabled, [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) {
+  color: var(--im-text);
+  background: var(--im-hover);
+}
+
+.im-icon-btn:where(:not(:disabled, [aria-disabled="true"])):is(:active, [data-im-force="press"]) {
+  color: var(--im-text);
+  background: var(--im-press);
+}
+
+.im-icon-btn:is(:disabled, [aria-disabled="true"]) {
+  color: var(--im-muted);
+  border: 1px dashed var(--im-line);
+}
+
+/* ---------- fields ---------- */
+
+.im-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.im-field-label {
+  font: 600 12.5px/1.2 var(--im-font-text);
+  color: var(--im-text-2);
+}
+
+.im-field-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--im-muted);
+}
+
+/* One sentence under the field, starting with the word "Error", tied to the input by aria-describedby. */
+.im-field-error {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--im-err);
+}
+
+.im-input,
+.im-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  height: var(--im-h-control);
+  padding: 0 10px;
+  font: 400 13px/1.45 var(--im-font-text);
+  color: var(--im-text);
+  background: var(--im-field);
+  border: 1px solid var(--im-line-strong);
+  border-radius: var(--im-r-control);
+  transition: border-color var(--im-t-fast) var(--im-ease);
+}
+
+.im-input > input {
+  all: unset;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: var(--im-text);
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.im-input > input::placeholder { color: var(--im-muted); }
+
+.im-input > .im-icon,
+.im-select > .im-icon { color: var(--im-muted); }
+
+.im-input--code { font-family: var(--im-font-code); font-size: 12px; }
+
+/* The select is a button that opens a list: the value on the left, a chevron on the right. */
+.im-select {
+  justify-content: space-between;
+  text-align: start;
+}
+
+.im-select > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The states below stack by order: hover, focus, invalid, read-only, disabled; the last one that applies wins the edge. */
+.im-input:is(:hover, [data-im-force="hover"]),
+.im-select:is(:hover, [data-im-force="hover"]) {
+  border-color: var(--im-text-2);
+}
+
+.im-input:is(:focus-within, [data-im-force="focus"]),
+.im-select:is(:focus-visible, [data-im-force="focus"]) {
+  border-color: var(--im-accent-text);
+  outline: 2px solid var(--im-accent-text);
+  outline-offset: 1px;
+}
+
+.im-input:has(> input[aria-invalid="true"]),
+.im-select[aria-invalid="true"] {
+  border-color: var(--im-err);
+}
+
+/* Read-only: no fill, no frame, the text still selectable, no caret. */
+.im-input:has(> input[readonly]) {
+  padding-inline: 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+.im-input > input[readonly] { caret-color: transparent; }
+
+.im-input:has(> input:disabled),
+.im-select:is(:disabled, [aria-disabled="true"]) {
+  color: var(--im-muted);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--im-line);
+}
+
+.im-input > input:disabled { color: var(--im-muted); }
+
+/* ---------- check, radio, switch ---------- */
+
+.im-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  color: var(--im-text);
+}
+
+.im-option:has([aria-disabled="true"]) { color: var(--im-muted); }
+
+.im-check,
+.im-radio,
+.im-switch {
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  flex: none;
+  background: var(--im-field);
+  border: 1.5px solid var(--im-line-strong);
+}
+
+.im-check {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--im-r-chip);
+}
+
+.im-check[aria-checked="true"] {
+  background: var(--im-accent);
+  border-color: var(--im-accent);
+}
+
+.im-check[aria-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--im-accent-on);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.im-check[aria-checked="mixed"] { border-color: var(--im-accent-text); }
+
+.im-check[aria-checked="mixed"]::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: var(--im-accent-text);
+}
+
+.im-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.im-radio[aria-checked="true"] { border-color: var(--im-accent); }
+
+.im-radio[aria-checked="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--im-accent);
+}
+
+.im-switch {
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+}
+
+.im-switch::after {
+  content: "";
+  position: absolute;
+  top: 2.5px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--im-text-2);
+  transition: transform var(--im-t-base) var(--im-ease);
+}
+
+.im-switch[aria-checked="true"] {
+  background: var(--im-accent);
+  border-color: var(--im-accent);
+}
+
+.im-switch[aria-checked="true"]::after {
+  background: var(--im-accent-on);
+  transform: translateX(13px);
+}
+
+:is(.im-check, .im-radio, .im-switch):not([aria-disabled="true"]):is(:hover, [data-im-force="hover"]),
+.im-option:hover :is(.im-check, .im-radio, .im-switch):not([aria-disabled="true"]) {
+  box-shadow: 0 0 0 4px var(--im-hover);
+}
+
+/* Disabled keeps its mark (tick, dot, thumb) in the muted colour, so on and off still read. */
+:is(.im-check, .im-radio, .im-switch)[aria-disabled="true"] {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--im-muted);
+}
+
+.im-check[aria-checked="true"][aria-disabled="true"]::after { border-color: var(--im-muted); }
+
+.im-check[aria-checked="mixed"][aria-disabled="true"]::after,
+.im-radio[aria-checked="true"][aria-disabled="true"]::after,
+.im-switch[aria-disabled="true"]::after { background: var(--im-muted); }
+
+/* ---------- tabs and segmented ---------- */
+
+.im-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.im-tab {
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  height: var(--im-h-control);
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 13.5px/calc(var(--im-h-control) - 2px) var(--im-font-head);
+  letter-spacing: var(--im-track);
+  text-transform: var(--im-case);
+  color: var(--im-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--im-r-control);
+  transition:
+    color var(--im-t-fast) var(--im-ease),
+    background-color var(--im-t-fast) var(--im-ease);
+}
+
+.im-tab > .im-icon {
+  vertical-align: middle;
+  margin-inline-end: 7px;
+}
+
+/* The mark of the selected tab is the weight and the line, not the colour. */
+.im-tab::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  background: var(--im-accent-text);
+  transform: scaleX(0);
+  transition: transform var(--im-t-base) var(--im-ease);
+}
+
+.im-tab:where(:not(:disabled, [aria-disabled="true"], [aria-selected="true"])):is(:hover, [data-im-force="hover"]) {
+  color: var(--im-text);
+  background: var(--im-hover);
+}
+
+.im-tab:where(:not(:disabled, [aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
+
+.im-tab[aria-selected="true"] {
+  font-weight: 700;
+  color: var(--im-text-hi);
+}
+
+.im-tab[aria-selected="true"]::after { transform: scaleX(1); }
+
+.im-tab:is(:disabled, [aria-disabled="true"]) {
+  color: var(--im-muted);
+  border-style: dashed;
+  border-color: var(--im-line);
+}
+
+.im-tab:is(:disabled, [aria-disabled="true"])::after { display: none; }
+
+.im-seg {
+  display: inline-flex;
+  box-sizing: border-box;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  background: var(--im-field);
+  border: 1px solid var(--im-line);
+  border-radius: var(--im-r-control);
+}
+
+.im-seg > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: calc(var(--im-h-control) - 6px);
+  padding: 0 9px;
+  white-space: nowrap;
+  font: 500 12.5px/1 var(--im-font-head);
+  letter-spacing: var(--im-track);
+  text-transform: var(--im-case);
+  color: var(--im-muted);
+  border: 1px solid transparent;
+  border-radius: max(0px, calc(var(--im-r-control) - 2px));
+}
+
+.im-seg > button:where(:not(:disabled, [aria-disabled="true"], [aria-selected="true"])):is(:hover, [data-im-force="hover"]) {
+  color: var(--im-text);
+  background: var(--im-hover);
+}
+
+.im-seg > button:where(:not(:disabled, [aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
+
+.im-seg > button[aria-selected="true"] {
+  font-weight: 700;
+  color: var(--im-text-hi);
+  background: var(--im-selected);
+  border-color: color-mix(in srgb, var(--im-accent-text) 55%, transparent);
+}
+
+.im-seg > button:is(:disabled, [aria-disabled="true"]) {
+  color: var(--im-muted);
+  border-style: dashed;
+  border-color: var(--im-line);
+}
+
+/* ---------- rows and lists ---------- */
+
+.im-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--im-h-row-2);
+  padding: 3px 10px;
+  color: var(--im-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--im-r-control);
+}
+
+.im-row--1 { min-height: var(--im-h-row); }
+
+.im-row-text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+
+.im-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--im-text);
+}
+
+.im-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--im-muted);
+}
+
+.im-row-meta {
+  white-space: nowrap;
+  font: 500 12px/1 var(--im-font-text);
+  font-variant-numeric: tabular-nums;
+  color: var(--im-text-2);
+}
+
+.im-row:where(:not([aria-selected="true"], [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) { background: var(--im-hover); }
+
+/* Selected: the selection fill and a heavier title, so it is not the colour alone. */
+.im-row[aria-selected="true"] { background: var(--im-selected); }
+
+.im-row:where(:not([aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
+
+.im-row[aria-selected="true"] .im-row-title {
+  font-weight: 700;
+  color: var(--im-text-hi);
+}
+
+/* The selection fill is lighter than the surface under it, so the muted lines on it step up to the second text colour. */
+:is([aria-selected="true"], [aria-current="step"]) :is(.im-row-sub, .im-cell-sub, .im-key) { color: var(--im-text-2); }
+
+.im-row[aria-disabled="true"] {
+  border-style: dashed;
+  border-color: var(--im-line);
+}
+
+.im-row[aria-disabled="true"] :is(.im-row-title, .im-row-sub, .im-row-meta) { color: var(--im-muted); }
+
+/* ---------- tree ---------- */
+
+.im-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 16px in for each level, set as style="--im-level: N" beside aria-level; the chevron turns down when open. */
+.im-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--im-h-row);
+  padding: 0 10px 0 calc(10px + 16px * var(--im-level, 0));
+  color: var(--im-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--im-r-control);
+}
+
+.im-tree-chevron {
+  color: var(--im-muted);
+  transition: transform var(--im-t-fast) var(--im-ease);
+}
+
+.im-tree-item[aria-expanded="true"] > .im-tree-chevron { transform: rotate(90deg); }
+.im-tree-item:not([aria-expanded]) > .im-tree-chevron { visibility: hidden; }
+
+.im-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.im-tree-item:where(:not([aria-selected="true"], [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) { background: var(--im-hover); }
+
+.im-tree-item[aria-selected="true"] { background: var(--im-selected); }
+
+.im-tree-item:where(:not([aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
+
+.im-tree-item[aria-selected="true"] > .im-tree-label {
+  font-weight: 700;
+  color: var(--im-text-hi);
+}
+
+.im-tree-item[aria-disabled="true"] {
+  color: var(--im-muted);
+  border-style: dashed;
+  border-color: var(--im-line);
+}
+
+/* ---------- table: no zebra, no header band, a missing value is a grey dash ---------- */
+
+.im-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.im-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: var(--im-h-table-row);
+  padding: 0 10px;
+  text-align: left;
+  white-space: nowrap;
+  font: 600 12px/1 var(--im-font-text);
+  color: var(--im-muted);
+  background: var(--im-sheet);
+  border-bottom: 1px solid var(--im-line);
+}
+
+.im-table td {
+  height: var(--im-h-table-row);
+  padding: 3px 10px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--im-line-soft);
+}
+
+.im-table .im-col-check {
+  width: 30px;
+  padding-right: 0;
+}
+
+.im-num { font-variant-numeric: tabular-nums; }
+
+.im-table .im-num {
+  text-align: right;
+  white-space: nowrap;
+  color: var(--im-text-2);
+}
+
+.im-cell-title {
+  display: block;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--im-text);
+}
+
+.im-cell-sub {
+  display: block;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: var(--im-muted);
+}
+
+.im-table tbody tr:not([aria-selected="true"]):is(:hover, [data-im-force="hover"]) td { background: var(--im-hover); }
+.im-table tbody tr[aria-selected="true"] td { background: var(--im-selected); }
+.im-table tbody tr:is(:active, [data-im-force="press"]) td { background: var(--im-press); }
+
+.im-table tbody tr[aria-selected="true"] .im-cell-title {
+  font-weight: 700;
+  color: var(--im-text-hi);
+}
+
+/* ---------- facts: a name and its value; the value is content and can be selected ---------- */
+
+.im-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+  padding: 2px var(--im-panel-pad, 16px) 14px;
+  font-size: 12.5px;
+}
+
+.im-facts dt {
+  font-weight: 600;
+  color: var(--im-muted);
+}
+
+.im-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--im-text);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.im-facts .im-facts-code {
+  font-family: var(--im-font-code);
+  font-size: 12px;
+}
+
+/* ---------- note: a result or a warning that stays in the page ---------- */
+
+.im-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--im-tone, var(--im-info)) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--im-tone, var(--im-info)) 50%, transparent);
+  border-radius: var(--im-r-sheet);
+}
+
+.im-note > .im-icon { color: var(--im-tone, var(--im-info)); }
+
+.im-note b {
+  display: block;
+  font-weight: 600;
+  color: var(--im-text-hi);
+}
+
+.im-note span {
+  display: block;
+  font-size: 12px;
+  color: var(--im-text-2);
+}
+
+/* ---------- progress and steps ---------- */
+
+.im-progress-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.im-progress-value {
+  font: 600 13px/1 var(--im-font-code);
+  color: var(--im-text-hi);
+}
+
+.im-progress {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  background: var(--im-field);
+  border: 1px solid var(--im-line-soft);
+  border-radius: 999px;
+}
+
+.im-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--im-progress, 0) * 1%);
+  background: var(--im-accent);
+  border-radius: inherit;
+}
+
+/* No value: a bar slides along the track. */
+.im-progress:not([aria-valuenow])::before {
+  width: 40%;
+  animation: im-progress-slide 1.2s var(--im-ease) infinite;
+}
+
+@keyframes im-progress-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+.im-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.im-steps > li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 9px 10px;
+  background: var(--im-field);
+  border: 1px solid var(--im-line);
+  border-radius: var(--im-r-sheet);
+}
+
+.im-step-index {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  font: 600 11.5px/1 var(--im-font-code);
+  color: var(--im-muted);
+  border: 1px solid var(--im-line-strong);
+  border-radius: var(--im-r-control);
+}
+
+.im-step-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--im-text);
+}
+
+.im-step-text > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.im-step-sub {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--im-muted);
+}
+
+/* done: a check mark in the index, in the ok tone; now: a filled index and the accent edge; to do: muted */
+.im-steps > li[data-im-step="done"] .im-step-index {
+  color: var(--im-ok);
+  border-color: color-mix(in srgb, var(--im-ok) 60%, transparent);
+}
+
+.im-steps > li[aria-current="step"] {
+  background: var(--im-selected);
+  border-color: var(--im-accent-text);
+}
+
+.im-steps > li[aria-current="step"] .im-step-index {
+  color: var(--im-accent-on);
+  background: var(--im-accent);
+  border-color: var(--im-accent);
+}
+
+.im-steps > li[data-im-step="todo"] .im-step-text { color: var(--im-muted); }
+
+/* ---------- panel states: empty, loading and error keep the frame of the panel ---------- */
+
+.im-empty {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin: 4px var(--im-panel-pad, 16px) var(--im-panel-pad, 16px);
+  padding: 14px;
+  color: var(--im-text-2);
+  border: 1px dashed var(--im-line-strong);
+  border-radius: var(--im-r-sheet);
+}
+
+/* Flat bars at the real sizes: nothing shimmers and nothing moves when the data lands. */
+.im-skeleton {
+  display: block;
+  height: 10px;
+  background: var(--im-skeleton);
+  border-radius: 3px;
+}
+
+.im-failure {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin: 4px var(--im-panel-pad, 16px) var(--im-panel-pad, 16px);
+  padding: 14px;
+  color: var(--im-text);
+  border: 1px solid color-mix(in srgb, var(--im-err) 50%, transparent);
+  border-radius: var(--im-r-sheet);
+}
+
+.im-failure b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--im-err);
+}
+
+/* ---------- menu items in the matrix: css/surfaces.css draws them, this lets them answer a forced state ---------- */
+
+.im-menu-item[data-im-force="hover"] { background: var(--im-hover); }
+.im-menu-item[data-im-force="press"] { background: var(--im-press); }
+
+/* ---------- reduced motion: states change at once ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .im-btn,
+  .im-icon-btn,
+  .im-input,
+  .im-select,
+  .im-tab,
+  .im-tab::after,
+  .im-switch::after,
+  .im-tree-chevron { transition: none; }
+
+  .im-spinner,
+  .im-progress:not([aria-valuenow])::before { animation: none; }
+}
+
+/* ---------- forced colours: fills vanish, so edges, outlines and system colours carry every state ---------- */
+
+@media (forced-colors: active) {
+  .im-btn,
+  .im-input,
+  .im-select,
+  .im-seg,
+  .im-check,
+  .im-radio,
+  .im-switch,
+  .im-progress,
+  .im-steps > li,
+  .im-note,
+  .im-key,
+  .im-avatar { border-color: ButtonText; }
+
+  .im-btn:is(:disabled, [aria-disabled="true"]),
+  .im-input:has(> input:disabled),
+  .im-select:is(:disabled, [aria-disabled="true"]),
+  .im-icon-btn:is(:disabled, [aria-disabled="true"]),
+  .im-tab:is(:disabled, [aria-disabled="true"]),
+  .im-row[aria-disabled="true"],
+  :is(.im-check, .im-radio, .im-switch)[aria-disabled="true"] {
+    color: GrayText;
+    border-color: GrayText;
+  }
+
+  /* selected and checked: a system-colour outline or fill, never a background colour alone */
+  .im-row[aria-selected="true"],
+  .im-tree-item[aria-selected="true"],
+  .im-seg > button[aria-selected="true"],
+  .im-steps > li[aria-current="step"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .im-table tbody tr[aria-selected="true"] td { border-bottom: 2px solid Highlight; }
+
+  .im-tab::after,
+  .im-progress::before { background: Highlight; }
+
+  .im-check[aria-checked="true"],
+  .im-switch[aria-checked="true"] {
+    background: Highlight;
+    border-color: Highlight;
+  }
+
+  .im-check[aria-checked="true"]::after { border-color: HighlightText; }
+  .im-radio[aria-checked="true"] { border-color: Highlight; }
+
+  .im-radio[aria-checked="true"]::after,
+  .im-check[aria-checked="mixed"]::after { background: Highlight; }
+
+  .im-switch::after { background: ButtonText; }
+  .im-switch[aria-checked="true"]::after { background: HighlightText; }
+
+  .im-input:has(> input[aria-invalid="true"]),
+  .im-select[aria-invalid="true"] { border-color: Mark; }
+}
