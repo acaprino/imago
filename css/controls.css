@@ -1208,3 +1208,26 @@
   .im-input:has(> input[aria-invalid="true"]),
   .im-select[aria-invalid="true"] { border-color: Mark; }
 }
+
+.im-path-field, .im-loader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.im-loader { display: inline-flex; }
+.im-path-field > .im-input { flex: 1; min-width: 0; }
+.im-file-selector { max-width: 100%; font: inherit; color: var(--im-text); }
+.im-file-selector::file-selector-button {
+  font: inherit;
+  color: var(--im-text);
+  background: var(--im-button);
+  border: 1px solid var(--im-line-strong);
+  border-radius: var(--im-r-control);
+  padding: 4px 10px;
+  margin-inline-end: 8px;
+}
+.im-file-selector:focus-visible { outline: 2px solid var(--im-accent-text); outline-offset: 2px; }
+.im-file-selector:disabled::file-selector-button { color: var(--im-muted); border-style: dashed; }
+@media (prefers-reduced-motion: reduce) {
+  .im-loader .im-spinner { animation: none; }
+}

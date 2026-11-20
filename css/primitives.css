@@ -341,3 +341,23 @@
   .im-brand { display: none; }
   .im-titlebar .im-views-menu { font-size: 0; }
 }
+
+@container im-shell (width >= 850px) {
+  .im-sidebar:has(> .im-sidebar-splitter) { position: relative; }
+}
+.im-sidebar-splitter { display: none; }
+@container im-shell (width >= 850px) {
+  .im-shell:not([data-im-sidebar-collapsed="true"], [data-im-sidebar="off"]) .im-sidebar-splitter {
+    display: block;
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .im-sidebar-splitter:is(:focus-visible, :hover) {
+    border-right: 2px solid var(--im-accent-text);
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+  }
+}
