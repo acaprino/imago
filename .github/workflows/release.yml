@@ -1,0 +1,148 @@
+name: Release
+
+# A release at every merge of develop into main. The same workflow is in Shinatama, Mukade, Xiox, Muro, Ethel
+# and artcraft-web, except that Imago has no program to build or package: its build is `npm run verify`, and
+# a release has no assets, and except that the plan job fails when it cannot read the merged pull request (the others
+# fall back to patch) and that the push is `git push --atomic`: the two are for the others to take. What is
+# project-specific is in .github/release.json, the version logic in .github/scripts/release.mjs.
+#   1. the merged pull request's label chooses the step: release:major, release:minor, otherwise patch;
+#   2. the next version is written in every version file (and the project's Cargo.lock entries);
+#   3. `npm run verify` runs on the project's runner (windows-latest unless release.json says otherwise);
+#   4. the version commit and the tag <prefix><version> go on main, and the GitHub Release is created with
+#      no assets: an app depends on the tag;
+#   5. main is merged back into develop, so develop carries the new version.
+# Nothing is published when verify fails. Run by hand (Actions, Run workflow) it only verifies, unless
+# "publish" is ticked.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      step:
+        description: Version step
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      publish:
+        description: Publish the release (otherwise verify only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    # The release commit itself ("release v1.2.3") is pushed by this workflow and must not start another one.
+    if: ${{ !startsWith(github.event.head_commit.message, 'release ') }}
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.plan.outputs.runner }}
+      step: ${{ steps.plan.outputs.step }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        shell: pwsh
+        run: |
+          $config = Get-Content .github/release.json -Raw | ConvertFrom-Json
+          $runner = if ($config.runner) { $config.runner } else { 'windows-latest' }
+          $step = '${{ inputs.step }}'
+          if ('${{ github.event_name }}' -eq 'push') {
+            # The step comes from the label of the pull request this push merged. When that cannot be read, or there is
+            # none, the job fails: guessing patch would publish v0.0.1 where the label asked for v0.1.0.
+            $response = gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls"
+            if ($LASTEXITCODE) { Write-Error 'gh api could not list the pull requests of this commit, so the version step is unknown: run the workflow again'; exit 1 }
+            $merged = @(($response -join "`n") | ConvertFrom-Json | Where-Object { $_.merged_at })
+            if ($merged.Count -eq 0) {
+              Write-Host "gh api returned: $($response -join ' ')"
+              Write-Error 'This push to main has no merged pull request (GitHub can be slow to link it: run the workflow again), so the version step is unknown. A release is the pull request develop to main; by hand, Run workflow takes the step'
+              exit 1
+            }
+            $labels = @($merged[0].labels | ForEach-Object { $_.name })
+            Write-Host "Pull request #$($merged[0].number), labels: $($labels -join ', ')"
+            $step = if ($labels -contains 'release:major') { 'major' } elseif ($labels -contains 'release:minor') { 'minor' } else { 'patch' }
+          }
+          "runner=$runner" >> $env:GITHUB_OUTPUT
+          "step=$step" >> $env:GITHUB_OUTPUT
+          Write-Host "Runner $runner, version step $step"
+
+  release:
+    needs: plan
+    runs-on: ${{ needs.plan.outputs.runner }}
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Next version
+        id: version
+        run: |
+          $current = node .github/scripts/release.mjs current
+          $version = node .github/scripts/release.mjs bump '${{ needs.plan.outputs.step }}'
+          if ($LASTEXITCODE) { exit 1 }
+          $tag = (node .github/scripts/release.mjs config tagPrefix) + $version
+          git fetch --tags --quiet
+          if (git tag --list $tag) { Write-Error "$tag already exists"; exit 1 }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "app=$(node .github/scripts/release.mjs config app)" >> $env:GITHUB_OUTPUT
+          Write-Host "$current -> $version ($tag)"
+
+      # rustup resolves and installs the channel, components and target in rust-toolchain.toml.
+      - name: Set up pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          if ($LASTEXITCODE) { exit 1 }
+          npx playwright install chromium
+          if ($LASTEXITCODE) { exit 1 }
+
+      - name: Verify
+        run: |
+          npm run verify
+          if ($LASTEXITCODE) { exit 1 }
+
+      - name: Commit, tag and publish
+        if: env.PUBLISH == 'true'
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- @(node .github/scripts/release.mjs paths)
+          git commit -m "release $tag"
+          git tag -a $tag -m "${{ steps.version.outputs.app }} ${{ steps.version.outputs.version }}"
+          git push --atomic origin "HEAD:refs/heads/main" "refs/tags/$tag"
+          if ($LASTEXITCODE) { exit 1 }
+          gh release create $tag --repo '${{ github.repository }}' --verify-tag --title "${{ steps.version.outputs.app }} ${{ steps.version.outputs.version }}" --generate-notes
+          if ($LASTEXITCODE) { exit 1 }
+
+      - name: develop follows main
+        if: env.PUBLISH == 'true'
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          git fetch origin develop
+          git switch -C develop origin/develop
+          git merge --no-edit -m "Merge $tag into develop" $tag
+          if ($LASTEXITCODE) { Write-Error "main could not be merged into develop: merge $tag into develop by hand"; exit 1 }
+          git push origin develop

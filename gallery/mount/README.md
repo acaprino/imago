@@ -1,0 +1,1 @@
+Every `*.ts` file in this folder is loaded by `gallery/main.ts`; its default export `(ctx) => void | (() => void)` runs on each redraw of the page, and the function it returns runs before the next one.

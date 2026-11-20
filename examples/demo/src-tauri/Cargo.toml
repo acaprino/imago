@@ -1,0 +1,18 @@
+[package]
+name = "imago-demo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "The gallery of Imago in a real glass window: the first place the imago-shell crate and the page-side shell run together"
+
+[features]
+# `tauri build` turns it on: the window loads the files of the build instead of the dev server.
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+imago-shell = { path = "../../../crates/imago-shell" }
+tauri = { version = "=2.12.5", features = [] }
