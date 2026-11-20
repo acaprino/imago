@@ -552,10 +552,10 @@ mod tests {
                 load_failure(false, COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED.0),
                 None
             );
-            let refused = COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED.0;
+            let aborted = COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED.0;
             assert_eq!(
-                load_failure(false, refused),
-                Some(ProcessFailure::NotLoaded(refused))
+                load_failure(false, aborted),
+                Some(ProcessFailure::NotLoaded(aborted))
             );
         }
     }
