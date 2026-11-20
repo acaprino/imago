@@ -137,7 +137,7 @@
   flex: none;
   width: 26px;
   height: 26px;
-  font: 700 10.5px/1 var(--im-font-head);
+  font: 700 11px/1 var(--im-font-head);
   letter-spacing: 0.04em;
   color: var(--im-text-2);
   background: var(--im-chip);
@@ -819,7 +819,8 @@
   white-space: nowrap;
   font: 600 12px/1 var(--im-font-text);
   color: var(--im-muted);
-  background: var(--im-sheet);
+  /* The header is sticky: rows scroll under it. Under .im-glass the sheet is translucent and they would show through. */
+  background: var(--im-sheet-solid);
   border-bottom: 1px solid var(--im-line);
 }
 

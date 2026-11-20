@@ -97,6 +97,7 @@
       "dark": {
         "ground": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.0706, 0.0863, 0.1176], "hex": "#12161E" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.0471, 0.0667, 0.1137], "alpha": 0.8, "hex": "#0C111D" } } } },
         "sheet": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.102, 0.1255, 0.1725], "hex": "#1A202C" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.102, 0.1255, 0.1725], "alpha": 0.94, "hex": "#1A202C" } } } },
+        "sheet-solid": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.102, 0.1255, 0.1725], "hex": "#1A202C" }, "$description": "The sheet as an opaque colour, also under .im-glass, for what rows scroll under (the sticky header of a table)." },
         "float": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.1373, 0.1569, 0.2039], "hex": "#232834" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.1412, 0.1608, 0.2078], "alpha": 0.96, "hex": "#242935" } } } },
         "field": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.1176, 0.1451, 0.2], "hex": "#1E2533" } },
         "button": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.102, 0.1255, 0.1725], "hex": "#1A202C" } },
@@ -127,6 +128,7 @@
       "light": {
         "ground": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.9647, 0.9686, 0.9765], "hex": "#F6F7F9" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.9647, 0.9686, 0.9765], "alpha": 0.88, "hex": "#F6F7F9" } } } },
         "sheet": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [1, 1, 1], "hex": "#FFFFFF" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [1, 1, 1], "alpha": 0.95, "hex": "#FFFFFF" } } } },
+        "sheet-solid": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [1, 1, 1], "hex": "#FFFFFF" }, "$description": "The sheet as an opaque colour, also under .im-glass, for what rows scroll under (the sticky header of a table)." },
         "float": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [1, 1, 1], "hex": "#FFFFFF" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [1, 1, 1], "alpha": 0.97, "hex": "#FFFFFF" } } } },
         "field": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.9686, 0.9725, 0.9804], "hex": "#F7F8FA" } },
         "button": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [1, 1, 1], "hex": "#FFFFFF" } },
@@ -159,6 +161,7 @@
       "dark": {
         "ground": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.0431, 0.0157, 0.0863], "hex": "#0B0416" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.0431, 0.0157, 0.0863], "alpha": 0.86, "hex": "#0B0416" } } } },
         "sheet": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.051, 0.0392, 0.1333], "hex": "#0D0A22" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.051, 0.0392, 0.1333], "alpha": 0.8, "hex": "#0D0A22" } } } },
+        "sheet-solid": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.051, 0.0392, 0.1333], "hex": "#0D0A22" }, "$description": "The sheet as an opaque colour, also under .im-glass, for what rows scroll under (the sticky header of a table)." },
         "float": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.0627, 0.0314, 0.1216], "hex": "#10081F" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.0627, 0.0314, 0.1216], "alpha": 0.97, "hex": "#10081F" } } } },
         "field": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.051, 0.0353, 0.1294], "hex": "#0D0921" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.051, 0.0392, 0.1333], "alpha": 0.9, "hex": "#0D0A22" } } } },
         "button": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.1412, 0.2706, 0.4784], "hex": "#24457A" } },
@@ -189,6 +192,7 @@
       "light": {
         "ground": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.9137, 0.9333, 0.9725], "hex": "#E9EEF8" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.9137, 0.9333, 0.9725], "alpha": 0.9, "hex": "#E9EEF8" } } } },
         "sheet": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [1, 1, 1], "hex": "#FFFFFF" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [1, 1, 1], "alpha": 0.82, "hex": "#FFFFFF" } } } },
+        "sheet-solid": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [1, 1, 1], "hex": "#FFFFFF" }, "$description": "The sheet as an opaque colour, also under .im-glass, for what rows scroll under (the sticky header of a table)." },
         "float": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.9804, 0.9882, 1], "hex": "#FAFCFF" }, "$extensions": { "imago": { "glass": { "colorSpace": "srgb", "components": [0.9804, 0.9882, 1], "alpha": 0.98, "hex": "#FAFCFF" } } } },
         "field": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [1, 1, 1], "hex": "#FFFFFF" } },
         "button": { "$type": "color", "$value": { "colorSpace": "srgb", "components": [0.8824, 0.9176, 0.9725], "hex": "#E1EAF8" } },

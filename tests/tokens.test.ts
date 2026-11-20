@@ -214,7 +214,7 @@ function declarations(sheet: string, selector: string): Map<string, string> {
 }
 
 const colourNames = [
-  'ground', 'sheet', 'float', 'field', 'button', 'line', 'line-soft', 'line-strong', 'text', 'text-2', 'text-hi', 'muted',
+  'ground', 'sheet', 'sheet-solid', 'float', 'field', 'button', 'line', 'line-soft', 'line-strong', 'text', 'text-2', 'text-hi', 'muted',
   'hover', 'press', 'selected', 'chip', 'chip-text', 'skeleton', 'terminal', 'scrim', 'shadow', 'edge',
   'ok', 'warn', 'err', 'info', 'danger', 'danger-on',
 ];
@@ -244,6 +244,21 @@ test('the glass values differ from the opaque ones exactly where the JSON says s
       assert.deepEqual(differing, declared, `${look} ${theme}`);
       for (const name of ['ground', 'sheet', 'float']) assert.ok(declared.includes(name), `${look} ${theme}: ${name} has a glass value`);
       for (const name of ['ground', 'sheet', 'float']) assert.match(opaque.get(`--im-${name}`) ?? '', /^#[0-9A-F]{6}$/, `${look} ${theme}: opaque ${name} is a plain colour`);
+    }
+  }
+});
+
+test('the sheet has an opaque twin that glass leaves alone, for what rows scroll under (a sticky header)', () => {
+  const sheet = css();
+  for (const look of looks) {
+    for (const theme of themes) {
+      const opaque = declarations(sheet, `[data-im-look="${look}"][data-im-theme="${theme}"]`);
+      const glass = declarations(sheet, `.im-glass[data-im-look="${look}"][data-im-theme="${theme}"]`);
+      assert.equal(at(`look.${look}.${theme}.sheet-solid`).$extensions?.imago?.glass, undefined, `${look} ${theme}: sheet-solid has no glass value`);
+      assert.match(opaque.get('--im-sheet-solid') ?? '', /^#[0-9A-F]{6}$/, `${look} ${theme}: sheet-solid is a plain colour`);
+      assert.equal(opaque.get('--im-sheet-solid'), opaque.get('--im-sheet'), `${look} ${theme}: sheet-solid is the opaque sheet`);
+      assert.equal(glass.get('--im-sheet-solid'), opaque.get('--im-sheet'), `${look} ${theme}: under glass it keeps the opaque value`);
+      assert.notEqual(glass.get('--im-sheet'), opaque.get('--im-sheet'), `${look} ${theme}: the sheet itself is translucent under glass`);
     }
   }
 });

@@ -295,6 +295,23 @@ export default async (page) => {
       }
       await show(page, { app: 'xiox', look, theme, glass: false, width: 1160 });
 
+      // Nothing is smaller than 11px (docs/design-file.md, Type): the initials of an avatar were 10.5.
+      const tooSmall = await page.evaluate(() => {
+        const found = [];
+        for (const root of document.querySelectorAll('.im-shell, #im-gallery-matrix')) {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent.trim()) continue;
+            const holder = node.parentElement;
+            if (!holder.getClientRects().length) continue;
+            const size = parseFloat(getComputedStyle(holder).fontSize);
+            if (size < 11) found.push(`${size}px ${holder.className} "${node.textContent.trim().slice(0, 14)}"`);
+          }
+        }
+        return [...new Set(found)];
+      });
+      assert.deepEqual(tooSmall, [], where('no text is smaller than 11px'));
+
       // Focus: a ring 2px wide, drawn with outline (which forced colours keep), at the offset of RING_OFFSET.
       const offsets = RING_OFFSET[look];
       const focusable = CONTROLS.filter(({ states }) => states.includes('focus')).map(({ id }) => id);
@@ -473,6 +490,26 @@ export default async (page) => {
         assert.ok(Math.abs(a.textStart - b.textStart) <= 0.5, said(`text starts at ${b.textStart}px selected and ${a.textStart}px not`));
         assert.ok(Math.abs(b.width - a.width - (nb.width - na.width)) <= 0.5, said(`selected grows by ${b.width - a.width}px, without forced colours by ${nb.width - na.width}px`));
       }
+    }
+  }
+
+  // Under im-glass the sheet is translucent. The header of a table is sticky, so rows scroll under it: it is opaque, or they
+  // would show through it. It is the colour of the opaque sheet.
+  for (const look of LOOKS) {
+    for (const theme of THEMES) {
+      await show(page, { app: 'xiox', look, theme, glass: true, width: 1160 });
+      const header = await page.evaluate(() => {
+        const th = document.querySelector('.im-shell .im-table th');
+        const shell = getComputedStyle(document.querySelector('.im-shell'));
+        const probe = document.createElement('i');
+        probe.style.color = shell.getPropertyValue('--im-sheet-solid').trim();
+        document.body.append(probe);
+        const solid = getComputedStyle(probe).color;
+        probe.remove();
+        return { background: getComputedStyle(th).backgroundColor, solid, sheet: shell.getPropertyValue('--im-sheet').trim() };
+      });
+      assert.equal(header.background, header.solid, `${look} ${theme} glass: the sticky table header is the opaque sheet (${header.background}; the sheet under glass is ${header.sheet})`);
+      assert.match(header.background, /^rgb\(/, `${look} ${theme} glass: the sticky table header is opaque`);
     }
   }
 

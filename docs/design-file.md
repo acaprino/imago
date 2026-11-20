@@ -55,6 +55,7 @@ Two looks, each with a dark and a light theme, set by three attributes on the ro
 |---|---|
 | `--im-ground` | The window's ground. Translucent under `im-glass` |
 | `--im-sheet` | A sheet on the ground: the work area, panels |
+| `--im-sheet-solid` | The sheet as an opaque colour, also under `im-glass`: for what rows scroll under, such as the sticky header of a table |
 | `--im-float` | A floating surface: menu, sheet, dialog, notice, palette |
 | `--im-field` | The fill of a field |
 | `--im-button` | The fill of a neutral button |
@@ -124,7 +125,7 @@ All fonts are local Windows fonts. The app downloads nothing.
 | `--im-font-code` | Cascadia Mono, Cascadia Code, Consolas | Code, paths, IDs and key caps |
 | `--im-font-head` | Smooth: the text font. ONI: the display font | Titles, labels, buttons, chips |
 
-Sizes: 12 for meta text, 13 for body text, 14 for a panel title, 18 for a dialog title. Nothing is smaller than 11, except the initials in an avatar (10.5, a known departure).
+Sizes: 12 for meta text, 13 for body text, 14 for a panel title, 18 for a dialog title. Nothing is smaller than 11.
 Numbers use tabular figures (`im-num`) and are right-aligned in columns. Smooth writes sentence case; ONI writes
 capitals with letter spacing on titles, tabs and buttons, through `--im-case` and `--im-track`.
 
