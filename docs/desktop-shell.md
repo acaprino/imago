@@ -214,16 +214,24 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 ### 3.5 The capabilities
 
 Tauri 2 refuses every call of the page on the window, the webview or an event until a capability file allows it. The
-page side of this document needs nine permissions, for the label of every window that carries the title bar:
+wiring of this document needs nine permissions, for the label of every window that carries the title bar. Two rows
+serve a part of the wiring that an app can leave out, and say so:
 
 | Permission | What needs it |
 |---|---|
 | `core:window:allow-minimize`, `core:window:allow-close` | The window buttons: `win.minimize()` and `win.close()` |
 | `core:window:allow-toggle-maximize` | The maximize button: `win.toggleMaximize()` |
-| `core:window:allow-is-maximized` | The state of the maximize button: `win.isMaximized()`, read when the window is resized |
-| `core:window:allow-start-dragging`, `core:window:allow-internal-toggle-maximize` | The drag regions of section 2: a press drags the window, and a double click on one maximizes it |
+| `core:window:allow-is-maximized` | Only with `onMaximized` (the button's icon and label follow the window's state): `win.isMaximized()`, read when the window is resized. An app that gives no `onMaximized` does not need it |
+| `core:window:allow-start-dragging`, `core:window:allow-internal-toggle-maximize` | Only with drag regions (section 2): a press on one drags the window, and a double click on one maximizes it. A title bar with no `data-tauri-drag-region` needs neither |
 | `core:webview:allow-set-webview-zoom` | `mountZoom`: `getCurrentWebview().setZoom` |
-| `core:event:allow-listen`, `core:event:allow-unlisten` | The event `caption-maximize` and the resize events, and the function that stops listening |
+| `core:event:allow-listen`, `core:event:allow-unlisten` | The event `caption-maximize` (and, with `onMaximized`, the resize events), and the function that stops listening |
+
+A call the capability does not allow is a rejected promise, and who sees it depends on the call. `mountWindowControls`
+passes the refusal of `minimize`, `toggleMaximize` and `close` to its `onError`. It does not see a refused `listen`,
+`unlisten`, drag or zoom: `mountZoom` moves a refused zoom back to the level it had, and a refused drag leaves the window where it is.
+A refused `listen` is a rejection that only the app can catch, where it calls `listen`: the demo's `stopOnResolve`
+(`gallery/mount/desktop.ts`) catches it and shows it in a notice. Left alone it is an unhandled rejection, and the page
+never hears `caption-maximize`, so the maximize button draws no hover or press from Windows.
 
 The app's own commands (`set_window_theme`, `window_caption_maximize`) are not on this list. The file that works is
 `examples/demo/src-tauri/capabilities/default.json`; it grants these nine and nothing else, and its `windows` names
