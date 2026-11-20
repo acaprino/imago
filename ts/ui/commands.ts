@@ -70,9 +70,11 @@ const keyName = (key: string): string => (key === ' ' ? 'space' : key.toLowerCas
 const chordId = (chord: Chord): string =>
   `${chord.ctrl ? 'ctrl+' : ''}${chord.shift ? 'shift+' : ''}${chord.alt ? 'alt+' : ''}${keyName(chord.name)}`;
 
-// A binding that types a character (`a`, `Shift+A`, `=`, Space) must leave text fields alone.
-const typesCharacter = (chord: Chord): boolean =>
-  !chord.ctrl && !chord.alt && (keyName(chord.name) === 'space' || [...chord.name].length === 1);
+// A text field owns every key pressed without Ctrl or Alt: the ones that type (`a`, `Shift+A`, `=`, Space) and the ones
+// that edit or move in it (Delete, Backspace, Home, End, the arrows, Enter, Tab). A binding of such a key must not
+// run in a field, and must not cancel the key there. Escape and F1 to F24 never type or edit: they stay available.
+const FIELD_FREE_KEY = /^(?:escape|f(?:[1-9]|1\d|2[0-4]))$/i;
+const belongsToField = (chord: Chord): boolean => !chord.ctrl && !chord.alt && !FIELD_FREE_KEY.test(chord.name);
 
 export function isTextTarget(target: unknown): boolean {
   if (typeof target !== 'object' || target === null) return false;
@@ -81,7 +83,7 @@ export function isTextTarget(target: unknown): boolean {
   return typeof tagName === 'string' && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName.toUpperCase());
 }
 
-type Entry = { command: Command; typesCharacter: boolean };
+type Entry = { command: Command; belongsToField: boolean };
 
 export function createRegistry(): Registry {
   const byId = new Map<string, Entry>();
@@ -94,7 +96,7 @@ export function createRegistry(): Registry {
     const id = chordId({ ctrl: event.ctrlKey, shift: event.shiftKey, alt: event.altKey, name: event.key });
     const entry = byChord.get(id);
     if (!entry || !available(entry.command)) return undefined;
-    if (entry.typesCharacter && isTextTarget(event.target)) return undefined;
+    if (entry.belongsToField && isTextTarget(event.target)) return undefined;
     return entry.command;
   };
 
@@ -107,7 +109,7 @@ export function createRegistry(): Registry {
         const taken = byChord.get(id);
         if (taken) throw new Error(`Keys "${command.keys}" of "${command.id}" are already bound to "${taken.command.id}"`);
       }
-      const entry: Entry = { command, typesCharacter: chord ? typesCharacter(chord) : false };
+      const entry: Entry = { command, belongsToField: chord ? belongsToField(chord) : false };
       byId.set(command.id, entry);
       if (id !== undefined) byChord.set(id, entry);
       return () => {

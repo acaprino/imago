@@ -62,6 +62,64 @@ test('Escape and the function keys match inside a text target', () => {
   assert.equal(registry.match(press('F6', { target: input }))?.id, 'next-pane');
 });
 
+test('a key that edits text (Delete, Backspace, Home, End, the arrows, Enter, Tab) is left to a text target', () => {
+  const registry = createRegistry();
+  const names = ['Delete', 'Backspace', 'Home', 'End', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'PageDown', 'Enter', 'Tab'];
+  for (const name of names) registry.register(command(name, name));
+
+  for (const name of names) {
+    assert.equal(registry.match(press(name, { target: input }))?.id, undefined, `${name} in an input`);
+    assert.equal(registry.match(press(name, { target: { tagName: 'TEXTAREA' } }))?.id, undefined, `${name} in a textarea`);
+    assert.equal(registry.match(press(name, { target: { tagName: 'DIV', isContentEditable: true } }))?.id, undefined, `${name} in an editable`);
+    assert.equal(registry.match(press(name, { target: { tagName: 'BUTTON' } }))?.id, name, `${name} on a button`);
+    assert.equal(registry.match(press(name))?.id, name, `${name} without a target`);
+  }
+});
+
+test('Shift with such a key does not bring it into a text target either', () => {
+  const registry = createRegistry();
+  registry.register(command('cut-line', 'Shift+Delete'));
+  registry.register(command('select-line', 'Shift+ArrowDown'));
+  assert.equal(registry.match(press('Delete', { shiftKey: true, target: input })), undefined);
+  assert.equal(registry.match(press('ArrowDown', { shiftKey: true, target: input })), undefined);
+  assert.equal(registry.match(press('Delete', { shiftKey: true }))?.id, 'cut-line');
+});
+
+test('a binding with Ctrl or Alt matches inside a text target, whatever its key', () => {
+  const registry = createRegistry();
+  registry.register(command('palette', 'Ctrl+K'));
+  registry.register(command('purge', 'Ctrl+Delete'));
+  registry.register(command('home', 'Alt+Home'));
+  registry.register(command('up', 'Ctrl+Shift+ArrowUp'));
+  assert.equal(registry.match(press('k', { ctrlKey: true, target: input }))?.id, 'palette');
+  assert.equal(registry.match(press('Delete', { ctrlKey: true, target: input }))?.id, 'purge');
+  assert.equal(registry.match(press('Home', { altKey: true, target: input }))?.id, 'home');
+  assert.equal(registry.match(press('ArrowUp', { ctrlKey: true, shiftKey: true, target: input }))?.id, 'up');
+});
+
+test('Escape and every function key F1 to F24 match inside a text target', () => {
+  const registry = createRegistry();
+  registry.register(command('close', 'Escape'));
+  registry.register(command('shifted', 'Shift+F6'));
+  for (let number = 1; number <= 24; number++) registry.register(command(`f${number}`, `F${number}`));
+
+  assert.equal(registry.match(press('Escape', { target: input }))?.id, 'close');
+  assert.equal(registry.match(press('F6', { shiftKey: true, target: input }))?.id, 'shifted');
+  for (let number = 1; number <= 24; number++) {
+    assert.equal(registry.match(press(`F${number}`, { target: input }))?.id, `f${number}`, `F${number}`);
+  }
+});
+
+test('a word that only starts like a function key is not one', () => {
+  const registry = createRegistry();
+  registry.register(command('fn', 'Fn'));
+  registry.register(command('f25', 'F25'));
+  registry.register(command('f0', 'F0'));
+  for (const name of ['Fn', 'F25', 'F0']) {
+    assert.equal(registry.match(press(name, { target: input })), undefined, name);
+  }
+});
+
 test('Enter does not match while an IME composes', () => {
   const registry = createRegistry();
   registry.register(command('confirm', 'Enter'));
