@@ -1,23 +1,41 @@
 # Imago
 
-The shared design system of Shinatama, Xiox, Mukade, Muro and Daodan: one set of tokens, CSS, behaviour
-modules and a Rust desktop shell, so the apps of the suite look and behave alike. Each app depends on a tag of
-this repository.
+The shared design system of Shinatama, Xiox, Mukade, Muro and Daodan: one set of tokens, CSS, behaviour modules and a
+Rust desktop shell, so the apps of the suite look and behave alike. There is no UI framework in it. Each app
+depends on a tag of this repository.
 
-Under construction: this is version 0.0.0, the repository and its release workflow. The design is in
-[docs/design.md](docs/design.md).
+What exists: the tokens and their CSS, the layout shell with its seven regions and three breakpoints, every control
+in every state in two looks (Smooth and ONI, each dark and light) and five accents, the behaviour modules (command
+registry, keys, menus, sheets, dialogs, notices, the inspector, the palette, panel states, the sidebar), the page side
+of the desktop shell, the crate `imago-shell`, the gallery, and a demo app that shows the gallery in a real glass
+window. No app has adopted it yet. The version is set by the release workflow, not by hand.
+
+## The documents
+
+| Document | What it is |
+|---|---|
+| [docs/design-file.md](docs/design-file.md) | The design file, for people and coding agents: looks, colour, type, measures, layout, controls and their states, surfaces, behaviour, what is common and what an app's own. Read it before UI work. It is not called `DESIGN.md` because on Windows that name is the same file as `design.md` |
+| [docs/using-imago.md](docs/using-imago.md) | How an app adopts the package: the dependency lines, the imports, the markup, the calls, what the app must do itself, the order of adoption, and the text for its `AGENTS.md` and `CLAUDE.md` |
+| [docs/desktop-shell.md](docs/desktop-shell.md) | The glass technique on Windows 11, the window techniques, the wiring order of an app, WebView2 recovery and the rebuilding contract |
+| [docs/verification.md](docs/verification.md) | What has been run on a real window, and what has not |
+| [docs/design.md](docs/design.md) | The approved design with its reasons, and the corrections made after the build |
+| `docs/reference/` | The proposal and the toolkit preview the design came from |
+
+`tests/docs.test.ts` checks the documents against the code: every `--im-*` name, every `im-` class, every export and
+every Rust name they write exists.
 
 ## What is where
 
 | Folder | What |
 |---|---|
 | `tokens/` | `imago.tokens.json`, the single source of the tokens. |
-| `css/` | The stylesheets: tokens, base, primitives, controls and the ONI look. |
-| `ts/ui/` | Behaviour modules without a framework: commands, menu, inspector, sheet, dialog, notice, keys. |
-| `ts/shell/` | The desktop shell in the WebView: window controls, zoom, desktop guard, window theme. |
-| `crates/imago-shell/` | The Rust side of the shell: acrylic, theme, Snap Layouts, guard, WebView2 recovery. |
-| `gallery/` | The gallery page: every control in every state, in both looks and themes. |
-| `docs/` | `design.md` is the design; `reference/` holds the proposal and the toolkit preview it came from. |
+| `css/` | The stylesheets: tokens (generated), base, primitives, controls, surfaces and the ONI look. |
+| `ts/ui/` | Behaviour modules without a framework: commands, keys, menus, sheets, dialogs, notices, the inspector, the palette, panel states, the sidebar. |
+| `ts/shell/` | The desktop shell in the page: look, window theme, zoom, window buttons, desktop guard. |
+| `crates/imago-shell/` | The Rust side of the shell: acrylic and theme, Snap Layouts, navigation guard, WebView2 recovery, window state. |
+| `gallery/` | The gallery page: the live shell of each app at any width, and every control in every state, in both looks and themes. |
+| `examples/demo/` | The demo app: the gallery in a real Tauri window with the glass material, and the screen capture that checks it. |
+| `docs/` | The documents above. |
 | `tests/` | The tests of the package and of the gallery. |
 | `scripts/` | The token build. |
 | `.github/` | The verify and release workflows, and `release.json`, which says what a release writes. |
@@ -26,12 +44,35 @@ Under construction: this is version 0.0.0, the repository and its release workfl
 
 | Command | What |
 |---|---|
-| `npm test` | The unit tests (`node --test`). |
+| `npm test` | The unit tests (`node --test`), the document tests included. |
 | `npm run tokens` | Builds `css/tokens.css` from `tokens/imago.tokens.json`; `-- --check` only compares. |
 | `npm run gallery` | Serves the gallery with Vite. |
 | `npm run build` | Type-checks, then builds the gallery. |
 | `npm run test:gallery` | Opens the gallery in a browser and checks every control, contrast included. |
-| `npm run verify` | All of the above and `cargo test -p imago-shell`: what CI runs. |
+| `npm run demo` | Starts the demo app in development. Needs a Windows 11 desktop session. |
+| `npm run capture` | Photographs the demo window from the screen in both looks and themes over a dark and a bright window, and checks the frame is glass. Needs a Windows 11 desktop session. |
+| `npm run verify` | The checks of CI: tokens, tests, build, the gallery tests and `cargo test -p imago-shell`. |
+
+## The gallery
+
+`npm run gallery` serves one page. Pick the app (its accent), the look, the theme and the glass, and set the width of
+the window from 500 to 1160 to see the three breakpoints. Under the window are the state matrix (every control in
+every state) and the panel states. The surfaces open on the live window: `Ctrl+K`, the menus and the destructive
+actions. The gallery is the acceptance surface: a control is done when its
+row is complete and its contrast test passes.
+
+## The demo app
+
+`examples/demo` loads the gallery in a Tauri window built with `glass_window_config`, with the wiring of
+[docs/desktop-shell.md](docs/desktop-shell.md), section 3. It is the executable example for an app that adopts the
+shell, and what `npm run capture` photographs. What it showed on a real window is in
+[docs/verification.md](docs/verification.md).
+
+## Using it
+
+An app depends on a tag (`"@acaprino/imago": "github:acaprino/imago#v<x>"` and `imago-shell = { git =
+"https://github.com/acaprino/imago", tag = "v<x>" }`) and imports `@acaprino/imago/css/imago.css`,
+`@acaprino/imago/ui` and `@acaprino/imago/shell`. [docs/using-imago.md](docs/using-imago.md) has the rest.
 
 ## Releases
 

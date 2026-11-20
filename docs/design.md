@@ -13,7 +13,7 @@ The owner asked for the weight to be on **controls, UX and layouts**, and delega
 decisions. Every decision below marked *(call)* was made by the agent, not agreed with the owner.
 
 **The proposal.** "The proposal" below is the page of 2026-11-20 (then under the working name Waku), kept beside this file as
-[2026-11-20-waku-proposal.html](2026-11-20-waku-proposal.html). Its looks A (Smooth) and B (ONI) are
+[reference/proposal.html](reference/proposal.html). Its looks A (Smooth) and B (ONI) are
 the reference for the appearance of every control, including the ones no app has yet (Tree, Steps,
 Facts, Avatar, Segmented, Count): its CSS draws them. Where this document and the page differ, this
 document wins. So Imago 0.1 is extraction plus design work for the states the page does not draw.
@@ -104,6 +104,8 @@ document wins. So Imago 0.1 is extraction plus design work for the states the pa
 - **The accent goes on four things only**: the one primary action, the selection mark, the focus
   ring, and data. Not on bars, not on every button, not on navigation backgrounds. (ONI keeps the
   accent as text on short labels, as today.)
+- ONI dark's muted text is `#9CB8E2`, not the preview's `#8AA8D6`: the preview's reaches only 3.92:1 on a
+  button, `#9CB8E2` reaches 4.70:1.
 - Status tones are `ok`, `warn`, `err`, `info`. A tone always comes with a word or an icon with a
   name: never colour alone.
 
@@ -155,12 +157,15 @@ One grid for every window, with seven regions. An app switches on the regions it
   in Shinatama and Muro and Xiox's bottom detail box. It pushes the content; it never covers it at
   1000px or more.
 - **Action bar**: at most one primary action per window, at the right, with its key on the button.
-- Breakpoints (Shinatama's own): below 1000 the inspector covers the content as a drawer; below 850
-  the sidebar becomes a 56px rail of icons, each with a tooltip and a name; below 620 the sidebar
-  opens on request and the view tabs become one "Views" menu.
+- Breakpoints (Shinatama's own), as ranges of the window's own width: under 1000 the inspector covers the
+  content as a drawer; from 620 to under 850 the sidebar is a 56px rail of icons, each with a tooltip and a
+  name; under 620 the sidebar is opened by a button in the title bar and the view tabs become one "Views"
+  menu. From 850 up a button in the sidebar header folds the sidebar into the same rail. The package does not
+  store that choice: the app keeps it through `onChange` and passes it back as `collapsed`.
 - Layout primitives: Shell, Panel (header, tools, body, foot), Stack, Cluster, Split, Scroll,
   Surface (ground, sheet, dense, floating).
-- The window names the product: mark and name at the left of the title bar, always.
+- The window names the product: mark and name at the left of the title bar, always. ONI shows the app's mark
+  in the title bar too; the preview hid it there.
 
 ### Surfaces: which one for what
 
@@ -187,7 +192,7 @@ States, the same for every control:
 |---|---|
 | Hover | A translucent wash; never a change of size |
 | Pressed | One step darker than hover |
-| Focus | A 2px ring in the accent text colour, 2px off, only from the keyboard; drawn with `outline` so forced colours keep it |
+| Focus | A ring 2px wide in the accent text colour, only from the keyboard; drawn with `outline` so forced colours keep it. 2px outside a control that stands alone; 1px outside a field; 2px inside an item of a list, table, tree, menu, tab strip or segmented control; 5px inside ONI chamfered controls |
 | Selected | The selection fill plus a mark that is not colour (weight, underline or check). Hover, focus and selected must be told apart at a glance |
 | Disabled | Stays readable at 4.5:1, with no hover, and says why in a tooltip or a line beside it |
 | Busy | The label and the width stay; a progress mark takes the icon's place; a second press does nothing |
@@ -262,7 +267,10 @@ Reduced motion honoured. Every action reachable from the keyboard.
 
 Shinatama's shell is the base and moves into the package: acrylic with the window theme from the
 look, saved for the first frame; the HTML title bar with Snap Layouts; navigation closed and browser
-keys off; WebView2 crash recovery; zoom. `desktop-shell.md` moves with it and stays the reference.
+keys off; the "Reload interface" item in the window menu, which works when the page is hung; WebView2
+crash recovery, with the rebuilding contract: while the app rebuilds its windows after a lost browser
+process it prevents the exit and does not save the window's state; zoom. `desktop-shell.md` moves with it
+and stays the reference.
 
 - Xiox has its own `native_frame.rs` and `window_state.rs`. Where the two differ, the builder reads
   both and the package keeps the behaviour that covers more cases. Saving and restoring the window's
@@ -279,7 +287,7 @@ acaprino/imago
 ├─ ts/shell/                 window-controls, zoom, desktop-guard, window-theme
 ├─ ts/ui/                    commands, menu, inspector, sheet, dialog, notice, keys
 ├─ crates/imago-shell/        Rust: acrylic, theme, Snap Layouts, guard, WebView2 recovery
-└─ docs/                     DESIGN.md, desktop-shell.md, the gallery
+└─ docs/                     design-file.md, desktop-shell.md, using-imago.md, the gallery
 ```
 
 Each app depends on a tag: `"@acaprino/imago": "github:acaprino/imago#v<x>"` and
@@ -330,3 +338,29 @@ as `desktop-shell.md` section 1.5 describes.
   setting is not adopted unless the owner asks for it.
 - The toolkit preview the owner approved: https://claude.ai/artifact/XnSFbo8GPwuUVgUgqNiz4T. The
   ONI focus ring is drawn inside chamfered controls, because a clip-path cuts an outer ring.
+
+## Corrections after the build
+
+Made on 2026-11-20, when the package was built. Each text above was changed in place; this list says what changed
+and why. Where [design-file.md](design-file.md) differs from this file, it wins.
+
+- **2026-11-20, focus ring.** The state table said "2px ring, 2px off". The ring is 2px wide everywhere, and its
+  distance depends on what surrounds the control: 2px outside a control that stands alone, 1px outside a field (as in
+  the approved preview), 2px inside an item of a list, table, tree, menu, tab strip or segmented control (their
+  container scrolls and clips), and 5px inside ONI chamfered controls (a clip-path cuts an outer ring).
+- **2026-11-20, ONI dark muted text.** `#8AA8D6` of the preview reaches 3.92:1 on a button, under the 4.5:1 rule. It is
+  `#9CB8E2`, 4.70:1. This is the one value that departs from the preview the owner approved.
+- **2026-11-20, the mark in ONI.** "The window names the product, always" outranks the preview, which hid the app's
+  mark in the title bar in ONI. The package shows it.
+- **2026-11-20, breakpoints.** They are written as ranges of the window's own width, so no fractional width falls
+  between two blocks: under 1000, 620 to under 850, and under 620. Under 620 the sidebar was only hidden; a title-bar
+  button now opens it as an overlay.
+- **2026-11-20, the sidebar folds.** From 850 up a button in the sidebar header folds it into the 56px rail of icons,
+  each with a tooltip and a name. From 620 to under 850 the width forces the rail. Under 620 the title-bar toggle opens
+  the whole sidebar. The package does not store the choice: the app keeps it through `onChange` and passes it back as
+  `collapsed`.
+- **2026-11-20, desktop shell.** The list gains the "Reload interface" item of the window menu, and the rebuilding
+  contract: while an app rebuilds its windows after a lost browser process it prevents the exit and does not save the
+  window's state.
+- **2026-11-20, names.** The design file is `docs/design-file.md`, not `docs/DESIGN.md`: on Windows both names are one
+  file. The proposal is `reference/proposal.html`; the link to it named a file that is not there.
