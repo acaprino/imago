@@ -226,6 +226,21 @@ describe('literal-color', () => {
     assert.deepEqual(found(rules.literalColor, html, 'index.html'), ['2 literal-color', '2 literal-color', '3 literal-color']);
   });
 
+  test('finds a JSX colour attribute however far it is from the opening of its tag', () => {
+    const lines = 'export const A = () => (\n  <path\n    d={`M0 ${x}`}\n    onClick={() => go(1, 2)}\n    className="mk-a mk-b"\n    fill="#abc"\n  />\n);\n';
+    assert.deepEqual(found(rules.literalColor, lines, 'src/a.tsx'), ['6 literal-color'], 'a tag over several lines, the colour fourth');
+    const long = `const b = <path d="M12 2L2 7l10 5 10-5-10-5z${' M2 17l10 5 10-5'.repeat(7)}" className="a" fill="#fff" />;\n`;
+    assert.deepEqual(found(rules.literalColor, long, 'src/b.tsx'), ['1 literal-color'], 'a long d before the colour');
+    const huge = `const c = <rect ${Array.from({ length: 40 }, (_, k) => `data-k${k}={values[${k}]}`).join(' ')} title="x" stroke="#123456" />;\n`;
+    assert.ok(huge.length > 600, `${huge.length} characters`);
+    assert.deepEqual(found(rules.literalColor, huge, 'src/c.tsx'), ['1 literal-color'], 'a tag of several hundred characters');
+  });
+
+  test('leaves a fill that is not the attribute of a tag: a variable, a default, an assignment in an expression', () => {
+    const tsx = "const fill = '#fff';\nconst draw = ({ fill = '#fff', color = 'red' }) => fill + color;\nconst a = <div>{items.map((item) => { const stroke = '#000'; return item; })}</div>;\nconst b = <path d={d} />; let color = 'red';\nif (a <b) color = '#fff';\n";
+    assert.deepEqual(found(rules.literalColor, tsx, 'src/d.tsx'), []);
+  });
+
   test('leaves none, currentColor, a url(#…), a token, and a variable that is not an attribute', () => {
     const ts = "el.innerHTML = '<svg><path fill=\"none\" stroke=\"currentColor\"/><rect fill=\"url(#g)\" stroke=\"var(--im-line)\"/></svg>';\nconst fill = '#fff';\nlet color = 'red';\nctx.fillStyle = gradient;\nif (i <n) { const stroke = '#000'; }\n";
     assert.deepEqual(found(rules.literalColor, ts, 'src/graph.ts'), []);
@@ -325,6 +340,16 @@ describe('the app\'s own custom properties', () => {
     assert.deepEqual(findings.map((f: Finding) => `${f.file}:${f.line} ${f.rule}`), ['src/chain.css:24 literal-space']);
     assert.ok(findings[0].message.includes('13px') && findings[0].message.includes('src/chain.css:2'), findings[0].message);
     assert.ok(notes.some((note: string) => note.includes('--c20') && /\b1000\b/.test(note)), notes.join('\n'));
+  });
+
+  test('a property defined in two rules reports both values at each use, each naming the line that sets it', () => {
+    const css = ':root { --mk-gap: 12px; }\n.mk-dense { --mk-gap: 14px; }\n.mk-a { gap: var(--mk-gap); }\n.mk-b { padding: var(--mk-gap); }\n';
+    const findings = judged(rules.literalSpace, { 'src/app.css': css });
+    assert.deepEqual(where(findings), ['src/app.css:3 literal-space', 'src/app.css:3 literal-space', 'src/app.css:4 literal-space', 'src/app.css:4 literal-space']);
+    for (const line of [3, 4]) {
+      const messages = findings.filter((f) => f.line === line).map((f) => f.message).join('\n');
+      assert.ok(/12px from --mk-gap \(src\/app\.css:1\)/.test(messages) && /14px from --mk-gap \(src\/app\.css:2\)/.test(messages), messages);
+    }
   });
 
   test('a hex in an app\'s property is found once, where it is defined', () => {
@@ -938,6 +963,29 @@ describe('imago-check on an app', () => {
     assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './ui.ts';\n${call}`, 'src/ui.ts': "import { mountApp } from '@acaprino/imago/ui';\nexport { mountApp };\n" }), 0, 'imported, then exported');
     assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './ui.ts';\n${call}`, 'src/ui.ts': 'export function mountApp(): void {}\n' }), 1, 'an own function of that name');
     assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './a.ts';\n${call}`, 'src/a.ts': "export * from './b.ts';\n", 'src/b.ts': "export * from './a.ts';\n" }), 1, 'a cycle ends, and passes nothing');
+    assert.equal(mounts({ 'src/main.ts': "import { mountApp } from './ui.ts';\n", 'src/ui.ts': "export { mountApp } from '@acaprino/imago/ui';\n" }), 1, 'a re-export imported and never called');
+    assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './ui.ts';\n${call}`, 'src/ui.ts': "export { other as mountApp } from './x.ts';\n", 'src/x.ts': 'export function other(): void {}\n' }), 1, 'the app\'s own function exported under the name');
+  });
+
+  test('mount-app gives the same answer in any order of the imports when a cycle of barrels holds the real export', () => {
+    const app = cleanApp();
+    delete app['src/boot.ts'];
+    const barrels = {
+      'src/a.ts': "export * from './b.ts';\n",
+      'src/b.ts': "export * from './a.ts';\nexport * from './c.ts';\n",
+      'src/c.ts': "export { mountApp } from '@acaprino/imago/ui';\n",
+    };
+    for (const main of ["import './b.ts';\nimport { mountApp } from './a.ts';\nmountApp(shell);\n", "import { mountApp } from './a.ts';\nimport './b.ts';\nmountApp(shell);\n"]) {
+      const { findings } = check({ root: folder({ ...app, ...barrels, 'src/main.ts': main }), packageMode: false });
+      assert.deepEqual(findings.filter((f: Finding) => f.rule === 'mount-app'), [], main);
+    }
+    // Twelve barrels that each export all the others: the answer comes at once, whichever file holds the export.
+    const dense: Record<string, string> = { 'src/main.ts': "import { mountApp } from './b0.ts';\nmountApp(shell);\n" };
+    for (let k = 0; k < 12; k++) dense[`src/b${k}.ts`] = Array.from({ length: 12 }, (_, j) => (j === k ? '' : `export * from './b${j}.ts';\n`)).join('') + (k === 11 ? "export { mountApp } from '@acaprino/imago/ui';\n" : '');
+    const started = performance.now();
+    const { findings } = check({ root: folder({ ...app, ...dense }), packageMode: false });
+    assert.deepEqual(findings.filter((f: Finding) => f.rule === 'mount-app'), []);
+    assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)} ms`);
   });
 
   test('reading no source file is exit 2, with the folders it looked in; the summary says how many files of each kind it read', () => {

@@ -82,7 +82,7 @@ export function parseSource(file, text) {
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return parseHtml(file, text);
   const lexed = lexScript(text);
   const sheet = inlineSheet(lexed.strings);
-  sheet.rules.push(...styleObjects(lexed.code, lexed.strings, 1));
+  sheet.rules.push(...styleObjects(lexed.code, lexed.strings, 1), ...jsxColors(lexed.code, lexed.strings, 1));
   return {
     file,
     kind: 'script',
@@ -321,8 +321,9 @@ export function lexScript(text, firstLine = 1) {
 /**
  * The declarations a script writes as style: a `style="…"` in its markup, `el.style.prop = '…'`,
  * `el.style.setProperty('prop', '…')`, `el.style.cssText = '…'` and `el.setAttribute('style', '…')`; the colour of a
- * `<meta name="theme-color">` and of the attributes of COLOR_ATTRIBUTES in its markup and in JSX; and the colours a
- * canvas context is given (`ctx.fillStyle = '…'`, strokeStyle, shadowColor). They form rules without a selector.
+ * `<meta name="theme-color">` and of the attributes of COLOR_ATTRIBUTES in its markup; and the colours a canvas
+ * context is given (`ctx.fillStyle = '…'`, strokeStyle, shadowColor). They form rules without a selector. The same
+ * attributes in JSX are read from the code, by jsxColors.
  * @param {Str[]} strings
  * @returns {Sheet}
  */
@@ -346,11 +347,6 @@ function inlineSheet(strings) {
     for (const match of str.text.matchAll(MARKUP_COLOR)) {
       const at = lineAt(str.text, match.index ?? 0, str.line);
       add(parseDeclarations(`${match[1].toLowerCase()}: ${match[2] ?? match[3] ?? ''}`, at), at);
-    }
-    const jsx = /(?:fill|stroke|color|Color|-color)\s*=\s*\{?\s*$/.test(str.before) ? JSX_COLOR.exec(str.before) : null;
-    if (jsx) {
-      add(parseDeclarations(`${kebab(jsx[2])}: ${str.text}`, str.line), str.line);
-      return;
     }
     const canvas = /\.(fillStyle|strokeStyle|shadowColor)\s*=\s*$/.exec(str.before);
     if (canvas) {
@@ -382,9 +378,58 @@ function inlineSheet(strings) {
 const COLOR_ATTRIBUTES = new Set(['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color', 'color']);
 // One of them with its value in the markup a string holds; `data-fill` and `stroke-width` are not one.
 const MARKUP_COLOR = /(?<![\w:-])(fill|stroke|stop-color|flood-color|lighting-color|color)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
-// One of them, with its JSX name, as the attribute of a JSX tag whose value is the string that follows: the code
-// before the string opens a tag (`<path d={d} fill=`) and does not leave it. Strings are blanked in that code.
-const JSX_COLOR = /<[A-Za-z][\w.:-]*(?:\s+(?:[^<>;{}()"'`]|\{[^{}]*\}|(["'`])\s*\1)*?)?\s(fill|stroke|stopColor|floodColor|lightingColor|color|stop-color|flood-color|lighting-color)\s*=\s*\{?\s*$/;
+// One of them, with its JSX name, just before the string that is its value: `fill="…"`, `stopColor={'…'}`.
+const JSX_COLOR = /(?<=\s)(fill|stroke|stopColor|floodColor|lightingColor|color|stop-color|flood-color|lighting-color)\s*=\s*\{?\s*$/;
+
+/**
+ * The colours of the attributes of COLOR_ATTRIBUTES in JSX (`<path d={d} fill="#fff" />`), however far the attribute
+ * is from the `<` of its tag.
+ * @param {string} code the code of the script, its strings blanked
+ * @param {Str[]} strings its strings, with their offsets in `code`
+ * @param {number} firstLine
+ * @returns {Rule[]}
+ */
+function jsxColors(code, strings, firstLine) {
+  const line = lineCounter(code, firstLine);
+  /** @type {Rule[]} */
+  const rules = [];
+  for (const str of strings) {
+    if (str.at === undefined) continue;
+    const head = code.slice(Math.max(0, str.at - 40), str.at);
+    const attribute = JSX_COLOR.exec(head);
+    if (!attribute || !insideTag(code, str.at - head.length + (attribute.index ?? 0))) continue;
+    const at = line(str.at);
+    const declarations = parseDeclarations(`${kebab(attribute[1])}: ${str.text}`, at);
+    if (declarations.length) rules.push(inlineRule(declarations, at));
+  }
+  return rules;
+}
+
+/**
+ * Whether the code just before `offset` is inside a JSX tag that has not closed: walking back, past the other
+ * attributes, their strings (blanked, so a quote holds only spaces) and their `{ … }` (skipped whole, a template's
+ * ${} with them), to a `<` and the letter of a tag's name. A `>`, an unmatched `{`, a `;`, a parenthesis or an
+ * operator met first means the code is not a tag: `const fill = '#fff'`, `({ fill = '#fff' }) =>`.
+ * @param {string} code @param {number} offset
+ */
+function insideTag(code, offset) {
+  for (let k = offset - 1; k >= 0; k--) {
+    const c = code[k];
+    if (c === '}') {
+      let depth = 1;
+      while (k > 0 && depth > 0) {
+        k--;
+        if (code[k] === '}') depth++;
+        else if (code[k] === '{') depth--;
+      }
+      if (depth > 0) return false;
+      continue;
+    }
+    if (c === '<') return /[A-Za-z]/.test(code[k + 1] ?? '');
+    if (!/[\w$\s=."'`:-]/.test(c)) return false;
+  }
+  return false;
+}
 
 /** The content of a `<meta name="theme-color" content="…">` tag, or null for another tag. */
 function themeColor(/** @type {string} */ tag) {
@@ -520,7 +565,7 @@ function parseHtml(file, text) {
     source.comments.push(...lexed.comments);
     source.imports.push(...importsIn(lexed.code, lexed.strings, first));
     source.exported.push(...exportedIn(lexed.code));
-    objects.push(...styleObjects(lexed.code, lexed.strings, first));
+    objects.push(...styleObjects(lexed.code, lexed.strings, first), ...jsxColors(lexed.code, lexed.strings, first));
     blankOut(at, at + match[2].length);
   }
   const scripts = inlineSheet(source.strings);

@@ -800,54 +800,53 @@ const escapeRegExp = (/** @type {string} */ text) => text.replace(/[$()*+.?[\\\]
  * @returns {Finding[]}
  */
 export function mountApp(sources, links = new Map()) {
-  const byFile = new Map(sources.map((source) => [source.file, source]));
+  // The names under which each file exports the package's mountApp. They are found together, by rounds until no file
+  // gains a name: a name passes through a cycle of barrels as through a chain, and the order of the imports does not
+  // change the answer. A round only adds names, of which there are finitely many, so the rounds end.
   /** @type {Map<string, Set<string>>} */
-  const exportsOf = new Map();
-  /**
-   * The names under which a module exports the package's mountApp: the package itself, or a file of the app that passes
-   * it on. A file met again while it is being read (a cycle) exports nothing more.
-   * @param {Source} from @param {string} specifier @param {Set<string>} reading
-   * @returns {Set<string>}
-   */
-  const mountNames = (from, specifier, reading) => {
-    if (specifier === '@acaprino/imago/ui') return new Set(['mountApp']);
+  const exportsOf = new Map(sources.map((source) => [source.file, new Set()]));
+  const MOUNT = new Set(['mountApp']);
+  /** @type {Set<string>} */
+  const NONE = new Set();
+  /** The names under which the module `specifier` of `from` exports the package's mountApp, as far as known. */
+  const mountNames = (/** @type {Source} */ from, /** @type {string} */ specifier) => {
+    if (specifier === '@acaprino/imago/ui') return MOUNT;
     const file = links.get(from.file)?.get(specifier);
-    const source = file === undefined ? undefined : byFile.get(file);
-    if (!source || reading.has(source.file)) return new Set();
-    const known = exportsOf.get(source.file);
-    if (known) return known;
-    reading.add(source.file);
-    const { locals } = bound(source, reading);
-    /** @type {Set<string>} */
-    const names = new Set();
-    for (const each of source.imports.filter((one) => one.kind === 'export' && !one.type)) {
-      const passed = mountNames(source, each.specifier, reading);
-      if (!each.names.length && !each.namespace) for (const name of passed) names.add(name);
-      for (const binding of each.names) if (passed.has(binding.imported)) names.add(binding.local);
-    }
-    for (const { local, name } of source.exported) if (locals.has(local)) names.add(name);
-    reading.delete(source.file);
-    exportsOf.set(source.file, names);
-    return names;
+    return (file === undefined ? undefined : exportsOf.get(file)) ?? NONE;
   };
   /**
    * The names a file binds to the package's mountApp: its locals, and `ns.name` through a namespace import.
-   * @param {Source} source @param {Set<string>} reading
+   * @param {Source} source
    */
-  const bound = (source, reading) => {
+  const bound = (source) => {
     /** @type {Set<string>} */
     const locals = new Set();
     /** @type {string[]} */
     const members = [];
     for (const each of source.imports.filter((one) => one.kind !== 'export' && !one.type)) {
-      const names = mountNames(source, each.specifier, reading);
+      const names = mountNames(source, each.specifier);
       for (const binding of each.names) if (names.has(binding.imported)) locals.add(binding.local);
       if (each.namespace) for (const name of names) members.push(`${escapeRegExp(each.namespace)}\\s*\\.\\s*${escapeRegExp(name)}`);
     }
     return { locals, members };
   };
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const source of sources) {
+      const names = /** @type {Set<string>} */ (exportsOf.get(source.file));
+      const before = names.size;
+      const { locals } = bound(source);
+      for (const each of source.imports.filter((one) => one.kind === 'export' && !one.type)) {
+        const passed = mountNames(source, each.specifier);
+        if (!each.names.length && !each.namespace) for (const name of passed) names.add(name);
+        for (const binding of each.names) if (passed.has(binding.imported)) names.add(binding.local);
+      }
+      for (const { local, name } of source.exported) if (locals.has(local)) names.add(name);
+      if (names.size !== before) changed = true;
+    }
+  }
   const calls = sources.some((source) => {
-    const { locals, members } = bound(source, new Set([source.file]));
+    const { locals, members } = bound(source);
     const patterns = [...[...locals].map((local) => `(?<![\\w$.])${escapeRegExp(local)}\\s*\\(`), ...members.map((member) => `(?<![\\w$.])${member}\\s*\\(`)];
     if (!patterns.length) return false;
     const call = new RegExp(patterns.join('|'));
