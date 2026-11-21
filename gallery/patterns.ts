@@ -205,7 +205,7 @@ export function formPageHtml(): string {
   const notes = `<section class="im-notes" aria-label="Custom instructions"><p class="im-text-warn">Instructions changed. Adapt again for: Codex.</p><details open><summary>Custom instructions · 2 Markdown files</summary><ul class="im-file-lines"><li><code>review.md</code></li><li><code>commit.md</code></li></ul></details></section>`;
   const more = `<details class="im-disclosure-section" open><summary>More</summary><div class="im-action-row">${buttonHtml('Check for updates', 'g-form-resolve', { icon: 'sync' })}${buttonHtml('Remove from my list', 'g-form-remove', { danger: true })}</div></details>`;
   return block('form', 'A form: head, fields, groups, operations and footer',
-    `<form class="im-form" aria-labelledby="g-form-title" onsubmit="return false">${formHeaderHtml('Marionette', 'Installed as its author ships it.', false, 'g-form-title')}${fields}${operations}${notes}${more}${fieldErrorHtml('g-form-error', '', 'div')}${formFooterHtml({ submit: 'Save', leadingHtml: '<small class="im-push-start">1 plugin will be uninstalled.</small>' })}</form>`);
+    `<form class="im-form" aria-labelledby="g-form-title" data-g-form>${formHeaderHtml('Marionette', 'Installed as its author ships it.', false, 'g-form-title')}${fields}${operations}${notes}${more}${fieldErrorHtml('g-form-error', '', 'div')}${formFooterHtml({ submit: 'Save', leadingHtml: '<small class="im-push-start">1 plugin will be uninstalled.</small>' })}</form>`);
 }
 
 /** Settings rows, repeat rows, a grid of fields and a list of choices. */

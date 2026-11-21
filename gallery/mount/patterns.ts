@@ -90,6 +90,8 @@ export default function mount({ root, sections }: MountContext): () => void {
     if (!openDialogSheet(dialog, { anchor: () => anchor, placement: 'below' })) return () => {};
     return () => { if (dialog.open) dialog.close(); dialog.remove(); };
   };
+  // The form of the patterns saves nothing (a script, not an inline handler: the demo's CSP allows no inline script).
+  document.querySelector('#g-patterns-forms [data-g-form]')?.addEventListener('submit', (event) => event.preventDefault());
   const fileButton = document.querySelector<HTMLElement>('#g-patterns-files [data-action="g-file-dialog"]');
   fileButton?.addEventListener('click', () => void openFileDialog());
   window.__imagoPatterns = { openFileDialog, openFormSheet };
