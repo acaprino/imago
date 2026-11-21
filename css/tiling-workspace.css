@@ -28,6 +28,8 @@
 .im-tile-tab-close:hover { color: var(--im-err); background: var(--im-hover); }
 .im-tile-tabwrap-active { background: var(--im-selected); box-shadow: inset 0 -2px var(--im-accent); }
 .im-tile-tabwrap-active .im-tile-tab { box-shadow: none; }
+/* The wrap holds the selection fill: the selected tab in it is not filled a second time, or its text sits on the selection twice. */
+.im-tile-tabwrap-active .im-tile-tab[aria-selected="true"] { background: transparent; }
 .im-tile-tab-toned .im-tile-tab::before { content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 var(--im-s-2) 1px 0; vertical-align: middle; background: var(--im-tile-tone); }
 .im-tile-tab-toned.im-tile-tabwrap-active { box-shadow: inset 0 -2px var(--im-tile-tone); }
 .im-add { padding: 0 var(--im-s-3); font-size: var(--im-fs-display); line-height: 1; color: var(--im-text-2); border-top: 0; border-bottom: 0; }

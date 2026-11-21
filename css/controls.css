@@ -490,6 +490,15 @@ select.im-select {
   background-repeat: no-repeat;
 }
 
+/* Chromium paints an autofilled field with `background-image: none !important`, which would take the chevron away. A
+   transition outranks an !important declaration, and this one (a year of delay, a discrete property) never gets to the
+   change: the chevron stays. The border keeps the transition it had. */
+select.im-select:autofill {
+  transition:
+    border-color var(--im-t-fast) var(--im-ease),
+    background-image 0s 31536000s allow-discrete;
+}
+
 .im-select > span:first-child {
   min-width: 0;
   overflow: hidden;
@@ -1148,6 +1157,21 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   color: var(--im-text-2);
 }
 
+/* The icon of a block note sits beside its title, at the gap of the compact note, and the title, the paragraph, the list and
+   the actions are one column to its right. */
+.im-note--block:has(> .im-icon) {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--im-s-3);
+}
+
+.im-note--block > .im-icon {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: center;
+}
+
+.im-note--block:has(> .im-icon) > :not(.im-icon) { grid-column: 2; }
+
 /* A list label: the weight and colour of the title, in the line. */
 .im-note--block > ul > li > b {
   font-weight: 600;
@@ -1342,6 +1366,9 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 
   .im-spinner,
   .im-progress:not([aria-valuenow])::before { animation: none; }
+
+  /* The chevron's transition above is not an animation: it stays. */
+  select.im-select:autofill { transition: background-image 0s 31536000s allow-discrete; }
 }
 
 /* ---------- forced colours: fills vanish, so edges, outlines and system colours carry every state ---------- */
