@@ -27,7 +27,7 @@ const parts = {
   code: ['code', 'im-mono'], pre: ['pre', 'im-code-view'], time: ['time', 'im-time'],
   descriptionList: ['dl', 'im-definition-list'], term: ['dt', 'im-term'], definition: ['dd', 'im-definition'],
   table: ['table', 'im-table'], tableHead: ['thead', ''], tableBody: ['tbody', ''], tableRow: ['tr', ''],
-  cell: ['td', ''], columnHeader: ['th', ''], progress: ['progress', 'im-progress'],
+  cell: ['td', ''], columnHeader: ['th', ''],
   nav: ['nav', 'im-navigation'], orderedList: ['ol', 'im-ordered-list'], mark: ['mark', 'im-highlight'],
   optionGroup: ['optgroup', ''], article: ['article', 'im-region'],
 } as const satisfies Record<string, readonly [keyof HTMLElementTagNameMap, string]>;

@@ -32,7 +32,7 @@ export function selectHtml(options: SelectMarkupOptions): string {
   return `<select ${attributes({ class: classes, name, ...extra, ...(label ? { 'aria-label': label } : {}), disabled })}>${selectOptionsHtml(options.options, value)}</select>`;
 }
 export function selectFieldHtml(label: string, name: string, options: readonly SelectOption[], selected: string): string {
-  return `<label class="im-field"><span>${esc(label)}</span>${selectHtml({ name, options, value: selected })}</label>`;
+  return `<label class="im-field"><span class="im-field-label">${esc(label)}</span>${selectHtml({ name, options, value: selected })}</label>`;
 }
 
 export interface CheckboxMarkupOptions {

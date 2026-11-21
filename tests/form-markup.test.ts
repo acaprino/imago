@@ -61,7 +61,7 @@ test('the renderers write the class of the one drawing: input.im-check, span.im-
   assert.match(choiceRowsHtml([{ name: 'pick', checked: true, label: 'Item' }]), /<li><label class="im-option"><input type="checkbox" class="im-check" name="pick" checked>/);
   assert.match(selectHtml({ name: 'harness', value: 'a', options: [['a', 'A']] }), /^<select class="im-select" name="harness">/);
   assert.match(selectHtml({ name: 'harness', value: 'a', options: [['a', 'A']], attrs: { class: 'wide' } }), /^<select class="im-select wide" name="harness">/);
-  assert.match(selectFieldHtml('Device', 'device', [['a', 'A']], 'a'), /^<label class="im-field"><span>Device<\/span><select class="im-select" name="device">/);
+  assert.match(selectFieldHtml('Device', 'device', [['a', 'A']], 'a'), /^<label class="im-field"><span class="im-field-label">Device<\/span><select class="im-select" name="device">/);
   assert.match(inputHtml({ name: 'model', label: 'Model', value: 'x' }), /^<span class="im-input"><input name="model" aria-label="Model" value="x"><\/span>$/);
   assert.match(settingInputHtml({ name: 'model', label: 'Model', value: 'x' }), /^<span class="im-input"><input [^>]*data-setting="model"[^>]*><\/span>$/);
 });

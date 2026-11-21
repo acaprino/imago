@@ -128,5 +128,5 @@ export function textFieldHtml(label: string, name: string, value = '', options: 
     options.required ? 'required aria-required="true"' : '', options.readonly ? 'readonly' : '',
     options.autofocus ? 'autofocus' : '', ...attributesHtml(options.attrs, options.id ? ['id', 'aria-describedby'] : ['aria-describedby']),
     described ? `aria-describedby="${escapeHtml(described)}"` : ''];
-  return `<label class="im-field"><span>${escapeHtml(label)}${options.optional ? '<em>optional</em>' : ''}</span><span class="im-input${options.mono ? ' im-input--code' : ''}"><input ${attrs.filter(Boolean).join(' ')}></span>${options.hint ? `<small id="${escapeHtml(hintId)}">${escapeHtml(options.hint)}</small>` : ''}${slot ? `<small class="im-field-error" id="${escapeHtml(errorId)}" role="alert"></small>` : ''}</label>`;
+  return `<label class="im-field"><span class="im-field-label">${escapeHtml(label)}${options.optional ? '<em>optional</em>' : ''}</span><span class="im-input${options.mono ? ' im-input--code' : ''}"><input ${attrs.filter(Boolean).join(' ')}></span>${options.hint ? `<small class="im-field-hint" id="${escapeHtml(hintId)}">${escapeHtml(options.hint)}</small>` : ''}${slot ? `<small class="im-field-error" id="${escapeHtml(errorId)}" role="alert"></small>` : ''}</label>`;
 }
