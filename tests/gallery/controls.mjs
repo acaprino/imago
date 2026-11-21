@@ -418,8 +418,7 @@ const measurePatterns = (page) =>
         if (opacityOf(holder) < 1) { faded++; continue; }
         texts++;
         const seen = read(holder);
-        // The selected tab of the tiling workspace, found by its role (its classes are to be renamed): see PENDING_CONTRAST.
-        if (seen.ratio < 4.5) low.push({ ...seen, pattern: name, text: words.slice(0, 40), selectedTab: Boolean(holder.closest('[data-g-tiling] [role="tab"][aria-selected="true"]')) });
+        if (seen.ratio < 4.5) low.push({ ...seen, pattern: name, text: words.slice(0, 40) });
       }
       patterns.push(name);
     }
@@ -443,31 +442,11 @@ const measurePatterns = (page) =>
     return { patterns, low, helpers, texts, faded };
   }, HELPERS);
 
-/**
- * Texts of the page patterns under 4.5:1 that css/ is to fix, each with its floor and its reason; the fix is in the report
- * of task 10. A listed text is tolerated down to its floor and printed. Once it reads at 4.5:1 in every app, look and
- * theme the test fails, so that the entry goes when the fix lands.
- */
-const PENDING_CONTRAST = [
-  {
-    id: 'tiling selected tab',
-    matches: (text) => text.pattern === 'tiling' && text.selectedTab,
-    floor: 4.45,
-    why: 'the selected tab of the tiling workspace is filled twice, by its wrap and by itself (css/tiling-workspace.css): 4.49:1 in Mukade and 4.48:1 in Shinatama, Smooth dark. With the fill on the wrap only it is 4.54:1 or more everywhere.',
-  },
-];
-const pendingSeen = new Map(PENDING_CONTRAST.map((entry) => [entry.id, 0]));
-
 // Every text of the page patterns reads at 4.5:1, and each text helper on the ground and on a sheet.
 function checkPatterns({ patterns, low, helpers, texts, faded }, where) {
   assert.ok(patterns.length >= 30 && texts > 300, where(`the page patterns are measured (${patterns.length} patterns, ${texts} texts)`));
   assert.ok(faded < 10, where(`only the dimmed pane of the tiling workspace is faded, not ${faded} texts`));
   const unreadable = low
-    .filter((text) => {
-      const pending = PENDING_CONTRAST.find((entry) => entry.matches(text) && text.ratio >= entry.floor);
-      if (pending) pendingSeen.set(pending.id, pendingSeen.get(pending.id) + 1);
-      return !pending;
-    })
     .map((text) => `${text.pattern}: "${text.text}" is ${text.ratio.toFixed(2)}:1 (${text.color} on ${text.fill})`);
   assert.deepEqual(unreadable, [], where('text of the page patterns under 4.5:1'));
   assert.deepEqual(helpers.filter((h) => !h.found || !h.onToken).map((h) => `${h.name} on the ${h.surface}`), [], where('each text helper is drawn on the ground and on a sheet'));
@@ -961,12 +940,6 @@ export default async (page) => {
         assert.ok(Math.abs(b.width - a.width - (nb.width - na.width)) <= 0.5, said(`selected grows by ${b.width - a.width}px, without forced colours by ${nb.width - na.width}px`));
       }
     }
-  }
-
-  // A pending text that reads at 4.5:1 everywhere is fixed: its entry goes.
-  for (const entry of PENDING_CONTRAST) {
-    assert.ok(pendingSeen.get(entry.id) > 0, `PENDING_CONTRAST "${entry.id}" reads at 4.5:1 in every app, look and theme now: take it out of the list`);
-    console.log(`      pending contrast: ${entry.id}, ${pendingSeen.get(entry.id)} times under 4.5:1: ${entry.why}`);
   }
 
   // Under im-glass the sheet is translucent. The header of a table is sticky, so rows scroll under it: it is opaque, or they

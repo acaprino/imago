@@ -33,7 +33,7 @@ export const UNUSED_PENDING_REMOVAL = new Map([
  */
 export const WHILE_RUNNING = new Map([]);
 
-/** The im- classes (and, until the tiling workspace's are renamed, the wm- ones) that the stylesheets of css/ style. */
+/** The im- classes that the stylesheets of css/ style (the tiling workspace's included). */
 function stylesheetClasses() {
   const files = [];
   const walk = (dir) => {
@@ -46,14 +46,7 @@ function stylesheetClasses() {
   walk(join(ROOT, 'css'));
   const sources = files.map((file) => parseSource(relative(ROOT, file).replaceAll('\\', '/'), readFileSync(file, 'utf8')));
   const { classes } = namesDefined(sources);
-  // namesDefined reads the im- names; the tiling workspace still writes wm- ones, read here from the same selectors.
-  const tiling = new Set();
-  for (const source of sources) {
-    for (const sheet of source.sheets) {
-      for (const rule of sheet.rules) for (const match of rule.selector.matchAll(/\.(wm-[a-z0-9][a-z0-9-]*)/g)) tiling.add(match[1]);
-    }
-  }
-  return { im: [...classes].sort(), wm: [...tiling].sort() };
+  return [...classes].sort();
 }
 
 // Runs in the page before its scripts: records every class of every element that is ever in the document.
@@ -246,7 +239,7 @@ export default async function (page, url) {
 
   await page.evaluate(() => window.__gallerySweep());
   const seen = new Set(await page.evaluate(() => [...window.__gallerySeen]));
-  const { im, wm } = stylesheetClasses();
+  const im = stylesheetClasses();
   const styled = new Set(im);
 
   // The lists say true things: each listed class is styled by css/, and is not drawn by the gallery.
@@ -258,8 +251,7 @@ export default async function (page, url) {
     console.log(`      pending removal from css/ (nothing writes them): ${[...UNUSED_PENDING_REMOVAL.keys()].join(', ')}`);
   }
 
-  // The tiling workspace's classes, until they are renamed im-: the gallery draws every one of them too.
-  const missing = [...im.filter((name) => !UNUSED_PENDING_REMOVAL.has(name) && !WHILE_RUNNING.has(name)), ...wm].filter((name) => !seen.has(name));
+  const missing = im.filter((name) => !UNUSED_PENDING_REMOVAL.has(name) && !WHILE_RUNNING.has(name)).filter((name) => !seen.has(name));
   // The whole list, one class a line: the runner shows only the first lines of an error.
   if (missing.length) console.log(`      css/ styles ${missing.length} classes the gallery never draws:\n        ${missing.join('\n        ')}`);
   assert.deepEqual(missing, [], `css/ styles ${missing.length} classes the gallery never draws (listed above)`);

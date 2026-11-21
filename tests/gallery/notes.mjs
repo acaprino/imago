@@ -113,14 +113,12 @@ const measure = (page) =>
   }, { parts: PARTS, style: STYLE });
 
 /**
- * Pending: the icon of a block note. The approved note (the compact one) has its icon beside its text; a block note with an
+ * The icon of a block note. The approved note (the compact one) has its icon beside its text; a block note with an
  * icon puts it on a row of its own above its title, and no rule says where it goes. Decided by the approved note: the icon
  * sits beside the title, at the compact note's gap, and the title, the paragraph, the list and the actions are one column
- * to its right. Enable this check once css/ has the rule (see the report of task 10).
+ * to its right.
  */
 async function blockNoteIcon(page) {
-  console.log('      pending: block note icon');
-  return;
   for (const look of LOOKS) {
     await show(page, { app: 'xiox', look, theme: 'dark', glass: false, width: 1160 });
     const seen = await page.evaluate(() => {

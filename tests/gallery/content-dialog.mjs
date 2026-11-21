@@ -82,16 +82,12 @@ async function tallAndNarrow(page, look, theme) {
 }
 
 /**
- * Pending: a tall dialog opens at its top. An app's own dialog whose first control is at its end (a Close button under a
- * long text) opens scrolled to that end: `dialog.show()` focuses the first control of the dialog, which scrolls it into
- * view, and openContentDialog (ts/ui/dialog.ts) then moves the focus to the dialog without scrolling it back. Enable this
- * check once openContentDialog keeps a dialog without an autofocus control at its top (see the report of task 10).
+ * A tall dialog opens at its top. An app's own dialog whose first control is at its end (a Close button under a long text)
+ * would open scrolled to that end if the focus on its first control scrolled it into view: openContentDialog
+ * (ts/ui/dialog.ts) keeps it at its top.
  */
-let openedAtTopPrinted = false;
 function openedAtTop(seen, where) {
-  if (!openedAtTopPrinted) console.log('      pending: tall content dialog opens at its top');
-  openedAtTopPrinted = true;
-  return;
+  assert.ok(seen.length >= 4, where(`the opening position of the tall dialogs is measured (${seen.length})`));
   for (const { what, at } of seen) assert.equal(at, 0, where(`a tall ${what} opens at its top, not scrolled by ${at}px`));
 }
 

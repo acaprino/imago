@@ -3,7 +3,7 @@
 // drawing. The DevTools protocol puts a field in that state (CSS.forcePseudoState with `autofill`, which is what the
 // browser's own autofill sets): the text of each native field the package draws still reads at 4.5:1 and the field keeps
 // its edge, in both looks and both themes. The chevron of a native select is a background image, which that stylesheet
-// takes away: the check that it stays is pending until css/ draws it so it does (see the report of task 10).
+// takes away: css/ keeps it with a transition on `select.im-select:autofill` (a transition outranks an !important rule).
 import assert from 'node:assert/strict';
 
 const LOOKS = ['smooth', 'oni'];
@@ -62,10 +62,8 @@ const read = (page, query) =>
     };
   }, query);
 
-/** Pending: the chevron of an autofilled native select. Enable it once css/ keeps the chevron through autofill. */
+/** The chevron of an autofilled native select stays. */
 function autofilledSelectKeepsChevron(results, where) {
-  console.log('      pending: autofilled select chevron');
-  return;
   const { before, after } = results['select-native'];
   assert.notEqual(after.image, 'none', where(`an autofilled native select keeps its chevron (${before.image.slice(0, 40)}… becomes ${after.image})`));
 }
@@ -74,7 +72,6 @@ export default async function (page) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('DOM.enable');
   await cdp.send('CSS.enable');
-  let pendingPrinted = false;
   for (const look of LOOKS) {
     for (const theme of THEMES) {
       const where = (message) => `${look} ${theme}: ${message}`;
@@ -96,8 +93,7 @@ export default async function (page) {
         assert.ok(after.ratio >= 4.5, said(`its text reads at ${after.ratio.toFixed(2)}:1 (${after.ink} on ${after.fill})`));
         assert.deepEqual(after.edge, before.edge, said('the field keeps its edge'));
       }
-      if (!pendingPrinted) autofilledSelectKeepsChevron(results, where);
-      pendingPrinted = true;
+      autofilledSelectKeepsChevron(results, where);
     }
   }
 }
