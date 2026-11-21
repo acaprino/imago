@@ -34,8 +34,8 @@ pub use recovery::{
     recovery_action, watch_process_failures, ProcessFailure, Recovery, RecoveryAction,
 };
 pub use theme::{
-    acrylic_tint, apply_theme, glass_window_config, parse_look, parse_theme, save_theme,
-    saved_theme, Look, WindowTheme,
+    acrylic_tint, apply_theme, drawn_by_page, glass_window_config, parse_look, parse_theme,
+    save_theme, saved_theme, Look, WindowTheme,
 };
 pub use window_state::{
     clamp_to_monitors, clamp_to_screens, load_state, save_state, state_to_save, Rect, Screen,

@@ -59,9 +59,10 @@ export default function mount(ctx: MountContext): (() => void) | undefined {
   const show = (text: string): void => { notify(shell, text, { tone: 'err' }); };
   const fail = (what: string, error: unknown): void => { show(`The window could not ${what}: ${error instanceof Error ? error.message : String(error)}`); };
 
-  // The theme of the look goes to the window each time it changes (once per word: the window saves it for the next start).
+  // The theme of the look goes to the window each time it, the look or the theme drawn changes (the window saves the
+  // word for the next start, and tints the acrylic with the look and the theme drawn).
   applyLook(ctx.root, { app: ctx.app, look: ctx.look, theme: ctx.theme, glass: true }, {
-    setWindowTheme: (theme) => invoke('set_window_theme', { theme }),
+    setWindowTheme: (theme, { look, resolved }) => invoke('set_window_theme', { theme, look, resolved }),
   });
 
   const titlebar = shell.querySelector<HTMLElement>('.im-titlebar');

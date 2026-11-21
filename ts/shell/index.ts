@@ -1,7 +1,7 @@
 export { applyLook, parseLook, parseTheme, resolveTheme } from './look.ts';
 export type { AppId, Look, LookDeps, LookState, ThemeChoice } from './look.ts';
 export { windowThemeFor } from './window-theme.ts';
-export type { WindowTheme } from './window-theme.ts';
+export type { WindowTheme, WindowThemeDetail } from './window-theme.ts';
 export { clampZoom, createZoomController, mountZoom, stepZoom, wheelPixels, zoomDirection } from './zoom.ts';
 export type { ZoomController, ZoomOptions } from './zoom.ts';
 export { mountWindowControls } from './window-controls.ts';

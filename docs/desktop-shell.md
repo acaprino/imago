@@ -33,13 +33,15 @@ Facts about the material:
   system's own: **it ignores the tint colour of `windowEffects`** and follows only the window's light or dark theme.
   The tint reaches only Windows 10 (and the first Windows 11, 21H2), where the legacy `SetWindowCompositionAttribute`
   path is used (and is slow to drag).
-- There the acrylic has no colour but the tint, so the tint follows the look. `apply_theme` sets it with the window
-  theme (1.2): `acrylic_tint(look, theme)` is the ground of the look under glass (the row "Ground" of 1.3), with its
-  alpha as a byte: Smooth dark `#0C111D` and 204, Smooth light `#F6F7F9` and 224, ONI dark `#0B0416` and 219, ONI
-  light `#E9EEF8` and 230. A window on Windows 10 is then light under a light look and dark under a dark one. The
-  first frame keeps the tint of the app's own config, which `glass_window_config` leaves as it is, until the page's
-  first `set_window_theme`. On Windows 11 22H2 and later nothing changes: setting the effect again sets the backdrop
-  the window already has (the call Tauri made when it built the window), and that backdrop takes no tint.
+- There the acrylic has no colour but the tint, so the tint follows the look and the theme the page draws, which the
+  page sends with the window theme (1.2). `apply_theme` sets it: `acrylic_tint(look, theme)` is the ground of the look
+  under glass (the row "Ground" of 1.3), with its alpha as a byte: Smooth dark `#0C111D` and 204, Smooth light
+  `#F6F7F9` and 224, ONI dark `#0B0416` and 219, ONI light `#E9EEF8` and 230. A window on Windows 10 is then light
+  under a light look and dark under a dark one, also under the theme `system` when Windows changes its colours (the
+  page sends the theme it draws again). The first frame keeps the tint of the app's own config, which
+  `glass_window_config` leaves as it is, until the page's first `set_window_theme`. On Windows 11 22H2 and later
+  nothing changes: setting the effect again sets the backdrop the window already has (the call Tauri made when it
+  built the window), and that backdrop takes no tint.
 - The acrylic is a blur of what is behind the window, with a nearly fixed luminosity. Measured from the screen
   (0 to 255): light acrylic about **143 over a dark window and 226 over a white one**; dark acrylic about **84 over a
   dark window**. A light acrylic over dark content is therefore a mid grey, and a dark one over bright content a
@@ -63,16 +65,19 @@ grey in Shinatama before 2026-11-19. The rule, as `windowThemeFor(look, choice)`
 | ONI | Windows | `dark`: ONI has no light backdrop to follow |
 
 `WindowTheme` is the Rust type of that word: `Light`, `Dark` or `System`. `Look` is the Rust type of the page's look,
-`Look::Smooth` or `Look::Oni`, read by `parse_look` from `smooth` or `oni`: it decides the tint of 1.1 and nothing
-else. The path of the word:
+`Look::Smooth` or `Look::Oni`, read by `parse_look` (`oni` is ONI, any other word Smooth): it decides the tint of 1.1
+and nothing else. The path of the word:
 
-1. The page calls `applyLook`, which sets the root attributes and sends the window theme to the window, once per
-   change, through the function the app gives as `setWindowTheme`.
+1. The page calls `applyLook`, which sets the root attributes and sends the window theme to the window through the
+   function the app gives as `setWindowTheme`, with `{ look, resolved }`: the look and the theme the page draws
+   (`light` or `dark`, never `system`). It sends again when the word, the look or the theme drawn changed, and not
+   otherwise; under `system` a change of Windows' colours changes the theme drawn.
 2. The app's command `set_window_theme` calls `parse_theme` (a word that is not `light`, `dark` or `system` is
-   refused) and `parse_look` for the look the page may send with it (Smooth when it sends none), then
-   `apply_theme(window, theme, look)` (Tauri's `set_theme`, which reaches DWM and WebView2's colour scheme, then the
-   tint of 1.1, with `system` the tint of the theme Windows has), then `save_theme`, which writes the bare word to
-   `window-theme` in the app's data folder, whole or not at all.
+   refused) and `drawn_by_page` for the look and the theme drawn (a page that sends neither, an older one, is Smooth
+   in the word's own theme, and dark for `system`), then `apply_theme(window, theme, look, resolved)` (Tauri's
+   `set_theme`, which reaches DWM and WebView2's colour scheme, then the tint of 1.1), then `save_theme`, which writes
+   the bare word to `window-theme` in the app's data folder, whole or not at all. `apply_theme` also gives the window
+   the acrylic effect, so it is called on the glass window only, the one built with `glass_window_config`.
 3. At the next start the app reads `saved_theme` before it builds the window and hands it to
    `glass_window_config`, so the **first frame** already has the right acrylic. A window built again after a
    WebView2 crash gets it too.
@@ -215,7 +220,7 @@ when one window closes for good, the app calls `Recovery::close` on the `Recover
 
 | What | Name | Direction |
 |---|---|---|
-| The window theme | the command `set_window_theme(theme: String, look: Option<String>)` | page to Rust. The app registers it: the crate has no command of its own. `look` is the page's look, `smooth` or `oni`, for the tint of 1.1; without one the tint is Smooth's. The demo's page sends none: `applyLook` gives `setWindowTheme` the window theme only, and only when that word changes |
+| The window theme | the command `set_window_theme(theme: String, look: Option<String>, resolved: Option<String>)` | page to Rust. The app registers it: the crate has no command of its own. `theme` is the first argument of `setWindowTheme`, and `look` (`smooth` or `oni`) and `resolved` (the theme the page draws, `light` or `dark`) come from its second, `{ look, resolved }`, for the tint of 1.1. `drawn_by_page` reads the two, and gives a page that sends neither Smooth in the word's own theme, dark for `system`. `applyLook` calls `setWindowTheme` again when the word, the look or the theme drawn changed |
 | The maximize button's rectangle | the command `window_caption_maximize(window, x, y, width, height)` | page to Rust. It finds the window's `SnapLayouts` by `window.label()` and calls `set_rect` with the four numbers unchanged |
 | Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay, at every change and again at every `window_caption_maximize` | Rust to page. Listening needs `core:event:allow-listen` and `core:event:allow-unlisten` (section 3.5) |
 

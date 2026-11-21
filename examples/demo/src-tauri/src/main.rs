@@ -14,10 +14,10 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use imago_shell::{
-    apply_theme, disable_browser_accelerators, glass_window_config, guard_navigation_with_scheme,
-    install_reload_menu, install_snap_layouts, parse_look, parse_theme, recovery_action,
-    save_theme, saved_theme, trim_context_menu, watch_process_failures, Look, ProcessFailure,
-    Recovery, RecoveryAction, SnapLayouts,
+    apply_theme, disable_browser_accelerators, drawn_by_page, glass_window_config,
+    guard_navigation_with_scheme, install_reload_menu, install_snap_layouts, parse_theme,
+    recovery_action, save_theme, saved_theme, trim_context_menu, watch_process_failures,
+    ProcessFailure, Recovery, RecoveryAction, SnapLayouts,
 };
 use std::{
     collections::HashMap,
@@ -60,20 +60,19 @@ fn data_dir(app: &AppHandle) -> tauri::Result<PathBuf> {
 }
 
 /// The page tells the window the theme of its look (`light`, `dark` or `system`), and the window keeps it for the
-/// first frame of the next start. The page may also say its look (`smooth` or `oni`), whose ground tints the acrylic
-/// on Windows 10; a page that says none is Smooth, the default look.
+/// first frame of the next start. With it come the look (`smooth` or `oni`) and the theme the page draws (`light` or
+/// `dark`), from which the window tints the acrylic on Windows 10; what an older page leaves out, `drawn_by_page`
+/// fills in.
 #[tauri::command]
 fn set_window_theme(
     window: WebviewWindow,
     theme: String,
     look: Option<String>,
+    resolved: Option<String>,
 ) -> Result<(), String> {
     let theme = parse_theme(&theme).ok_or_else(|| format!("unknown window theme \"{theme}\""))?;
-    let look = match look.as_deref() {
-        None => Look::Smooth,
-        Some(word) => parse_look(word).ok_or_else(|| format!("unknown look \"{word}\""))?,
-    };
-    apply_theme(&window, theme, look).map_err(|error| error.to_string())?;
+    let (look, resolved) = drawn_by_page(theme, look.as_deref(), resolved.as_deref());
+    apply_theme(&window, theme, look, resolved).map_err(|error| error.to_string())?;
     let dir = data_dir(window.app_handle()).map_err(|error| error.to_string())?;
     save_theme(&dir, theme).map_err(|error| error.to_string())
 }

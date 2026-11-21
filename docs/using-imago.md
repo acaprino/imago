@@ -171,7 +171,7 @@ A call that sets something up returns the function that undoes it. The calls tha
 
 | Call | What it does |
 |---|---|
-| `applyLook(root, state, deps)` | The look of the window. `state` is `{ app, look, theme, glass }`; `deps` is `{ systemIsDark?, setWindowTheme? }`. `setWindowTheme` receives `light`, `dark` or `system` and is called only when the word changed |
+| `applyLook(root, state, deps)` | The look of the window. `state` is `{ app, look, theme, glass }`; `deps` is `{ systemIsDark?, setWindowTheme? }`. `setWindowTheme` receives the window theme (`light`, `dark` or `system`) and `{ look, resolved }`, the look and the theme the page draws (`light` or `dark`), which the window uses to tint its acrylic on Windows 10. It is called again only when one of the three changed: under `system`, a change of Windows' colours changes `resolved` |
 | `parseLook(value)`, `parseTheme(value)` | A stored value back into a look or a theme choice. A stale or corrupt value is the default |
 | `resolveTheme(choice, systemIsDark)`, `windowThemeFor(look, choice)` | The theme the page draws, and the theme the native window is asked for |
 | `guardDesktop(document, { allowReloadIn })` | With `keyPhase` set to `bubble`, register app shortcuts before the guard to handle keys such as Ctrl+F. The default is capture. Browser keys do nothing, the page menu stays out of the chrome, the mouse's back and forward buttons do nothing, images and links are not dragged out. `allowReloadIn` is a selector for places that run their own keys and menus, such as a terminal. The guard refuses F5, F12, Ctrl+R, Ctrl+Shift+I, J and C and the page menu in every build, so under `tauri dev` it also takes away reload and DevTools: call it only outside development, as the sketch below does |
@@ -194,7 +194,7 @@ import { tauriWindowApi } from '@acaprino/imago/tauri';
 const onError = (action: string, error: unknown) => notify(shell, `${action} failed: ${String(error)}`, { tone: 'err' });
 const api = tauriWindowApi(onError);
 applyLook(document.documentElement, { app: 'muro', look, theme, glass: true }, {
-  setWindowTheme: (word) => invoke('set_window_theme', { theme: word }),
+  setWindowTheme: (word, { look, resolved }) => invoke('set_window_theme', { theme: word, look, resolved }),
 });
 // The guard refuses reload and DevTools too: leave it out under `tauri dev`.
 if (!import.meta.env.DEV) guardDesktop(document, { allowReloadIn: '.xterm' });

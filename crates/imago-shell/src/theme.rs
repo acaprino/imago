@@ -80,13 +80,33 @@ pub enum Look {
     Oni,
 }
 
-/// `smooth` or `oni`, the page's words for its look, in lower case and nothing else.
-pub fn parse_look(word: &str) -> Option<Look> {
+/// The look a word of the page stands for: `oni` is ONI MODE, and any other word is Smooth, the
+/// default look, as the page's own `parseLook` reads it.
+pub fn parse_look(word: &str) -> Look {
     match word {
-        "smooth" => Some(Look::Smooth),
-        "oni" => Some(Look::Oni),
-        _ => None,
+        "oni" => Look::Oni,
+        _ => Look::Smooth,
     }
+}
+
+/// What the page draws, from the words it sends with its window theme: `look` (`smooth` or `oni`,
+/// read by [`parse_look`]) and `resolved`, the theme it draws (`light` or `dark`, never `system`).
+/// The tint of the acrylic is chosen from these two ([`acrylic_tint`]), not from what Windows says
+/// at the call. A page that sends neither, one older than the tint, is Smooth in the window theme's
+/// own word, and dark for `system`; a word that is not `light` or `dark` counts as none.
+pub fn drawn_by_page(
+    theme: WindowTheme,
+    look: Option<&str>,
+    resolved: Option<&str>,
+) -> (Look, Theme) {
+    let look = look.map_or(Look::Smooth, parse_look);
+    let resolved = match (resolved, theme) {
+        (Some("light"), _) => Theme::Light,
+        (Some("dark"), _) => Theme::Dark,
+        (_, WindowTheme::Light) => Theme::Light,
+        (_, WindowTheme::Dark | WindowTheme::System) => Theme::Dark,
+    };
+    (look, resolved)
 }
 
 /// The tint of the acrylic (RGBA) for `look` drawn in `theme`, light or dark: the ground of the
@@ -124,15 +144,15 @@ pub fn saved_theme(data_dir: &Path) -> Option<WindowTheme> {
 }
 
 /// The window takes the theme of the look the page shows, and its acrylic the tint of that look in
-/// that theme ([`acrylic_tint`]). With `system` the window follows Windows, and the tint is the one
-/// of the theme Windows has at the call.
+/// the theme the page draws, `resolved` ([`acrylic_tint`]; [`drawn_by_page`] reads both from what
+/// the page sent). It also gives the window the acrylic effect, so it is for the glass window only:
+/// call it on the window built from [`glass_window_config`], and on no other.
 ///
 /// The tint is for Windows 10, where the acrylic takes its colour from it. On Windows 11 22H2 and
 /// later it does no harm: there the acrylic is the system backdrop `DWMSBT_TRANSIENTWINDOW`, which
 /// takes no colour and follows only the window's theme, which is set first, as before. Setting the
 /// effect again is the call Tauri made when it built the window from [`glass_window_config`], and
-/// it sets the backdrop the window already has. So call it on a window built from that config,
-/// whose effect is the acrylic: any other window would get the acrylic too.
+/// it sets the backdrop the window already has.
 ///
 /// The first frame is not this function's: it has the theme saved with [`save_theme`] and the tint
 /// of the app's own config, until the page's first call.
@@ -140,17 +160,12 @@ pub fn apply_theme<R: Runtime>(
     window: &WebviewWindow<R>,
     theme: WindowTheme,
     look: Look,
+    resolved: Theme,
 ) -> tauri::Result<()> {
     window.set_theme(theme.to_tauri())?;
-    let drawn = match theme {
-        WindowTheme::Light => Theme::Light,
-        WindowTheme::Dark => Theme::Dark,
-        // No theme of its own: the one Windows has, which the window has just taken.
-        WindowTheme::System => window.theme()?,
-    };
     window.set_effects(WindowEffectsConfig {
         effects: vec![WindowEffect::Acrylic],
-        color: Some(acrylic_tint(look, drawn)),
+        color: Some(acrylic_tint(look, resolved)),
         ..Default::default()
     })
 }
@@ -306,12 +321,48 @@ mod tests {
     }
 
     #[test]
-    fn parse_look_reads_only_its_two_words() {
-        assert_eq!(parse_look("smooth"), Some(Look::Smooth));
-        assert_eq!(parse_look("oni"), Some(Look::Oni));
-        assert_eq!(parse_look("ONI"), None, "the words are lower case");
-        assert_eq!(parse_look("dark"), None, "a theme is not a look");
-        assert_eq!(parse_look(""), None);
+    fn parse_look_reads_oni_and_takes_any_other_word_for_smooth() {
+        assert_eq!(parse_look("smooth"), Look::Smooth);
+        assert_eq!(parse_look("oni"), Look::Oni);
+        assert_eq!(parse_look("ONI"), Look::Smooth, "lower case only");
+        assert_eq!(parse_look("modules"), Look::Smooth, "an unknown look");
+        assert_eq!(parse_look(""), Look::Smooth);
+    }
+
+    #[test]
+    fn the_page_says_what_it_draws_and_an_older_page_is_smooth_in_its_word() {
+        use WindowTheme::{Dark, Light, System};
+        // What the page sent: the theme it draws wins over the word, `system` included.
+        assert_eq!(
+            drawn_by_page(System, Some("oni"), Some("light")),
+            (Look::Oni, Theme::Light)
+        );
+        assert_eq!(
+            drawn_by_page(System, Some("smooth"), Some("dark")),
+            (Look::Smooth, Theme::Dark)
+        );
+        // A page that sends no look is Smooth.
+        assert_eq!(
+            drawn_by_page(Light, None, Some("light")),
+            (Look::Smooth, Theme::Light)
+        );
+        // A page that sends no theme drawn: the word's own, and dark for `system`.
+        for (theme, drawn) in [
+            (Light, Theme::Light),
+            (Dark, Theme::Dark),
+            (System, Theme::Dark),
+        ] {
+            assert_eq!(
+                drawn_by_page(theme, None, None),
+                (Look::Smooth, drawn),
+                "{theme:?}"
+            );
+            assert_eq!(
+                drawn_by_page(theme, Some("oni"), Some("purple")),
+                (Look::Oni, drawn),
+                "{theme:?}: a word that is not light or dark is none"
+            );
+        }
     }
 
     #[test]
