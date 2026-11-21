@@ -104,7 +104,9 @@ test('the states a control can only have once it is interactive are listed where
   }
   assert.ok(has('steps', 'selected'), 'steps show the current step as selected');
   assert.ok(has('progress', 'busy'), 'progress shows the indeterminate one as busy');
-  for (const id of ['button-secondary', 'button-ghost']) assert.ok(has(id, 'selected'), `${id} can be pressed (aria-pressed) and shows it as selected`);
+  for (const id of ['button-primary', 'button-secondary', 'button-ghost', 'button-danger', 'button-confirm-danger']) {
+    assert.ok(has(id, 'selected'), `${id} can be pressed (aria-pressed) and shows it as selected`);
+  }
 });
 
 // A control drawn on a native element and on an ARIA element is drawn once: the matrix shows both, in the same states, and

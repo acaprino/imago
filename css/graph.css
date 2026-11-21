@@ -118,7 +118,7 @@
   background: var(--im-sheet-solid); color: var(--im-text); overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere;
 }
 .im-editor-inspector > h3 { display: flex; align-items: center; justify-content: space-between; gap: var(--im-s-1); margin: 0 0 var(--im-s-2); }
-.im-editor-inspector input, .im-editor-inspector select, .im-editor-inspector textarea { max-width: 100%; width: 100%; min-width: 0; }
+.im-editor-inspector :is(.im-input, .im-select, .im-textarea) { max-width: 100%; width: 100%; min-width: 0; }
 .im-editor-inspector .im-btn { min-width: 0; max-width: 100%; height: auto; white-space: normal; }
 .im-editor-inspector .im-field { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); }
 .im-editor-inspector .im-btn[aria-pressed="true"] { border-color: var(--im-accent-text); }

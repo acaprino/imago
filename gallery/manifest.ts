@@ -10,7 +10,8 @@ export interface Control {
   states: State[];
 }
 
-const PUSH: State[] = ['rest', 'hover', 'press', 'focus', 'disabled', 'busy'];
+// A button can also be pressed down (aria-pressed): selected is that state, the selection fill and a bar along its bottom.
+const PUSH: State[] = ['rest', 'hover', 'press', 'focus', 'selected', 'disabled', 'busy'];
 const PICK: State[] = ['rest', 'hover', 'focus', 'selected', 'disabled'];
 
 const FIELD: State[] = ['rest', 'hover', 'focus', 'disabled', 'invalid', 'readonly'];
@@ -31,9 +32,8 @@ export const NATIVE_TWINS: Record<string, string> = {
 
 export const CONTROLS: Control[] = [
   { id: 'button-primary', states: PUSH },
-  // A neutral and a ghost button can be pressed (aria-pressed): selected is that state.
-  { id: 'button-secondary', states: [...PUSH, 'selected'] },
-  { id: 'button-ghost', states: [...PUSH, 'selected'] },
+  { id: 'button-secondary', states: PUSH },
+  { id: 'button-ghost', states: PUSH },
   { id: 'button-danger', states: PUSH },
   { id: 'button-confirm-danger', states: PUSH },
   { id: 'icon-button', states: ['rest', 'hover', 'press', 'focus', 'disabled'] },

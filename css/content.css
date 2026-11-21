@@ -128,8 +128,7 @@
 .im-choice-list { max-height: 420px; overflow: auto; }
 .im-choice-list button { display: grid; gap: 1px; width: 100%; padding: 9px 12px; border-bottom: 1px solid var(--im-line); }
 .im-choice-list li:last-child button { border-bottom: 0; }
-.im-choice-list button:hover { background: var(--im-hover); }
-.im-choice-list button[aria-pressed="true"] { background: var(--im-chip); box-shadow: inset 2px 0 0 var(--im-accent-text); }
+.im-choice-list button:not(.im-btn):hover { background: var(--im-hover); }
 .im-choice-list small { overflow-wrap: anywhere; }
 @container im-shell (width < 1000px) {
   .im-aside-layout { grid-template-columns: minmax(0,1fr); }

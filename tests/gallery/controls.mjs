@@ -2,6 +2,7 @@
 // state is told apart without colour alone, never changes the size of the control, and keeps its text readable.
 import assert from 'node:assert/strict';
 import { CONTROLS, NATIVE_TWINS } from '../../gallery/manifest.ts';
+import { settingInputHtml, settingsRowHtml } from '../../ts/ui/form-markup.ts';
 
 const LOOKS = ['smooth', 'oni'];
 const THEMES = ['dark', 'light'];
@@ -394,11 +395,45 @@ export default async (page) => {
       for (const id of ['segmented', 'segmented-native', 'tree', 'table-row']) {
         assert.ok(at(id, 'selected').fontWeight > rest(id).fontWeight, where(`${id} selected is heavier`));
       }
-      // A pressed button (aria-pressed) takes the selection fill, and in Smooth the weight 600; ONI's buttons are bold already.
-      for (const id of ['button-secondary', 'button-ghost']) {
+      // A pressed button (aria-pressed) takes the selection fill and a mark that is not a colour, in both looks: a 2px bar
+      // inside its bottom edge, as a selected segment has, in the accent text colour; on the two filled buttons (primary,
+      // confirming danger) it is in their text colour, since their fill is the accent's or the danger's, and they keep that
+      // fill. Smooth also takes the weight 600; ONI's buttons are 700 at rest and stay so.
+      const bars = await page.evaluate((ids) => {
+        const probe = document.createElement('i');
+        document.querySelector('#im-gallery-matrix .g-mx-surface').append(probe);
+        const barOf = (colour) => {
+          probe.style.boxShadow = `inset 0 -2px ${colour}`;
+          return getComputedStyle(probe).boxShadow;
+        };
+        const out = {};
+        for (const id of ids) {
+          const button = (state) => getComputedStyle(document.querySelector(`#im-gallery-matrix [data-control="${id}"][data-state="${state}"] .im-btn`));
+          const pressed = button('selected');
+          out[id] = { pressed: pressed.boxShadow, rest: button('rest').boxShadow, accent: barOf('var(--im-accent-text)'), text: barOf(pressed.color) };
+        }
+        probe.remove();
+        return out;
+      }, BUTTONS);
+      for (const id of BUTTONS) {
         const sel = at(id, 'selected');
-        assert.notEqual(sel.fill, rest(id).fill, where(`${id} pressed has the selection fill`));
-        assert.equal(sel.fontWeight, look === 'oni' ? 700 : 600, where(`${id} pressed is ${sel.fontWeight}`));
+        const filled = id === 'button-primary' || id === 'button-confirm-danger';
+        const bar = filled ? bars[id].text : bars[id].accent;
+        assert.ok(bars[id].pressed.startsWith(bar + ','), where(`${id} pressed has the bar inside its bottom edge (${bars[id].pressed}; the bar is ${bar})`));
+        assert.ok(!bars[id].rest.includes(' 0px -2px '), where(`${id} at rest has no bar (${bars[id].rest})`));
+        if (filled) assert.equal(sel.fill, rest(id).fill, where(`${id} pressed keeps its own fill`));
+        else assert.notEqual(sel.fill, rest(id).fill, where(`${id} pressed has the selection fill`));
+        assert.equal(sel.fontWeight, filled || look === 'oni' ? rest(id).fontWeight : 600, where(`${id} pressed is ${sel.fontWeight}`));
+      }
+      // The bar is painted, and in ONI the chamfer's clip-path leaves it along the straight part of the bottom edge: the
+      // button looks different with the bar taken away.
+      for (const id of BUTTONS) {
+        const box = page.locator(`#im-gallery-matrix [data-control="${id}"][data-state="selected"] .im-btn`);
+        const marked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => { el.style.boxShadow = 'inset 0 0 0 99px var(--im-btn-wash)'; });
+        const unmarked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => { el.style.boxShadow = ''; });
+        assert.ok(!marked.equals(unmarked), where(`${id} pressed: its bar is painted`));
       }
 
       // One drawing for a control on a native element and on an ARIA element: in every state, each native cell has the box,
@@ -429,6 +464,63 @@ export default async (page) => {
         await box.evaluate((el) => el.removeAttribute('data-g-unmarked'));
         assert.ok(!marked.equals(unmarked), where(`${control} ${state} ${n}: the mark of the native input is painted`));
       }
+
+      // Native controls where the package's layouts hold them. The graph inspector stretches its fields, not a checkbox or
+      // a radio; a settings row gives its field 260px, the box and not the input in it; a bare input stays in its line of
+      // text, inline as a native input is.
+      const placed = await page.evaluate((settingRow) => {
+        const host = document.createElement('div');
+        host.style.width = '600px';
+        // The inspector as graphInspector() writes it, in the flow of the page instead of over a graph.
+        host.innerHTML = `<section class="im-editor-inspector" role="dialog" aria-label="Node" style="position: static; width: 260px">
+            <label class="im-option"><input type="checkbox" class="im-check" checked>Pinned</label>
+            <label class="im-option"><input type="radio" class="im-radio" name="g-inspector-kind" checked>Service</label>
+            <input class="im-input" aria-label="Node name" value="Store"></section>
+          <div class="im-settings" data-g-settings="renderer">${settingRow}</div>
+          <div class="im-setting-row" data-g-settings="bare"><div><strong>Name</strong></div><input class="im-input" aria-label="Name" value="Store"></div>
+          <p style="margin: 0">Name <input class="im-input" aria-label="Inline" value="inline"> after</p>
+          <div class="im-choice-list"><button type="button" class="im-btn im-choice-row" aria-pressed="true"><span>Claude Code</span><span>default</span></button>
+            <div role="listbox" aria-label="Harness"><div class="im-row" role="option" aria-selected="true"><span class="im-row-text"><span class="im-row-title">Codex</span></span></div></div></div>`;
+        document.querySelector('#im-gallery-matrix .g-mx-surface').append(host);
+        const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
+        const outside = (control, selector) => box(document.querySelector(`#im-gallery-matrix [data-control="${control}"][data-state="rest"] ${selector}`));
+        const inspector = host.querySelector('.im-editor-inspector');
+        const pad = getComputedStyle(inspector);
+        const line = host.querySelector('p');
+        const textBox = (node) => { const range = document.createRange(); range.selectNodeContents(node); return box(range); };
+        const out = {
+          check: { inside: box(inspector.querySelector('.im-check')), outside: outside('checkbox-native', '.im-check') },
+          radio: { inside: box(inspector.querySelector('.im-radio')), outside: outside('radio-native', '.im-radio') },
+          field: box(inspector.querySelector('input.im-input')).width,
+          room: inspector.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight),
+          settings: { renderer: box(host.querySelector('[data-g-settings="renderer"] .im-input')).width, bare: box(host.querySelector('[data-g-settings="bare"] .im-input')).width },
+          inline: { before: textBox(line.firstChild), input: box(line.querySelector('input')), after: textBox(line.lastChild), display: getComputedStyle(line.querySelector('input')).display },
+          // A row of a choice list takes the common selection, its fill and its mark: as a pressed button, or as a selected
+          // row. (The line between the rows of a list is the list's, not the selection's.)
+          choice: ((pressed, row) => {
+            const look = (el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.boxShadow, s.fontWeight].join(' | '); };
+            return {
+              button: look(host.querySelector('.im-choice-row')), pressedButton: look(pressed),
+              row: look(host.querySelector('.im-choice-list .im-row')), selectedRow: look(row),
+            };
+          })(document.querySelector('#im-gallery-matrix [data-control="button-secondary"][data-state="selected"] .im-btn'),
+            document.querySelector('#im-gallery-matrix [data-control="row"][data-state="selected"] .im-row')),
+        };
+        host.remove();
+        return out;
+      }, settingsRowHtml({ title: 'Model', field: 'g-model', controlHtml: settingInputHtml({ name: 'g-model', label: 'Model', value: 'claude' }) }));
+      for (const kind of ['check', 'radio']) {
+        const { inside, outside } = placed[kind];
+        assert.deepEqual([inside.width, inside.height], [outside.width, outside.height], where(`a native ${kind} in the graph inspector is ${inside.width}x${inside.height}, as outside it`));
+      }
+      assert.ok(Math.abs(placed.field - placed.room) <= 0.5, where(`a field in the graph inspector fills its width (${placed.field} of ${placed.room})`));
+      assert.deepEqual(placed.settings, { renderer: 260, bare: 260 }, where('the field of a settings row is 260px, its box'));
+      const { before, input, after, display } = placed.inline;
+      assert.equal(placed.choice.button, placed.choice.pressedButton, where('a pressed button of a choice list is drawn as every pressed button'));
+      assert.equal(placed.choice.row, placed.choice.selectedRow, where('a selected row of a choice list is drawn as every selected row'));
+      assert.ok(display.startsWith('inline'), where(`a bare input is inline-level (${display})`));
+      assert.ok(input.left >= before.right - 0.5 && after.left >= input.right - 0.5 && input.top < before.bottom && input.bottom > before.top && after.top < input.bottom,
+        where(`a bare input stays in its line of text (${JSON.stringify(placed.inline)})`));
 
       // Busy: the label and the width stay, a spinner takes the icon's place, a second press does nothing.
       for (const id of BUTTONS) {
@@ -536,6 +628,9 @@ export default async (page) => {
       });
       const marks = await page.evaluate(marksOf, MARKED);
       const shapes = await page.evaluate(shapesOf, MARKED);
+      // The edge of a button turns in --im-t-fast (120ms): it is read once the turn is over.
+      await page.waitForTimeout(300);
+      const pressedEdge = await page.$eval('#im-gallery-matrix [data-control="button-secondary"][data-state="selected"] .im-btn', (el) => getComputedStyle(el).borderBottomColor);
       await page.emulateMedia({ forcedColors: 'none' });
       assert.notEqual(forced.button.style, 'none', where('forced colours: a focused button keeps its outline'));
       assert.equal(forced.button.width, '2px', where('forced colours: the ring is 2px'));
@@ -544,6 +639,7 @@ export default async (page) => {
       assert.equal(forced.progressFill, forced.highlight, where('forced colours: the progress fill is Highlight'));
       assert.equal(forced.checked, forced.highlight, where('forced colours: a checked box is Highlight'));
       assert.equal(forced.nativeChecked, forced.highlight, where('forced colours: a checked native box is Highlight'));
+      assert.equal(pressedEdge, forced.highlight, where('forced colours: the bar of a pressed button is its Highlight edge'));
       assert.ok(!/^none(, none)*$/.test(forced.nativeSelect.image) || forced.nativeSelect.appearance !== 'none', where(`forced colours: a native select keeps a chevron (${JSON.stringify(forced.nativeSelect)})`));
 
       // A selected item is a Highlight bar inside the item. It is not the outline, which is the focus ring, and the ring

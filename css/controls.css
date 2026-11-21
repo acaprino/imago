@@ -289,9 +289,20 @@
   --im-btn-wash: transparent;
 }
 
-/* pressed down (aria-pressed), or selected: the selection fill and a heavier weight, as a selected row has, so it is not the
-   colour alone. The filled buttons keep their fill: their text is on the accent and the danger colour. The exclusion of
-   aria-current="false" is in :where(), so the rule weighs what [aria-pressed] alone does and disabled still wins by order. */
+/* pressed down (aria-pressed), or selected, in both looks: the selection fill and the mark a selected segment has, a 2px bar
+   inside the bottom edge in the accent text colour, so it is not the colour alone (ONI's chamfer leaves the bar along the
+   straight part of the edge). The wash of hover and press stays under the bar. Smooth also takes the weight 600; ONI's
+   buttons are 700 already (looks/oni.css). The filled buttons keep their fill, and their bar is their text colour: the
+   accent text colour is the primary's fill. The exclusion of aria-current="false" is in :where(), so these rules weigh what
+   [aria-pressed] alone does and disabled still wins by order. */
+.im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) {
+  box-shadow: inset 0 -2px var(--im-accent-text), inset 0 0 0 99px var(--im-btn-wash);
+}
+
+.im-btn:is(.im-btn--primary, .im-btn--confirm-danger):is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) {
+  box-shadow: inset 0 -2px var(--im-btn-fg), inset 0 0 0 99px var(--im-btn-wash);
+}
+
 .im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]):where(:not(.im-btn--primary, .im-btn--confirm-danger)) {
   --im-btn-bg: var(--im-selected);
   font-weight: 600;
@@ -413,8 +424,10 @@
   user-select: text;
 }
 
-/* On the input itself the box is the input: its text is content, as the text of an input in the box is. */
+/* On the input itself the box is the input: it stays inline-level, as a native input is, so it keeps its place in a line of
+   text or beside a label; its text is content, as the text of an input in the box is. */
 input.im-input {
+  display: inline-block;
   cursor: text;
   -webkit-user-select: text;
   user-select: text;
@@ -1283,7 +1296,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   .im-key,
   .im-avatar { border-color: ButtonText; }
 
-  /* A pressed button: its fill vanishes, so its edge is the system's selection colour. */
+  /* A pressed button: its fill and its bar vanish (a shadow), so its edge is the system's selection colour. */
   .im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { border-color: Highlight; }
 
   .im-btn:is(:disabled, [aria-disabled="true"]),
