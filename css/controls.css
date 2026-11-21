@@ -78,8 +78,8 @@
   box-sizing: border-box;
   min-width: 18px;
   height: 18px;
-  padding: 0 5px;
-  font: 500 11px/1 var(--im-font-code);
+  padding: 0 5px; /* imago-check: allow literal-space — the key cap's drawing, not a space: 5px each side of its letters in an 18px cap */
+  font: 500 var(--im-fs-micro)/1 var(--im-font-code);
   letter-spacing: 0;
   text-transform: none;
   white-space: nowrap;
@@ -95,13 +95,13 @@
   flex: none;
   min-width: 20px;
   height: 18px;
-  padding: 0 6px;
-  font: 600 11px/1 var(--im-font-text);
+  padding: 0 6px; /* imago-check: allow literal-space — the count's drawing, as the key cap's: 6px each side of its figures in an 18px pill */
+  font: 600 var(--im-fs-micro)/1 var(--im-font-text);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   color: var(--im-chip-text);
   background: var(--im-chip);
-  border-radius: 999px;
+  border-radius: 999px; /* imago-check: allow literal-space — the count's pill, in both looks: a radius beyond its 18px rounds both ends; no radius token is a pill */
 }
 
 /* A tone always comes with a word or an icon with a name next to it: never the colour alone. */
@@ -116,12 +116,12 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: var(--im-s-1);
   box-sizing: border-box;
   height: 20px;
-  padding: 0 7px;
+  padding: 0 var(--im-s-2);
   white-space: nowrap;
-  font: 600 11.5px/1 var(--im-font-head);
+  font: 600 var(--im-fs-meta)/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-chip-text);
@@ -152,7 +152,7 @@
   flex: none;
   width: 26px;
   height: 26px;
-  font: 700 11px/1 var(--im-font-head);
+  font: 700 var(--im-fs-micro)/1 var(--im-font-head);
   letter-spacing: 0.04em;
   color: var(--im-text-2);
   background: var(--im-chip);
@@ -213,16 +213,16 @@
   flex: 0 1 auto;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--im-s-2);
   box-sizing: border-box;
   min-width: 0;
   max-width: 100%;
   height: var(--im-h-control);
-  padding: 0 12px;
+  padding: 0 var(--im-s-3);
   overflow: hidden;
   vertical-align: middle;
   white-space: nowrap;
-  font: 500 13px/1 var(--im-font-head);
+  font: 500 var(--im-fs-body)/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-btn-fg);
@@ -244,7 +244,7 @@
   white-space: nowrap;
 }
 
-.im-btn > .im-key { margin-right: -4px; }
+.im-btn > .im-key { margin-right: calc(var(--im-s-1) * -1); }
 
 .im-btn--primary {
   --im-btn-bg: var(--im-accent);
@@ -288,8 +288,8 @@
 
 .im-btn--sm {
   height: var(--im-h-control-sm);
-  padding: 0 8px;
-  font-size: 12px;
+  padding: 0 var(--im-s-2);
+  font-size: var(--im-fs-meta);
 }
 
 /* hover: a translucent wash, the box does not change */
@@ -309,7 +309,7 @@
 }
 
 .im-btn--primary:where(:not(:disabled, [aria-disabled="true"], [aria-busy="true"])):is(:active, [data-im-force="press"]) {
-  --im-btn-bg: color-mix(in srgb, var(--im-accent) 78%, #000000);
+  --im-btn-bg: color-mix(in srgb, var(--im-accent) 78%, #000000); /* imago-check: allow literal-color — black mixed into the accent, here and on the edge below: the pressed primary is the accent 22% darker in both themes, and no token is black */
   --im-btn-border: color-mix(in srgb, var(--im-accent) 78%, #000000);
   --im-btn-wash: transparent;
 }
@@ -382,24 +382,24 @@
 
 .im-field {
   display: grid;
-  gap: 6px;
+  gap: var(--im-s-1);
   min-width: 0;
 }
 
 .im-field-label {
-  font: 600 12.5px/1.2 var(--im-font-text);
+  font: 600 var(--im-fs-body)/1.2 var(--im-font-text);
   color: var(--im-text-2);
 }
 
 .im-field-hint {
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   line-height: 1.4;
   color: var(--im-muted);
 }
 
 /* One sentence under the field, starting with the word "Error", tied to the input by aria-describedby. */
 .im-field-error {
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   line-height: 1.4;
   color: var(--im-err);
 }
@@ -411,12 +411,12 @@
 .im-select {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--im-s-2);
   box-sizing: border-box;
   min-width: 0;
   height: var(--im-h-control);
-  padding: 0 10px;
-  font: 400 13px/1.45 var(--im-font-text);
+  padding: 0 var(--im-s-2);
+  font: 400 var(--im-fs-body)/1.45 var(--im-font-text);
   color: var(--im-text);
   background: var(--im-field);
   border: 1px solid var(--im-line-strong);
@@ -465,7 +465,7 @@ input.im-input::placeholder,
 .im-input > .im-icon,
 .im-select > .im-icon { color: var(--im-muted); }
 
-.im-input--code { font-family: var(--im-font-code); font-size: 12px; }
+.im-input--code { font-family: var(--im-font-code); font-size: var(--im-fs-meta); }
 
 /* The select is a button that opens a list: the value on the left, a chevron on the right. */
 .im-select {
@@ -475,17 +475,17 @@ input.im-input::placeholder,
 }
 
 /* A native select has no element inside it for the icon: its chevron is drawn in the background, two strokes where the
-   button's icon draws them (the path M7 10l5 5 5-5 of a 24px box drawn 16px wide, 10px in from the edge, a stroke of 1.6
-   at that scale). The value stops where the button's does, before the gap and the icon. */
+   button's icon draws them (the path M7 10l5 5 5-5 of a 24px box drawn 16px wide, the field's padding in from the edge, a
+   stroke of 1.6 at that scale). The value stops where the button's does, before the gap and the icon. */
 select.im-select {
-  /* imago-check: allow literal-space — the field's 10px padding, the 16px icon and the 8px gap of the select button */
-  padding-right: calc(10px + 16px + 8px);
+  /* imago-check: allow literal-space — the 16px box of the select button's icon, between the field's padding and the gap */
+  padding-right: calc(var(--im-s-2) + 16px + var(--im-s-2));
   background-image:
     linear-gradient(to top right, transparent calc(50% - 0.53px), var(--im-muted) 0 calc(50% + 0.53px), transparent 0),
     linear-gradient(to bottom right, transparent calc(50% - 0.53px), var(--im-muted) 0 calc(50% + 0.53px), transparent 0);
   background-position:
-    right calc(10px + 16px * 12 / 24) top calc(50% + 16px * 0.5 / 24),
-    right calc(10px + 16px * 7 / 24) top calc(50% + 16px * 0.5 / 24);
+    right calc(var(--im-s-2) + 16px * 12 / 24) top calc(50% + 16px * 0.5 / 24),
+    right calc(var(--im-s-2) + 16px * 7 / 24) top calc(50% + 16px * 0.5 / 24);
   background-size: calc(16px * 5 / 24) calc(16px * 5 / 24);
   background-repeat: no-repeat;
 }
@@ -565,7 +565,7 @@ input.im-input:disabled,
 .im-option {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--im-s-2);
   min-width: 0;
   white-space: nowrap;
   color: var(--im-text);
@@ -646,7 +646,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-switch {
   width: 32px;
   height: 18px;
-  border-radius: 999px;
+  border-radius: 999px; /* imago-check: allow literal-space — the switch's track is a pill in Smooth (ONI squares it, looks/oni.css); no radius token is a pill */
 }
 
 .im-switch::after {
@@ -694,7 +694,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-tabs {
   display: flex;
   align-items: stretch;
-  gap: 4px;
+  gap: var(--im-s-1);
   min-width: 0;
   max-width: 100%;
 }
@@ -706,11 +706,11 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   min-width: 0;
   max-width: 100%;
   height: var(--im-h-control);
-  padding: 0 10px;
+  padding: 0 var(--im-s-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 500 13.5px/calc(var(--im-h-control) - 2px) var(--im-font-head);
+  font: 500 var(--im-fs-title)/calc(var(--im-h-control) - 2px) var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-muted);
@@ -724,15 +724,15 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 
 .im-tab > .im-icon {
   vertical-align: middle;
-  margin-inline-end: 7px;
+  margin-inline-end: var(--im-s-2);
 }
 
 /* The mark of the selected tab is the weight and the line, not the colour. */
 .im-tab::after {
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: var(--im-s-2);
+  right: var(--im-s-2);
   bottom: 0;
   height: 2px;
   background: var(--im-accent-text);
@@ -794,12 +794,12 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-seg > :is(button, label) {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--im-s-1);
   box-sizing: border-box;
   height: calc(var(--im-h-control) - 6px);
-  padding: 0 9px;
+  padding: 0 var(--im-s-2);
   white-space: nowrap;
-  font: 500 12.5px/1 var(--im-font-head);
+  font: 500 var(--im-fs-body)/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-muted);
@@ -832,11 +832,11 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--im-s-2);
   box-sizing: border-box;
   min-width: 0;
   min-height: var(--im-h-row-2);
-  padding: 3px 10px;
+  padding: 2px var(--im-s-2);
   color: var(--im-text);
   background: transparent;
   border: 1px solid transparent;
@@ -865,14 +865,14 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   line-height: 1.2;
   color: var(--im-muted);
 }
 
 .im-row-meta {
   white-space: nowrap;
-  font: 500 12px/1 var(--im-font-text);
+  font: 500 var(--im-fs-meta)/1 var(--im-font-text);
   font-variant-numeric: tabular-nums;
   color: var(--im-text-2);
 }
@@ -945,11 +945,11 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-tree-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--im-s-1);
   box-sizing: border-box;
   min-width: 0;
   min-height: var(--im-h-row);
-  padding: 0 10px 0 calc(10px + 16px * var(--im-level, 0));
+  padding: 0 var(--im-s-2) 0 calc(var(--im-s-2) + var(--im-s-4) * var(--im-level, 0));
   color: var(--im-text);
   background: transparent;
   border: 1px solid transparent;
@@ -996,7 +996,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--im-fs-body);
 }
 
 .im-table th {
@@ -1004,10 +1004,10 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   top: 0;
   z-index: 1;
   height: var(--im-h-table-row);
-  padding: 0 10px;
+  padding: 0 var(--im-s-2);
   text-align: left;
   white-space: nowrap;
-  font: 600 12px/1 var(--im-font-text);
+  font: 600 var(--im-fs-meta)/1 var(--im-font-text);
   color: var(--im-muted);
   /* The header is sticky: rows scroll under it. Under .im-glass the sheet is translucent and they would show through. */
   background: var(--im-sheet-solid);
@@ -1016,7 +1016,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 
 .im-table td {
   height: var(--im-h-table-row);
-  padding: 3px 10px;
+  padding: 2px var(--im-s-2);
   vertical-align: middle;
   border-bottom: 1px solid var(--im-line-soft);
 }
@@ -1051,7 +1051,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: var(--im-fs-meta);
   line-height: 1.2;
   color: var(--im-muted);
 }
@@ -1070,10 +1070,10 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 8px 16px;
+  gap: var(--im-s-2) var(--im-s-4);
   margin: 0;
-  padding: 2px var(--im-panel-pad, 16px) 14px;
-  font-size: 12.5px;
+  padding: 2px var(--im-panel-pad, var(--im-s-4)) var(--im-s-3);
+  font-size: var(--im-fs-body);
 }
 
 .im-facts dt {
@@ -1091,7 +1091,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 
 .im-facts .im-facts-code {
   font-family: var(--im-font-code);
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
 }
 
 /* ---------- note: a result or a warning that stays in the page ---------- */
@@ -1099,10 +1099,10 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-note {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--im-s-3);
   box-sizing: border-box;
   width: 100%;
-  padding: 10px 12px;
+  padding: var(--im-s-2) var(--im-s-3);
   background: color-mix(in srgb, var(--im-tone, var(--im-info)) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--im-tone, var(--im-info)) 50%, transparent);
   border-radius: var(--im-r-sheet);
@@ -1160,12 +1160,12 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 12px;
+  gap: var(--im-s-3);
   min-width: 220px;
 }
 
 .im-progress-value {
-  font: 600 13px/1 var(--im-font-code);
+  font: 600 var(--im-fs-body)/1 var(--im-font-code);
   color: var(--im-text-hi);
 }
 
@@ -1178,7 +1178,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   overflow: hidden;
   background: var(--im-field);
   border: 1px solid var(--im-line-soft);
-  border-radius: 999px;
+  border-radius: 999px; /* imago-check: allow literal-space — the progress track is a pill in Smooth (ONI squares it, looks/oni.css); no radius token is a pill */
 }
 
 .im-progress::before {
@@ -1204,7 +1204,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-steps {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  gap: var(--im-s-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1213,10 +1213,10 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-steps > li {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--im-s-2);
   box-sizing: border-box;
   min-width: 0;
-  padding: 9px 10px;
+  padding: var(--im-s-2);
   background: var(--im-field);
   border: 1px solid var(--im-line);
   border-radius: var(--im-r-sheet);
@@ -1231,7 +1231,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   flex: none;
   width: 26px;
   height: 26px;
-  font: 600 11.5px/1 var(--im-font-code);
+  font: 600 var(--im-fs-meta)/1 var(--im-font-code);
   color: var(--im-muted);
   border: 1px solid var(--im-line-strong);
   border-radius: var(--im-r-control);
@@ -1252,7 +1252,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 }
 
 .im-step-sub {
-  font-size: 11.5px;
+  font-size: var(--im-fs-meta);
   font-weight: 400;
   color: var(--im-muted);
 }
@@ -1282,9 +1282,9 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-empty {
   display: grid;
   justify-items: start;
-  gap: 10px;
-  margin: 4px var(--im-panel-pad, 16px) var(--im-panel-pad, 16px);
-  padding: 14px;
+  gap: var(--im-s-2);
+  margin: var(--im-s-1) var(--im-panel-pad, var(--im-s-4)) var(--im-panel-pad, var(--im-s-4));
+  padding: var(--im-s-3);
   color: var(--im-text-2);
   border: 1px dashed var(--im-line-strong);
   border-radius: var(--im-r-sheet);
@@ -1301,15 +1301,15 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   display: block;
   height: 10px;
   background: var(--im-skeleton);
-  border-radius: 3px;
+  border-radius: 3px; /* imago-check: allow literal-space — the skeleton bar's drawing: a 10px bar rounded 3px in both looks, less than a chip */
 }
 
 .im-failure {
   display: grid;
   justify-items: start;
-  gap: 10px;
-  margin: 4px var(--im-panel-pad, 16px) var(--im-panel-pad, 16px);
-  padding: 14px;
+  gap: var(--im-s-2);
+  margin: var(--im-s-1) var(--im-panel-pad, var(--im-s-4)) var(--im-panel-pad, var(--im-s-4));
+  padding: var(--im-s-3);
   color: var(--im-text);
   border: 1px solid color-mix(in srgb, var(--im-err) 50%, transparent);
   border-radius: var(--im-r-sheet);
@@ -1318,7 +1318,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-failure b {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--im-s-2);
   font-weight: 600;
   color: var(--im-err);
 }
@@ -1465,7 +1465,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 .im-path-field, .im-loader {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--im-s-2);
 }
 .im-loader { display: inline-flex; }
 .im-steps > li:has(> button:only-child) { padding: 0; }
@@ -1491,8 +1491,8 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   background: var(--im-button);
   border: 1px solid var(--im-line-strong);
   border-radius: var(--im-r-control);
-  padding: 4px 10px;
-  margin-inline-end: 8px;
+  padding: var(--im-s-1) var(--im-s-2);
+  margin-inline-end: var(--im-s-2);
 }
 .im-file-selector:focus-visible { outline: 2px solid var(--im-accent-text); outline-offset: 2px; }
 .im-file-selector:disabled::file-selector-button { color: var(--im-muted); border-style: dashed; }

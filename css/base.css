@@ -13,7 +13,7 @@
 
 .im-shell {
   color: var(--im-text);
-  font: 400 13px/1.45 var(--im-font-text);
+  font: 400 var(--im-fs-body)/1.45 var(--im-font-text);
   text-align: left;
   -webkit-font-smoothing: antialiased;
   /* Chrome text is not selectable and nothing is a link: the window behaves like an app, not a page. */

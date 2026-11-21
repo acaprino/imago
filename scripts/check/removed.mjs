@@ -5,8 +5,8 @@
 // (an argument that went, an option that changed) is not a name, and is not here. tests/check.test.ts asserts that
 // every name of the tables is here, but those of KEPT, and that the package no longer defines any of them.
 //
-// Built from moving-from-0.1.4.md and moving/task-4.md, task-5.md, task-6.md, task-9.md, task-13.md, task-14.md,
-// task-16.md, task-17.md and task-18.md. A later table may correct an earlier one: task-16.md brings back
+// Built from moving-from-0.1.4.md and moving/task-4.md, task-5.md, task-6.md, task-7.md, task-9.md, task-13.md,
+// task-14.md, task-16.md, task-17.md and task-18.md. A later table may correct an earlier one: task-16.md brings back
 // data-im-badge (KEPT), and keeps --im-item-color as the package's, which the app reads and never sets (`when: 'set'`).
 
 /**
@@ -88,6 +88,41 @@ export const REMOVED = [
   { old: 'ShinatamaPaletteTokens', kind: 'export', now: 'nothing in the package: the skins are Shinatama\'s own overrides of tokens' },
   // moving/task-9.md: the React binding
   { old: 'DetailPanel', kind: 'export', now: 'the details as the children of the inspector: give them to Workbench as details, with detailsLabel' },
+  // moving/task-7.md: the classes of the tiling workspace (createTilingWorkspace) take the im- prefix
+  { old: 'wm-host', kind: 'class', now: 'im-host' },
+  { old: 'wm-canvas', kind: 'class', now: 'im-tile-canvas (im-canvas-panel, -frame and -message are the canvas of a page)' },
+  { old: 'wm-pane', kind: 'class', now: 'im-pane' },
+  { old: 'wm-focused', kind: 'class', now: 'im-focused' },
+  { old: 'wm-header', kind: 'class', now: 'im-header' },
+  { old: 'wm-chrome', kind: 'class', now: 'im-chrome' },
+  { old: 'wm-control', kind: 'class', now: 'im-control' },
+  { old: 'wm-pane-focus', kind: 'class', now: 'im-pane-focus' },
+  { old: 'wm-pane-tools', kind: 'class', now: 'im-pane-tools' },
+  { old: 'wm-tabs', kind: 'class', now: 'im-tile-tabs (im-tabs is the strip of the title bar and of a panel)' },
+  { old: 'wm-tab', kind: 'class', now: 'im-tile-tab (im-tab is a tab of the title bar and of a panel)' },
+  { old: 'wm-tabwrap', kind: 'class', now: 'im-tile-tabwrap' },
+  { old: 'wm-tabwrap-active', kind: 'class', now: 'im-tile-tabwrap-active' },
+  { old: 'wm-tab-close', kind: 'class', now: 'im-tile-tab-close' },
+  { old: 'wm-tab-toned', kind: 'class', now: 'im-tile-tab-toned' },
+  { old: 'wm-tab-dragging', kind: 'class', now: 'im-tile-tab-dragging' },
+  { old: 'wm-tabs-filtered', kind: 'class', now: 'im-tile-tabs-filtered' },
+  { old: 'wm-body', kind: 'class', now: 'im-tile-body (im-body is the shell\'s row of the sidebar and the work area)' },
+  { old: 'wm-placeholder', kind: 'class', now: 'im-placeholder' },
+  { old: 'wm-empty-start', kind: 'class', now: 'im-tile-empty-start (im-empty is the empty state of a panel)' },
+  { old: 'wm-collapsed', kind: 'class', now: 'im-collapsed' },
+  { old: 'wm-splitter', kind: 'class', now: 'im-tile-splitter (im-splitter is the handle of splitView)' },
+  { old: 'wm-drop-preview', kind: 'class', now: 'im-drop-preview' },
+  { old: 'wm-drop-label', kind: 'class', now: 'im-drop-label' },
+  { old: 'wm-drop-marker', kind: 'class', now: 'im-drop-marker' },
+  { old: 'wm-drag-ghost', kind: 'class', now: 'im-drag-ghost' },
+  { old: 'wm-changing', kind: 'class', now: 'im-changing' },
+  { old: 'wm-dragging', kind: 'class', now: 'im-dragging' },
+  { old: 'wm-status', kind: 'class', now: 'im-tile-status (im-status is the shell\'s status row)' },
+  { old: 'wm-add', kind: 'class', now: 'im-add' },
+  { old: 'wm-filtered-out', kind: 'class', now: 'im-filtered-out' },
+  { old: 'wm-parking', kind: 'class', now: 'im-parking' },
+  { old: 'data-wm-key', kind: 'attribute', now: 'data-im-tile-key, on the tiling workspace\'s controls, tabs and handles' },
+  { old: '--tab-tone', kind: 'property', now: '--im-tile-tone, which the tiling workspace sets on a tab from toneForView' },
 ];
 
 /**

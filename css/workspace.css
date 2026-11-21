@@ -20,7 +20,7 @@
 .im-breadcrumbs button { padding: var(--im-s-1); background: transparent; border: 0; }
 .im-breadcrumbs button:hover, .im-disclosure > summary:hover { background: var(--im-hover); }
 .im-breadcrumbs button:focus-visible, .im-disclosure > summary:focus-visible { outline: 2px solid var(--im-accent-text); outline-offset: -2px; }
-.im-disclosure > summary { padding: var(--im-s-2); font-weight: 600; cursor: pointer; }
+.im-disclosure > summary { padding: var(--im-s-2); font-weight: 600; }
 .im-disclosure > :not(summary) { margin-inline-start: var(--im-s-3); }
 
 [data-im-pane] { position: relative; }
