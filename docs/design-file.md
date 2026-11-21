@@ -492,10 +492,41 @@ goes on them. The calls are in [content-composition.md](content-composition.md) 
 | A graph, its host and its key | `im-graph-host`, `im-graph-panel` round the graph; `im-graph-legend`, `im-graph-summary` | the host on the app's element, then `graphView`; `graphLegendHtml` |
 | A group that opens | `im-disclosure` | `uiPart('details')`, `Disclosure` |
 
-Text helpers, for content inside a pattern: `im-muted` (the muted colour), `im-mono` (the code font), `im-grow` (takes
-the room left), `im-text-accent` (the accent on data), `im-content-text` (content that can be selected outside a page:
-a message, a path, terminal output). A page's own headings are `h1` 18, `h2` 14 and `h3` 13, in the head font, in
-sentence case in both looks.
+Where no renderer writes a pattern, the app writes its markup with the package's classes, as the app named below does;
+the gallery shows each one so written. They are the package's, and no app redefines them.
+
+| Pattern | Class | As written by |
+|---|---|---|
+| A section's line under its heading | `im-section-description` | Muro |
+| The room for a back button above a page's head | `im-breadcrumb-space` | Muro |
+| The head of a record: its avatar, its `h1`, its chips; and its meta (a path, a button, a line, a disclosure) | `im-record-heading`, `im-record-meta` | Muro |
+| The files a record holds: a name, what it is, a path | `im-file-list` | Muro |
+| A row of a stack list that opens its record: the whole row one button | `im-list-link` | Muro |
+| In a table: a record's name and path as a ghost button; a state with its icon (in `ok`, `im-tone-ok`); a cell's head on one line, and a line under it; a note of a log that keeps its line breaks | `im-record-button`, `im-inline-cell`, `im-tone-ok`, `im-inline`, `im-cell-meta`, `im-log-note` | Muro |
+| A row of chips in a definition | `im-tag-row` | Muro |
+| The numbered result of a run: its chips, the request, the numbered steps, a line | `im-numbered-result` | Muro |
+| A column of controls beside the content, in two stacks of 12 and of 4 | `im-aside-layout`, `im-stack-3`, `im-stack-2` | Muro |
+| A list of choices, each a button with `aria-pressed`; or a listbox of buttons `im-btn im-choice-row`, each with its two texts | `im-choice-list`, `im-choice-row` | Muro |
+| A grid of fields | `im-form-grid` | Muro |
+| In a form: a field shown for one choice; a slot hidden while empty; a section that takes focus; the operations it runs with their status; notes with their files; a disclosure of more actions; a line pushed to the start of the foot | `im-field-space`, `im-hide-empty`, `im-form-section`, `im-operation-list`, `im-operation-status`, `im-notes`, `im-file-lines`, `im-disclosure-section`, `im-push-start` | Muro |
+| A line of its own in a hint | `im-block` | Muro |
+| The sections of an inspection page | `im-section` (16 between two), a kicker over its title `im-kicker` | Daodan |
+| A list of findings; a grid of cards; a padded card; a region that scrolls up to half the window; a readout that keeps its lines | `im-detail-list`, `im-auto-grid`, `im-inset`, `im-scroll--bounded`, `im-readout` | Daodan |
+| A canvas in a frame of a fixed height, a smaller preview frame, a message over it, what fills it | `im-canvas-frame`, `im-canvas-frame--preview`, `im-canvas-message`, `im-fill` | Daodan |
+| A mark the size of a line of text (a harness's logo before its name) | `im-inline-mark` | Daodan |
+| The sessions of a thread over its conversation, which scrolls on its own | `im-summary-list`, `im-scroll-log` | Shinatama |
+| A banner at the foot of a viewport | `im-viewport-footer` | Shinatama |
+| A dialog of files; a render view (an address bar over a canvas) | `im-file-dialog`, `im-render-view` | Shinatama |
+| The actions at the foot of a form in a sheet | `im-sheet-actions` | the gallery's form sheet |
+
+Text helpers, for content inside a pattern: `im-muted` (the muted colour), `im-caption` (a muted meta line), `im-mono`
+(the code font), `im-grow` (takes the room left), `im-end` (pushed to the end of its row), `im-nowrap` (one line),
+`im-truncate` (one line, cut with an ellipsis), `im-text-accent` (the accent on data), `im-content-text` (content that
+can be selected outside a page: a message, a path, terminal output). `im-ellipsis` draws what `im-truncate` draws, and
+`data-im-align="end"` what `im-end` draws: an app writes `im-truncate` and `im-end`. `im-path`, a muted path on one
+line, is used by nothing and the gallery does not draw it: a file's location is `im-file-location` (`fileWorkspace`) and
+an editable path `im-path-field` (`pathField`). A page's own headings are `h1` 18,
+`h2` 14 and `h3` 13, in the head font, in sentence case in both looks.
 
 ## Surfaces: which one for what
 
@@ -630,7 +661,7 @@ of the second for itself: an app never writes or styles them.
 | `data-im-key` | A control | Its identity across a repaint, for focus and dialogs (`captureDomState`) |
 | `data-im-scroll` | A region that scrolls | Its scroll is kept across a repaint (`captureDomState`) |
 | `data-im-rail-detail` | Anything inside the sidebar | Hidden in the rail |
-| `data-im-align` | An item of a toolbar | `end`: pushed to the end |
+| `data-im-align` | An item of a toolbar | `end`: pushed to the end, as `im-end` does; an app writes `im-end` |
 
 | Attribute | Written by | What it says |
 |---|---|---|

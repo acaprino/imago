@@ -91,6 +91,18 @@ keyboard targets and the geometry.
 | `graphGesture(event, { move, release, cancel })` | One gesture of the pointer from a press to its release, even when it leaves the canvas. Escape cancels it and is claimed. It returns the function that stops it |
 | `graphMiniature(options)` | A small decorative drawing of a graph, `im-graph-mini`, with its nodes `im-graph-mini-node` and its edges `im-graph-mini-edge`: `{ width, height, nodeWidth, nodeHeight, nodes, edges }` |
 
+The parts the app writes in its own markup round the editor, as Shinatama's team map does, take the editor's classes:
+
+| Part | Class |
+|---|---|
+| In the palette: a list (`im-editor-items`) of things the person drags onto the map, each a button (`im-editor-source`), and a list of what is wrong (`im-editor-issues`); in the toolbar, a status of it in its tone (`im-editor-summary`) | `im-editor-items`, `im-editor-source`, `im-editor-issues`, `im-editor-summary` |
+| In a node: its title with a dot (`im-editor-node-title`, `im-editor-dot`), a caption (`im-editor-caption`) and a foot (`im-editor-node-foot`) | `im-editor-node-title`, `im-editor-dot`, `im-editor-caption`, `im-editor-node-foot` |
+| On the map: the line that says what to do on an empty one; the shelf under the map, with its key; the ghost of what is dragged onto it | `im-editor-empty`, `im-editor-shelf`, `im-editor-ghost` |
+| In the form of a connection: a choice of kinds, each with a sample of its line; a group of options; a description | `im-editor-choice`, `im-editor-sample`, `im-editor-options`, `im-editor-description` |
+| In a list of saved arrangements: a preset, and the form on one line that saves one | `im-editor-preset`, `im-editor-inline-form`, in `im-editor-popup` |
+
 The details and the form of the selected node or connection go in the shell's inspector (`inspector(shell).open`).
-`graphInspector(label)` makes a panel inside the editor's stage (`im-editor-inspector`) instead; an editor does not use
-it, because the inspector is the only side panel ([design-file.md](design-file.md), "Surfaces: which one for what").
+`graphInspector(label)` makes a panel inside the editor's stage (`im-editor-inspector`) instead, and Shinatama's team map
+also puts its saved arrangements in one (with `im-editor-popup`). An editor does not use it: the form of what is selected
+goes in the shell's inspector, the only side panel, and a short choice tied to a control (the saved arrangements) in a
+sheet (`openSheet`) ([design-file.md](design-file.md), "Surfaces: which one for what").

@@ -685,6 +685,7 @@ breakpoints of what stays follow the shell (`@container im-shell` at 1000, 850 a
 | `.im-row[aria-pressed="true"]`, `.im-row[aria-current="page"]`, `.im-btn[aria-pressed="true"]` in the accent colour | The selection of the row (its fill and a heavier title) and of the button (the selection fill, a 2px bar inside its bottom edge in the accent text colour, and in Smooth the weight 600), the same for `aria-selected="true"`, an `aria-current` that is not `"false"` and `aria-pressed="true"`, on `im-row`, `im-tab`, `im-tree-item`, `im-menu-item`, `im-btn` and the segments of `im-seg`. A primary and a confirming danger button keep their fill and take the bar in their text colour |
 | `.im-setting-row input` 260px wide | The field's box, `.im-setting-row .im-input`, is 260px: the box round the input as `settingInputHtml` writes it, or the input itself |
 | `.im-editor-inspector input, select, textarea` stretched to its width | Its fields are stretched (`im-input`, `im-select`, `im-textarea`); a checkbox and a radio keep their 16px |
+| A `select.im-select` that the browser autofills, losing its chevron | Nothing to do: it keeps its chevron |
 
 ### The tiling workspace
 
@@ -730,6 +731,7 @@ workspace makes for its tabs and panels are ids, not names an app writes: they a
 | `wm-parking` | `im-parking` |
 | `data-wm-key` | `data-im-tile-key`, on the workspace's controls, tabs and handles (`data-im-key` is the focus key of a repaint) |
 | `--tab-tone` | `--im-tile-tone`, which the workspace sets on a tab from `toneForView`; an app reads it, never sets it |
+| The selected tab of a pane filled twice, by its wrap and by itself | Nothing to do: the wrap (`im-tile-tabwrap-active`) holds the selection fill, and the selected tab in it is not filled again, so its text sits on the selection once |
 
 ### Messages and states
 
@@ -739,6 +741,7 @@ workspace makes for its tabs and panels are ids, not names an app writes: they a
 | A note written by hand (`<div class="im-note">` with its icon, `b` and `span`) | `noteHtml({ icon, title, message, tone })` writes the same markup |
 | `BannerOptions` | `NoteOptions`; its `title` is optional and its `tone` is a status tone |
 | `im-banner` | `im-note im-note--block`: a title in `b`, the message in `p`, a `ul` of `<b>label</b>: message`, the buttons in `im-action-row` |
+| The icon of a block note above its title | Nothing to do: it sits beside its title, at the gap of the compact note, and the title, the paragraph, the list and the actions are one column to its right |
 | `im-callout` | `im-note` (`noteHtml({ message })`); its tone, if any, in `data-im-tone` |
 | `busyIndicatorHtml(label)` | An operation in the content: `loader(doc, label)` (`im-loader`, inline). A button that runs it: `aria-busy="true"` on the button. A panel that loads: its loading state (`setPanelState`, `panelStateHtml`) |
 | `im-busy` | The same: `im-loader`, `aria-busy="true"` on the button, or the panel's loading state. Nothing is fixed to the corner of the window |
@@ -773,6 +776,7 @@ In TypeScript a tone outside its set is a type error; from plain JavaScript it i
 | `im-padded-drawer` | `inspector(shell).open(content, opener?)`, or a dialog for a form that must block the window while it saves, as above |
 | `createContentDialog(shell, options).show(markup, 'drawer')` | `show(markup)`. The second argument is gone: a dialog is always the centred one. To open a side panel, use the inspector |
 | `dialog.im-content-dialog.im-native-controls` with a section heading | `dialog.im-content-dialog` with a section heading, which `uiPart('dialog')` writes |
+| A content dialog taller than the window, opened scrolled down to its first control (a Close button under a long text) | `openContentDialog` and `createContentDialog` open it at its top, with the focus on the dialog. A control that must take the focus when it opens carries `autofocus`: it takes it, as before |
 | `formHeaderHtml(title, subtitle, locked, id)`, its close button named `Close` with no tooltip | `formHeaderHtml(title, subtitle, locked, id, closeLabel)`: `closeLabel` (default `Close`) is the close button's `aria-label` and its `title`. An app in another language passes its word |
 
 ### Keys and commands

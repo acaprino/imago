@@ -73,7 +73,7 @@ uses `showModal()`.
 |---|---|---|
 | `confirm(shell, options)` | A decision | A promise of `true` or `false` ([using-imago.md](using-imago.md), section 5) |
 | `openFormDialog(shell, options)` | A form the package lays out: a head, a body that scrolls, a foot that stays | A `FormDialog`: `root`, `dialog`, `body` and `foot` to append the controls to, `close()` (true when this call dismissed it), `lock(locked)` and `setTitle(title, subtitle)`. `FormDialogOptions`: `title`, `subtitle?`, `icon?`, `wide?` (`im-form-dialog--wide`), `closeLabel` (the words of the close button), `onClose?` |
-| `openContentDialog(shell, dialog, options)` | A `dialog` element the app owns, with its own heading, name and form | `{ close(), dispose() }`. `ContentDialogOptions`: `canDismiss?`, `onClose?` |
+| `openContentDialog(shell, dialog, options)` | A `dialog` element the app owns, with its own heading, name and form | `{ close(), dispose() }`. `ContentDialogOptions`: `canDismiss?`, `onClose?`. It opens at its top with the focus on the dialog, or on the control that carries `autofocus` |
 | `createContentDialog(shell, options)` | A `dialog` the package makes and the app fills again and again with trusted markup | `{ element, show(markup), close(), dismiss(), dispose() }`. `ContentDialogControllerOptions`: `label?` (its name when the markup has no `h1` or `h2`), `canDismiss?`, `onClose?`, `fallbackFocus?` |
 | `openDialogSheet(dialog, options)` | A native form `dialog` docked as a sheet to a control or a pane | Whether it opened. `{ anchor, placement, lightDismiss? }`; its own cancel event still decides whether it closes |
 
