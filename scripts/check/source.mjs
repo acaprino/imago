@@ -11,11 +11,12 @@ import { parseCss, parseDeclarations } from './css.mjs';
  * @typedef {import('./css.mjs').Sheet} Sheet
  * @typedef {import('./css.mjs').Rule} Rule
  * @typedef {import('./css.mjs').Comment} Comment
- * @typedef {{ text: string, line: number, before: string, template: boolean, attribute?: string, at?: number }} Str
+ * @typedef {{ text: string, line: number, before: string, template: boolean, attribute?: string, at?: number, lead?: string }} Str
  *   A string of a script, or an attribute value of a page. In `text` each ${} of a template literal is the character
  *   DYNAMIC followed by as many new lines as the expression held, so that a line counted in `text` is a line of the file.
  *   `before` is the code just before the string (strings and comments in it blanked), or `name=` for an attribute.
  *   `at` is the offset of a script string's opening quote in the code it was lexed from.
+ *   `lead` is, for a string inside the ${} of a template literal, the text of that template before the ${ (its own substitutions as DYNAMIC).
  * @typedef {{ text: string, line: number }} Chunk
  *   Code with its strings' contents and its comments blanked, new lines kept.
  * @typedef {{ imported: string, local: string }} Binding
@@ -236,7 +237,9 @@ export function lexScript(text, firstLine = 1) {
       if (text[i] === '$' && text[i + 1] === '{') {
         str.text += text.slice(literal, i);
         blank(literal, i);
+        const inside = strings.length;
         const end = codeUntil(i + 2, true);
+        for (const nested of strings.slice(inside)) nested.lead ??= str.text;
         str.text += DYNAMIC + '\n'.repeat(text.slice(i, end).split('\n').length - 1);
         i = end;
         literal = end;
@@ -339,17 +342,18 @@ function inlineSheet(strings) {
   };
   strings.forEach((str, index) => {
     if (str.attribute !== undefined) return;
+    const lineOf = lineCounter(str.text, str.line);
     for (const match of str.text.matchAll(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/g)) {
-      const at = lineAt(str.text, (match.index ?? 0) + match[0].indexOf(match[2]), str.line);
+      const at = lineOf((match.index ?? 0) + match[0].indexOf(match[2]));
       add(parseDeclarations(match[2], at), at);
     }
     for (const match of str.text.matchAll(/<meta\b[^>]*>/gi)) {
-      const at = lineAt(str.text, match.index ?? 0, str.line);
+      const at = lineOf(match.index ?? 0);
       const color = themeColor(match[0]);
       if (color !== null) add(parseDeclarations(`theme-color: ${color}`, at), at);
     }
     for (const match of str.text.matchAll(MARKUP_COLOR)) {
-      const at = lineAt(str.text, match.index ?? 0, str.line);
+      const at = lineOf(match.index ?? 0);
       add(parseDeclarations(`${match[1].toLowerCase()}: ${match[2] ?? match[3] ?? ''}`, at), at);
     }
     const canvas = /\.(fillStyle|strokeStyle|shadowColor)\s*=\s*$/.exec(str.before);
