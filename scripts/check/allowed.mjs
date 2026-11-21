@@ -1,7 +1,7 @@
 // The literal values that are not findings, each with the reason it is allowed. A value goes here only when it is not
 // a measure or a colour of the design: what is a measure or a colour is a token (css/tokens.css). A single place that
 // needs a literal takes an exception comment instead, `imago-check: allow <rule> — <reason>`, on its line or the line
-// above, and the program prints it.
+// above, and the program prints it. This is the one place for what the rules allow: rules.mjs keeps no list of its own.
 
 /** @typedef {{ value: string, reason: string, properties?: string[] }} Allowed */
 
@@ -47,6 +47,25 @@ export const COLOR = [
   { value: 'none', reason: 'no colour at all' },
   { value: 'initial', reason: 'the colour the property starts from' },
   { value: 'unset', reason: 'the colour of the parent, or none' },
+];
+
+/** Opacities on a disabled state that are not a finding: they dim nothing. A value is compared as a number too (`1.0`). */
+export const OPACITY = [
+  { value: '1', reason: 'full opacity: it dims nothing' },
+  { value: '100%', reason: 'full opacity, as a percentage' },
+];
+
+/** The values of text-transform in an app: the case of a label is the look's, never typed. */
+export const CASE = [
+  { value: 'none', reason: 'the text as it is written' },
+  { value: 'var(--im-case)', reason: 'the case of the look: none in smooth, capitals in ONI' },
+];
+
+/** The values of letter-spacing in an app. A zero of any unit is no spacing at all. */
+export const TRACKING = [
+  { value: '0', reason: 'no spacing at all; a zero is a zero in any unit' },
+  { value: 'normal', reason: 'the spacing of the font itself' },
+  { value: 'var(--im-track)', reason: 'the spacing of the look: 0 in smooth, the spacing of its capitals in ONI' },
 ];
 
 /** The colours of the system. Under `@media (forced-colors: active)` borders and outlines take them where fills vanish. */

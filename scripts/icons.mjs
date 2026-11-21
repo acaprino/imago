@@ -1,8 +1,10 @@
 // Makes the icon set of each app into icons/<app>/ from tokens/imago.tokens.json.
-//   node scripts/icons.mjs            write the files (draws the PNGs: Windows, with Segoe UI, and Playwright's Chromium)
-//   node scripts/icons.mjs --check    compare the SVGs and the list of files with what the tokens give, without drawing;
-//                                     exit 1 on a difference
-//   --tokens <file> and --out <dir> point at other files (the tests check a copy).
+//   node scripts/icons.mjs            write the files (draws the PNGs: Windows, with Segoe UI Variable Display, and
+//                                     Playwright's Chromium; anywhere else it refuses, and says why)
+//   node scripts/icons.mjs --check    compare the SVGs and the list of files with what the tokens give, the size in the
+//                                     header of each PNG with its name, and each .ico with the container of the
+//                                     folder's PNGs, without drawing; exit 1 on a difference
+//   --tokens <file> and --out <dir> point at other files (the tests check a copy). Any other argument is exit 2.
 //
 // The icon is the mark of the title bar: a rounded square (corner 70 of 256, as 6 of 22) in the accent of the app's
 // dark theme, holding the capital initial of its name, weight 700, in the accent's ink. Both colours are read from the
@@ -124,7 +126,18 @@ function filesOf(svg, pngs) {
 // A text file may arrive with CRLF line endings or a line break at its end, from a checkout or an editor: the SVG is the same.
 const normal = (text) => text.replace(/\r\n/g, '\n').replace(/\n+$/, '');
 
-/** What is wrong in the icons folder `out`: the list of files and the SVGs, without drawing. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** The width and height a PNG's header (its IHDR chunk) gives, or null when the bytes are not a PNG. */
+function pngSize(bytes) {
+  if (bytes.length < 24 || !bytes.subarray(0, 8).equals(PNG_SIGNATURE) || bytes.toString('ascii', 12, 16) !== 'IHDR') return null;
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+/** The size a PNG of the set has by its name: `48x48.png` is 48, and `icon.png` is the 512 one. */
+const sizeByName = (name) => (name === 'icon.png' ? 512 : Number(/^(\d+)x\1\.png$/.exec(name)?.[1] ?? NaN));
+
+/** What is wrong in the icons folder `out`: the list of files, the SVGs, the headers of the PNGs and the .ico containers, without drawing. */
 export function problems(tokens, out) {
   const found = [];
   const svgs = svgsOf(tokens);
@@ -144,19 +157,69 @@ export function problems(tokens, out) {
       if (!present.includes(name)) continue;
       if (normal(readFileSync(join(folder, name), 'utf8')) !== svgs[app]) found.push(`${app}/${name}: not what the tokens give`);
     }
+    for (const name of FILES.filter((file) => file.endsWith('.png') && present.includes(file))) {
+      const size = pngSize(readFileSync(join(folder, name)));
+      const want = sizeByName(name);
+      if (!size) found.push(`${app}/${name}: not a PNG`);
+      else if (size.width !== want || size.height !== want) found.push(`${app}/${name}: its header gives ${size.width}x${size.height}, not ${want}x${want}`);
+    }
+    for (const [name, sizes] of [['icon.ico', ICON_SIZES], ['favicon.ico', FAVICON_SIZES]]) {
+      const pngs = sizes.map((size) => `${size}x${size}.png`);
+      if (!present.includes(name) || !pngs.every((png) => present.includes(png))) continue;
+      const built = icoFile(sizes.map((size) => ({ size, png: readFileSync(join(folder, `${size}x${size}.png`)) })));
+      if (!built.equals(readFileSync(join(folder, name)))) found.push(`${app}/${name}: not the container of the folder's ${pngs.join(', ')}`);
+    }
   }
   return found;
 }
 
+/** A bad argument: exit 2, and nothing is drawn or written. */
+class ArgumentError extends Error {}
+
+/** The arguments: --check, --tokens <file> and --out <dir>, and nothing else. */
+function parseArguments(args) {
+  const options = { check: false, tokens: undefined, out: undefined };
+  for (let k = 0; k < args.length; k++) {
+    const arg = args[k];
+    if (arg === '--check') options.check = true;
+    else if (arg === '--tokens' || arg === '--out') {
+      const value = args[++k];
+      if (!value || value.startsWith('--')) throw new ArgumentError(`${arg} needs a path`);
+      options[arg.slice(2)] = value;
+    } else throw new ArgumentError(`unknown argument ${arg}: the arguments are --check, --tokens <file> and --out <dir>`);
+  }
+  return options;
+}
+
+// The font of the letter, and the file Windows keeps it in (in its own fonts folder, or in the user's).
+const FONT = 'Segoe UI Variable Display';
+const FONT_FILE = 'SegUIVar.ttf';
+
+/** Whether this machine has the font of the letter. */
+function fontFound() {
+  const folders = [join(process.env.WINDIR ?? 'C:\\Windows', 'Fonts'), process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Microsoft', 'Windows', 'Fonts') : null];
+  return folders.some((folder) => folder && existsSync(join(folder, FONT_FILE)));
+}
+
+/**
+ * Why this machine cannot draw the icons, or null when it can: the PNGs are drawn on Windows, in Segoe UI Variable
+ * Display. Drawn elsewhere, the letter would be another font, and every app would copy it.
+ * @param {string} platform @param {boolean} hasFont
+ */
+export function drawingRefusal(platform, hasFont) {
+  if (platform !== 'win32') return `npm run icons draws the PNGs on Windows only, where the letter's font, ${FONT}, is; here it would draw another font. Compare without drawing: npm run icons -- --check`;
+  if (!hasFont) return `the font ${FONT} (${FONT_FILE}) is not on this machine: the PNGs would be drawn in another font. Install it, or draw on a Windows 11 machine`;
+  return null;
+}
+
 async function main() {
-  const args = process.argv.slice(2);
-  const option = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
-  const tokensFile = option('--tokens') ?? join(root, 'tokens', 'imago.tokens.json');
-  const out = option('--out') ?? join(root, 'icons');
+  const args = parseArguments(process.argv.slice(2));
+  const tokensFile = args.tokens ?? join(root, 'tokens', 'imago.tokens.json');
+  const out = args.out ?? join(root, 'icons');
   const name = relative(process.cwd(), out) || out;
   const tokens = JSON.parse(readFileSync(tokensFile, 'utf8'));
 
-  if (args.includes('--check')) {
+  if (args.check) {
     const found = problems(tokens, out);
     if (found.length) {
       console.error(`${name} is out of date with ${relative(process.cwd(), tokensFile) || tokensFile}: run "npm run icons".\n${found.map((line) => `  ${line}`).join('\n')}`);
@@ -165,6 +228,8 @@ async function main() {
     return;
   }
 
+  const refusal = drawingRefusal(process.platform, process.platform === 'win32' && fontFound());
+  if (refusal) throw new Error(refusal);
   const svgs = svgsOf(tokens);
   const drawn = await drawAll(svgs);
   for (const [app, svg] of Object.entries(svgs)) {
@@ -188,6 +253,6 @@ if (invoked()) {
     await main();
   } catch (error) {
     console.error(error.message);
-    process.exitCode = 1;
+    process.exitCode = error instanceof ArgumentError ? 2 : 1;
   }
 }

@@ -1,7 +1,9 @@
-// The text of a file into what the rules read: its stylesheets, its strings, its code and its comments, each with
-// lines. A stylesheet is read by css.mjs; a script (.ts, .tsx, .js, .mjs) by the small lexer below, which knows
-// comments, strings, template literals with their ${} and regular expressions; a page (.html) is split into its
-// <style> and <script> blocks and the attributes of its tags.
+// The text of a file into what the rules read: its stylesheets, its strings, its code, its comments and its imports,
+// each with lines. A stylesheet is read by css.mjs; a script (.ts, .tsx, .js, .mjs) by the small lexer below, which
+// knows comments, strings, template literals with their ${} and regular expressions; a page (.html) is split into its
+// <style> and <script> blocks and the attributes of its tags. The style a script writes (a style attribute in its
+// markup, `.style.x =`, setProperty, cssText, setAttribute('style', …), a React `style={{ … }}` object) and the colour
+// of a <meta name="theme-color"> are read as rules without a selector.
 
 import { parseCss, parseDeclarations } from './css.mjs';
 
@@ -9,13 +11,18 @@ import { parseCss, parseDeclarations } from './css.mjs';
  * @typedef {import('./css.mjs').Sheet} Sheet
  * @typedef {import('./css.mjs').Rule} Rule
  * @typedef {import('./css.mjs').Comment} Comment
- * @typedef {{ text: string, line: number, before: string, template: boolean, attribute?: string }} Str
+ * @typedef {{ text: string, line: number, before: string, template: boolean, attribute?: string, at?: number }} Str
  *   A string of a script, or an attribute value of a page. In `text` each ${} of a template literal is the character
  *   DYNAMIC followed by as many new lines as the expression held, so that a line counted in `text` is a line of the file.
  *   `before` is the code just before the string (strings and comments in it blanked), or `name=` for an attribute.
+ *   `at` is the offset of a script string's opening quote in the code it was lexed from.
  * @typedef {{ text: string, line: number }} Chunk
  *   Code with its strings' contents and its comments blanked, new lines kept.
- * @typedef {{ file: string, kind: 'css' | 'script' | 'html', sheets: Sheet[], strings: Str[], code: Chunk[], comments: Comment[] }} Source
+ * @typedef {{ imported: string, local: string }} Binding
+ * @typedef {{ specifier: string, line: number, kind: 'import' | 'export' | 'dynamic', type: boolean, names: Binding[], namespace: string | null }} Import
+ *   A module a script imports (`import`, `import('…')`) or re-exports (`export … from`), with the names it binds:
+ *   `names` are the named bindings, `namespace` the name of `* as ns`. `type` marks `import type`.
+ * @typedef {{ file: string, kind: 'css' | 'script' | 'html', sheets: Sheet[], strings: Str[], code: Chunk[], comments: Comment[], imports: Import[] }} Source
  */
 
 /** Stands for a ${} of a template literal: a name next to it is built at run time. */
@@ -68,17 +75,20 @@ export function parseSource(file, text) {
   const lower = file.toLowerCase();
   if (lower.endsWith('.css')) {
     const sheet = parseCss(text);
-    return { file, kind: 'css', sheets: [sheet], strings: [], code: [], comments: sheet.comments };
+    return { file, kind: 'css', sheets: [sheet], strings: [], code: [], comments: sheet.comments, imports: [] };
   }
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return parseHtml(file, text);
   const lexed = lexScript(text);
+  const sheet = inlineSheet(lexed.strings);
+  sheet.rules.push(...styleObjects(lexed.code, lexed.strings, 1));
   return {
     file,
     kind: 'script',
-    sheets: [inlineSheet(lexed.strings)],
+    sheets: [sheet],
     strings: lexed.strings,
     code: [{ text: lexed.code, line: 1 }],
     comments: lexed.comments,
+    imports: importsIn(lexed.code, lexed.strings, 1),
   };
 }
 
@@ -88,9 +98,62 @@ export function parseSource(file, text) {
  * @returns {string[]}
  */
 export function importsOf(source) {
-  return source.strings
-    .filter((str) => !str.template && /(?:\bfrom|\bimport)\s*\(?\s*$/.test(str.before))
-    .map((str) => str.text);
+  return source.imports.map((each) => each.specifier);
+}
+
+// The statements of a script's code (its strings blanked, their quotes kept) that name a module: the quote that ends
+// each match opens the specifier.
+const STATIC_IMPORT = /(?<![\w$.])(import|export)(?![\w$])((?:\s*type(?![\w$]))?[\w$\s{},*]*?)(?<![\w$])from\s*(?=["'])/g;
+const BARE_IMPORT = /(?<![\w$.])import\s*(?=["'])/g;
+const DYNAMIC_IMPORT = /(?<![\w$.])import\s*\(\s*(?=["'])/g;
+
+/**
+ * The imports of a script: each module it imports or re-exports, with the names it binds.
+ * @param {string} code the code of the script, its strings blanked
+ * @param {Str[]} strings its strings, with their offsets in `code`
+ * @param {number} firstLine
+ * @returns {Import[]}
+ */
+function importsIn(code, strings, firstLine) {
+  const byOffset = new Map(strings.flatMap((str) => (str.at === undefined || str.template ? [] : [[str.at, str]])));
+  const line = lineCounter(code, firstLine);
+  /** @type {(Import & { at: number })[]} */
+  const found = [];
+  const add = (/** @type {RegExpMatchArray} */ match, /** @type {Import['kind']} */ kind, /** @type {{ names: Binding[], namespace: string | null }} */ bound) => {
+    const at = (match.index ?? 0) + match[0].length;
+    const specifier = byOffset.get(at);
+    if (specifier) found.push({ specifier: specifier.text, line: line(match.index ?? 0), kind, type: /^\s*type\b/.test(match[2] ?? ''), ...bound, at });
+  };
+  for (const match of code.matchAll(STATIC_IMPORT)) add(match, /** @type {'import' | 'export'} */ (match[1]), bindingsOf(match[2].replace(/^\s*type\b/, '')));
+  for (const match of code.matchAll(BARE_IMPORT)) add(match, 'import', { names: [], namespace: null });
+  for (const match of code.matchAll(DYNAMIC_IMPORT)) {
+    // `const { a, b: c } = await import('…')` binds a and c.
+    const pattern = /(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*(?:await\s+)?$/.exec(code.slice(Math.max(0, (match.index ?? 0) - 400), match.index));
+    const names = (pattern?.[1] ?? '').split(',').flatMap((part) => {
+      const name = /^\s*([\w$]+)(?:\s*:\s*([\w$]+))?\s*$/.exec(part);
+      return name ? [{ imported: name[1], local: name[2] ?? name[1] }] : [];
+    });
+    add(match, 'dynamic', { names, namespace: null });
+  }
+  return found.sort((a, b) => a.at - b.at).map(({ at, ...each }) => each);
+}
+
+/**
+ * The names an import clause binds: `a, { b, c as d, type E }, * as ns` (a default import is the name `default`).
+ * @param {string} clause
+ */
+function bindingsOf(clause) {
+  /** @type {Binding[]} */
+  const names = [];
+  const braces = /\{([^}]*)\}/.exec(clause);
+  for (const part of braces ? braces[1].split(',') : []) {
+    const name = /^\s*(?:type\s+)?([\w$]+)(?:\s+as\s+([\w$]+))?\s*$/.exec(part);
+    if (name) names.push({ imported: name[1], local: name[2] ?? name[1] });
+  }
+  const namespace = /\*\s*as\s+([\w$]+)/.exec(clause)?.[1] ?? null;
+  const rest = clause.replace(/\{[^}]*\}/, '').replace(/\*(?:\s*as\s+[\w$]+)?/, '').replace(/,/g, ' ').trim();
+  if (/^[\w$]+$/.test(rest)) names.push({ imported: 'default', local: rest });
+  return { names, namespace };
 }
 
 // ---------- scripts ----------
@@ -138,14 +201,14 @@ export function lexScript(text, firstLine = 1) {
     let i = start + 1;
     while (i < text.length && text[i] !== quote && text[i] !== '\n') i += text[i] === '\\' ? 2 : 1;
     const end = Math.min(i, text.length);
-    strings.push({ text: text.slice(start + 1, end), line: line(start), before: before(start), template: false });
+    strings.push({ text: text.slice(start + 1, end), line: line(start), before: before(start), template: false, at: start });
     blank(start + 1, end);
     return text[end] === quote ? end + 1 : end;
   };
 
   /** A template literal from its backtick; returns the index after it. */
   const template = (start) => {
-    const str = { text: '', line: line(start), before: before(start), template: true };
+    const str = { text: '', line: line(start), before: before(start), template: true, at: start };
     strings.push(str);
     let i = start + 1;
     let literal = start + 1;
@@ -245,7 +308,8 @@ export function lexScript(text, firstLine = 1) {
 
 /**
  * The declarations a script writes as style: a `style="…"` in its markup, `el.style.prop = '…'`,
- * `el.style.setProperty('prop', '…')` and `el.style.cssText = '…'`. They form rules without a selector.
+ * `el.style.setProperty('prop', '…')`, `el.style.cssText = '…'` and `el.setAttribute('style', '…')`, and the colour
+ * of a `<meta name="theme-color">` in its markup. They form rules without a selector.
  * @param {Str[]} strings
  * @returns {Sheet}
  */
@@ -261,6 +325,11 @@ function inlineSheet(strings) {
       const at = lineAt(str.text, (match.index ?? 0) + match[0].indexOf(match[2]), str.line);
       add(parseDeclarations(match[2], at), at);
     }
+    for (const match of str.text.matchAll(/<meta\b[^>]*>/gi)) {
+      const at = lineAt(str.text, match.index ?? 0, str.line);
+      const color = themeColor(match[0]);
+      if (color !== null) add(parseDeclarations(`theme-color: ${color}`, at), at);
+    }
     const property = /\.style\.([A-Za-z]+)\s*=\s*$/.exec(str.before);
     if (property && property[1] !== 'cssText') {
       add(parseDeclarations(`${kebab(property[1])}: ${str.text}`, str.line), str.line);
@@ -275,11 +344,102 @@ function inlineSheet(strings) {
     if (previous && /\.setProperty\(\s*(["'`])\s*\1\s*,\s*$/.test(str.before)) {
       add(parseDeclarations(`${previous.text}: ${str.text}`, str.line), str.line);
     }
+    if (previous?.text.toLowerCase() === 'style' && /\.setAttribute\(\s*(["'`])\s*\1\s*,\s*$/.test(str.before)) {
+      add(parseDeclarations(str.text, str.line), str.line);
+    }
   });
   return { rules, atRules: [], comments: [] };
 }
 
+/** The content of a `<meta name="theme-color" content="…">` tag, or null for another tag. */
+function themeColor(/** @type {string} */ tag) {
+  /** @type {Record<string, string>} */
+  const attributes = {};
+  for (const match of tag.matchAll(/\s([^\s=>"'/]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g)) attributes[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? '';
+  return attributes.name?.toLowerCase() === 'theme-color' && attributes.content !== undefined ? attributes.content : null;
+}
+
 const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+
+/** A key of a React style object as the CSS property it writes: `fontSize` is font-size, `WebkitMask` -webkit-mask. */
+const cssProperty = (/** @type {string} */ key) => (key.startsWith('--') ? key : kebab(key.replace(/^(Webkit|Moz|ms|O)(?=[A-Z])/, (prefix) => `-${prefix.toLowerCase()}`)));
+
+/**
+ * The declarations of each React `style={{ … }}` object in a script's code: a key with a string, a template or a
+ * number for its value. React writes a number in pixels (the properties it leaves without a unit, as lineHeight and
+ * opacity, are none the rules judge); a value computed at run time and a spread are not read.
+ * @param {string} code the code of the script, its strings blanked
+ * @param {Str[]} strings its strings, with their offsets in `code`
+ * @param {number} firstLine
+ * @returns {Rule[]}
+ */
+function styleObjects(code, strings, firstLine) {
+  const byOffset = new Map(strings.flatMap((str) => (str.at === undefined ? [] : [[str.at, str]])));
+  const line = lineCounter(code, firstLine);
+  /** @type {Rule[]} */
+  const rules = [];
+  for (const match of code.matchAll(/(?<![\w$-])style\s*=\s*\{\s*\{/g)) {
+    const start = (match.index ?? 0) + match[0].length;
+    /** @type {[number, number][]} */
+    const entries = [];
+    let depth = 0;
+    let from = start;
+    let end = -1;
+    for (let k = start; k < code.length && end === -1; k++) {
+      const c = code[k];
+      if (c === '{' || c === '[' || c === '(') depth++;
+      else if (c === '}' || c === ']' || c === ')') {
+        if (depth === 0) end = k;
+        else depth--;
+      } else if (c === ',' && depth === 0) {
+        entries.push([from, k]);
+        from = k + 1;
+      }
+    }
+    if (end === -1) continue;
+    entries.push([from, end]);
+    const declarations = entries.flatMap(([a, b]) => styleEntry(code, byOffset, a, b, line));
+    if (declarations.length) rules.push(inlineRule(declarations, line(match.index ?? 0)));
+  }
+  return rules;
+}
+
+/**
+ * The declaration of one `key: value` of a style object, from `a` to `b` in the code; none for anything else.
+ * @param {string} code @param {Map<number, Str>} byOffset @param {number} a @param {number} b @param {(offset: number) => number} line
+ * @returns {import('./css.mjs').Declaration[]}
+ */
+function styleEntry(code, byOffset, a, b, line) {
+  let k = a;
+  while (k < b && /\s/.test(code[k])) k++;
+  let key = '';
+  if (code[k] === '"' || code[k] === "'") {
+    const str = byOffset.get(k);
+    if (!str) return [];
+    key = str.text;
+    k += str.text.length + 2;
+  } else {
+    const name = /^[A-Za-z_$][\w$]*/.exec(code.slice(k, b));
+    if (!name) return [];
+    key = name[0];
+    k += name[0].length;
+  }
+  while (k < b && /\s/.test(code[k])) k++;
+  if (code[k] !== ':') return [];
+  k++;
+  while (k < b && /\s/.test(code[k])) k++;
+  const value = code.slice(k, b).trim();
+  const property = cssProperty(key);
+  let text = '';
+  if (/^(["'])[^"'`]*\1$/.test(value) || /^`[^`]*`$/.test(value)) {
+    const str = byOffset.get(k);
+    if (!str) return [];
+    text = str.text;
+  } else if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(value)) {
+    text = Number(value) === 0 || property.startsWith('--') ? value : `${value}px`;
+  } else return [];
+  return parseDeclarations(`${property}: ${text}`, line(k));
+}
 
 /** @param {import('./css.mjs').Declaration[]} declarations @param {number} line @returns {Rule} */
 const inlineRule = (declarations, line) => ({
@@ -295,7 +455,9 @@ const inlineRule = (declarations, line) => ({
  */
 function parseHtml(file, text) {
   /** @type {Source} */
-  const source = { file, kind: 'html', sheets: [], strings: [], code: [], comments: [] };
+  const source = { file, kind: 'html', sheets: [], strings: [], code: [], comments: [], imports: [] };
+  /** @type {Rule[]} */
+  const objects = [];
   let rest = text;
   const line = lineCounter(text, 1);
   const blankOut = (from, to) => {
@@ -321,14 +483,23 @@ function parseHtml(file, text) {
     source.strings.push(...lexed.strings);
     source.code.push({ text: lexed.code, line: first });
     source.comments.push(...lexed.comments);
+    source.imports.push(...importsIn(lexed.code, lexed.strings, first));
+    objects.push(...styleObjects(lexed.code, lexed.strings, first));
     blankOut(at, at + match[2].length);
   }
-  source.sheets.push(inlineSheet(source.strings));
+  const scripts = inlineSheet(source.strings);
+  scripts.rules.push(...objects);
+  source.sheets.push(scripts);
 
   /** @type {Rule[]} */
   const styles = [];
   for (const tag of rest.matchAll(/<[A-Za-z][\w:-]*(?:\s+[^\s=>"'/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+))?)*\s*\/?>/g)) {
     const tagAt = tag.index ?? 0;
+    const color = /^<meta\b/i.test(tag[0]) ? themeColor(tag[0]) : null;
+    if (color !== null) {
+      const at = line(tagAt);
+      styles.push(inlineRule(parseDeclarations(`theme-color: ${color}`, at), at));
+    }
     for (const attribute of tag[0].matchAll(/\s([^\s=>"'/]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g)) {
       const name = attribute[1].toLowerCase();
       const value = attribute[2] ?? attribute[3] ?? attribute[4] ?? '';

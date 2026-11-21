@@ -1,12 +1,18 @@
 // The rules of the design file that a program can judge: one pure function per rule. A rule takes what css.mjs,
 // source.mjs and names.mjs read (never a path on disk) and returns its findings, `{ file, line, rule, message }`;
-// `endLine` is kept when a declaration spans lines, so that an exception above it covers all of it. The ids are the
-// ones docs/design-file.md names. The exceptions written in comments are read and applied at the end of this file.
+// `endLine` is kept when a declaration spans lines, so that an exception above it covers all of it, and `via` when the
+// literal is in the value of an app's own custom property defined elsewhere, so that an exception there covers it too.
+// The ids are the ones docs/design-file.md names. What a rule allows is in allowed.mjs, the names the canon removed in
+// removed.mjs, the closed sets of values in values.mjs. The exceptions written in comments are read and applied at the
+// end of this file.
 
-import { COLOR, FONT_SIZE, SPACE, SYSTEM_COLORS } from './allowed.mjs';
-import { classesOf, valueTokens } from './css.mjs';
-import { namesUsed } from './names.mjs';
-import { lineAt } from './source.mjs';
+import { posix } from 'node:path';
+import { CASE, COLOR, FONT_SIZE, OPACITY, SPACE, SYSTEM_COLORS, TRACKING } from './allowed.mjs';
+import { classesOf, COLOR_FUNCTIONS, COLOR_WORDS, isLength, SIZE_KEYWORDS, takesColor, valueTokens } from './css.mjs';
+import { namesIn, namesUsed } from './names.mjs';
+import { REMOVED } from './removed.mjs';
+import { DYNAMIC, lineAt } from './source.mjs';
+import { VALUES } from './values.mjs';
 
 /**
  * @typedef {import('./source.mjs').Source} Source
@@ -14,8 +20,16 @@ import { lineAt } from './source.mjs';
  * @typedef {import('./css.mjs').Declaration} Declaration
  * @typedef {import('./css.mjs').Token} Token
  * @typedef {import('./names.mjs').Names} Names
- * @typedef {{ file: string, line: number, endLine?: number, rule: string, message: string }} Finding
+ * @typedef {import('./removed.mjs').Removed} Removed
+ * @typedef {{ file: string, line: number, endLine?: number }} Place
+ * @typedef {{ file: string, line: number, endLine?: number, rule: string, message: string, via?: Place }} Finding
  * @typedef {{ file: string, line: number, rule: string, reason: string }} Exception
+ * @typedef {{ name: string, file: string, line: number, endLine: number, value: string }} Definition
+ *   A custom property of the app, where it is set and to what.
+ * @typedef {Map<string, Definition[]>} Properties
+ *   The app's own custom properties (not --im-), each with every place the app sets it.
+ * @typedef {Token & { via?: Definition }} Resolved
+ *   A token of a value, with the definition it came from when it is the value of an app's custom property.
  */
 
 /** @returns {Finding} */
@@ -25,6 +39,12 @@ function finding(file, line, rule, message, endLine = line) {
 
 const list = (items) => [...new Set(items)].join(', ');
 const byLine = (/** @type {Finding} */ a, /** @type {Finding} */ b) => a.line - b.line;
+/** A string as the program prints it: a ${} of a template literal written as such. */
+const shown = (/** @type {string} */ text) => text.replaceAll(DYNAMIC, '${…}').replace(/\s+/g, ' ');
+/** The value of a declaration as the rules compare it: without spaces, and in lower case but for a custom property's name. */
+const compact = (/** @type {string} */ value) => value.replace(/\s+/g, '').replace(/^[^(]*/, (head) => head.toLowerCase());
+/** The same value as allowed.mjs writes it, a zero of any unit being `0`. */
+const asAllowed = (/** @type {Token} */ token) => (token.number === 0 ? '0' : `${token.number}${token.unit}`);
 
 /** Every rule of a source with its declarations, the inline ones of a script or a page included. */
 function* rulesOf(/** @type {Source} */ source) {
@@ -34,24 +54,92 @@ function* rulesOf(/** @type {Source} */ source) {
 /** The rules a selector rule judges: written in a stylesheet, with a selector of their own. */
 const selectorRules = (source) => [...rulesOf(source)].filter((rule) => !rule.inline && !rule.keyframes && !rule.implicit);
 
+/** @type {Properties} */
+const NO_PROPERTIES = new Map();
+
 /**
- * One finding per declaration whose value holds literals, as `literalsOf(declaration)` returns them.
+ * The custom properties the app sets (in its CSS, its pages and the style its scripts write), but those of the package.
+ * @param {Source[]} sources
+ * @returns {Properties}
+ */
+export function customProperties(sources) {
+  /** @type {Properties} */
+  const properties = new Map();
+  for (const source of sources) {
+    for (const rule of rulesOf(source)) {
+      for (const { property, value, line, endLine } of rule.declarations) {
+        if (!property.startsWith('--') || property.startsWith('--im-')) continue;
+        properties.set(property, [...(properties.get(property) ?? []), { name: property, file: source.file, line, endLine, value }]);
+      }
+    }
+  }
+  return properties;
+}
+
+/**
+ * The tokens of a value with each var() of an app's own property replaced by the tokens of the values the app gives
+ * it, through as many var() as it takes; each such token keeps the definition it came from. A property set in several
+ * places gives the tokens of all of them; one the app never sets, or a loop, is left as it is.
+ * @param {string} value @param {Properties} properties
+ * @returns {Resolved[]}
+ */
+function resolve(value, properties, resolving = new Set()) {
+  const tokens = valueTokens(value);
+  if (!properties.size) return tokens;
+  /** @type {Resolved[]} */
+  const out = [];
+  for (let k = 0; k < tokens.length; k++) {
+    const token = tokens[k];
+    const name = token.type === 'function' && token.name === 'var' ? tokens[k + 1]?.text ?? '' : '';
+    const definitions = properties.get(name);
+    if (!definitions || resolving.has(name)) {
+      out.push(token);
+      continue;
+    }
+    let close = k + 1;
+    while (close < tokens.length && !(tokens[close].type === 'close' && tokens[close].fns.length === token.fns.length + 1)) close++;
+    resolving.add(name);
+    for (const definition of definitions) {
+      for (const inner of resolve(definition.value, properties, resolving)) out.push({ ...inner, fns: [...token.fns, ...inner.fns], via: inner.via ?? definition });
+    }
+    resolving.delete(name);
+    k = close;
+  }
+  return out;
+}
+
+/**
+ * One finding per declaration whose own value holds literals, as `literalsOf` returns them, and one per definition
+ * of an app's custom property whose value, used here, holds them: that finding is on the line of the use, names the
+ * line of the definition, and an exception at either place allows it.
  * @param {Source} source @param {string} id
- * @param {(declaration: Declaration) => string[]} literalsOf
- * @param {(literals: string, declaration: Declaration) => string} message
+ * @param {(tokens: Resolved[], declaration: Declaration) => Resolved[]} literalsOf
+ * @param {(literals: string, declaration: Declaration) => string} message `literals` is what to print before " in <property>"
+ * @param {Properties} [properties]
  * @returns {Finding[]}
  */
-function perDeclaration(source, id, literalsOf, message) {
+function perDeclaration(source, id, literalsOf, message, properties = NO_PROPERTIES) {
   /** @type {Finding[]} */
   const findings = [];
   for (const rule of rulesOf(source)) {
     for (const declaration of rule.declarations) {
-      const literals = literalsOf(declaration);
-      if (literals.length) findings.push(finding(source.file, declaration.line, id, message(list(literals), declaration), declaration.endLine));
+      const literals = literalsOf(resolve(declaration.value, properties), declaration);
+      const own = literals.filter((token) => !token.via);
+      if (own.length) findings.push(finding(source.file, declaration.line, id, message(list(own.map(literalText)), declaration), declaration.endLine));
+      /** @type {Map<Definition, Resolved[]>} */
+      const byDefinition = new Map();
+      for (const token of literals) if (token.via) byDefinition.set(token.via, [...(byDefinition.get(token.via) ?? []), token]);
+      for (const [via, tokens] of byDefinition) {
+        const from = `${list(tokens.map(literalText))} from ${via.name} (${via.file}:${via.line})`;
+        findings.push({ ...finding(source.file, declaration.line, id, message(from, declaration), declaration.endLine), via: { file: via.file, line: via.line, endLine: via.endLine } });
+      }
     }
   }
   return findings.sort(byLine);
 }
+
+/** A literal as a finding prints it: a colour function by its name. */
+const literalText = (/** @type {Token} */ token) => (token.type === 'function' ? `${token.name}()` : token.text);
 
 // ---------- im-selector ----------
 
@@ -87,91 +175,49 @@ export function imSelector(source) {
 
 // ---------- literal-color ----------
 
-const NAMED_COLORS = new Set(('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood '
-  + 'cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey '
-  + 'darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey '
-  + 'darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite '
-  + 'gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon '
-  + 'lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue '
-  + 'lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid '
-  + 'mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin '
-  + 'navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff '
-  + 'peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver '
-  + 'skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow '
-  + 'yellowgreen transparent currentcolor').split(' '));
-for (const { value } of SYSTEM_COLORS) NAMED_COLORS.add(value.toLowerCase());
 const ALLOWED_COLORS = new Set([...COLOR, ...SYSTEM_COLORS].map(({ value }) => value.toLowerCase()));
-const COLOR_FUNCTIONS = new Set(['rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color', 'device-cmyk']);
+const isColorWord = (/** @type {string} */ word) => COLOR_WORDS.has(word.toLowerCase()) || SYSTEM_COLORS.some(({ value }) => value.toLowerCase() === word.toLowerCase());
 const HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
-/** The literal colours of a CSS value: hex, a colour function, a colour by name; a color-mix( over them is one. */
-function colorLiterals(/** @type {string} */ value) {
-  /** @type {string[]} */
-  const literals = [];
-  for (const token of valueTokens(value)) {
-    if (token.fns.some((fn) => COLOR_FUNCTIONS.has(fn.name))) continue;
-    if (token.type === 'hash' && HEX.test(token.text)) literals.push(token.text);
-    else if (token.type === 'function' && COLOR_FUNCTIONS.has(token.name ?? '')) literals.push(`${token.name}()`);
-    else if (token.type === 'ident' && NAMED_COLORS.has(token.text.toLowerCase()) && !ALLOWED_COLORS.has(token.text.toLowerCase())) literals.push(token.text);
-  }
-  return literals;
+/**
+ * The literal colours of a value: a hex or a colour function in any property, and a colour by name in a property that
+ * takes a colour (`animation: red 1s` names keyframes); a color-mix( over them is one.
+ * @param {Resolved[]} tokens @param {string} property
+ */
+function colorLiterals(tokens, property) {
+  return tokens.filter((token) => {
+    if (token.fns.some((fn) => COLOR_FUNCTIONS.has(fn.name))) return false;
+    if (token.type === 'hash') return HEX.test(token.text);
+    if (token.type === 'function') return COLOR_FUNCTIONS.has(token.name ?? '');
+    return token.type === 'ident' && takesColor(property) && isColorWord(token.text) && !ALLOWED_COLORS.has(token.text.toLowerCase());
+  });
 }
 
-// A string that is the argument of these calls is a selector, and `#fade` in it is an id.
-const ID_CALL = /(?:querySelector(?:All)?|closest|matches|getElementById)\s*\(\s*$/;
-// An attribute that holds a reference, never a colour.
-const REFERENCE_ATTRIBUTES = new Set(['href', 'xlink:href', 'src', 'action', 'formaction', 'for', 'id', 'name', 'form', 'list', 'usemap',
-  'aria-controls', 'aria-describedby', 'aria-labelledby', 'aria-owns', 'aria-activedescendant']);
-const SCRIPT_HEX = /#[0-9a-fA-F]{3,8}(?![\w-])/g;
-const SCRIPT_COLOR_FUNCTION = /(?<![\w-])(?:rgba?|hsla?|hwb|oklab|oklch|lab|lch)\(/gi;
-
 /**
- * A literal colour in a CSS value (and in the style a script or a page writes), and a hex colour or a colour function
- * in a quoted string or a template literal of a script. In a script, `#fade` in `href="#fade"`, in `url(#fade)`, in a
- * `querySelector('#fade')` and in `&#160;` is not a colour.
- * @param {Source} source @returns {Finding[]}
+ * A literal colour in a CSS value, and in the style a script or a page writes: a style attribute, `.style.x =`,
+ * setProperty, cssText, setAttribute('style', …), a React style object, a <meta name="theme-color">. Any other string
+ * of a script ('Issue #123', location.hash = '#top') is not style. A colour word in an app's custom property is judged
+ * where the property is used, by the property that uses it; a hex or a colour function there is found where it is set.
+ * @param {Source} source @param {Properties} [properties] the app's own custom properties
+ * @returns {Finding[]}
  */
-export function literalColor(source) {
-  const findings = perDeclaration(source, 'literal-color', (declaration) => colorLiterals(declaration.value),
-    (literals, declaration) => `${literals} in ${declaration.property}: a colour is a token (--im-…)`);
-  const lines = new Set(findings.map((each) => each.line));
-  /** @type {Map<number, string[]>} */
-  const inStrings = new Map();
-  for (const str of source.strings) {
-    if (ID_CALL.test(str.before) || REFERENCE_ATTRIBUTES.has(str.attribute ?? '')) continue;
-    const text = str.text;
-    for (const match of text.matchAll(SCRIPT_HEX)) {
-      const at = match.index ?? 0;
-      const digits = match[0].length - 1;
-      if (![3, 4, 6, 8].includes(digits) || /[&\w]/.test(text[at - 1] ?? '')) continue;
-      if (/(?:url\(\s*["']?|\b(?:href|xlink:href|src|action)\s*=\s*["']?)$/i.test(text.slice(0, at))) continue;
-      const line = lineAt(text, at, str.line);
-      inStrings.set(line, [...(inStrings.get(line) ?? []), match[0]]);
-    }
-    for (const match of text.matchAll(SCRIPT_COLOR_FUNCTION)) {
-      const line = lineAt(text, match.index ?? 0, str.line);
-      inStrings.set(line, [...(inStrings.get(line) ?? []), `${match[0]})`]);
-    }
-  }
-  for (const [line, literals] of inStrings) {
-    if (!lines.has(line)) findings.push(finding(source.file, line, 'literal-color', `${list(literals)} in a string: a colour is a token (var(--im-…))`));
-  }
-  return findings.sort(byLine);
+export function literalColor(source, properties) {
+  return perDeclaration(source, 'literal-color',
+    (tokens, declaration) => colorLiterals(tokens, declaration.property).filter((token) => !token.via || token.type === 'ident'),
+    (literals, declaration) => `${literals} in ${declaration.property}: a colour is a token (--im-…)`, properties);
 }
 
 // ---------- literal-font-size and literal-space ----------
 
-const NOT_LENGTHS = new Set(['deg', 'grad', 'rad', 'turn', 's', 'ms', 'hz', 'khz', 'dpi', 'dpcm', 'dppx', 'x', 'fr']);
-const isLength = (/** @type {Token} */ token) => token.type === 'dimension' && !NOT_LENGTHS.has(token.unit ?? '');
-const normal = (/** @type {Token} */ token) => `${token.number}${token.unit}`;
-const SIZE_KEYWORDS = new Set(['xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large', 'xxx-large', 'smaller', 'larger', 'math']);
 const ALLOWED_FONT_SIZES = new Set(FONT_SIZE.map(({ value }) => value));
 const onTheScale = (/** @type {Token} */ token) => token.fns.some((fn) => fn.name === 'var' && (fn.arg ?? '').startsWith('--im-fs-'));
 
-/** The literal sizes of a font-size, or of the size in a font shorthand (its line-height, after the slash, is not one). */
-function fontSizeLiterals(/** @type {string} */ property, /** @type {string} */ value) {
-  const tokens = valueTokens(value);
-  /** @type {string[]} */
+/**
+ * The literal sizes of a font-size, or of the size in a font shorthand (its line-height, after the slash, is not one).
+ * @param {string} property @param {Resolved[]} tokens
+ */
+function fontSizeLiterals(property, tokens) {
+  /** @type {Resolved[]} */
   const literals = [];
   for (let k = 0; k < tokens.length; k++) {
     const token = tokens[k];
@@ -184,38 +230,68 @@ function fontSizeLiterals(/** @type {string} */ property, /** @type {string} */ 
       continue;
     }
     if (onTheScale(token)) continue;
-    if ((isLength(token) || token.type === 'percentage') && token.number !== 0 && !ALLOWED_FONT_SIZES.has(normal(token))) literals.push(token.text);
-    else if (token.type === 'ident' && token.fns.length === 0 && SIZE_KEYWORDS.has(token.text.toLowerCase()) && !ALLOWED_FONT_SIZES.has(token.text)) literals.push(token.text);
+    if ((isLength(token) || token.type === 'percentage') && !ALLOWED_FONT_SIZES.has(asAllowed(token))) literals.push(token);
+    else if (token.type === 'ident' && token.fns.length === 0 && SIZE_KEYWORDS.has(token.text.toLowerCase()) && !ALLOWED_FONT_SIZES.has(token.text)) literals.push(token);
   }
   return literals;
 }
 
 /**
- * A font-size, or the size of a font shorthand, that is not a type token (var(--im-fs-…)).
- * @param {Source} source @returns {Finding[]}
+ * A font-size, or the size of a font shorthand, that is not a type token (var(--im-fs-…)), here or in the value of an
+ * app's custom property it reads.
+ * @param {Source} source @param {Properties} [properties] the app's own custom properties
+ * @returns {Finding[]}
  */
-export function literalFontSize(source) {
+export function literalFontSize(source, properties) {
   return perDeclaration(source, 'literal-font-size',
-    (declaration) => (declaration.property === 'font-size' || declaration.property === 'font' ? fontSizeLiterals(declaration.property, declaration.value) : []),
-    (literals, declaration) => `${literals} in ${declaration.property}: a size of text is a type token (var(--im-fs-micro|meta|body|title|display))`);
+    (tokens, declaration) => (declaration.property === 'font-size' || declaration.property === 'font' ? fontSizeLiterals(declaration.property, tokens) : []),
+    (literals, declaration) => `${literals} in ${declaration.property}: a size of text is a type token (var(--im-fs-micro|meta|body|title|display))`, properties);
 }
 
 const SPACE_PROPERTY = /^(?:padding|margin)(?:-[a-z]+)*$|^(?:grid-)?(?:row-|column-)?gap$|^border(?:-[a-z]+)*-radius$/;
 
 /** @param {string} property @param {Token} token */
-const allowedSpace = (property, token) =>
-  token.number === 0 || SPACE.some((entry) => entry.value === normal(token) && (!entry.properties || entry.properties.includes(property)));
+const allowedSpace = (property, token) => SPACE.some((entry) => entry.value === asAllowed(token) && (!entry.properties || entry.properties.includes(property)));
 
 /**
- * A padding, margin, gap or border-radius with a length that is not a token or an allowed literal (allowed.mjs).
+ * A padding, margin, gap or border-radius with a length that is not a token or an allowed literal (allowed.mjs), here
+ * or in the value of an app's custom property it reads.
+ * @param {Source} source @param {Properties} [properties] the app's own custom properties
+ * @returns {Finding[]}
+ */
+export function literalSpace(source, properties) {
+  return perDeclaration(source, 'literal-space',
+    (tokens, declaration) => (SPACE_PROPERTY.test(declaration.property) ? tokens.filter((token) => isLength(token) && !allowedSpace(declaration.property, token)) : []),
+    (literals, declaration) => `${literals} in ${declaration.property}: ${/radius/.test(declaration.property) ? 'a radius is a token (--im-r-…)' : 'a space is a token (--im-s-1 to --im-s-5)'}`, properties);
+}
+
+// ---------- literal-case ----------
+
+const ALLOWED_CASE = new Set(CASE.map(({ value }) => value));
+const ALLOWED_TRACKING = new Set(TRACKING.map(({ value }) => value));
+
+/**
+ * A text-transform other than none or var(--im-case), or a letter-spacing other than 0, normal or var(--im-track), in
+ * the app's CSS and in the style its scripts write: the case and the spacing of a label are the look's (capitals with
+ * spacing in ONI, none in smooth), never typed.
  * @param {Source} source @returns {Finding[]}
  */
-export function literalSpace(source) {
-  return perDeclaration(source, 'literal-space',
-    (declaration) => (SPACE_PROPERTY.test(declaration.property)
-      ? valueTokens(declaration.value).filter((token) => isLength(token) && !allowedSpace(declaration.property, token)).map((token) => token.text)
-      : []),
-    (literals, declaration) => `${literals} in ${declaration.property}: ${/radius/.test(declaration.property) ? 'a radius is a token (--im-r-…)' : 'a space is a token (--im-s-1 to --im-s-5)'}`);
+export function literalCase(source) {
+  /** @type {Finding[]} */
+  const findings = [];
+  for (const rule of rulesOf(source)) {
+    for (const declaration of rule.declarations) {
+      const { property, value } = declaration;
+      const tokens = valueTokens(value);
+      const zero = tokens.length === 1 && (tokens[0].type === 'number' || tokens[0].type === 'dimension') && tokens[0].number === 0;
+      if (property === 'text-transform' && !ALLOWED_CASE.has(compact(value))) {
+        findings.push(finding(source.file, declaration.line, 'literal-case', `text-transform: ${value}: the case of a label is the look's, var(--im-case) (capitals in ONI, none in smooth); write the text as it reads`, declaration.endLine));
+      } else if (property === 'letter-spacing' && !zero && !ALLOWED_TRACKING.has(compact(value))) {
+        findings.push(finding(source.file, declaration.line, 'literal-case', `letter-spacing: ${value}: the spacing of a label is the look's, var(--im-track), or none`, declaration.endLine));
+      }
+    }
+  }
+  return findings.sort(byLine);
 }
 
 // ---------- cursor-pointer, disabled-opacity, media-width ----------
@@ -226,7 +302,7 @@ export function literalSpace(source) {
  */
 export function cursorPointer(source) {
   return perDeclaration(source, 'cursor-pointer',
-    (declaration) => (declaration.property === 'cursor' ? valueTokens(declaration.value).filter((token) => token.type === 'ident' && token.text.toLowerCase() === 'pointer').map((token) => token.text) : []),
+    (tokens, declaration) => (declaration.property === 'cursor' ? tokens.filter((token) => token.type === 'ident' && token.text.toLowerCase() === 'pointer') : []),
     () => 'cursor: pointer: no control has a hand cursor; leave the arrow');
 }
 
@@ -250,17 +326,18 @@ const DISABLED = /:disabled\b|\[\s*disabled\b|aria-disabled/i;
 
 /**
  * An opacity in a rule whose selector, or a selector it is nested in, is a disabled state. Disabled is a dashed edge
- * and the muted text colour, never an opacity. An opacity of 1 dims nothing.
+ * and the muted text colour, never an opacity. An opacity that dims nothing (allowed.mjs) is not one.
  * @param {Source} source @returns {Finding[]}
  */
 export function disabledOpacity(source) {
   /** @type {Finding[]} */
   const findings = [];
+  const dimsNothing = (/** @type {string} */ value) => OPACITY.some((entry) => entry.value === value || (!entry.value.endsWith('%') && Number(entry.value) === Number(value)));
   for (const rule of rulesOf(source)) {
     if (rule.inline || rule.keyframes) continue;
     if (![rule.selector, ...rule.parents].some((selector) => DISABLED.test(withoutNot(selector)))) continue;
     for (const declaration of rule.declarations) {
-      if (declaration.property !== 'opacity' || declaration.value === '100%' || Number(declaration.value) === 1) continue;
+      if (declaration.property !== 'opacity' || dimsNothing(declaration.value)) continue;
       findings.push(finding(source.file, declaration.line, 'disabled-opacity', `opacity: ${declaration.value} on a disabled state: disabled is a dashed edge and the muted text colour, never an opacity`, declaration.endLine));
     }
   }
@@ -268,13 +345,18 @@ export function disabledOpacity(source) {
 }
 
 /**
- * A @media on a width. The breakpoints follow the window, not the screen: @container im-shell at 1000, 850 or 620.
+ * A @media on a width, and a matchMedia( of a script whose query holds a width. The breakpoints follow the window,
+ * not the screen: @container im-shell at 1000, 850 or 620.
  * @param {Source} source @returns {Finding[]}
  */
 export function mediaWidth(source) {
-  return source.sheets.flatMap((sheet) => sheet.atRules
+  const media = source.sheets.flatMap((sheet) => sheet.atRules
     .filter((at) => at.name === 'media' && /width/i.test(at.prelude))
     .map((at) => finding(source.file, at.line, 'media-width', `@media ${at.prelude}: a breakpoint follows the window, not the screen; use @container im-shell at 1000, 850 or 620`)));
+  const queries = source.strings
+    .filter((str) => str.attribute === undefined && /(?<![\w$])matchMedia\s*\(\s*$/.test(str.before) && /width/i.test(str.text))
+    .map((str) => finding(source.file, str.line, 'media-width', `matchMedia('${shown(str.text)}'): a breakpoint follows the window, not the screen; style it with @container im-shell at 1000, 850 or 620`));
+  return [...media, ...queries].sort(byLine);
 }
 
 // ---------- show-modal ----------
@@ -289,10 +371,42 @@ export function showModal(source) {
     'showModal() makes the title bar inert, and the window cannot be moved or closed: use confirm, openFormDialog or openContentDialog')));
 }
 
-// ---------- unknown-name and class-prefix ----------
+// ---------- own-keydown ----------
+
+const KEY_TARGET = /(?<![\w$.])(document(?:\s*\.\s*body)?|window)\s*\.\s*/;
+const KEY_LISTENER = new RegExp(`${KEY_TARGET.source}addEventListener\\s*\\(\\s*$`);
+const KEY_PROPERTY = new RegExp(`${KEY_TARGET.source}on(keydown|keyup|keypress)\\s*=(?!=)`, 'g');
+const KEY_EVENT = /^key(?:down|up|press)$/;
 
 /**
- * An im- class or a data-im- attribute that the installed package does not define: a removed or mistyped name.
+ * A key handler of the app on the document, the window or the body: addEventListener('keydown' | 'keyup' |
+ * 'keypress', …), or onkeydown = (and onkeyup, onkeypress). The keys of a window are commands of the registry, which
+ * mountApp attaches; a widget that runs its own keys (a terminal) carries the exception comment.
+ * @param {Source} source @returns {Finding[]}
+ */
+export function ownKeydown(source) {
+  const message = (/** @type {string} */ what) => `${what}: a key of the window is a command of the registry, which mountApp attaches; a widget that runs its own keys (a terminal) takes an exception, imago-check: allow own-keydown — <reason>`;
+  /** @type {Finding[]} */
+  const findings = [];
+  for (const str of source.strings) {
+    const target = str.attribute === undefined && KEY_EVENT.test(str.text) ? KEY_LISTENER.exec(str.before) : null;
+    if (target) findings.push(finding(source.file, str.line, 'own-keydown', message(`${target[1].replace(/\s+/g, '')}.addEventListener('${str.text}')`)));
+  }
+  for (const chunk of source.code) {
+    for (const match of chunk.text.matchAll(KEY_PROPERTY)) {
+      findings.push(finding(source.file, lineAt(chunk.text, match.index ?? 0, chunk.line), 'own-keydown', message(`${match[1].replace(/\s+/g, '')}.on${match[2]} =`)));
+    }
+  }
+  return findings.sort(byLine);
+}
+
+// ---------- unknown-name, removed-name, unknown-value and class-prefix ----------
+
+const REMOVED_NAMES = new Set(REMOVED.map((entry) => entry.old));
+
+/**
+ * An im- class or a data-im- attribute that the installed package does not define: a removed or mistyped name. A name
+ * of removed.mjs is left to removed-name, which says what replaces it.
  * @param {Source} source @param {Names} defined @returns {Finding[]}
  */
 export function unknownName(source, defined) {
@@ -302,12 +416,73 @@ export function unknownName(source, defined) {
   const findings = [];
   const report = (/** @type {{ name: string, line: number }} */ use, /** @type {string} */ what) => {
     const key = `${use.line} ${use.name}`;
-    if (seen.has(key)) return;
+    if (seen.has(key) || REMOVED_NAMES.has(use.name)) return;
     seen.add(key);
     findings.push(finding(source.file, use.line, 'unknown-name', `${use.name} is not ${what} of the installed @acaprino/imago: a removed or mistyped name`));
   };
   for (const use of used.classes) if (!defined.classes.has(use.name)) report(use, 'a class');
   for (const use of used.attributes) if (!defined.attributes.has(use.name)) report(use, 'an attribute');
+  return findings.sort(byLine);
+}
+
+/**
+ * A name the canon removed (removed.mjs): a class with or without the im- prefix, a data-im- attribute, a --im-
+ * custom property or an export of the package, in the app's CSS, markup or script, its tests included. The message
+ * gives what replaces it.
+ * @param {Source} source @param {Removed[]} [removed]
+ * @returns {Finding[]}
+ */
+export function removedName(source, removed = REMOVED) {
+  const byName = new Map(removed.map((entry) => [entry.old, entry]));
+  const of = (/** @type {Removed['kind']} */ kind) => removed.filter((entry) => entry.kind === kind).map((entry) => entry.old);
+  const uses = namesIn(source, { classes: of('class'), attributes: of('attribute'), properties: of('property'), exports: of('export') });
+  return uses.map((use) => {
+    const entry = /** @type {Removed} */ (byName.get(use.name));
+    const what = entry.kind === 'export' ? `${use.name}, an export of @acaprino/imago,` : use.name;
+    return finding(source.file, use.line, 'removed-name', `${what} was removed: ${entry.now}`);
+  });
+}
+
+/**
+ * A value outside the set of an attribute that takes a closed set (values.mjs): in a page, in the markup and the
+ * selectors of a script's strings, in JSX, in setAttribute( and dataset, and in a selector of the app's CSS. A value
+ * built at run time is not judged.
+ * @param {Source} source @param {Record<string, string[]>} [values]
+ * @returns {Finding[]}
+ */
+export function unknownValue(source, values = VALUES) {
+  /** @type {Finding[]} */
+  const findings = [];
+  const seen = new Set();
+  const judge = (/** @type {string} */ attribute, /** @type {string} */ value, /** @type {number} */ line) => {
+    const allowed = values[attribute];
+    if (!allowed || value.includes(DYNAMIC) || allowed.includes(value) || seen.has(`${line} ${attribute} ${value}`)) return;
+    seen.add(`${line} ${attribute} ${value}`);
+    const last = allowed.length > 1 ? `${allowed.slice(0, -1).join(', ')} or ${allowed[allowed.length - 1]}` : allowed[0];
+    findings.push(finding(source.file, line, 'unknown-value', `${attribute}="${shown(value)}": ${attribute} takes ${last}; the package draws no other value`));
+  };
+  // name="value", name='value' or name=value, in markup or in a selector; `^=` and its kin are not an equal value.
+  const pairs = (/** @type {string} */ text, /** @type {number} */ line) => {
+    for (const match of text.matchAll(/(?<![\w-])(data-im-[a-z0-9-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>\]]+))/g)) {
+      judge(match[1], match[2] ?? match[3] ?? match[4] ?? '', lineAt(text, match.index ?? 0, line));
+    }
+  };
+  // `dataset.imSidebarCollapsed` is data-im-sidebar-collapsed.
+  const attributeOf = (/** @type {string} */ key) => `data-im-${key.replace(/[A-Z]/g, (letter, at) => (at ? '-' : '') + letter.toLowerCase())}`;
+  source.strings.forEach((str, index) => {
+    if (str.attribute !== undefined) {
+      judge(str.attribute, str.text, str.line);
+      return;
+    }
+    pairs(str.text, str.line);
+    const jsx = /(?<![\w-])(data-im-[a-z0-9-]+)\s*=\s*\{?\s*$/.exec(str.before);
+    if (jsx) judge(jsx[1], str.text, str.line);
+    const previous = source.strings[index - 1];
+    if (previous && /\.setAttribute\(\s*(["'`])\s*\1\s*,\s*$/.test(str.before)) judge(previous.text, str.text, str.line);
+    const dataset = /\.dataset\.im([A-Z][A-Za-z0-9]*)\s*(?:={1,3}|!==?)\s*$/.exec(str.before);
+    if (dataset) judge(attributeOf(dataset[1]), str.text, str.line);
+  });
+  for (const rule of selectorRules(source)) pairs(rule.selector, rule.line);
   return findings.sort(byLine);
 }
 
@@ -511,53 +686,71 @@ export function pinMismatch({ npm, cargo, workspace, npmLock, cargoLock }) {
 
 // ---------- agent-rules and mount-app ----------
 
-export const DESIGN_FILE_PATH = 'node_modules/@acaprino/imago/docs/design-file.md';
+// A path to the design file written in an agent file: in backquotes, in a Markdown link, after the @ of a CLAUDE.md
+// import or in a sentence.
+const DESIGN_PATH = /[^\s`'"()<>[\]]*design-file\.md/g;
 
 /**
- * The files of the app's coding agents (AGENTS.md, CLAUDE.md) name the design file of the installed package.
+ * The files of the app's coding agents (AGENTS.md, CLAUDE.md) name the design file of the installed package, by a path
+ * that exists from the folder of the file or from the root of the app.
  * @param {{ file: string, text: string | null }[]} files `text` is null for a file that does not exist
+ * @param {{ designFile: string, resolves: (file: string, path: string) => boolean }} installed `designFile` is the
+ *   design file of the installed package from the root; `resolves` says whether a path written in a file exists, from
+ *   its folder or from the root
  * @returns {Finding[]}
  */
-export function agentRules(files) {
+export function agentRules(files, { designFile, resolves }) {
   return files.flatMap(({ file, text }) => {
-    if (text === null) return [finding(file, 1, 'agent-rules', `${file} does not exist: it holds the lines of using-imago.md section 9, which name ${DESIGN_FILE_PATH}`)];
-    return text.includes(DESIGN_FILE_PATH) ? [] : [finding(file, 1, 'agent-rules', `${file} does not name ${DESIGN_FILE_PATH}: paste the lines of using-imago.md section 9`)];
+    const expected = posix.relative(posix.dirname(file), designFile) || designFile;
+    if (text === null) return [finding(file, 1, 'agent-rules', `${file} does not exist: it holds the lines of using-imago.md section 9, which name ${expected}`)];
+    const written = [...text.matchAll(DESIGN_PATH)].filter((match) => match[0].includes('/') && !match[0].includes('://'));
+    if (!written.length) return [finding(file, 1, 'agent-rules', `${file} does not name ${expected}: paste the lines of using-imago.md section 9`)];
+    return written.flatMap((match) => {
+      const path = match[0];
+      if (resolves(file, path) || (path.startsWith('@') && resolves(file, path.slice(1)))) return [];
+      return [finding(file, lineAt(text, match.index ?? 0, 1), 'agent-rules', `${path.replace(/^@/, '')} does not exist, from the folder of ${file} or from the root: the design file of the installed @acaprino/imago is ${expected}`)];
+    });
   });
 }
 
 const escapeRegExp = (/** @type {string} */ text) => text.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&');
 
 /**
- * The entry of the app, or a file it imports, calls mountApp( (under its own name, an alias, or through a namespace).
+ * The entry of the app, or a file it imports, imports mountApp from @acaprino/imago/ui and calls that binding (under
+ * its own name, an alias, or through a namespace). An app's own function of the same name is not it.
  * @param {Source[]} sources the entry first, then the files it imports
  * @returns {Finding[]}
  */
 export function mountApp(sources) {
-  const calls = sources.some((source) => source.code.some((chunk) => {
-    if (/(?<![\w$])mountApp\s*\(/.test(chunk.text)) return true;
-    return [...chunk.text.matchAll(/\bmountApp\s+as\s+([A-Za-z_$][\w$]*)/g)].some((alias) => new RegExp(`(?<![\\w$.])${escapeRegExp(alias[1])}\\s*\\(`).test(chunk.text));
-  }));
+  const calls = sources.some((source) => {
+    const imports = source.imports.filter((each) => each.specifier === '@acaprino/imago/ui' && each.kind !== 'export' && !each.type);
+    const locals = imports.flatMap((each) => each.names.filter((name) => name.imported === 'mountApp').map((name) => name.local));
+    const namespaces = imports.flatMap((each) => (each.namespace ? [each.namespace] : []));
+    const patterns = [...locals.map((local) => `(?<![\\w$.])${escapeRegExp(local)}\\s*\\(`), ...namespaces.map((name) => `(?<![\\w$.])${escapeRegExp(name)}\\s*\\.\\s*mountApp\\s*\\(`)];
+    if (!patterns.length) return false;
+    const call = new RegExp(patterns.join('|'));
+    return source.code.some((chunk) => call.test(chunk.text));
+  });
   if (calls || !sources.length) return [];
   const { file } = sources[0];
-  return [finding(file, 1, 'mount-app', `neither ${file} nor a file it imports calls mountApp(shell, registry, options), which attaches the layers, the keys, the regions, the sidebar and the standard commands`)];
+  return [finding(file, 1, 'mount-app', `neither ${file} nor a file it imports calls mountApp imported from @acaprino/imago/ui, mountApp(shell, registry, options), which attaches the layers, the keys, the regions, the sidebar and the standard commands; a function of the app with that name is not it`)];
 }
 
 // ---------- app-icon ----------
-
-export const ICONS_PATH = 'node_modules/@acaprino/imago/icons';
 
 /**
  * The icon files an app copied from the package (`icons/<app>/`, see using-imago.md): each is the package's file, byte
  * for byte. A line ending is a byte, so the files are compared as they are, not as text.
  * @param {string} app the id of the app, which names the package's folder
  * @param {{ file: string, name: string, have: Uint8Array | null, want: Uint8Array }[]} icons `file` is the path in the app, `name` the file in the package's folder, `have` is null when the app has no such file
+ * @param {string} packagePath where the package is installed, from the root of the app
  * @returns {Finding[]}
  */
-export function appIcon(app, icons) {
+export function appIcon(app, icons, packagePath) {
   const id = 'app-icon';
   const same = (/** @type {Uint8Array} */ a, /** @type {Uint8Array} */ b) => a.length === b.length && a.every((byte, k) => byte === b[k]);
   return icons.flatMap(({ file, name, have, want }) => {
-    const source = `${ICONS_PATH}/${app}/${name}`;
+    const source = `${packagePath}/icons/${app}/${name}`;
     if (have === null) return [finding(file, 1, id, `${file} does not exist: copy ${source} to it`)];
     if (same(have, want)) return [];
     return [finding(file, 1, id, `${file} is not ${source} (${have.length} bytes, the package's has ${want.length}): copy the package's file over it`)];
@@ -566,7 +759,7 @@ export function appIcon(app, icons) {
 
 // ---------- exceptions ----------
 
-const EXCEPTION =/imago-check:\s*allow\s+([a-z]+(?:-[a-z]+)*)([^\n]*)/g;
+const EXCEPTION = /imago-check:\s*allow\s+([a-z]+(?:-[a-z]+)*)([^\n]*)/g;
 
 /**
  * The exceptions written in the comments of a source: `imago-check: allow <rule> — <reason>`, a hyphen accepted for
@@ -583,7 +776,9 @@ export function exceptionsIn(source) {
 
 /**
  * Takes out the findings an exception allows: one for the same rule, in the same file, on the line of the finding (or
- * any line of its declaration) or the line above. An exception without a reason allows nothing; the finding says so.
+ * any line of its declaration) or the line above; for a literal in the value of an app's custom property, an
+ * exception at the place that sets the property allows it too. An exception without a reason allows nothing; the
+ * finding says so.
  * @param {Finding[]} findings @param {Exception[]} exceptions
  * @returns {{ findings: Finding[], accepted: Exception[] }}
  */
@@ -592,12 +787,13 @@ export function applyExceptions(findings, exceptions) {
   const kept = [];
   /** @type {Set<Exception>} */
   const accepted = new Set();
+  const covers = (/** @type {Exception} */ exception, /** @type {Place} */ place) => exception.file === place.file
+    && exception.line >= place.line - 1 && exception.line <= (place.endLine ?? place.line);
   for (const each of findings) {
-    const near = exceptions.filter((exception) => exception.file === each.file && exception.rule === each.rule
-      && exception.line >= each.line - 1 && exception.line <= (each.endLine ?? each.line));
+    const near = exceptions.filter((exception) => exception.rule === each.rule && (covers(exception, each) || (each.via !== undefined && covers(exception, each.via))));
     const allowing = near.find((exception) => exception.reason);
     if (allowing) accepted.add(allowing);
-    else if (near.length) kept.push({ ...each, message: `${each.message} (the exception on line ${near[0].line} gives no reason: imago-check: allow ${each.rule} — <reason>)` });
+    else if (near.length) kept.push({ ...each, message: `${each.message} (the exception on ${near[0].file === each.file ? `line ${near[0].line}` : `${near[0].file}:${near[0].line}`} gives no reason: imago-check: allow ${each.rule} — <reason>)` });
     else kept.push(each);
   }
   return { findings: kept, accepted: [...accepted] };

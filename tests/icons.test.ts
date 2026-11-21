@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { APPS as GALLERY_APPS, APP_IDS } from '../gallery/apps.ts';
 import { colorValueToHex, contrast } from '../scripts/color.mjs';
-import { APPS, FAVICON_SIZES, FILES, ICON_SIZES, PNG_SIZES, icoFile, iconSvg } from '../scripts/icons.mjs';
+import { APPS, FAVICON_SIZES, FILES, ICON_SIZES, PNG_SIZES, drawingRefusal, icoFile, iconSvg } from '../scripts/icons.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const script = join(root, 'scripts', 'icons.mjs');
@@ -227,8 +227,10 @@ describe('the letter is centred in the square', () => {
 
   for (const app of ids) {
     for (const size of [16, 256]) {
-      // 2% of the size, and never less than three quarters of a pixel: a letter at 16 pixels sits on whole pixels.
-      const allowed = Math.max(0.02 * size, 0.75) / size;
+      // 1.5% of the size, rounded up to the half pixel the measure tells apart (the box is in whole pixels, so its middle
+      // is in halves), and never less than three quarters of a pixel: a letter at 16 pixels sits on whole pixels. At 256
+      // that is 4 pixels, which Daodan's D takes: the letter is centred by its advance, and the D's ink sits 4 pixels right.
+      const allowed = Math.max(Math.ceil(0.015 * size * 2) / 2, 0.75) / size;
       test(`${app} at ${size}: the middle of the letter is within ${(allowed * 100).toFixed(1)}% of the middle of the square, and it fills a third to a half of it`, () => {
         const { cx, cy, h } = letter(app, size);
         assert.ok(Math.abs(cx - 0.5) <= allowed, `horizontal middle ${cx.toFixed(3)}`);
@@ -297,6 +299,48 @@ describe('npm run icons -- --check', () => {
 
     mkdtempSync(join(dir, 'ethel-'));
     assert.equal(run(dir).status, 1);
+  });
+
+  test('exits 1, without drawing, on a PNG whose header does not give the size of its name, and on an .ico that is not the container of the folder\'s PNGs', () => {
+    const dir = copy();
+    writeFileSync(join(dir, 'shinatama', '16x16.png'), readFileSync(join(iconsDir, 'shinatama', '24x24.png')));
+    const swapped = run(dir);
+    assert.equal(swapped.status, 1);
+    assert.match(swapped.stderr, /shinatama[\\/]16x16\.png: .*24x24/);
+    assert.match(swapped.stderr, /shinatama[\\/]icon\.ico/, 'icon.ico no longer holds the folder\'s 16x16.png');
+    cpSync(join(iconsDir, 'shinatama', '16x16.png'), join(dir, 'shinatama', '16x16.png'));
+
+    writeFileSync(join(dir, 'muro', 'icon.png'), Buffer.from('not a png'));
+    const corrupt = run(dir);
+    assert.equal(corrupt.status, 1);
+    assert.match(corrupt.stderr, /muro[\\/]icon\.png: not a PNG/);
+    cpSync(join(iconsDir, 'muro', 'icon.png'), join(dir, 'muro', 'icon.png'));
+
+    const ico = readFileSync(join(dir, 'xiox', 'favicon.ico'));
+    ico[ico.length - 1] ^= 0xff;
+    writeFileSync(join(dir, 'xiox', 'favicon.ico'), ico);
+    const changed = run(dir);
+    assert.equal(changed.status, 1);
+    assert.match(changed.stderr, /xiox[\\/]favicon\.ico/);
+    assert.doesNotMatch(changed.stderr, /xiox[\\/]icon\.ico/, 'icon.ico is still the container of its PNGs');
+  });
+
+  test('an unknown argument, or an option without its value, exits 2 and writes nothing', () => {
+    const dir = copy();
+    const before = readFileSync(join(dir, 'daodan', '256x256.png'));
+    for (const args of [['--chek', '--out', dir], ['--check', '--out'], ['--out', dir, 'extra']]) {
+      const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+      assert.equal(result.status, 2, `${args.join(' ')}: ${result.stdout}${result.stderr}`);
+      assert.match(result.stderr, /\S/);
+    }
+    assert.deepEqual(readFileSync(join(dir, 'daodan', '256x256.png')), before);
+  });
+
+  test('drawing refuses, with a message, off Windows or without the font Segoe UI Variable Display', () => {
+    assert.match(drawingRefusal('linux', true) ?? '', /Windows/);
+    assert.match(drawingRefusal('darwin', true) ?? '', /Windows/);
+    assert.match(drawingRefusal('win32', false) ?? '', /Segoe UI Variable Display/);
+    assert.equal(drawingRefusal('win32', true), null);
   });
 
   test('a line break at the end of an SVG, in a CRLF checkout too, does not make it another SVG', () => {
