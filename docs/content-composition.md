@@ -100,4 +100,8 @@ For a user-editable topology, the graph entry point also exposes
 `graphEditorWorkspace`, `graphEditor`, `graphEditorNode`, `graphEditorPort`
 and `graphEditorEdge`. The consumer supplies node and connection data, allowed
 edits and persistence. Imago owns the graph controls, pointer gestures,
-keyboard targets, geometry and inspectors.
+keyboard targets, geometry and inspectors. The parts the consumer puts in the
+workspace take the editor roles by name: `uiTraits(list, 'editorItems')` for a
+popup's list, `editorShelf` and `editorSource` for the shelf of things to drop,
+`editorNodeTitle`, `editorCaption` and `editorNodeFoot` for a card, and
+`editorOptions` and `editorChoice` for a choice. `UI_TRAITS` lists every role.

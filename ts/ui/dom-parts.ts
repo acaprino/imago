@@ -45,8 +45,18 @@ const traits = {
   noticeHost: 'im-notices', notice: 'im-float im-notice', dockedInspector: 'im-docked-inspector',
   inspectionRail: 'im-inspection-rail', resizableNav: 'im-resizable-nav', navRail: 'im-nav-rail', navLine: 'im-nav-line',
   navEntry: 'im-nav-entry', navMark: 'im-nav-mark', navDetail: 'im-nav-detail',
+  statusText: 'im-status-text', fieldError: 'im-field-error', actions: 'im-action-row',
+  // The parts of a graph editor's workspace (graphEditorWorkspace): its shelf of sources, popups, cards and choices.
+  editorShelf: 'im-editor-shelf', editorSource: 'im-editor-source', editorGhost: 'im-editor-ghost',
+  editorPopup: 'im-editor-popup', editorItems: 'im-editor-items', editorPreset: 'im-editor-preset',
+  editorInlineForm: 'im-editor-inline-form', editorIssues: 'im-editor-issues', editorEmpty: 'im-editor-empty',
+  editorSummary: 'im-editor-summary', editorCaption: 'im-editor-caption', editorDescription: 'im-editor-description',
+  editorNodeTitle: 'im-editor-node-title', editorNodeFoot: 'im-editor-node-foot', editorDot: 'im-editor-dot',
+  editorOptions: 'im-editor-options', editorChoice: 'im-editor-choice', editorSample: 'im-editor-sample',
 } as const satisfies Record<string, string>;
 
+/** Every role and the classes that draw it, for a check that each is in Imago's stylesheets. */
+export const UI_TRAITS: Readonly<Record<UiTrait, string>> = Object.freeze({ ...traits });
 export type UiTrait = keyof typeof traits;
 /** Gives `node` these roles (`uiTraits(uiPart('orderedList'), 'scroll', 'bounded')`) and returns it. */
 export function uiTraits<T extends Element>(node: T, ...names: readonly UiTrait[]): T {
