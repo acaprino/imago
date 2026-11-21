@@ -21,7 +21,7 @@ window.__imagoKeys = { roving, regions };
 const select = (el: HTMLElement) => el.click();
 
 // Wires the keyboard movement on the live shell: arrows in the sidebar list, the title-bar tabs and the
-// content table, one tab stop each, and F6 between the regions.
+// content table, one tab stop each. F6 between the regions is not here: `mountApp` (gallery/main.ts) makes that call.
 export default function mount({ shell }: MountContext): () => void {
   const undo: Array<() => void> = [];
 
@@ -33,8 +33,6 @@ export default function mount({ shell }: MountContext): () => void {
 
   const table = shell.querySelector<HTMLElement>('.im-content tbody');
   if (table) undo.push(roving(table, { item: 'tr', orientation: 'vertical', onSelect: select }));
-
-  undo.push(regions(shell));
 
   return () => {
     for (const stop of undo) stop();
