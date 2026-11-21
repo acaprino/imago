@@ -34,7 +34,7 @@
     "demo:fetch": "node examples/demo/fetch.mjs",
     "capture": "node examples/demo/capture.mjs",
     "check": "node scripts/check/cli.mjs --package",
-    "verify": "npm run tokens -- --check && npm test && npm run build && npm run test:gallery && cargo test -p imago-shell",
+    "verify": "npm run tokens -- --check && npm test && npm run check && npm run build && npm run test:gallery && cargo test -p imago-shell",
     "prepare": "npm run build:package",
     "build:package": "tsc -p tsconfig.package.json",
     "pretest": "npm run build:package"

@@ -14,9 +14,9 @@
 .im-metric-grid { grid-template-columns: repeat(auto-fit,minmax(min(10rem,100%),1fr)); }
 .im-metric { display: flex; flex-direction: column; gap: var(--im-s-1); margin: 0; padding: var(--im-s-3); background: var(--im-sheet); border: 1px solid var(--im-line); border-radius: var(--im-r-sheet); }
 .im-metric dd { margin: 0; }
-.im-metric-value { order: -1; font: 600 1.65rem/1.2 var(--im-font-head); color: var(--im-text-hi); font-variant-numeric: tabular-nums; }
+.im-metric-value { order: -1; font: 600 var(--im-fs-display)/1.2 var(--im-font-head); color: var(--im-text-hi); font-variant-numeric: tabular-nums; }
 .im-caption, .im-muted { color: var(--im-muted); }
-.im-caption, .im-kicker { font-size: .8rem; }
+.im-caption, .im-kicker { font-size: var(--im-fs-meta); }
 .im-detail-list, .im-timeline { list-style: none; margin: 0; padding: 0; }
 .im-detail-list > li { padding-block: var(--im-s-1); overflow-wrap: anywhere; }
 .im-row--detail { width: 100%; height: auto; min-block-size: var(--im-h-row); text-align: start; justify-content: flex-start; white-space: normal; }

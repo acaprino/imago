@@ -1,8 +1,8 @@
 /* Positions come from the caller's layout. The viewport and all states follow the active Imago look. */
 .im-graph-host { block-size: clamp(320px, 60vh, 760px); min-inline-size: 0; }
 .im-graph-panel { padding: var(--im-s-3); min-inline-size: 0; }
-.im-graph-legend { display: flex; gap: var(--im-s-3); flex-wrap: wrap; margin-block-end: var(--im-s-2); font-size: 12px; color: var(--im-muted); }
-.im-graph-legend i { display: inline-block; inline-size: 22px; margin-inline-end: 6px; vertical-align: middle; border-block-start: 2px solid var(--im-tone, var(--im-line-strong)); }
+.im-graph-legend { display: flex; gap: var(--im-s-3); flex-wrap: wrap; margin-block-end: var(--im-s-2); font-size: var(--im-fs-meta); color: var(--im-muted); }
+.im-graph-legend i { display: inline-block; inline-size: 22px; margin-inline-end: var(--im-s-1); vertical-align: middle; border-block-start: 2px solid var(--im-tone, var(--im-line-strong)); }
 .im-graph-legend [data-im-stroke="dashed"] { border-block-start-style: dashed; }
 .im-graph-legend [data-im-stroke="dotted"] { border-block-start-style: dotted; }
 .im-graph-summary { margin-inline-start: auto; }
@@ -18,7 +18,7 @@
 .im-graph-group { border: 1px dashed var(--im-line-strong); background: var(--im-hover); }
 .im-graph-card {
   display: flex; align-items: stretch; background: var(--im-sheet-solid); color: var(--im-text);
-  border: 1px solid var(--im-line-strong); font: 400 13px/1.4 var(--im-font-text);
+  border: 1px solid var(--im-line-strong); font: 400 var(--im-fs-body)/1.4 var(--im-font-text);
 }
 .im-graph-card[data-im-external] { border-style: dashed; }
 .im-graph-card:has([aria-pressed="true"]) { border-color: var(--im-accent-text); box-shadow: 0 0 0 2px var(--im-accent-text); }
@@ -36,7 +36,7 @@
 .im-graph-edge > path { stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linejoin: round; }
 .im-graph-edge[data-im-tone] > path { stroke-width: 2.4; }
 .im-graph-edge text {
-  text-anchor: middle; dominant-baseline: central; font: 12px var(--im-font-text); fill: var(--im-text);
+  text-anchor: middle; dominant-baseline: central; font: var(--im-fs-meta) var(--im-font-text); fill: var(--im-text);
   stroke: var(--im-ground); stroke-width: 5px; stroke-linejoin: round; paint-order: stroke;
 }
 .im-graph-tools {
@@ -59,13 +59,13 @@
 .im-editor-node[aria-pressed="true"] { outline: 1px solid var(--im-accent-text); border-color: var(--im-accent-text); }
 .im-editor-port {
   position: absolute; right: -13px; top: 50%; width: 26px; height: 26px; min-height: 0;
-  margin-top: -13px; padding: 0; border-radius: 50%; border: 1px solid var(--im-line-strong);
+  margin-top: -13px; padding: 0; border-radius: 50%; border: 1px solid var(--im-line-strong); /* imago-check: allow literal-space — half the 26px port, not a space: with top: 50% it centres the port on the node's middle, as right: -13px centres it on the edge */
   background: var(--im-sheet-solid); color: var(--im-accent-text); cursor: crosshair;
 }
 .im-editor-port:hover { border-color: var(--im-accent-text); }
 .im-editor-line { fill: none; stroke: var(--im-line-strong); stroke-width: 2; }
 .im-editor-preview { fill: none; stroke: var(--im-accent-text); stroke-width: 2; stroke-dasharray: 5 4; }
-.im-editor-label { font: 11px var(--im-font-text); fill: var(--im-text); paint-order: stroke; stroke: var(--im-ground); stroke-width: 6px; pointer-events: none; }
+.im-editor-label { font: var(--im-fs-micro) var(--im-font-text); fill: var(--im-text); paint-order: stroke; stroke: var(--im-ground); stroke-width: 6px; pointer-events: none; }
 .im-editor-edge:focus-visible .im-editor-line, .im-editor-edge:hover .im-editor-line { stroke: var(--im-accent-text); stroke-width: 3.5; }
 .im-graph-mini { display: block; background: var(--im-ground); border: 1px solid var(--im-line); }
 .im-graph-mini-node { fill: var(--im-line-strong); }
@@ -75,7 +75,7 @@
 /* An editing workspace may host a palette, an overlay inspector and a drop shelf. */
 .im-editor-workspace {
   position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0;
-  background: var(--im-sheet); color: var(--im-text); font: 13px/1.4 var(--im-font-text);
+  background: var(--im-sheet); color: var(--im-text); font: var(--im-fs-body)/1.4 var(--im-font-text);
 }
 .im-editor-workspace [hidden] { display: none !important; }
 .im-editor-workspace > .im-content-toolbar { flex: none; justify-content: start; margin: 0; gap: var(--im-s-2); padding: var(--im-s-2); border-bottom: 1px solid var(--im-line); }
@@ -95,7 +95,7 @@
 .im-editor-shelf { padding: var(--im-s-2); border-top: 1px solid var(--im-line); min-height: 40px; }
 .im-editor-shelf .im-graph-legend { margin: 0; }
 .im-editor-empty { position: absolute; top: 15%; left: 50%; transform: translateX(-50%); width: min(440px, 85%); padding: var(--im-s-3); text-align: center; color: var(--im-muted); background: var(--im-sheet-solid); border: 1px dashed var(--im-line); pointer-events: none; }
-.im-editor-node { padding: 6px 12px; border-inline-start: 3px solid var(--im-tone, var(--im-line-strong)); }
+.im-editor-node { padding: var(--im-s-1) var(--im-s-3); border-inline-start: 3px solid var(--im-tone, var(--im-line-strong)); }
 .im-editor-node[data-pending], .im-editor-node[data-empty] { border-style: dashed; }
 .im-editor-node[data-bad] { outline: 1px solid var(--im-err); }
 .im-editor-node[data-lifted] { z-index: 2; cursor: grabbing; }
@@ -103,8 +103,8 @@
 .im-editor-node-title, .im-editor-node-foot { display: flex; align-items: center; gap: var(--im-s-1); min-width: 0; }
 .im-editor-node-title { font-weight: 600; }
 .im-editor-dot { flex: none; width: 8px; height: 8px; border: 1px solid var(--im-muted); border-radius: 50%; background: var(--im-tone, transparent); }
-.im-editor-node-foot { justify-content: space-between; margin-top: 3px; }
-.im-editor-caption, .im-editor-node-foot, .im-editor-source span { color: var(--im-muted); font-size: 11px; }
+.im-editor-node-foot { justify-content: space-between; margin-top: 2px; }
+.im-editor-caption, .im-editor-node-foot, .im-editor-source span { color: var(--im-muted); font-size: var(--im-fs-micro); }
 .im-editor-caption, .im-editor-source > * { min-width: 0; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
 .im-editor-edge[data-im-tone] .im-editor-line { stroke: var(--im-tone, var(--im-line-strong)); }
 .im-editor-arrow, .im-editor-edge[data-im-tone] .im-editor-label { fill: var(--im-tone, var(--im-line-strong)); }
