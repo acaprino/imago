@@ -529,6 +529,23 @@ async function inspectors(page, look, theme) {
   assert.equal(await page.evaluate(() => window.__escapes), 0, where('and does not run the command bound to Escape'));
   await press(page, 'Escape');
   assert.equal(await page.evaluate(() => window.__escapes), 1, where('a second Escape runs it'));
+
+  // A held Escape too: the press closes the inspector, and its repeats, which reach the opener once focus is back
+  // there, run no command until the key goes up.
+  await build();
+  await page.evaluate((s) => {
+    window.__escapes = 0;
+    window.__imagoSurfaces.inspector.open(window.__inspectorContent, document.querySelector(s));
+  }, opener);
+  await page.keyboard.down('Escape');
+  await page.keyboard.down('Escape'); // a repeat: Playwright marks every down after the first as one
+  await page.keyboard.down('Escape');
+  assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), false, where('a held Escape closes the inspector'));
+  assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, where('focus is back on the opener'));
+  assert.equal(await page.evaluate(() => window.__escapes), 0, where('its repeats run no command'));
+  await page.keyboard.up('Escape');
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => window.__escapes), 1, where('after the keyup a new Escape runs it'));
   await page.evaluate(() => window.__unbindEscape());
 
   await build();

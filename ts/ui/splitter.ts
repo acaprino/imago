@@ -1,3 +1,5 @@
+import { claimKey } from './key-claim.ts';
+
 /** The host lays out its panes and saves a size only after a completed gesture. */
 export function splitter(doc: Document, options: {
   label: string;
@@ -59,6 +61,7 @@ export function splitter(doc: Document, options: {
       options.onCommit?.(value);
     }
     event.preventDefault();
+    claimKey(event); // the splitter answered the key: no command bound to it also runs
     event.stopPropagation();
   };
   element.onpointerdown = event => {

@@ -2,6 +2,7 @@
 // whether it is available now. Key bindings, key caps, menus and the palette all read it.
 // No DOM types and nothing touched at import time, so it also runs under plain Node.
 
+import { keyClaimed } from './key-claim.ts';
 import { hasModal } from './layers.ts';
 
 export type Command = {
@@ -26,7 +27,7 @@ export type KeyEventLike = {
   target?: unknown;
 };
 
-type KeyDownEvent = KeyEventLike & { preventDefault(): void; defaultPrevented?: boolean };
+type KeyDownEvent = KeyEventLike & { preventDefault(): void };
 
 /** Anything that dispatches `keydown`: `document`, `window`, an element. */
 export type KeyEventTarget = {
@@ -53,8 +54,9 @@ export type Registry = {
   match(event: KeyEventLike): Command | undefined;
   /**
    * Runs the matching command on `keydown` and cancels the browser's own action, except while a dialog or the
-   * palette is open (see `AttachOptions`). A key is answered once: a key another handler already took (it prevented
-   * the default, as Escape does when it closes a surface, the inspector or the sidebar drawer) runs no command.
+   * palette is open (see `AttachOptions`). A key is answered once: a key a handler of the package claimed
+   * (`claimKey`: Escape that closed a surface, the inspector or the sidebar drawer, an arrow that moved a list) runs no
+   * command. A key that is only prevented still does: `guardDesktop` refuses Ctrl+F to the browser, not to the app.
    * Returns detach.
    */
   attach(target: KeyEventTarget, options?: AttachOptions): () => void;
@@ -139,7 +141,7 @@ export function createRegistry(): Registry {
     match,
     attach(target, options = {}) {
       const onKeyDown = (event: KeyDownEvent): void => {
-        if (event.defaultPrevented) return;
+        if (keyClaimed(event)) return;
         if (!options.runUnderModal && hasModal()) return;
         const command = match(event);
         if (!command) return;

@@ -140,7 +140,8 @@ const DEFAULT_APPEARANCE = { group: 'Appearance', smooth: 'Smooth look', oni: 'O
 
 /**
  * Registers the five commands of `appearance` in its group: each calls `set` with its own half and the other half of
- * `get()` unchanged, and the command of the current choice is not available. Returns the function that unregisters them.
+ * `get()` unchanged, and the command of the current choice is not available (and does nothing if it is run). Returns
+ * the function that unregisters them.
  */
 function appearanceCommands(registry: Registry, appearance: AppearanceOptions): () => void {
   const { get, set, labels } = appearance;
@@ -149,11 +150,20 @@ function appearanceCommands(registry: Registry, appearance: AppearanceOptions): 
   const themes = [[THEME_SYSTEM, 'system'], [THEME_LIGHT, 'light'], [THEME_DARK, 'dark']] as const;
   const undo: Array<() => void> = [];
   try {
+    // Run anyway while it is the current choice (a key or a menu of the app can), a command does nothing.
     for (const [id, look] of looks) {
-      undo.push(registry.register({ id, title: labels?.[look] ?? DEFAULT_APPEARANCE[look], group, when: () => get().look !== look, run: () => set({ look, theme: get().theme }) }));
+      const run = (): void => {
+        const now = get();
+        if (now.look !== look) set({ look, theme: now.theme });
+      };
+      undo.push(registry.register({ id, title: labels?.[look] ?? DEFAULT_APPEARANCE[look], group, when: () => get().look !== look, run }));
     }
     for (const [id, theme] of themes) {
-      undo.push(registry.register({ id, title: labels?.[theme] ?? DEFAULT_APPEARANCE[theme], group, when: () => get().theme !== theme, run: () => set({ look: get().look, theme }) }));
+      const run = (): void => {
+        const now = get();
+        if (now.theme !== theme) set({ look: now.look, theme });
+      };
+      undo.push(registry.register({ id, title: labels?.[theme] ?? DEFAULT_APPEARANCE[theme], group, when: () => get().theme !== theme, run }));
     }
   } catch (error) {
     undoAll(undo);
@@ -191,8 +201,9 @@ function mountError(error: unknown): Error {
  * and the theme. Register the app's own commands before or after: the registry keeps them in the order they come, and
  * the palette lists them so.
  *
- * A key is answered once. The layers and the sidebar drawer listen before the registry: an Escape that closes one of
- * them (or the inspector, which listens on its own region) runs no command of the app.
+ * A key is answered once. The layers and the sidebar drawer listen before the registry and claim the Escape that closes
+ * one of them (so does the inspector, on its own region): it runs no command of the app, nor do its repeats while it is
+ * held. A key that `guardDesktop` or the zoom keys only prevent still runs the app's command.
  *
  * Call it once for each shell: a second call on a shell that is still mounted throws. If a step throws (the app
  * already registered `Ctrl+K`, say), the steps before it are undone and the error is thrown, so the shell is free to be

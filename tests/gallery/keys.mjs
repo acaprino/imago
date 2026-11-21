@@ -561,8 +561,28 @@ async function footer(page) {
   await page.evaluate(() => window.__imago.set({ app: 'xiox' }));
 }
 
+// A key is answered once: an arrow that moves focus in a list belongs to the list, and a command of the app bound to
+// that arrow does not also run; with focus outside any list it runs.
+async function claimedArrows(page) {
+  await page.evaluate(() => window.__imago.set({ app: 'xiox', look: 'smooth', theme: 'dark' }));
+  await width(page, 1160);
+  await page.evaluate(() => {
+    window.__arrows = 0;
+    window.__unbindArrow = window.__imagoSurfaces.registry.register({ id: 'test:arrow', title: 'Next item', keys: 'ArrowDown', run: () => void window.__arrows++ });
+  });
+  await page.focus(`${SIDEBAR_ROWS}[tabindex="0"]`);
+  await press(page, 'Home', 'ArrowDown');
+  assert.equal(await activeIndex(page, SIDEBAR_ROWS), 1, 'the list moves');
+  assert.equal(await page.evaluate(() => window.__arrows), 0, 'the command bound to ArrowDown does not also run');
+  await page.evaluate(() => document.activeElement?.blur());
+  await press(page, 'ArrowDown');
+  assert.equal(await page.evaluate(() => window.__arrows), 1, 'outside a list the command runs');
+  await page.evaluate(() => window.__unbindArrow());
+}
+
 export default async function (page) {
   await liveShell(page);
+  await claimedArrows(page);
   await selecting(page);
   await otherApps(page);
   await scratch(page);

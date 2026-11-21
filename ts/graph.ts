@@ -1,5 +1,6 @@
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, zoomTransform } from 'd3-zoom';
+import { claimKey } from './ui/key-claim.ts';
 
 export interface GraphPoint { x: number; y: number }
 export interface GraphBox extends GraphPoint { width: number; height: number }
@@ -197,6 +198,7 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       default: return;
     }
     event.preventDefault();
+    claimKey(event); // the graph answered the key: no command bound to it also runs
     if (next !== undefined) entries.get(next)?.focus({ preventScroll: true });
   });
 

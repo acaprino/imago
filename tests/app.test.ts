@@ -15,6 +15,7 @@ import {
   THEME_SYSTEM,
   type AppearanceOptions,
 } from '../ts/ui/app.ts';
+import { guardDesktop } from '../ts/shell/desktop-guard.ts';
 import { inspector } from '../ts/ui/inspector.ts';
 import { pushLayer, type LayerKind } from '../ts/ui/layers.ts';
 
@@ -50,12 +51,14 @@ function listening() {
     },
     // Capturing listeners run before the others, as in a browser; `phase` runs only one of the two. A listener that
     // stops the event (`stopImmediatePropagation`) is the last to see it.
+    // The event's `currentTarget` is this object while its listeners run, as in a browser.
     dispatch(type: string, event: unknown, phase: 'capture' | 'bubble' | 'both' = 'both') {
       const ours = active.filter((entry) => entry.type === type);
       const capturing = phase === 'bubble' ? [] : ours.filter((e) => e.capture);
       const bubbling = phase === 'capture' ? [] : ours.filter((e) => !e.capture);
       for (const entry of [...capturing, ...bubbling]) {
         if ((event as { stopped?: boolean }).stopped) return;
+        (event as { currentTarget?: unknown }).currentTarget = this;
         (entry.listener as (event: unknown) => void)(event);
       }
     },
@@ -85,6 +88,7 @@ class FakeElement {
 
 const fakeDocument = () => ({
   ...listening(),
+  nodeType: 9, // a document, for the code that looks for the document an event is on
   defaultView: null,
   createElement: (tag: string) => new FakeElement(tag),
 });
@@ -134,7 +138,7 @@ const keyEvent = (key: string, extra: Partial<KeyEventLike> & { repeat?: boolean
 });
 
 // A key pressed where nothing of the shell listens: the document's listeners only. Returns how often its default was prevented.
-const keydown = (doc: FakeDocument, key: string, extra: Partial<KeyEventLike> = {}) => {
+const keydown = (doc: FakeDocument, key: string, extra: Partial<KeyEventLike> & { repeat?: boolean } = {}) => {
   const event = keyEvent(key, extra);
   doc.dispatch('keydown', event);
   return event.prevented;
@@ -483,6 +487,73 @@ test('Escape that closes a layer runs no command of the app: mountApp attaches t
   }
 });
 
+test('Ctrl+F searches in a desktop app: guardDesktop refuses the key to the browser and leaves it to the app, in any order', () => {
+  // The documented order is the guard first, in the capture phase; the other three are the ones an app may also write.
+  const orders: [string, (doc: Document, mount: () => void) => void][] = [
+    ['the guard first, capturing', (doc, mount) => { guardDesktop(doc); mount(); }],
+    ['the guard after mountApp, capturing', (doc, mount) => { mount(); guardDesktop(doc); }],
+    ['the guard first, bubbling', (doc, mount) => { guardDesktop(doc, { keyPhase: 'bubble' }); mount(); }],
+    ['the guard after mountApp, bubbling', (doc, mount) => { mount(); guardDesktop(doc, { keyPhase: 'bubble' }); }],
+  ];
+  for (const [order, wire] of orders) {
+    const doc = fakeDocument();
+    let searches = 0;
+    wire(asDocument(doc), () => mountApp(asShell(fakeShell(doc)), createRegistry(), { search: () => void searches++ }));
+    const event = keyEvent('f', { ctrlKey: true });
+    doc.dispatch('keydown', event);
+    assert.equal(searches, 1, `${order}: the search command runs once`);
+    assert.equal(event.defaultPrevented, true, `${order}: and the browser's own find stays refused`);
+  }
+});
+
+test('a held Escape is answered once: it closes the inspector, its repeats run no command, and after its keyup a new Escape runs it', () => {
+  const doc = fakeDocument();
+  const region = inspectorRegion(doc);
+  const shell = asShell(fakeShell(doc, { '.im-inspector': region }));
+  const registry = createRegistry();
+  let escapes = 0;
+  registry.register(command('clear', 'Escape', { run: () => void escapes++ }));
+  mountApp(shell, registry, { search: () => {} });
+  const details = inspector(shell);
+  details.open({ remove() {} } as unknown as HTMLElement);
+
+  keydownIn(doc, region, 'Escape');
+  assert.equal(details.isOpen(), false, 'the press closes the inspector');
+  // Focus went back to the opener: the repeats of the held key arrive outside the inspector.
+  for (let held = 0; held < 3; held++) assert.equal(keydown(doc, 'Escape', { repeat: true }), 1, 'each repeat is taken');
+  assert.equal(escapes, 0, 'and none runs the command bound to Escape');
+  doc.dispatch('keyup', keyEvent('Escape'));
+  keydown(doc, 'Escape');
+  assert.equal(escapes, 1, 'after the keyup a new Escape runs it');
+});
+
+test('a held Escape that closes the sidebar drawer or a menu runs no command either while it is held', () => {
+  const doc = fakeDocument();
+  const { parts } = sidebarParts();
+  const shell = fakeShell(doc, parts);
+  const registry = createRegistry();
+  let escapes = 0;
+  registry.register(command('clear', 'Escape', { run: () => void escapes++ }));
+  const undo = mountApp(asShell(shell), registry, { search: () => {} });
+
+  shell.dataset.imSidebarOpen = 'true';
+  keydown(doc, 'Escape');
+  keydown(doc, 'Escape', { repeat: true });
+  assert.equal(shell.dataset.imSidebarOpen, undefined);
+  assert.equal(escapes, 0, 'the drawer: the repeat runs no command');
+  doc.dispatch('keyup', keyEvent('Escape'));
+
+  const pop = openLayer('menu');
+  try {
+    keydown(doc, 'Escape');
+    keydown(doc, 'Escape', { repeat: true });
+    assert.equal(escapes, 0, 'the menu: the repeat runs no command');
+  } finally {
+    pop();
+    undo();
+  }
+});
+
 // ---------- the look and the theme ----------
 
 test('with appearance, mountApp registers the five look and theme commands alike in every app: same ids, group, no keys', () => {
@@ -530,6 +601,18 @@ test('each command calls set with its own half and the other half of get() uncha
   choice.theme = 'light';
   void registry.get(LOOK_ONI)?.run();
   assert.deepEqual(calls.at(-1), { look: 'oni', theme: 'light' }, 'get() is read at each run');
+});
+
+test('the command of the current choice does nothing when it is run anyway (by a key or a menu the app gives it)', () => {
+  const { calls, appearance } = keptAppearance('oni', 'dark');
+  const registry = createRegistry();
+  mountApp(asShell(fakeShell(fakeDocument())), registry, { search: () => {}, appearance });
+
+  void registry.get(LOOK_ONI)?.run();
+  void registry.get(THEME_DARK)?.run();
+  assert.deepEqual(calls, [], 'set is not called with the choice it already has');
+  void registry.get(THEME_SYSTEM)?.run();
+  assert.deepEqual(calls, [{ look: 'oni', theme: 'system' }]);
 });
 
 test('the titles and the group are the app\'s words; a word left out keeps its default', () => {

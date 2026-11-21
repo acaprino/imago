@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { keyClaimed } from '../ts/ui/key-claim.ts';
 import { attachLayers, closeLayers, hasDialog, hasModal, pushLayer, topLayer, type Layer, type LayerKind } from '../ts/ui/layers.ts';
 
 // Plain objects stand in for elements: the module must not need a DOM.
@@ -71,6 +72,7 @@ test('one Escape closes only the top layer', () => {
   assert.equal(first.state.closed, 0);
   assert.equal(topLayer(), first.layer);
   assert.equal(event.defaultPrevented, true, 'the press is consumed');
+  assert.equal(keyClaimed(event), true, 'and claimed: no command runs on it');
   assert.equal(event.stopped, true, 'no other handler also acts on it');
 
   press('Escape');
@@ -85,6 +87,7 @@ test('Escape with no layer is left alone', () => {
   const detach = attachLayers(shell);
   const event = press('Escape');
   assert.equal(event.defaultPrevented, false);
+  assert.equal(keyClaimed(event), false);
   assert.equal(event.stopped, false);
   detach();
 });

@@ -3,6 +3,8 @@
 // or a sheet) and where focus goes back to. Nothing touches the DOM when this module is imported,
 // so the stack logic also runs under plain Node.
 
+import { claimKey } from './key-claim.ts';
+
 export type LayerKind = 'menu' | 'sheet' | 'dialog' | 'palette';
 
 export type Layer = {
@@ -169,6 +171,7 @@ export function trapTab(event: KeyboardEvent, root: HTMLElement): void {
   const items = tabbables(root);
   if (!items.length) {
     event.preventDefault();
+    claimKey(event);
     root.focus();
     return;
   }
@@ -176,6 +179,7 @@ export function trapTab(event: KeyboardEvent, root: HTMLElement): void {
   const edge = event.shiftKey ? items[0] : items[items.length - 1];
   if (active === edge || !items.includes(active as HTMLElement)) {
     event.preventDefault();
+    claimKey(event);
     (event.shiftKey ? items[items.length - 1] : items[0]).focus();
   }
 }
@@ -260,6 +264,7 @@ export function attachLayers(shell: HTMLElement): () => void {
     const picker = (event.target as Element | null)?.closest?.('.im-search-picker');
     if (picker && top.el.contains(picker) && picker.querySelector('input[role="combobox"][aria-expanded="true"]')) return;
     event.preventDefault?.();
+    claimKey(event); // no command runs on it, nor on its repeats while it is held
     event.stopImmediatePropagation?.();
     top.close();
   };
