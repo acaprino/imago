@@ -142,7 +142,7 @@ export const APPS: Record<AppId, App> = {
     footer: 'Local runtime · 4 terminals · 268 MiB', keys: [], footerKeys: ['action:primary', { keys: 'F6', title: 'Next region' }],
     side: { title: 'Threads', n: 9, rows: [
       { cat: 1, dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { cat: 2, badge: 'needs you', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
-      { cat: 3, dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { cat: 4, t: 'Dunning emails', s: '1 session', m: '6m' },
+      { cat: 3, dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { cat: 4, t: 'Dunning emails', m: '6m' },
       { cat: 5, t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { cat: 6, t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
     content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<div class="im-panel-body g-term-body"><pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
 

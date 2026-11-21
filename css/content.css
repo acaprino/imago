@@ -35,11 +35,12 @@
 .im-page-content { box-sizing: content-box; max-width: 1180px; margin: 0 auto; padding: var(--im-s-5); }
 .im-page-content--narrow { max-width: 860px; }
 /* A page is content: its text can be selected and copied (a path, a commit, an id), as im-content-text can elsewhere in
-   the shell. The controls on it are chrome, as everywhere: the elements css/base.css treats as chrome (button, a, label,
-   summary), the package's controls and their parts, and every role of a control. */
+   the shell. The controls on it are chrome, as everywhere: a button and a select, which are always a control, the
+   package's controls and their parts (the box of a field round its input, not the input), and every role of a control.
+   A link, a label, a summary or a key cap that holds prose is content; inside a control it is the control's. */
 .im-page-content { -webkit-user-select: text; user-select: text; }
-.im-page-content :is(button, a, label, summary, select,
-  .im-btn, .im-icon-btn, .im-tab, .im-seg, .im-option, .im-row, .im-tree-item, .im-menu-item, .im-field-label, .im-chip, .im-key, .im-count,
+.im-page-content :is(button, select,
+  .im-btn, .im-icon-btn, .im-tab, .im-seg, .im-option, .im-row, .im-tree-item, .im-menu-item, .im-field-label, .im-input:not(input), .im-chip, .im-count,
   [role="button"], [role="tab"], [role="treeitem"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"],
   [role="switch"], [role="checkbox"], [role="radio"]) {
   -webkit-user-select: none;

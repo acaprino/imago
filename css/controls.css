@@ -162,7 +162,8 @@
 
 /* A categorical colour: the colour of one thing among others of its kind (a thread, a project), data-im-cat="1" to "8", a
    fixed hue each, the same in every app. It is never the only thing that tells the things apart: each is named in words.
-   A row draws it as a 3px mark at its start edge, beside its selection mark; an avatar, a rail item and a dot are filled
+   A row draws it as a 3px mark at its start edge, beside its selection mark (in the rail its item's fill tells it, and
+   the mark is not drawn: css/primitives.css); an avatar, a rail item and a dot are filled
    with it, their text in --im-cat-on; a chip takes it as its tone. As text, a categorical colour stands only on a ground
    of its own (the chip's): on the fill of a selected row some reach barely 4.5:1. */
 :is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="1"] { --im-item-color: var(--im-cat-1); }

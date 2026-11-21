@@ -358,8 +358,22 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
     pointer-events: none;
     box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground);
   }
-  /* A check is all a row with a check shows in the rail: its target is 24 by 24 round its 16px box. */
-  .im-sidebar .im-row > .im-check.im-rail-item::before { content: ""; position: absolute; inset: -4px; }
+  /* In the rail a category is the rail item's own fill: the row's start mark is not drawn there, where it would cover the
+     ring round a selected item (forced colours, which draw no category, keep that place for their selection bar). */
+  @media (forced-colors: none) {
+    .im-sidebar .im-row[data-im-cat]::before { content: none; }
+  }
+  /* A check is all a row with a check shows in the rail: its target is 24 by 24, centred on its 16px box whatever the
+     width of its edge (an inset would be counted from inside the edge). */
+  .im-sidebar .im-row > .im-check.im-rail-item::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    inline-size: 24px;
+    block-size: 24px;
+    translate: -50% -50%;
+  }
   .im-sidebar .im-row > .im-row-text {
     position: absolute;
     inline-size: 1px;
@@ -368,7 +382,9 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
+  /* Every row of the rail is as tall as a two-line row: it shows one item whatever its lines, and the ring round a selected
+     item stays a pixel or more inside the row's focus ring. */
+  .im-sidebar .im-row { position: relative; justify-content: center; min-block-size: var(--im-h-row-2); padding-inline: 0; }
   /* the selection is a heavier line, or a ring round an avatar or a check, apart from it by a gap of what is under the
      row, as well as a fill */
   .im-sidebar .im-row[aria-selected="true"] > .im-rail-item .im-icon { stroke-width: 2.4; }

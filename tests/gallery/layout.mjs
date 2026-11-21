@@ -249,23 +249,29 @@ const buildFrame = (page, width, options = {}) => page.evaluate(({ width, option
   inspector.hidden = false;
 }, { width, options });
 
-// What a page holds that is content, not a control: a table of data, steps, a progress value, avatars, facts, a note. Every
-// other control of the manifest is chrome, in a page as everywhere: none of its text can be selected. A control added to
-// the manifest is chrome until it is named here.
-const PAGE_CONTENT = ['table-row', 'steps', 'progress', 'avatar', 'facts', 'note'];
-// Controls the matrix does not draw, which the rule names all the same.
+// What a page holds that is content, not a control: a table of data, steps, a progress value, avatars, facts, a note, a
+// key cap written in prose. Every other control of the manifest is chrome, in a page as everywhere: none of its text can
+// be selected. A control added to the manifest is chrome until it is named here.
+const PAGE_CONTENT = ['table-row', 'steps', 'progress', 'avatar', 'facts', 'note', 'key'];
+// Controls the matrix does not draw, which the rule names all the same: a link button, menu items of every kind, a role
+// button, an option, a check, a field label, and a key cap inside a button.
 const MORE_CONTROLS = '<a class="im-btn" href="#">Open</a><div role="menu" aria-label="View"><div role="menuitemcheckbox" aria-checked="true">Wrap lines</div>'
   + '<div role="menuitemradio" aria-checked="false">Left</div></div><div role="button">Act</div><div role="listbox" aria-label="Pick"><span role="option">One</span></div>'
-  + '<span role="checkbox" aria-checked="false">Pinned</span><span class="im-field-label">Label</span><summary>More</summary>';
+  + '<span role="checkbox" aria-checked="false">Pinned</span><span class="im-field-label">Label</span>'
+  + '<button type="button" class="im-btn"><span>Run</span><kbd class="im-key">r</kbd></button>';
+// Elements that are not always a control's chrome, holding prose in a page: a link, a label, a summary, a key cap.
+const PROSE = '<p><a href="#notes">the release notes</a></p><p><label for="g-prose-field">The folder Codex reads its plans from</label></p>'
+  + '<details><summary>Show the log of the last run</summary><p>Log</p></details><p>Press <kbd class="im-key">Ctrl K</kbd></p>';
 
 // Page content is content and its controls are chrome: every control of the manifest in a page cannot be selected, what is
-// content in it can, and a drag across two paragraphs with controls between them copies the paragraphs' words alone.
+// content in it can, and a drag across two paragraphs with controls between them copies the paragraphs' words alone, a
+// link and a key cap in them included.
 async function pageControls(page, where) {
   const cells = CONTROLS.map(({ id }) => `<div data-cell="${id}">${cellMarkup(id, 'rest')}</div>`).join('');
-  const between = '<button type="button" class="im-btn"><span>Copy</span></button><label class="im-option"><input type="checkbox" class="im-check">Keep</label>'
-    + '<a class="im-btn" href="#">Open</a><span class="im-chip">open</span><kbd class="im-key">Ctrl K</kbd><span class="im-count">3</span>';
+  const between = '<button type="button" class="im-btn"><span>Copy</span><kbd class="im-key">Ctrl C</kbd></button><label class="im-option"><input type="checkbox" class="im-check">Keep</label>'
+    + '<a class="im-btn" href="#">Open</a><span class="im-chip">open</span><span class="im-count">3</span>';
   try {
-    await page.evaluate(({ cells, between, more }) => {
+    await page.evaluate(({ cells, between, more, prose }) => {
       document.getElementById('frame-host')?.remove();
       const api = window.__imagoSurfaces;
       const host = document.createElement('div');
@@ -278,10 +284,12 @@ async function pageControls(page, where) {
       document.querySelector('#g-sections').append(host);
       api.renderShellFrame(shell, api.shellFrameHtml({
         titlebarHtml: api.titlebarHtml({ brand: { name: 'Frame' } }), contentLabel: 'Page', skipLabel: 'Skip to content', inspectorLabel: 'Details',
-        contentHtml: api.pageContentHtml(`<p data-test="first">First paragraph</p>${between}<p data-test="second">Second paragraph</p><div data-test="more">${more}</div>${cells}`),
+        contentHtml: api.pageContentHtml('<p data-test="first">See <a href="#notes">the release notes</a> first</p>'
+          + `${between}<p data-test="second">Press <kbd class="im-key">Ctrl K</kbd> to open the palette</p><div data-test="more">${more}</div>`
+          + `<div data-test="prose">${prose}<input id="g-prose-field" class="im-input" aria-label="Folder"></div>${cells}`),
       }));
       host.scrollIntoView({ block: 'start' });
-    }, { cells, between, more: MORE_CONTROLS });
+    }, { cells, between, more: MORE_CONTROLS, prose: PROSE });
     const read = await page.evaluate((content) => {
       const page = document.querySelector('#frame-host .im-page-content');
       const texts = (root) => {
@@ -296,6 +304,7 @@ async function pageControls(page, where) {
       return {
         cells: [...page.querySelectorAll('[data-cell]')].map((cell) => ({ id: cell.dataset.cell, content: content.includes(cell.dataset.cell), texts: texts(cell) })),
         more: texts(page.querySelector('[data-test="more"]')),
+        prose: texts(page.querySelector('[data-test="prose"]')),
         fields: [...page.querySelectorAll('input:not([type="checkbox"], [type="radio"]), textarea')].map((el) => getComputedStyle(el).userSelect),
       };
     }, PAGE_CONTENT);
@@ -304,13 +313,15 @@ async function pageControls(page, where) {
       assert.deepEqual(wrong, [], where(`page content: the ${cell.id} control's text ${cell.content ? 'can' : 'cannot'} be selected`));
     }
     assert.ok(read.cells.filter((cell) => !cell.content).every((cell) => cell.texts.length || ['icon-button', 'search', 'field', 'field-bare', 'textarea'].includes(cell.id)), where('the controls have text to test'));
-    assert.deepEqual(read.more.filter((t) => t.select !== 'none'), [], where('page content: a link button, menu items of every kind, a role button, an option, a check, a field label and a summary cannot be selected'));
+    assert.deepEqual(read.more.filter((t) => t.select !== 'none'), [], where('page content: a link button, menu items of every kind, a role button, an option, a check, a field label and a key cap in a button cannot be selected'));
+    assert.ok(read.prose.length === 6 && read.prose.every((t) => t.select === 'text'), where(`page content: a link, a label, a summary and a key cap that hold prose can be selected (${JSON.stringify(read.prose)})`));
     assert.ok(read.fields.length && read.fields.every((value) => value === 'text'), where('page content: a field\'s value can'));
 
     // A drag from the first paragraph to the end of the second, over the controls between them.
     const ends = await page.evaluate(() => {
       const range = (selector, start) => {
-        const node = document.querySelector(`#frame-host [data-test="${selector}"]`).firstChild;
+        const paragraph = document.querySelector(`#frame-host [data-test="${selector}"]`);
+        const node = start ? paragraph.firstChild : paragraph.lastChild;
         const r = document.createRange();
         r.setStart(node, start ? 0 : node.length - 1);
         r.setEnd(node, start ? 1 : node.length);
@@ -325,7 +336,7 @@ async function pageControls(page, where) {
     await page.mouse.move(ends.to.x, ends.to.y, { steps: 8 });
     await page.mouse.up();
     const copied = await page.evaluate(() => getSelection().toString());
-    assert.match(copied, /^First paragraph\s+Second paragraph$/, where(`a drag across two paragraphs copies their words, not the controls between them (${JSON.stringify(copied)})`));
+    assert.match(copied, /^See the release notes first\s+Press Ctrl K to open the palette$/, where(`a drag across two paragraphs copies their words, a link and a key cap in them included, not the controls between them (${JSON.stringify(copied)})`));
   } finally {
     await page.evaluate(() => { getSelection().removeAllRanges(); document.getElementById('frame-host')?.remove(); });
   }
@@ -527,14 +538,24 @@ async function checksInRail(page, where, at) {
   await page.locator('[data-test="tick"]').click();
   assert.equal(await page.locator('[data-test="tick"]').getAttribute('aria-checked'), 'true', where('a check in the rail is ticked by a press'));
   assert.notEqual(await page.locator('[data-test="tick"]').evaluate((el) => getComputedStyle(el, '::after').content), 'none', where('and shows its tick'));
-  // In the rail the check is all there is to aim at: a press 10px from its centre, in each direction, still ticks it (a
-  // target of 24 by 24), and its drawn box stays 16 by 16.
+  // In the rail the check is all there is to aim at: its target is 24 by 24 round its drawn 16 by 16 box. A press 11.5px
+  // from its centre, in each direction, ticks it; one 13px away does not.
   const target = page.locator('[data-test="tick"]');
   await target.evaluate((el) => { window.__ticks = 0; el.addEventListener('click', (event) => { if (event.target === el) window.__ticks++; }); });
-  const centre = await target.evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width, height: r.height }; });
+  const centre = await target.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const area = getComputedStyle(el, '::before');
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width, height: r.height, area: [area.width, area.height] };
+  });
   assert.deepEqual([centre.width, centre.height], [16, 16], where('the check is drawn 16 by 16 in the rail'));
-  for (const [dx, dy] of [[10, 0], [-10, 0], [0, 10], [0, -10]]) await page.mouse.click(centre.x + dx, centre.y + dy);
-  assert.equal(await page.evaluate(() => window.__ticks), 4, where('a press 10px from the check, in each direction, reaches it'));
+  assert.deepEqual(centre.area, ['24px', '24px'], where('its target is 24 by 24'));
+  const presses = async (distance) => {
+    await page.evaluate(() => { window.__ticks = 0; });
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) await page.mouse.click(centre.x + dx * distance, centre.y + dy * distance);
+    return page.evaluate(() => window.__ticks);
+  };
+  assert.equal(await presses(11.5), 4, where('a press 11.5px from the check, in each direction, reaches it'));
+  assert.equal(await presses(13), 0, where('a press 13px from it, in each direction, does not'));
 }
 
 // The marks a rail item carries that are not colour, the selection's ring (of an avatar, of a check) and the badge's
@@ -619,6 +640,73 @@ const railMarks = (page) => page.evaluate(() => {
   }
   return { failures, measured };
 });
+
+// The ring of a selected row's rail item, read from the pixels of a screenshot: whole on its four sides (in the rail the
+// row's category mark is not drawn, the rail item's fill tells the category), and, the row focused, apart from the row's
+// focus ring by at least a pixel of what is under the row, on a two-line row and on a one-line one (Shinatama's
+// "Dunning emails"). The column through the rail item's centre, from the row's edge to the item, holds two runs of the
+// accent: the focus ring, then the selection's ring.
+async function railRingPixels(page, where, at) {
+  await at(840, 'shinatama');
+  for (const title of ['PowerShell', 'Dunning emails']) {
+    const geometry = await page.evaluate((title) => {
+      const rows = [...document.querySelectorAll('.im-sidebar .im-row')];
+      for (const one of rows) { one.setAttribute('aria-selected', String(one.title.startsWith(title))); one.removeAttribute('data-im-force'); }
+      const row = rows.find((one) => one.title.startsWith(title));
+      row.setAttribute('data-im-force', 'focus');
+      row.scrollIntoView({ block: 'center' });
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; };
+      const probe = document.createElement('i');
+      probe.style.color = 'var(--im-accent-text)';
+      row.after(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      return { row: rect(row), item: rect(row.querySelector(':scope > .im-rail-item')), lines: row.querySelector('.im-row-sub') ? 2 : 1, accent };
+    }, title);
+    const clip = { x: Math.floor(geometry.row.left), y: Math.floor(geometry.row.top), width: Math.ceil(geometry.row.width) + 2, height: Math.ceil(geometry.row.height) + 2 };
+    const shot = await page.screenshot({ clip });
+    const seen = await page.evaluate(async ({ png, clip, row, item, accent }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${png}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const g = canvas.getContext('2d', { willReadFrequently: true });
+      g.fillStyle = accent;
+      g.fillRect(0, 0, 1, 1);
+      const ink = [...g.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+      g.drawImage(image, 0, 0);
+      const data = g.getImageData(0, 0, canvas.width, canvas.height).data;
+      const pixel = (x, y) => { const at = ((y - clip.y) * canvas.width + (x - clip.x)) * 4; return [data[at], data[at + 1], data[at + 2]]; };
+      // The middle pixel of a 2px band is the band's colour itself: a near colour (a category beside the accent) is not it.
+      const isAccent = (p) => Math.abs(p[0] - ink[0]) + Math.abs(p[1] - ink[1]) + Math.abs(p[2] - ink[2]) <= 12;
+      const cx = Math.floor((item.left + item.right) / 2);
+      const cy = Math.floor((item.top + item.bottom) / 2);
+      const sides = { start: [Math.floor(item.left - 3), cy], end: [Math.floor(item.right + 3), cy], top: [cx, Math.floor(item.top - 3)], bottom: [cx, Math.floor(item.bottom + 3)] };
+      const runs = (from, to, step) => {
+        const list = [];
+        for (let y = from; step > 0 ? y < to : y > to; y += step) {
+          const on = isAccent(pixel(cx, y));
+          if (!list.length || list.at(-1).accent !== on) list.push({ accent: on, length: 1 });
+          else list.at(-1).length++;
+        }
+        return list;
+      };
+      return {
+        sides: Object.fromEntries(Object.entries(sides).map(([side, [x, y]]) => [side, isAccent(pixel(x, y))])),
+        colours: Object.fromEntries(Object.entries(sides).map(([side, [x, y]]) => [side, pixel(x, y).join(',')])),
+        above: runs(Math.round(row.top), Math.floor(item.top), 1), below: runs(Math.round(row.bottom) - 1, Math.ceil(item.bottom) - 1, -1), ink: ink.join(','),
+      };
+    }, { png: shot.toString('base64'), clip, row: geometry.row, item: geometry.item, accent: geometry.accent });
+    const said = (text) => where(`the ${geometry.lines === 1 ? 'one-line' : 'two-line'} row ${title} in the rail: ${text} (${JSON.stringify(seen)})`);
+    assert.deepEqual(seen.sides, { start: true, end: true, top: true, bottom: true }, said('the selection ring is whole on its four sides'));
+    for (const side of ['above', 'below']) {
+      const lit = seen[side].filter((run) => run.accent);
+      assert.ok(seen[side][0]?.accent && lit.length === 2 && seen[side][1].length >= 1, said(`${side} the item, the focus ring and the selection ring are two, a pixel or more apart`));
+    }
+  }
+}
 
 async function checkRailMarks(page, where, at) {
   await at(840);
@@ -740,6 +828,7 @@ async function categoryAndBadge(page, where, at) {
   for (const row of await categories(page)) {
     assert.ok(row.item, where(`category ${row.n}: the rail item carries the category`));
     assert.deepEqual([row.item.background, row.item.color], [row.cat, row.on], where(`category ${row.n}: the rail item is filled with it, its text in --im-cat-on`));
+    assert.equal(row.mark.content, 'none', where(`category ${row.n}: in the rail the row draws no start mark, the item's fill tells the category`));
   }
 }
 
@@ -865,6 +954,7 @@ export default async (page, url) => {
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 840'));
       await checksInRail(page, where, at);
       await categoryAndBadge(page, where, at);
+      await railRingPixels(page, where, at);
       await checkRailMarks(page, where, at);
 
       // 610: no sidebar, no tabs in the title bar, the Views menu instead (a menu button that is closed).
