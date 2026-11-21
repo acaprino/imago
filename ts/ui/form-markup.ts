@@ -74,8 +74,9 @@ export function settingsMessageHtml(message: string, details: readonly string[] 
   return `<div class="im-setting-row" role="status"><div><span>${options.icon ? `<span class="${tone}">${iconHtml(options.icon)}</span> ` : ''}${esc(message)}</span>${details.map(detail => `<small class="im-wrap-text">${esc(detail)}</small>`).join('')}</div></div>`;
 }
 
-export function formHeaderHtml(title: string, subtitle = '', locked = false, id = 'dlg-title'): string {
-  return `<div class="im-form-head"><div><h2 id="${esc(id)}">${esc(title)}</h2>${subtitle ? `<p class="im-muted">${esc(subtitle)}</p>` : ''}</div><button type="button" class="im-icon-btn" data-close aria-label="Close" ${locked ? 'disabled' : ''}>${iconHtml('x')}</button></div>`;
+/** The head of a form: its title, a subtitle, and the close button, whose `closeLabel` is its name and its tooltip. */
+export function formHeaderHtml(title: string, subtitle = '', locked = false, id = 'dlg-title', closeLabel = 'Close'): string {
+  return `<div class="im-form-head"><div><h2 id="${esc(id)}">${esc(title)}</h2>${subtitle ? `<p class="im-muted">${esc(subtitle)}</p>` : ''}</div><button type="button" class="im-icon-btn" data-close aria-label="${esc(closeLabel)}" title="${esc(closeLabel)}" ${locked ? 'disabled' : ''}>${iconHtml('x')}</button></div>`;
 }
 
 export function formFooterHtml(options: { submit: string; leadingHtml?: string; disabled?: boolean; cancel?: string }): string {

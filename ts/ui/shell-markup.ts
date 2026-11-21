@@ -21,15 +21,17 @@ export function tabNavigationHtml(tabs: readonly NavigationTab[], selected: stri
   }).join('')}</nav>`;
 }
 
-export interface WindowButtonLabels { minimize: string; maximize: string; close: string }
-export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Minimize window', maximize: 'Maximize window', close: 'Close window' }): string {
+/** The words of the window buttons: each one's accessible name and its tooltip (`title`), as an icon-only control has both. */
+export interface WindowButtonLabels { minimize: string; maximize: string; close: string; minimizeTitle: string; maximizeTitle: string; closeTitle: string }
+export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Minimize window', maximize: 'Maximize window', close: 'Close window', minimizeTitle: 'Minimize', maximizeTitle: 'Maximize', closeTitle: 'Close' }): string {
   const svg = (body: string) => `<svg class="im-icon" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
   const icons = {
     minimize: svg('<path d="M5 12h14"/>'),
     maximize: svg('<rect x="6" y="6" width="12" height="12"/>') + svg('<path d="M8 8V4h12v12h-4M4 8h12v12H4z"/>'),
     close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   };
-  return `<div class="im-window-buttons">${(['minimize', 'maximize', 'close'] as const).map(name => `<button type="button" class="im-window-button" data-im-window="${name}" aria-label="${escapeHtml(labels[name])}">${icons[name]}</button>`).join('')}</div>`;
+  const titles = { minimize: labels.minimizeTitle, maximize: labels.maximizeTitle, close: labels.closeTitle };
+  return `<div class="im-window-buttons">${(['minimize', 'maximize', 'close'] as const).map(name => `<button type="button" class="im-window-button" data-im-window="${name}" aria-label="${escapeHtml(labels[name])}" title="${escapeHtml(titles[name])}">${icons[name]}</button>`).join('')}</div>`;
 }
 
 export interface TitlebarOptions {

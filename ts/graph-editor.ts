@@ -1,3 +1,5 @@
+import { claimKey } from './ui/key-claim.ts';
+
 /** A scrollable editing surface. Consumers own node content, coordinates and mutations. */
 type Point = { x: number; y: number };
 const ns = 'http://www.w3.org/2000/svg';
@@ -74,6 +76,7 @@ export function graphEditorNode(actions: {
     if (event.target !== node) return;
     if (activates(event)) {
       event.preventDefault();
+      claimKey(event);
       actions.open();
       return;
     }
@@ -83,7 +86,7 @@ export function graphEditorNode(actions: {
       ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step },
     };
     const delta = directions[event.key];
-    if (delta) { event.preventDefault(); actions.nudge(delta); }
+    if (delta) { event.preventDefault(); claimKey(event); actions.nudge(delta); }
   };
   return node;
 }
@@ -121,7 +124,7 @@ export function graphEditorEdge(a: Point, b: Point, markerId: string, open: () =
   group.addEventListener('pointerdown', event => event.stopPropagation());
   group.addEventListener('click', open);
   group.addEventListener('keydown', event => {
-    if (activates(event)) { event.preventDefault(); open(); }
+    if (activates(event)) { event.preventDefault(); claimKey(event); open(); }
   });
   return { group, line, label, title, hit };
 }
@@ -155,7 +158,7 @@ export function graphGesture(event: PointerEvent, handlers: {
     target.addEventListener(type, next => { if (next.pointerId === pointer) cancel(); }, options);
   }
   target.ownerDocument.addEventListener('keydown', key => {
-    if (key.key === 'Escape') { key.preventDefault(); key.stopPropagation(); cancel(); }
+    if (key.key === 'Escape') { key.preventDefault(); claimKey(key); key.stopPropagation(); cancel(); }
   }, { ...options, capture: true });
   try { target.setPointerCapture(pointer); } catch { /* Synthetic gestures still dispatch on the target. */ }
   return stop;

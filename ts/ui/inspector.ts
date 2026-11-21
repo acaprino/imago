@@ -3,6 +3,7 @@
 // Escape closes it only when no menu, sheet, dialog or palette is above it. Leaving it with unsaved changes
 // asks once.
 
+import { claimKey } from './key-claim.ts';
 import { tabbables } from './layers.ts';
 
 export type Inspector = {
@@ -98,10 +99,13 @@ export function inspector(shell: HTMLElement): Inspector {
     }
   }
 
+  // Escape in the region is the inspector's: it claims the key, so no command of the app also runs on it, nor on its
+  // repeats while it is held (`claimKey`). A held key closes one view, as it closes one layer.
   region.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
-    close();
+    claimKey(event);
+    if (!event.repeat) close();
   });
 
   function close(): void {

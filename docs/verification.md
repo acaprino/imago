@@ -85,6 +85,14 @@ Smooth dark title bar at 28,31,40 over a dark window then, the same over a brigh
 - The WebView2 failure watcher and what follows a failure: the reload of a renderer that stopped, the rebuild of the
   windows after the browser process died, the question after three reloads in a minute.
 - The "Reload interface" item of the window menu.
+- The context menu trimmed to the editing commands (`trim_context_menu`). The photographed build predates it, and no
+  step of the capture opens a context menu.
+- The tint of the acrylic on Windows 10 (`acrylic_tint`, set by `apply_theme`). No machine of the suite runs Windows
+  10, and on Windows 11 22H2 and later the tint does not show. That setting the effect again changes nothing on
+  Windows 11 is read from the code (Tauri and window-vibrancy 0.8.1 set the same backdrop again), not seen on a real
+  window.
+- The failures WebView2 reports while the application closes, ignored (`Recovery::close`). Nothing here closed the
+  demo and watched what the failure watcher reported.
 - The place of the window (`load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens`). The
   crate gives the pieces and an app wires them; the demo app wires none of them, so nothing here saved, read or
   brought back the place of a real window. Only the crate's own tests (run by CI) cover the arithmetic and the file.

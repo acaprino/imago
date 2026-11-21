@@ -555,12 +555,23 @@ test('renderShellFrame refuses a frame without its fixed regions and changes not
 });
 
 test('window buttons provide the native selectors and both maximize/restore icons', () => {
-  const html = windowButtonsHtml({ minimize: 'Hide <window>', maximize: 'Grow', close: 'Close' });
+  const html = windowButtonsHtml({ minimize: 'Hide <window>', maximize: 'Grow', close: 'Close', minimizeTitle: 'Hide', maximizeTitle: 'Grow', closeTitle: 'Close' });
   assert.deepEqual([...html.matchAll(/data-im-window="([^"]+)"/g)].map(match => match[1]), ['minimize', 'maximize', 'close']);
   assert.equal(html.match(/<svg/g)?.length, 4);
   assert.match(html, /aria-label="Hide &lt;window&gt;"/);
   assert.doesNotMatch(titlebarHtml({ brand: { name: 'Example' } }), /im-window-buttons/);
   assert.match(titlebarHtml({ brand: { name: 'Example' }, windowControls: true }), /im-window-buttons/);
+});
+
+test('each window button has a tooltip beside its accessible name: Minimize, Maximize, Close, or the app\'s words', () => {
+  const pairs = (html: string): (string | undefined)[][] =>
+    [...html.matchAll(/<button [^>]*>/g)].map(([button]) => [/aria-label="([^"]*)"/.exec(button)?.[1], /title="([^"]*)"/.exec(button)?.[1]]);
+  assert.deepEqual(pairs(windowButtonsHtml()), [['Minimize window', 'Minimize'], ['Maximize window', 'Maximize'], ['Close window', 'Close']]);
+  assert.deepEqual(pairs(titlebarHtml({ brand: { name: 'Example' }, windowControls: true })).slice(-3), [['Minimize window', 'Minimize'], ['Maximize window', 'Maximize'], ['Close window', 'Close']]);
+
+  const words = { minimize: 'Riduci a icona la finestra', maximize: 'Ingrandisci la finestra', close: 'Chiudi la finestra', minimizeTitle: 'Riduci <a icona>', maximizeTitle: 'Ingrandisci', closeTitle: 'Chiudi' };
+  assert.deepEqual(pairs(windowButtonsHtml(words)), [['Riduci a icona la finestra', 'Riduci &lt;a icona&gt;'], ['Ingrandisci la finestra', 'Ingrandisci'], ['Chiudi la finestra', 'Chiudi']]);
+  assert.deepEqual(pairs(titlebarHtml({ brand: { name: 'Esempio' }, windowControls: words })).slice(-3).map(([, title]) => title), ['Riduci &lt;a icona&gt;', 'Ingrandisci', 'Chiudi']);
 });
 
 // The approved note: its icon, then its title and its line (docs/reference/toolkit-preview.html, the gallery's `note` control).

@@ -3,6 +3,8 @@
 // or a sheet) and where focus goes back to. Nothing touches the DOM when this module is imported,
 // so the stack logic also runs under plain Node.
 
+import { claimKey } from './key-claim.ts';
+
 export type LayerKind = 'menu' | 'sheet' | 'dialog' | 'palette';
 
 export type Layer = {
@@ -169,6 +171,7 @@ export function trapTab(event: KeyboardEvent, root: HTMLElement): void {
   const items = tabbables(root);
   if (!items.length) {
     event.preventDefault();
+    claimKey(event);
     root.focus();
     return;
   }
@@ -176,6 +179,7 @@ export function trapTab(event: KeyboardEvent, root: HTMLElement): void {
   const edge = event.shiftKey ? items[0] : items[items.length - 1];
   if (active === edge || !items.includes(active as HTMLElement)) {
     event.preventDefault();
+    claimKey(event);
     (event.shiftKey ? items[items.length - 1] : items[0]).focus();
   }
 }
@@ -223,6 +227,7 @@ export function follow(place: () => void): () => void {
 type KeyLike = {
   key: string;
   target?: EventTarget | null;
+  defaultPrevented?: boolean;
   repeat?: boolean;
   isComposing?: boolean;
   keyCode?: number;
@@ -240,7 +245,8 @@ type EventHost = {
 };
 
 /**
- * Escape closes the top layer and nothing else: the press stops there, so no other handler also acts on it.
+ * Escape closes the top layer and nothing else: the press stops there, so no other handler also acts on it. A key is
+ * answered once: an Escape that a handler before this one already took (its default prevented) closes nothing.
  * A press outside closes a menu or a sheet, and a press on the control that toggles it closes it and swallows
  * the click that follows, so the control does not open it again. The returned function detaches the listeners
  * and closes every layer still open (the shell they belong to is going away).
@@ -251,13 +257,14 @@ export function attachLayers(shell: HTMLElement): () => void {
 
   const onKeyDown = (event: KeyLike): void => {
     swallow = null; // a key press is not the click that follows a press on an opener
-    if (event.key !== 'Escape' || event.repeat || event.isComposing || event.keyCode === 229) return;
+    if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229) return;
     const top = topLayer();
     if (!top || top.acceptsEscape?.(event.target as EventTarget | null) === false) return;
     // The focused picker in this layer gets the first Escape to dismiss its own results.
     const picker = (event.target as Element | null)?.closest?.('.im-search-picker');
     if (picker && top.el.contains(picker) && picker.querySelector('input[role="combobox"][aria-expanded="true"]')) return;
     event.preventDefault?.();
+    claimKey(event); // no command runs on it, nor on its repeats while it is held
     event.stopImmediatePropagation?.();
     top.close();
   };

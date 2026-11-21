@@ -1,3 +1,5 @@
+import { claimKey } from './key-claim.ts';
+
 export interface PickerItem {
   id: string;
   label: string;
@@ -181,6 +183,7 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
     close();
     input.focus();
     event.preventDefault();
+    claimKey(event); // the picker answered it: its results close, and no command runs on it
     event.stopPropagation();
   });
   input.onkeydown = event => {
@@ -194,6 +197,7 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
       else if (item) void operate(item, false);
     } else return;
     event.preventDefault();
+    claimKey(event);
     event.stopPropagation();
   };
   void refresh();

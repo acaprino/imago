@@ -3,7 +3,7 @@
 // read nothing else. Where the choice is kept (the webview's own storage, the app's settings) is the app's business;
 // what it reads back goes through `parseLook` and `parseTheme`, which take a stale or corrupt value for the default.
 
-import { sendWindowTheme, windowThemeFor, type WindowTheme } from './window-theme.ts';
+import { sendWindowTheme, windowThemeFor, type WindowTheme, type WindowThemeDetail } from './window-theme.ts';
 
 export type Look = 'smooth' | 'oni';
 /** The theme chosen: `system` follows Windows. */
@@ -31,8 +31,12 @@ export type LookState = { app: AppId; look: Look; theme: ThemeChoice; glass: boo
 export type LookDeps = {
   /** Whether Windows is dark now. Default: the root's own window, `prefers-color-scheme: dark`; dark when there is none. */
   systemIsDark?: () => boolean;
-  /** Asks the native window for its theme (see window-theme.ts). Called only when the word changed since the last call for this root. */
-  setWindowTheme?: (theme: WindowTheme) => void | Promise<unknown>;
+  /**
+   * Asks the native window for its theme (see window-theme.ts), with the look and the theme the page draws (`resolved`,
+   * never `system`) for the tint of the acrylic. Called only when the word, the look or the drawn theme changed since
+   * the last call for this root. A function that takes only the word keeps working.
+   */
+  setWindowTheme?: (theme: WindowTheme, detail: WindowThemeDetail) => void | Promise<unknown>;
 };
 
 const windowIsDark = (root: HTMLElement): boolean =>
@@ -53,5 +57,5 @@ export function applyLook(root: HTMLElement, state: LookState, deps: LookDeps = 
   root.classList.toggle('im-glass', state.glass);
   // The engine's own controls and scrollbars follow the theme too.
   if (root.style) root.style.colorScheme = theme;
-  if (deps.setWindowTheme) sendWindowTheme(root, windowTheme, deps.setWindowTheme);
+  if (deps.setWindowTheme) sendWindowTheme(root, windowTheme, { look, resolved: theme }, deps.setWindowTheme);
 }

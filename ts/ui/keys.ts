@@ -1,6 +1,8 @@
 // Keyboard movement: arrows inside a list, one tab stop per list, F6 between regions.
 // Nothing here touches the DOM when the module is imported.
 
+import { claimKey } from './key-claim.ts';
+
 export type NavKey = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End';
 export type Orientation = 'vertical' | 'horizontal';
 
@@ -82,13 +84,16 @@ export function roving(container: HTMLElement, options: RovingOptions): () => vo
     const rows = items().filter(canFocus);
     const current = rows.indexOf(target); // a control nested inside a row is not a row: leave its keys alone
     if (current === -1) return;
+    // The list answers these keys: it claims them, so no command bound to them also runs.
     if (isNavKey(key)) {
       const next = nextIndex(current, rows.length, key, orientation);
       if (next === -1) return;
       event.preventDefault();
+      claimKey(event);
       rows[next].focus();
     } else {
       event.preventDefault();
+      claimKey(event);
       onSelect?.(target);
     }
   };
@@ -170,6 +175,7 @@ export function regions(shell: HTMLElement): () => void {
       const entry = region && isRendered(region) ? entryPoint(region) : null;
       if (entry) {
         event.preventDefault();
+        claimKey(event);
         entry.focus();
         return;
       }

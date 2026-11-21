@@ -31,8 +31,19 @@ Facts about the material:
 
 - On Windows 11 22H2 and later the acrylic is the DWM system backdrop `DWMSBT_TRANSIENTWINDOW`. That material is the
   system's own: **it ignores the tint colour of `windowEffects`** and follows only the window's light or dark theme.
-  The tint reaches only Windows 10, where the legacy `SetWindowCompositionAttribute` path is used (and is slow to
-  drag). `glass_window_config` keeps the app's own tint for Windows 10.
+  The tint reaches only Windows 10 (and the first Windows 11, 21H2), where the legacy `SetWindowCompositionAttribute`
+  path is used (and is slow to drag).
+- There the acrylic has no colour but the tint, so the tint follows the look and the theme the page draws, which the
+  page sends with the window theme (1.2). `apply_theme` sets it: `acrylic_tint(look, theme)` is the ground of the look
+  under glass (the row "Ground" of 1.3), with its alpha as a byte: Smooth dark `#0C111D` and 204, Smooth light
+  `#F6F7F9` and 224, ONI dark `#0B0416` and 219, ONI light `#E9EEF8` and 230. A window on Windows 10 is then light
+  under a light look and dark under a dark one. Under the theme `system` the tint follows a change of Windows' colours
+  only when the page calls `applyLook` again at that change, as [using-imago.md](using-imago.md), section 3, asks
+  (listening to `prefers-color-scheme`): then the page sends the theme it draws again. The demo's page does it
+  (`gallery/mount/desktop.ts`). The first frame keeps the tint of the app's own config, which
+  `glass_window_config` leaves as it is, until the page's first `set_window_theme`. On Windows 11 22H2 and later
+  nothing changes: setting the effect again sets the backdrop the window already has (the call Tauri made when it
+  built the window), and that backdrop takes no tint.
 - The acrylic is a blur of what is behind the window, with a nearly fixed luminosity. Measured from the screen
   (0 to 255): light acrylic about **143 over a dark window and 226 over a white one**; dark acrylic about **84 over a
   dark window**. A light acrylic over dark content is therefore a mid grey, and a dark one over bright content a
@@ -55,13 +66,21 @@ grey in Shinatama before 2026-11-19. The rule, as `windowThemeFor(look, choice)`
 | ONI | Dark | `dark` |
 | ONI | Windows | `dark`: ONI has no light backdrop to follow |
 
-`WindowTheme` is the Rust type of that word: `Light`, `Dark` or `System`. The path of the word:
+`WindowTheme` is the Rust type of that word: `Light`, `Dark` or `System`. `Look` is the Rust type of the page's look,
+`Look::Smooth` or `Look::Oni`, read by `parse_look` (`oni` is ONI, any other word Smooth): it decides the tint of 1.1
+and nothing else. The path of the word:
 
-1. The page calls `applyLook`, which sets the root attributes and sends the window theme to the window, once per
-   change, through the function the app gives as `setWindowTheme`.
+1. The page calls `applyLook`, which sets the root attributes and sends the window theme to the window through the
+   function the app gives as `setWindowTheme`, with `{ look, resolved }`: the look and the theme the page draws
+   (`light` or `dark`, never `system`). Called again, it sends again when the word, the look or the theme drawn
+   changed, and not otherwise; under `system` a change of Windows' colours changes the theme drawn, when the app calls
+   `applyLook` again at that change (1.1).
 2. The app's command `set_window_theme` calls `parse_theme` (a word that is not `light`, `dark` or `system` is
-   refused), then `apply_theme` (Tauri's `set_theme`, which reaches DWM and WebView2's colour scheme), then
-   `save_theme`, which writes the bare word to `window-theme` in the app's data folder, whole or not at all.
+   refused) and `drawn_by_page` for the look and the theme drawn (a page that sends neither, an older one, is Smooth
+   in the word's own theme, and dark for `system`), then `apply_theme(window, theme, look, resolved)` (Tauri's
+   `set_theme`, which reaches DWM and WebView2's colour scheme, then the tint of 1.1), then `save_theme`, which writes
+   the bare word to `window-theme` in the app's data folder, whole or not at all. `apply_theme` also gives the window
+   the acrylic effect, so it is called on the glass window only, the one built with `glass_window_config`.
 3. At the next start the app reads `saved_theme` before it builds the window and hands it to
    `glass_window_config`, so the **first frame** already has the right acrylic. A window built again after a
    WebView2 crash gets it too.
@@ -140,12 +159,12 @@ Shinatama's method still holds:
 | HTML title bar with Snap Layouts | No decorations. A child window that never paints lies over the HTML maximize button and answers `HTMAXBUTTON`; the page reports the button's rectangle | `install_snap_layouts`, `SnapLayouts::set_rect`, `mountWindowControls` |
 | Dragging | `data-tauri-drag-region` on each element that should drag: the title bar, its spacer, and the brand with everything inside it. Tauri starts a drag only when the pressed element itself carries the attribute, and nothing in `css/` changes what a child does with the pointer. Buttons, tabs and fields are left unmarked, so they take their clicks. Needs the permissions of section 3.5 | the app's markup; `markDragRegion` in `gallery/mount/desktop.ts` |
 | Snap zones | A minimum width of 500 | `glass_window_config` |
-| Not a web page | Navigation limited to the app's own origin; new windows refused; browser accelerators off in a release build; browser keys, the page menu and the mouse's back and forward buttons refused in the page | `guard_navigation`, `disable_browser_accelerators`, `guardDesktop` |
+| Not a web page | Navigation limited to the app's own origin; new windows refused; browser accelerators off and the engine's context menu trimmed to editing in a release build; browser keys, the page menu and the mouse's back and forward buttons refused in the page | `guard_navigation`, `disable_browser_accelerators`, `trim_context_menu`, `guardDesktop` |
 | Reload when hung | A "Reload interface" item in the window menu (Alt+Space) | `install_reload_menu` |
-| WebView2 crash | A page reloaded at most three times a minute; a lost browser process rebuilds the windows | `watch_process_failures`, `recovery_action`, `Recovery` (see section 4) |
+| WebView2 crash | A page reloaded at most three times a minute; a lost browser process rebuilds the windows; nothing is done while the app closes | `watch_process_failures`, `recovery_action`, `Recovery` (see section 4) |
 | Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, panels, notices and code are selectable | `css/base.css` |
 | Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `mountZoom` |
-| Theme | The window theme from the look, saved for the first frame (1.2) | `applyLook`, `parse_theme`, `apply_theme`, `save_theme`, `saved_theme` |
+| Theme | The window theme from the look, saved for the first frame (1.2), and the tint of the acrylic for Windows 10 (1.1) | `applyLook`, `parse_theme`, `drawn_by_page`, `apply_theme`, `acrylic_tint`, `Look`, `save_theme`, `saved_theme` |
 | Place of the window | The pieces to save the position, size and maximized state and to bring them back inside the monitors there are now. The crate gives the pieces and the app wires them, as the paragraph below says; the demo does not | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
 
 The place of the window is Xiox's, moved into the shell. Xiox saves it in `window.json` in the data folder with the
@@ -180,11 +199,15 @@ example. [using-imago.md](using-imago.md) has the page side with signatures.
 
 A window built again after a lost browser process goes through this again.
 
-1. `disable_browser_accelerators(&window)` in a release build only: a development build keeps the engine's own reload and
-   DevTools keys. That is the Rust side. The page's `guardDesktop` (section 3.4) refuses F5, F12, Ctrl+R and
-   Ctrl+Shift+I, J and C in every build, so under `tauri dev` it takes reload and DevTools away too: an app calls it
-   only outside development (`if (!import.meta.env.DEV) guardDesktop(document)`), as the sketch in
-   [using-imago.md](using-imago.md), section 5, does.
+1. `disable_browser_accelerators(&window)` and `trim_context_menu(&window)` in a release build only: a development
+   build keeps the engine's own reload and DevTools keys and its whole context menu (Inspect). That is the Rust side.
+   `trim_context_menu` decides what WebView2's own menu holds when it opens: the editing commands (emoji, undo, redo,
+   cut, copy, paste, paste as plain text, select all), a separator only between two of them, and no menu at all when
+   nothing is left. The page's `guardDesktop` (section 3.4) decides where the menu opens: it refuses it outside
+   fields, the `allowReloadIn` places and selected text. It also refuses F5, F12, Ctrl+R and Ctrl+Shift+I, J and C in
+   every build, so under `tauri dev` it takes reload and DevTools away too: an app calls it only outside development
+   (`if (!import.meta.env.DEV) guardDesktop(document)`), as the sketch in [using-imago.md](using-imago.md), section 5,
+   does.
 2. `watch_process_failures(&window, handler)`. The handler calls `recovery_action` (section 4).
 3. `install_snap_layouts(&window)`, and keep the `SnapLayouts` it returns **per window label**, replacing the entry
    when the window is rebuilt. A `Mutex<HashMap<String, SnapLayouts>>` in the app's state does it. Tauri's `manage`
@@ -193,13 +216,15 @@ A window built again after a lost browser process goes through this again.
 4. `install_reload_menu(&window, "Reload interface", on_reload)`. The app words the label and decides what a reload
    is. `on_reload` runs on a thread of its own, because the window's thread may be the one waiting for a hung page.
 
-Each window also needs its own `Recovery`, kept per label and across rebuilds.
+Each window also needs its own `Recovery`, kept per label and across rebuilds; a window opened anew, not rebuilt, gets a
+new one (`Recovery::new`), also under a label used before. When an exit begins that the app does not prevent, and when
+one window closes for good, the app calls `Recovery::close` on the `Recovery` of those windows (section 4).
 
 ### 3.3 Between the page and Rust
 
 | What | Name | Direction |
 |---|---|---|
-| The window theme | the command `set_window_theme(theme: String)` | page to Rust. The app registers it: the crate has no command of its own |
+| The window theme | the command `set_window_theme(theme: String, look: Option<String>, resolved: Option<String>)` | page to Rust. The app registers it: the crate has no command of its own. `theme` is the first argument of `setWindowTheme`, and `look` (`smooth` or `oni`) and `resolved` (the theme the page draws, `light` or `dark`) come from its second, `{ look, resolved }`, for the tint of 1.1. `drawn_by_page` reads the two, and gives a page that sends neither Smooth in the word's own theme, dark for `system`. `applyLook` calls `setWindowTheme` again when the word, the look or the theme drawn changed |
 | The maximize button's rectangle | the command `window_caption_maximize(window, x, y, width, height)` | page to Rust. It finds the window's `SnapLayouts` by `window.label()` and calls `set_rect` with the four numbers unchanged |
 | Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay, at every change and again at every `window_caption_maximize` | Rust to page. Listening needs `core:event:allow-listen` and `core:event:allow-unlisten` (section 3.5) |
 
@@ -271,6 +296,27 @@ transparent window with nothing in it that takes no input.
 - `on_failure` runs on a thread of its own for every report, never inside WebView2's callback, so it may destroy
   windows, build them, ask the person and sleep.
 
+### While the application closes
+
+Closing the application ends its WebView2 processes too, and WebView2 reports them as failed: that is not a failure
+to recover from. That is what Xiox found with its one window, and why it ignores every failure once its exit or the
+close of its window begins. A window closed while the application goes on is the same case for that window.
+`Recovery::close` tells it to a window's `Recovery`, and from then on `recovery_action` answers every failure of that
+window with `RecoveryAction::Ignore`: no reload, no rebuild, no question. Nothing undoes it, `Recovery::reset`
+included. The app calls it:
+
+- on every window's `Recovery` when an exit begins that the app does not prevent (Tauri's `ExitRequested` and
+  `Exit`), a window that has no `Recovery` yet included. An exit the app prevents, to rebuild its windows or to stay
+  in the tray, closes nothing;
+- on one window's when that window is closed for good: on `Destroyed`, or already on `CloseRequested` when the app
+  never prevents a close.
+
+A closed `Recovery` stays closed, so a window opened anew under the same label, and not rebuilt, gets a new one
+(`Recovery::new`): with the old one it would never reload, rebuild or ask again. A window destroyed to be built again
+is not closing: while the rebuilding flag is set the app calls it for none of them, prevents the exit as the contract
+below says, and keeps each `Recovery` as it is. The demo does it in `build_main`, `on_run_event` and
+`close_recoveries` (`examples/demo/src-tauri/src/main.rs`); it prevents no exit and no close.
+
 ### The rebuilding contract
 
 A lost browser process kills every webview of the app, and every window reports it. The app rebuilds once, for the
@@ -332,5 +378,6 @@ shell in short:
 
 [verification.md](verification.md) lists what has been run on a real Windows 11 window with Imago, and what has not.
 From the code and its tests, these were never run with a live webview when the crate was written: the calls into
-WebView2 that turn the browser accelerators off and watch the process failures, and the real flow of a rebuild. Targets
-other than Windows compile the same names to no-ops that have been read, not built.
+WebView2 that turn the browser accelerators off, trim the context menu and watch the process failures, the tint of
+the acrylic on Windows 10, what the failure watcher reports while the application closes, and the real flow of a
+rebuild. Targets other than Windows compile the same names to no-ops that have been read, not built.

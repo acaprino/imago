@@ -27,9 +27,17 @@ test('form chrome escapes text while composition slots retain shared markup', ()
   assert.match(controls, /<legend>&lt;Options&gt;<\/legend>/);
   assert.match(controls, /<input name="x">/);
   assert.match(formHeaderHtml('<Title>', '<Subtitle>', true, 'title"'), /id="title&quot;">&lt;Title&gt;/);
-  assert.match(formHeaderHtml('Title', '', true), /aria-label="Close" disabled/);
+  assert.match(formHeaderHtml('Title', '', true), /aria-label="Close" title="Close" disabled/);
   assert.match(formFooterHtml({ submit: '<Save>', disabled: true, leadingHtml: '<small>Pending</small>' }), /<small>Pending<\/small>/);
   assert.match(fieldErrorHtml('error"', '<Rejected>'), /id="error&quot;" role="alert">&lt;Rejected&gt;/);
+});
+
+test('the close button of a form header is named and has a tooltip, in the app\'s words', () => {
+  const close = (html: string): string => /<button [^>]*data-close[^>]*>/.exec(html)?.[0] ?? '';
+  assert.match(close(formHeaderHtml('Title')), /aria-label="Close" title="Close"/, 'Close by default');
+  const words = close(formHeaderHtml('Titolo', '', false, 'dlg-title', 'Chiudi <la finestra>'));
+  assert.match(words, /aria-label="Chiudi &lt;la finestra&gt;" title="Chiudi &lt;la finestra&gt;"/);
+  assert.doesNotMatch(words, /disabled/);
 });
 
 test('settings rows and fields share hint/error associations and native attributes', () => {

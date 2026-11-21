@@ -137,11 +137,53 @@ test('applyLook calls setWindowTheme once for two identical calls, and again whe
   assert.deepEqual(sent, ['light']);
   applyLook(root, { ...state, theme: 'dark' }, deps);
   assert.deepEqual(sent, ['light', 'dark']);
-  // ONI with the Windows theme asks for dark too: the window is already dark, nothing to send.
+  // ONI with the Windows theme asks for dark too, but the look changed: the window is told, for its tint.
   applyLook(root, { ...state, look: 'oni', theme: 'system' }, deps);
-  assert.deepEqual(sent, ['light', 'dark']);
+  assert.deepEqual(sent, ['light', 'dark', 'dark']);
+  applyLook(root, { ...state, look: 'oni', theme: 'dark' }, deps);
+  assert.deepEqual(sent, ['light', 'dark', 'dark'], 'the same word, look and drawn theme: nothing to send');
   applyLook(root, { ...state, look: 'smooth', theme: 'system' }, deps);
-  assert.deepEqual(sent, ['light', 'dark', 'system']);
+  assert.deepEqual(sent, ['light', 'dark', 'dark', 'system']);
+});
+
+test('applyLook tells the window the look and the theme the page draws with the window theme', () => {
+  const root = fakeRoot();
+  const sent: unknown[] = [];
+  const setWindowTheme = (theme: string, detail: unknown): void => { sent.push([theme, detail]); };
+  applyLook(root, { app: 'xiox', look: 'oni', theme: 'light', glass: true }, { systemIsDark: () => true, setWindowTheme });
+  applyLook(root, { app: 'xiox', look: 'smooth', theme: 'system', glass: true }, { systemIsDark: () => false, setWindowTheme });
+  assert.deepEqual(sent, [
+    ['light', { look: 'oni', resolved: 'light' }],
+    ['system', { look: 'smooth', resolved: 'light' }],
+  ]);
+});
+
+test('applyLook tells the window again when only the look changes', () => {
+  const root = fakeRoot();
+  const sent: unknown[] = [];
+  const deps = { systemIsDark: () => true, setWindowTheme: (theme: string, detail: unknown) => { sent.push([theme, detail]); } };
+  applyLook(root, { app: 'muro', look: 'smooth', theme: 'dark', glass: true }, deps);
+  applyLook(root, { app: 'muro', look: 'oni', theme: 'dark', glass: true }, deps);
+  assert.deepEqual(sent, [
+    ['dark', { look: 'smooth', resolved: 'dark' }],
+    ['dark', { look: 'oni', resolved: 'dark' }],
+  ]);
+});
+
+test('applyLook tells the window again when Windows changes its colours under the Windows theme', () => {
+  const root = fakeRoot();
+  const sent: unknown[] = [];
+  let dark = true;
+  const deps = { systemIsDark: () => dark, setWindowTheme: (theme: string, detail: unknown) => { sent.push([theme, detail]); } };
+  const state = { app: 'mukade', look: 'smooth', theme: 'system', glass: true } as const;
+  applyLook(root, state, deps);
+  applyLook(root, state, deps);
+  dark = false;
+  applyLook(root, state, deps);
+  assert.deepEqual(sent, [
+    ['system', { look: 'smooth', resolved: 'dark' }],
+    ['system', { look: 'smooth', resolved: 'light' }],
+  ], 'the same word, and the theme the page draws changed: the tint follows it');
 });
 
 test('applyLook keeps what it sent per root', () => {
