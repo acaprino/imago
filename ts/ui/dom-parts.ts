@@ -32,6 +32,43 @@ const parts = {
   optionGroup: ['optgroup', ''], article: ['article', 'im-region'],
 } as const satisfies Record<string, readonly [keyof HTMLElementTagNameMap, string]>;
 
+/** What a part can also be: the layout, list, dialog and desktop roles that combine with any kind. The app names
+ * the role; the classes that draw it are Imago's. */
+const traits = {
+  stack: 'im-stack', row: 'im-inline-row', scroll: 'im-scroll', bounded: 'im-scroll--bounded', grow: 'im-grow',
+  spacer: 'im-spacer', truncate: 'im-truncate', wrap: 'im-wrap-text', muted: 'im-muted', visuallyHidden: 'im-visually-hidden',
+  chip: 'im-chip', signal: 'im-signal', list: 'im-list', formGrid: 'im-form-grid', section: 'im-section',
+  choiceList: 'im-choice-list', choiceRow: 'im-choice-row', summaryList: 'im-summary-list', conversation: 'im-scroll-log',
+  emptyMessage: 'im-empty-message', renderView: 'im-render-view', viewportFooter: 'im-viewport-footer',
+  paddedDrawer: 'im-padded-drawer', sectionedDrawer: 'im-sectioned-drawer', fileDialog: 'im-file-dialog',
+  desktopContent: 'im-desktop-content', toolbar: 'im-toolbar', workArea: 'im-work-area', workspaceArea: 'im-workspace-area',
+  noticeHost: 'im-notices', notice: 'im-float im-notice', dockedInspector: 'im-docked-inspector',
+  inspectionRail: 'im-inspection-rail', resizableNav: 'im-resizable-nav', navRail: 'im-nav-rail', navLine: 'im-nav-line',
+  navEntry: 'im-nav-entry', navMark: 'im-nav-mark', navDetail: 'im-nav-detail',
+} as const satisfies Record<string, string>;
+
+export type UiTrait = keyof typeof traits;
+/** Gives `node` these roles (`uiTraits(uiPart('orderedList'), 'scroll', 'bounded')`) and returns it. */
+export function uiTraits<T extends Element>(node: T, ...names: readonly UiTrait[]): T {
+  for (const name of names) node.classList.add(...traits[name].split(' '));
+  return node;
+}
+
+const tones = { ok: 'im-text-ok', warn: 'im-text-warn', err: 'im-text-err' } as const;
+export type UiTone = keyof typeof tones;
+/** The text of `node` in a semantic tone, or in its own colour again with `null`. Say the state in words too. */
+export function uiTone<T extends Element>(node: T, tone: UiTone | null): T {
+  for (const [name, className] of Object.entries(tones)) node.classList.toggle(className, name === tone);
+  return node;
+}
+
+const emphases = { primary: 'im-btn--primary', danger: 'im-btn--danger' } as const;
+/** A button that becomes the primary action, or the armed destructive one, and back to plain with `null`. */
+export function uiEmphasis(button: HTMLButtonElement, emphasis: keyof typeof emphases | null): HTMLButtonElement {
+  for (const [name, className] of Object.entries(emphases)) button.classList.toggle(className, name === emphasis);
+  return button;
+}
+
 export type UiPart = keyof typeof parts;
 export function uiPart<K extends UiPart>(kind: K, text?: string, className?: string): HTMLElementTagNameMap[(typeof parts)[K][0]] {
   const [tag, classes] = parts[kind];

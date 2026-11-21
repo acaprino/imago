@@ -64,6 +64,17 @@ controls that can be bound to application commands. `componentElement` mounts
 one trusted result from an Imago HTML renderer. Pass service and user text to
 the renderer's text parameters.
 
+A part takes further roles by name, never by class: `uiTraits(node, ...traits)`
+adds layout roles (`stack`, `row`, `scroll`, `bounded`, `grow`, `truncate`), list
+roles (`choiceList`, `summaryList`, `conversation`), dialog roles
+(`sectionedDrawer`, `fileDialog`) and the regions of a desktop shell (`workArea`,
+`dockedInspector`, `resizableNav`, `navLine`). The `UiTrait` type lists every
+one. `uiTone(node, tone)` puts a text in the `ok`, `warn` or `err` tone, and
+`null` gives it its own colour back; the words still say the state.
+`uiEmphasis(button, emphasis)` makes a button the `primary` action or the armed
+`danger` one, and `null` makes it plain again. The app keeps its own classes for
+its own hooks; the classes Imago draws with stay Imago's.
+
 `createTilingWorkspace` presents a controlled tree of weighted splits and tab
 groups. Supply the current layout, reducer and stable DOM bindings keyed by view
 ID. A layout edit moves an existing binding. The consumer starts and disposes
