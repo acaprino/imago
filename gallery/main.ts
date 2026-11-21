@@ -1,5 +1,6 @@
 import '../css/imago.css';
 import './gallery.css';
+import { createRegistry, mountApp, type Registry } from '../ts/ui/index.ts';
 import { APP_HUES, APP_IDS, APPS, shellMarkup, type AppId } from './apps.ts';
 
 export type Look = 'smooth' | 'oni';
@@ -17,6 +18,12 @@ export type MountContext = {
   theme: Theme;
   /** An empty element under the window where a module may add its own sections of the gallery page. */
   sections: HTMLElement;
+  /**
+   * The command registry of this shell. A module registers the app's commands in it. The page calls `mountApp` once the
+   * modules have run, which attaches the keys, the layers, the regions and the sidebar and adds `Ctrl+K` and `Ctrl+F`:
+   * a module calls none of those.
+   */
+  registry: Registry;
 };
 export type MountModule = { default?: (ctx: MountContext) => void | (() => void) };
 
@@ -64,6 +71,9 @@ slider.addEventListener('input', () => set({ width: Number(slider.value) }));
 const mounts = import.meta.glob<MountModule>('./mount/*.ts', { eager: true });
 let cleanups: (() => void)[] = [];
 
+// The choice to fold the sidebar into its rail outlives a redraw of the gallery, as an app would store it.
+let sidebarCollapsed = false;
+
 function describeWidth(width: number, hasSidebar: boolean): string[] {
   return [
     width >= 1000 ? 'Inspector docked at the right' : 'Inspector over the content',
@@ -97,7 +107,8 @@ function redraw(): void {
   sections.replaceChildren();
   const shell = root.querySelector<HTMLElement>('.im-shell');
   if (!shell) throw new Error('shellMarkup() drew no .im-shell');
-  const ctx: MountContext = { shell, root, app: state.app, look: state.look, theme: state.theme, sections };
+  const registry = createRegistry();
+  const ctx: MountContext = { shell, root, app: state.app, look: state.look, theme: state.theme, sections, registry };
   for (const [path, module] of Object.entries(mounts).sort(([a], [b]) => a.localeCompare(b))) {
     try {
       const cleanup = module.default?.(ctx);
@@ -106,6 +117,19 @@ function redraw(): void {
       console.error(`gallery/${path.slice(2)} failed to mount: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+
+  // The app is mounted like any app: once its commands are registered, with its words. Mounted last, so undone first.
+  const strings = APPS[state.app].strings;
+  cleanups.unshift(
+    mountApp(shell, registry, {
+      search: () => {
+        window.__imago.searches++;
+        shell.querySelector<HTMLInputElement>('.im-panel-tools input')?.focus(); // the view's search field, where it has one
+      },
+      labels: { palette: strings.commands, search: strings.search, palettePlaceholder: strings.palettePlaceholder, paletteEmpty: strings.paletteEmpty },
+      sidebar: { collapsed: sidebarCollapsed, onChange: (value) => (sidebarCollapsed = value) },
+    }),
+  );
 }
 
 /**
@@ -123,8 +147,9 @@ function set(partial: Partial<GalleryState>): void {
 
 declare global {
   interface Window {
-    __imago: { set(partial: Partial<GalleryState>): void; state: GalleryState; ready: boolean };
+    /** `searches` counts the calls of the search that `mountApp` was given (Ctrl+F, or the palette's command), for tests/gallery/keys.mjs. */
+    __imago: { set(partial: Partial<GalleryState>): void; state: GalleryState; ready: boolean; searches: number };
   }
 }
 redraw();
-window.__imago = { set, state, ready: true };
+window.__imago = { set, state, ready: true, searches: 0 };

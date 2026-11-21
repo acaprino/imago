@@ -68,7 +68,12 @@ function table(cols: Column[], rows: TableRow[]): string {
 
 // ---- the five apps ---------------------------------------------------------------------------------------------
 
-type Strings = { cancel: string; undo: string; commands: string; views: string; collapse: string; expand: string; skip: string };
+type Strings = {
+  cancel: string; undo: string; commands: string; views: string; collapse: string; expand: string;
+  /** The words `mountApp` takes as its labels: the search command, and the palette's field and empty list. */
+  search: string; palettePlaceholder: string; paletteEmpty: string;
+  skip: string;
+};
 type App = {
   name: string; tabs: string[]; on?: number;
   primary: { text: string; keys?: string; icon?: string; act?: string };
@@ -79,7 +84,11 @@ type App = {
   strings: Strings;
 };
 
-const EN: Strings = { cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views', collapse: 'Collapse sidebar', expand: 'Expand sidebar', skip: 'Skip to content' };
+const EN: Strings = {
+  cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views', collapse: 'Collapse sidebar', expand: 'Expand sidebar',
+  search: 'Search in this view', palettePlaceholder: 'Type a command', paletteEmpty: 'No command matches',
+  skip: 'Skip to content',
+};
 
 export const APPS: Record<AppId, App> = {
   xiox: {
@@ -176,7 +185,11 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
       { c: [two('Dynamic', 'Osservazione dei test · esclusa dalla demo'), chip('Prevista'), '3 / 4', none] },
       { c: [two('Union', 'Collegamento dei grafi'), chip('In attesa'), '4 / 4', none] }])}</div>`,
     inspector: () => `${header('Grafo', { n: 18 })}<div class="im-panel-body">${facts([['Nodi', '10 / 18'], ['Relazioni', '23 / 43'], ['Inventario', '5e49ee96e', true], ['Snapshot', '42a63a9ac071', true]])}</div><div class="im-panel-foot">${button('Elimina analisi', { danger: true, act: 'kill' })}</div>`,
-    strings: { cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale', skip: 'Vai al contenuto' },
+    strings: {
+      cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale',
+      search: 'Cerca in questa vista', palettePlaceholder: 'Digita un comando', paletteEmpty: 'Nessun comando corrisponde',
+      skip: 'Vai al contenuto',
+    },
   },
 };
 

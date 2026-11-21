@@ -3,6 +3,15 @@
 // window.__imagoKeys on elements of their own.
 import assert from 'node:assert/strict';
 
+// The five fixtures and the words each gives mountApp as its labels.
+const EN = { commands: 'Commands', search: 'Search in this view', placeholder: 'Type a command' };
+const APPS = [
+  { id: 'xiox', ...EN },
+  { id: 'mukade', ...EN },
+  { id: 'shinatama', ...EN },
+  { id: 'muro', ...EN },
+  { id: 'daodan', commands: 'Comandi', search: 'Cerca in questa vista', placeholder: 'Digita un comando' },
+];
 const SIDEBAR_ROWS = '.im-sidebar [role="listbox"] .im-row';
 const TABS = '.im-titlebar .im-tabs .im-tab';
 const TABLE_ROWS = '.im-content tbody tr';
@@ -410,10 +419,64 @@ async function scratch(page) {
   await page.evaluate(() => document.getElementById('scratch').remove());
 }
 
+// mountApp gives every app Ctrl+K and Ctrl+F, once: the gallery mounts each fixture with it, and draws the shell again
+// (so mounts again) every time the app changes. A mount that was not undone, or made twice, would count a press twice.
+async function standardCommands(page) {
+  const searches = () => page.evaluate(() => window.__imago.searches);
+  const palettes = () => page.evaluate(() => document.querySelectorAll('.im-palette').length);
+  const options = () => page.locator('.im-palette-list [role="option"]').evaluateAll((list) => list.map((o) => o.textContent.replace(/\s+/g, ' ').trim()));
+
+  // Xiox twice: coming back to an app that was already mounted and undone once.
+  for (const app of [...APPS, APPS[0]]) {
+    const where = (text) => `${app.id}: ${text}`;
+    await page.evaluate((id) => window.__imago.set({ app: id, look: 'smooth', theme: 'dark' }), app.id);
+    await width(page, 1160);
+    await page.evaluate(() => document.activeElement?.blur());
+
+    // Ctrl+F calls the app's search, once for a press.
+    const before = await searches();
+    await press(page, 'Control+f');
+    assert.equal(await searches(), before + 1, where('Ctrl+F calls search once'));
+
+    // Ctrl+K opens the palette, with the words given to mountApp. It lists the search command by its label and its keys,
+    // and not itself.
+    await press(page, 'Control+k');
+    assert.equal(await palettes(), 1, where('Ctrl+K opens the palette'));
+    assert.equal(await page.getAttribute('.im-palette-input', 'placeholder'), app.placeholder, where('the palette speaks the labels given to mountApp'));
+    const listed = await options();
+    assert.ok(listed.includes(`${app.search}CtrlF`), where(`the search command is listed with its keys (${listed.join(' | ')})`));
+    assert.ok(!listed.some((text) => text.startsWith(app.commands)), where('the palette does not list itself'));
+
+    // Under the palette the key belongs to the palette: the search is not called, and Escape closes it.
+    await press(page, 'Control+f');
+    assert.equal(await searches(), before + 1, where('Ctrl+F under the palette does not search'));
+    await press(page, 'Escape');
+    assert.equal(await palettes(), 0, where('Escape closes the palette'));
+    assert.equal(await page.evaluate(() => document.querySelector('.im-shell [inert]') === null), true, where('and releases the shell'));
+
+    // The palette runs it too: Enter on the search command is Ctrl+F.
+    await press(page, 'Control+k');
+    await page.fill('.im-palette-input', app.search);
+    await press(page, 'Enter');
+    assert.equal(await palettes(), 0, where('the palette closes before the command runs'));
+    assert.equal(await searches(), before + 2, where('the palette runs the search command'));
+  }
+
+  // Xiox's view has a field for it: the gallery's search moves focus there, from anywhere, a text field included.
+  await page.evaluate(() => window.__imago.set({ app: 'xiox', look: 'smooth', theme: 'dark' }));
+  await page.evaluate(() => document.activeElement?.blur());
+  await press(page, 'Control+f');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Search this view', 'Ctrl+F moves focus to the field of the view');
+  const inField = await searches();
+  await press(page, 'Control+f');
+  assert.equal(await searches(), inField + 1, 'Ctrl+F inside a text field still reaches the search');
+}
+
 export default async function (page) {
   await liveShell(page);
   await selecting(page);
   await otherApps(page);
   await scratch(page);
+  await standardCommands(page);
 }
 
