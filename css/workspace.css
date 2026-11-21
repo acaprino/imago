@@ -48,9 +48,8 @@
 
 .im-inspector > [data-im-covered] { display: none !important; }
 
-.im-picker-mark { display: inline-grid; flex: none; place-items: center; inline-size: var(--im-h-row); align-self: stretch; cursor: pointer; }
-.im-picker-mark::before { content: ''; box-sizing: border-box; inline-size: 1em; block-size: 1em; border: 1px solid currentColor; border-radius: var(--im-r-chip); }
-.im-picker-mark[data-im-checked="true"]::before { content: '\2713'; color: var(--im-accent-text); font-weight: bold; line-height: 1; }
+/* The hit area of a row's mark, the height of the row; the mark in it is an im-check. */
+.im-picker-mark { display: inline-grid; flex: none; place-items: center; inline-size: var(--im-h-row); align-self: stretch; }
 @media (forced-colors: active) {
   [data-im-dock-tab][data-im-dock-target] { outline: 2px solid Highlight; outline-offset: -2px; }
 }

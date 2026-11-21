@@ -1,7 +1,8 @@
 // The controls and their states, in both looks and both themes: the matrix draws every pair of the manifest, and each
 // state is told apart without colour alone, never changes the size of the control, and keeps its text readable.
 import assert from 'node:assert/strict';
-import { CONTROLS } from '../../gallery/manifest.ts';
+import { CONTROLS, NATIVE_TWINS } from '../../gallery/manifest.ts';
+import { settingInputHtml, settingsRowHtml } from '../../ts/ui/form-markup.ts';
 
 const LOOKS = ['smooth', 'oni'];
 const THEMES = ['dark', 'light'];
@@ -28,6 +29,14 @@ const TARGET = {
   tree: '.im-tree-item',
   'table-row': 'tbody tr',
   'menu-item': '.im-menu-item',
+  // The native twins: the same class on the native element (a segment is the label over its radio, the bare field the input).
+  'field-bare': '.im-input',
+  'checkbox-native': '.im-check',
+  'radio-native': '.im-radio',
+  'switch-native': '.im-switch',
+  'select-native': '.im-select',
+  'segmented-native': '.im-seg > label',
+  textarea: '.im-textarea',
 };
 const TEXT = {
   field: 'input',
@@ -35,6 +44,9 @@ const TEXT = {
   checkbox: '.im-option',
   radio: '.im-option',
   switch: '.im-option',
+  'checkbox-native': '.im-option',
+  'radio-native': '.im-option',
+  'switch-native': '.im-option',
   row: '.im-row-title',
   tree: '.im-tree-label',
   'table-row': '.im-cell-title',
@@ -42,7 +54,7 @@ const TEXT = {
 };
 const BUTTONS = ['button-primary', 'button-secondary', 'button-ghost', 'button-danger', 'button-confirm-danger'];
 // Controls with a box one control high: their height is --im-h-control in every state.
-const CONTROL_HEIGHT = [...BUTTONS, 'icon-button', 'field', 'search', 'select', 'tab', 'segmented', 'row'];
+const CONTROL_HEIGHT = [...BUTTONS, 'icon-button', 'field', 'field-bare', 'search', 'select', 'select-native', 'tab', 'segmented', 'segmented-native', 'row'];
 // css/surfaces.css draws the menu item: its edge is not ours to assert.
 const NO_EDGE = ['menu-item'];
 
@@ -50,9 +62,9 @@ const NO_EDGE = ['menu-item'];
 // a control that stands alone 2 outside; a field 1 outside; an item of a list, table, tree, menu, tab strip or
 // segmented control 2 inside (its container clips); an ONI chamfered button 5 inside (a clip-path cuts an outer ring).
 const RING_OFFSET = (() => {
-  const alone = { 'icon-button': 2, select: 2, checkbox: 2, radio: 2, switch: 2 };
-  const field = { field: 1, search: 1 };
-  const item = { tab: -2, segmented: -2, row: -2, tree: -2, 'table-row': -2, 'menu-item': -2 };
+  const alone = { 'icon-button': 2, select: 2, checkbox: 2, radio: 2, switch: 2, 'select-native': 2, 'checkbox-native': 2, 'radio-native': 2, 'switch-native': 2 };
+  const field = { field: 1, 'field-bare': 1, search: 1, textarea: 1 };
+  const item = { tab: -2, segmented: -2, 'segmented-native': -2, row: -2, tree: -2, 'table-row': -2, 'menu-item': -2 };
   const buttons = (offset) => Object.fromEntries(BUTTONS.map((id) => [id, offset]));
   return { smooth: { ...buttons(2), ...alone, ...field, ...item }, oni: { ...buttons(-5), ...alone, ...field, ...item } };
 })();
@@ -171,6 +183,137 @@ const measureAll = (page) =>
     { target: TARGET, text: TEXT },
   );
 
+// The letter of the mark at the top left of the live shell, on the accent of its square: its colour and the fill's, as the
+// eye sees them, and the contrast between them.
+const markContrast = (page) =>
+  page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const flatten = (colours) => {
+      g.clearRect(0, 0, 1, 1);
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 1, 1);
+      for (const c of colours) {
+        g.fillStyle = c;
+        g.fillRect(0, 0, 1, 1);
+      }
+      const d = g.getImageData(0, 0, 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    const channel = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = ([r, g2, b]) => 0.2126 * channel(r) + 0.7152 * channel(g2) + 0.0722 * channel(b);
+    const mark = document.querySelector('#g-window .im-titlebar .im-mark');
+    const layers = [];
+    for (let node = mark; node; node = node.parentElement) {
+      const paint = getComputedStyle(node).backgroundColor;
+      if (paint !== 'rgba(0, 0, 0, 0)' && paint !== 'transparent') layers.unshift(paint);
+    }
+    const fill = flatten(layers);
+    const ink = flatten([...layers, getComputedStyle(mark).color]);
+    const [hi, lo] = [luminance(ink), luminance(fill)].sort((a, b) => b - a);
+    return { text: mark.textContent, ink: ink.join(','), fill: fill.join(','), accent: flatten([getComputedStyle(mark).getPropertyValue('--im-accent').trim()]).join(','), ratio: (hi + 0.05) / (lo + 0.05) };
+  });
+
+// Rows of the eight categorical colours (data-im-cat), at rest, hovered and selected, in the live sidebar's list (in the
+// inspector of an app without a sidebar): each with a rail avatar, an avatar, a dot and a chip of its colour, and its title,
+// line and meta. For each, the text that is the hardest to read on what is under it, and the colours the design gives
+// them: the avatar and the dot are filled with the colour, the avatar's text in --im-cat-on, the chip's text in the colour.
+// The rows are taken out again before the page is read for anything else.
+const categoryRows = (page) =>
+  page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const flatten = (colours) => {
+      g.clearRect(0, 0, 1, 1);
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 1, 1);
+      for (const c of colours) {
+        g.fillStyle = c;
+        g.fillRect(0, 0, 1, 1);
+      }
+      const d = g.getImageData(0, 0, 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    const background = (el) => {
+      const layers = [];
+      for (let node = el; node; node = node.parentElement) {
+        const paint = getComputedStyle(node).backgroundColor;
+        if (paint !== 'rgba(0, 0, 0, 0)' && paint !== 'transparent') layers.unshift(paint);
+      }
+      return layers;
+    };
+    const channel = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = ([r, g2, b]) => 0.2126 * channel(r) + 0.7152 * channel(g2) + 0.0722 * channel(b);
+    const ratio = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const list = document.querySelector('.im-shell .im-sidebar .im-list') ?? document.querySelector('.im-shell .im-inspector .im-panel-body');
+    const STATES = { rest: '', hover: ' data-im-force="hover"', selected: '' };
+    const rows = [];
+    for (let n = 1; n <= 8; n++) {
+      for (const [state, force] of Object.entries(STATES)) {
+        const row = document.createElement('div');
+        row.innerHTML = `<div class="im-row" role="option" aria-selected="${state === 'selected'}" data-im-cat="${n}"${force}><span class="im-avatar im-rail-item" data-im-cat="${n}" aria-hidden="true">TH</span>`
+          + `<span class="im-avatar" data-im-cat="${n}">CA</span><span class="im-dot" data-im-cat="${n}"></span><span class="im-row-text"><span class="im-row-title">Thread ${n}</span>`
+          + `<span class="im-row-sub">1 session · running</span></span><span class="im-row-meta">2m</span><span class="im-chip" data-im-cat="${n}">thread</span></div>`;
+        rows.push({ n, state, el: row.firstElementChild });
+        list.append(row.firstElementChild);
+      }
+    }
+    const colour = (value) => {
+      const el = document.createElement('i');
+      el.style.color = value;
+      list.append(el);
+      const result = getComputedStyle(el).color;
+      el.remove();
+      return result;
+    };
+    const out = rows.map(({ n, state, el }) => {
+      let worst = { ratio: Infinity, text: '' };
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const holder = node.parentElement;
+        if (!node.textContent.trim() || !holder.getClientRects().length) continue;
+        const under = background(holder);
+        const r = ratio(flatten([...under, getComputedStyle(holder).color]), flatten(under));
+        if (r < worst.ratio) worst = { ratio: r, text: node.textContent.trim() };
+      }
+      const style = (selector) => getComputedStyle(el.querySelector(selector));
+      return {
+        n, state, worst, cat: colour(`var(--im-cat-${n})`), on: colour('var(--im-cat-on)'),
+        avatar: [style('.im-avatar:not(.im-rail-item)').backgroundColor, style('.im-avatar:not(.im-rail-item)').color],
+        rail: [style('.im-rail-item').backgroundColor, style('.im-rail-item').color],
+        dot: style('.im-dot').backgroundColor, chip: style('.im-chip').color,
+      };
+    });
+    for (const { el } of rows) el.remove();
+    return out;
+  });
+
+/** Every categorised row of `categoryRows` reads at 4.5:1 and takes its colour as the design says. */
+async function checkCategories(page, where) {
+  const rows = await categoryRows(page);
+  assert.equal(rows.length, 24, where('eight colours in three states'));
+  const unreadable = rows.filter((row) => row.worst.ratio < 4.5).map((row) => `category ${row.n} ${row.state}: "${row.worst.text}" is ${row.worst.ratio.toFixed(2)}:1`);
+  assert.deepEqual(unreadable, [], where('text on a categorised row under 4.5:1'));
+  for (const row of rows) {
+    const said = (text) => where(`category ${row.n} ${row.state}: ${text}`);
+    assert.deepEqual(row.avatar, [row.cat, row.on], said('the avatar is filled with the colour, its text in --im-cat-on'));
+    assert.deepEqual(row.rail, [row.cat, row.on], said('the rail item too'));
+    assert.equal(row.dot, row.cat, said('the dot is filled with the colour'));
+    assert.equal(row.chip, row.cat, said('the chip takes the colour as its tone'));
+  }
+}
+
 const index = (rows) => {
   const map = new Map(rows.map((row) => [`${row.control}|${row.state}`, row]));
   return (control, state) => map.get(`${control}|${state}`);
@@ -204,6 +347,7 @@ const MARKED = [
   { id: 'row', item: '.im-row', text: '.im-row-title', host: null, pseudo: '::before' },
   { id: 'tree', item: '.im-tree-item', text: '.im-tree-label', host: null, pseudo: '::before' },
   { id: 'segmented', item: '.im-seg > button', text: null, host: null, pseudo: '::after' },
+  { id: 'segmented-native', item: '.im-seg > label', text: null, host: null, pseudo: '::after' },
   // The tab's line is always there; it is scaled to nothing until the tab is selected.
   { id: 'tab', item: '.im-tab', text: null, host: null, pseudo: '::after', scaled: true },
   { id: 'table-row', item: 'tbody tr', text: '.im-cell-title', host: ':scope > :first-child', pseudo: '::before' },
@@ -266,8 +410,43 @@ const marksOf = (marked) => {
   return out;
 };
 
+// What a control looks like, read from its computed style: its box and edge, its fill, its ring, its text, and its mark
+// (`::after`: the tick, the bar of a mixed checkbox, the dot, the thumb). For each cell of a native control, the same read of
+// the cell of its twin in the same state; a cell with more than one control (a checkbox and its mixed one) is read in order.
+// Self-contained: Playwright sends its source to the page.
+const drawingsOf = ({ twins, target }) => {
+  const BOX = ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopStyle', 'borderRightStyle',
+    'borderBottomStyle', 'borderLeftStyle', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+    'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius', 'backgroundColor', 'boxShadow',
+    'outlineStyle', 'outlineWidth', 'outlineOffset', 'outlineColor', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'letterSpacing',
+    'textTransform'];
+  const MARK = ['content', 'display', 'position', 'top', 'left', 'width', 'height', 'backgroundColor', 'borderTopWidth', 'borderRightWidth',
+    'borderBottomWidth', 'borderLeftWidth', 'borderTopStyle', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+    'borderTopLeftRadius', 'transform'];
+  const pick = (style, names) => Object.fromEntries(names.map((name) => [name, style[name]]));
+  // A mark with no content is not drawn: the rest of its style is the browser's and says nothing.
+  const mark = (style) => (style.content === 'none' ? 'none' : pick(style, MARK));
+  const read = (cell, control) => [...cell.querySelectorAll(target[control])].map((el) => {
+    const box = el.getBoundingClientRect();
+    return { tag: el.localName, width: box.width, height: box.height, ...pick(getComputedStyle(el), BOX), mark: mark(getComputedStyle(el, '::after')) };
+  });
+  const out = [];
+  for (const [native, twin] of Object.entries(twins)) {
+    for (const cell of document.querySelectorAll(`#im-gallery-matrix [data-control="${native}"][data-state]`)) {
+      const other = document.querySelector(`#im-gallery-matrix [data-control="${twin}"][data-state="${cell.dataset.state}"]`);
+      out.push({ native, twin, state: cell.dataset.state, drawn: read(cell, native), twinDrawn: other ? read(other, twin) : [] });
+    }
+  }
+  return out;
+};
+
+// The native inputs whose mark is a pseudo-element: [control, state, which of the cell's controls].
+const MARKS = [['checkbox-native', 'selected', 0], ['checkbox-native', 'selected', 1], ['checkbox-native', 'disabled', 0], ['radio-native', 'selected', 0], ['switch-native', 'rest', 0], ['switch-native', 'selected', 0]];
+
 export default async (page) => {
   const expected = CONTROLS.flatMap(({ id, states }) => states.map((state) => `${id}|${state}`)).sort();
+  // Takes the mark of one element away, to compare its pixels with and without it.
+  await page.addStyleTag({ content: '[data-g-unmarked]::after { content: none !important; }' });
 
   for (const look of LOOKS) {
     for (const theme of THEMES) {
@@ -292,6 +471,22 @@ export default async (page) => {
       for (const app of APPS.filter((name) => name !== 'xiox')) {
         await show(page, { app, look, theme, glass: false, width: 1160 });
         checkReadable(await measureAll(page), (message) => where(`${app}: ${message}`));
+      }
+      // The letter of the mark at the top left is the initial on the app's accent, at 4.5:1 or more, in every app.
+      for (const app of APPS) {
+        await show(page, { app, look, theme, glass: false, width: 1160 });
+        const mark = await markContrast(page);
+        assert.match(mark.text, /^\p{Lu}$/u, where(`${app}: the mark holds one capital letter, not "${mark.text}"`));
+        assert.equal(mark.fill, mark.accent, where(`${app}: the square is the accent`));
+        assert.ok(mark.ratio >= 4.5, where(`${app}: the letter of the mark is ${mark.ratio.toFixed(2)}:1 (${mark.ink} on ${mark.fill})`));
+      }
+      // The categorical colours on a row, at rest, hovered and selected, in every app (the selection is in the app's accent),
+      // in the whole sidebar and in the rail.
+      for (const app of APPS) {
+        for (const width of [1160, 840]) {
+          await show(page, { app, look, theme, glass: false, width });
+          await checkCategories(page, (message) => where(`${app} at ${width}: ${message}`));
+        }
       }
       await show(page, { app: 'xiox', look, theme, glass: false, width: 1160 });
 
@@ -344,9 +539,135 @@ export default async (page) => {
         if (id === 'tab') assert.notEqual(sel.textColor, a.textColor, where('a selected tab has its own text colour'));
         else assert.ok(sel.textColor !== a.textColor || sel.fill !== a.fill, where('a selected row changes the colour or the fill'));
       }
-      for (const id of ['segmented', 'tree', 'table-row']) {
+      for (const id of ['segmented', 'segmented-native', 'tree', 'table-row']) {
         assert.ok(at(id, 'selected').fontWeight > rest(id).fontWeight, where(`${id} selected is heavier`));
       }
+      // A pressed button (aria-pressed) takes the selection fill and a mark that is not a colour, in both looks: a 2px bar
+      // inside its bottom edge, as a selected segment has, in the accent text colour; on the two filled buttons (primary,
+      // confirming danger) it is in their text colour, since their fill is the accent's or the danger's, and they keep that
+      // fill. Smooth also takes the weight 600; ONI's buttons are 700 at rest and stay so.
+      const bars = await page.evaluate((ids) => {
+        const probe = document.createElement('i');
+        document.querySelector('#im-gallery-matrix .g-mx-surface').append(probe);
+        const barOf = (colour) => {
+          probe.style.boxShadow = `inset 0 -2px ${colour}`;
+          return getComputedStyle(probe).boxShadow;
+        };
+        const out = {};
+        for (const id of ids) {
+          const button = (state) => getComputedStyle(document.querySelector(`#im-gallery-matrix [data-control="${id}"][data-state="${state}"] .im-btn`));
+          const pressed = button('selected');
+          out[id] = { pressed: pressed.boxShadow, rest: button('rest').boxShadow, accent: barOf('var(--im-accent-text)'), text: barOf(pressed.color) };
+        }
+        probe.remove();
+        return out;
+      }, BUTTONS);
+      for (const id of BUTTONS) {
+        const sel = at(id, 'selected');
+        const filled = id === 'button-primary' || id === 'button-confirm-danger';
+        const bar = filled ? bars[id].text : bars[id].accent;
+        assert.ok(bars[id].pressed.startsWith(bar + ','), where(`${id} pressed has the bar inside its bottom edge (${bars[id].pressed}; the bar is ${bar})`));
+        assert.ok(!bars[id].rest.includes(' 0px -2px '), where(`${id} at rest has no bar (${bars[id].rest})`));
+        if (filled) assert.equal(sel.fill, rest(id).fill, where(`${id} pressed keeps its own fill`));
+        else assert.notEqual(sel.fill, rest(id).fill, where(`${id} pressed has the selection fill`));
+        assert.equal(sel.fontWeight, filled || look === 'oni' ? rest(id).fontWeight : 600, where(`${id} pressed is ${sel.fontWeight}`));
+      }
+      // The bar is painted, and in ONI the chamfer's clip-path leaves it along the straight part of the bottom edge: the
+      // button looks different with the bar taken away.
+      for (const id of BUTTONS) {
+        const box = page.locator(`#im-gallery-matrix [data-control="${id}"][data-state="selected"] .im-btn`);
+        const marked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => { el.style.boxShadow = 'inset 0 0 0 99px var(--im-btn-wash)'; });
+        const unmarked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => { el.style.boxShadow = ''; });
+        assert.ok(!marked.equals(unmarked), where(`${id} pressed: its bar is painted`));
+      }
+
+      // One drawing for a control on a native element and on an ARIA element: in every state, each native cell has the box,
+      // the edge, the fill, the ring, the text and the mark of its twin's cell. A text area is the field's drawing on more
+      // than one line, so its height is its own, and the field of the matrix is the code one (im-input--code), so its font.
+      const drawings = await page.evaluate(drawingsOf, { twins: NATIVE_TWINS, target: TARGET });
+      const pairs = Object.entries(NATIVE_TWINS).flatMap(([native]) => CONTROLS.find((c) => c.id === native).states.map((state) => `${native}|${state}`));
+      assert.deepEqual(drawings.map((d) => `${d.native}|${d.state}`).sort(), pairs.sort(), where('every state of every native control is compared'));
+      for (const { native, twin, state, drawn, twinDrawn } of drawings) {
+        const said = (message) => where(`${native} ${state} (${drawn.map((d) => d.tag).join(', ')}) ${message}`);
+        assert.ok(drawn.length > 0 && drawn.length === twinDrawn.length, said(`has ${drawn.length} controls, ${twin} has ${twinDrawn.length}`));
+        drawn.forEach((one, n) => {
+          const { tag, ...mine } = one;
+          const { tag: twinTag, ...theirs } = twinDrawn[n];
+          if (native === 'textarea') for (const name of ['height', 'fontFamily', 'fontSize']) delete mine[name], delete theirs[name];
+          assert.notEqual(tag, twinTag, said(`is a native element, not a second ${twinTag}`));
+          assert.deepEqual(mine, theirs, said(`is drawn as ${twin} (${twinTag})`));
+        });
+      }
+
+      // The mark of a native input is a pseudo-element of the input, as it is of the ARIA element: WebView2 and Chromium paint
+      // the ::after of an input with `appearance: none`. Proven on the pixels: the box looks different without its mark.
+      for (const [control, state, n] of MARKS) {
+        const box = page.locator(`#im-gallery-matrix [data-control="${control}"][data-state="${state}"] ${TARGET[control]}`).nth(n);
+        const marked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => el.setAttribute('data-g-unmarked', ''));
+        const unmarked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => el.removeAttribute('data-g-unmarked'));
+        assert.ok(!marked.equals(unmarked), where(`${control} ${state} ${n}: the mark of the native input is painted`));
+      }
+
+      // Native controls where the package's layouts hold them. The graph inspector stretches its fields, not a checkbox or
+      // a radio; a settings row gives its field 260px, the box and not the input in it; a bare input stays in its line of
+      // text, inline as a native input is.
+      const placed = await page.evaluate((settingRow) => {
+        const host = document.createElement('div');
+        host.style.width = '600px';
+        // The inspector as graphInspector() writes it, in the flow of the page instead of over a graph.
+        host.innerHTML = `<section class="im-editor-inspector" role="dialog" aria-label="Node" style="position: static; width: 260px">
+            <label class="im-option"><input type="checkbox" class="im-check" checked>Pinned</label>
+            <label class="im-option"><input type="radio" class="im-radio" name="g-inspector-kind" checked>Service</label>
+            <input class="im-input" aria-label="Node name" value="Store"></section>
+          <div class="im-settings" data-g-settings="renderer">${settingRow}</div>
+          <div class="im-setting-row" data-g-settings="bare"><div><strong>Name</strong></div><input class="im-input" aria-label="Name" value="Store"></div>
+          <p style="margin: 0">Name <input class="im-input" aria-label="Inline" value="inline"> after</p>
+          <div class="im-choice-list"><button type="button" class="im-btn im-choice-row" aria-pressed="true"><span>Claude Code</span><span>default</span></button>
+            <div role="listbox" aria-label="Harness"><div class="im-row" role="option" aria-selected="true"><span class="im-row-text"><span class="im-row-title">Codex</span></span></div></div></div>`;
+        document.querySelector('#im-gallery-matrix .g-mx-surface').append(host);
+        const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
+        const outside = (control, selector) => box(document.querySelector(`#im-gallery-matrix [data-control="${control}"][data-state="rest"] ${selector}`));
+        const inspector = host.querySelector('.im-editor-inspector');
+        const pad = getComputedStyle(inspector);
+        const line = host.querySelector('p');
+        const textBox = (node) => { const range = document.createRange(); range.selectNodeContents(node); return box(range); };
+        const out = {
+          check: { inside: box(inspector.querySelector('.im-check')), outside: outside('checkbox-native', '.im-check') },
+          radio: { inside: box(inspector.querySelector('.im-radio')), outside: outside('radio-native', '.im-radio') },
+          field: box(inspector.querySelector('input.im-input')).width,
+          room: inspector.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight),
+          settings: { renderer: box(host.querySelector('[data-g-settings="renderer"] .im-input')).width, bare: box(host.querySelector('[data-g-settings="bare"] .im-input')).width },
+          inline: { before: textBox(line.firstChild), input: box(line.querySelector('input')), after: textBox(line.lastChild), display: getComputedStyle(line.querySelector('input')).display },
+          // A row of a choice list takes the common selection, its fill and its mark: as a pressed button, or as a selected
+          // row. (The line between the rows of a list is the list's, not the selection's.)
+          choice: ((pressed, row) => {
+            const look = (el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.boxShadow, s.fontWeight].join(' | '); };
+            return {
+              button: look(host.querySelector('.im-choice-row')), pressedButton: look(pressed),
+              row: look(host.querySelector('.im-choice-list .im-row')), selectedRow: look(row),
+            };
+          })(document.querySelector('#im-gallery-matrix [data-control="button-secondary"][data-state="selected"] .im-btn'),
+            document.querySelector('#im-gallery-matrix [data-control="row"][data-state="selected"] .im-row')),
+        };
+        host.remove();
+        return out;
+      }, settingsRowHtml({ title: 'Model', field: 'g-model', controlHtml: settingInputHtml({ name: 'g-model', label: 'Model', value: 'claude' }) }));
+      for (const kind of ['check', 'radio']) {
+        const { inside, outside } = placed[kind];
+        assert.deepEqual([inside.width, inside.height], [outside.width, outside.height], where(`a native ${kind} in the graph inspector is ${inside.width}x${inside.height}, as outside it`));
+      }
+      assert.ok(Math.abs(placed.field - placed.room) <= 0.5, where(`a field in the graph inspector fills its width (${placed.field} of ${placed.room})`));
+      assert.deepEqual(placed.settings, { renderer: 260, bare: 260 }, where('the field of a settings row is 260px, its box'));
+      const { before, input, after, display } = placed.inline;
+      assert.equal(placed.choice.button, placed.choice.pressedButton, where('a pressed button of a choice list is drawn as every pressed button'));
+      assert.equal(placed.choice.row, placed.choice.selectedRow, where('a selected row of a choice list is drawn as every selected row'));
+      assert.ok(display.startsWith('inline'), where(`a bare input is inline-level (${display})`));
+      assert.ok(input.left >= before.right - 0.5 && after.left >= input.right - 0.5 && input.top < before.bottom && input.bottom > before.top && after.top < input.bottom,
+        where(`a bare input stays in its line of text (${JSON.stringify(placed.inline)})`));
 
       // Busy: the label and the width stay, a spinner takes the icon's place, a second press does nothing.
       for (const id of BUTTONS) {
@@ -395,7 +716,7 @@ export default async (page) => {
         for (const state of CONTROLS.find((c) => c.id === id).states) {
           const cell = at(id, state);
           // A segment sits in a track with 2px of padding and a 1px edge: the track is the control.
-          const height = id === 'segmented' ? cell.height + 6 : cell.height;
+          const height = id.startsWith('segmented') ? cell.height + 6 : cell.height;
           assert.ok(Math.abs(height - control) <= 0.5, where(`${id} ${state} is ${height}px high, the control height is ${control}px`));
         }
       }
@@ -447,10 +768,16 @@ export default async (page) => {
           disabledRow: style(cell('row', 'disabled').querySelector('.im-row-title')).color,
           progressFill: getComputedStyle(cell('progress', 'rest').querySelector('.im-progress'), '::before').backgroundColor,
           checked: style(cell('checkbox', 'selected').querySelector('.im-check')).backgroundColor,
+          nativeChecked: style(cell('checkbox-native', 'selected').querySelector('.im-check')).backgroundColor,
+          // Forced colours drop a gradient: the chevron of a native select is then the browser's own, in system colours.
+          nativeSelect: { image: style(cell('select-native', 'rest').querySelector('select')).backgroundImage, appearance: style(cell('select-native', 'rest').querySelector('select')).appearance },
         };
       });
       const marks = await page.evaluate(marksOf, MARKED);
       const shapes = await page.evaluate(shapesOf, MARKED);
+      // The edge of a button turns in --im-t-fast (120ms): it is read once the turn is over.
+      await page.waitForTimeout(300);
+      const pressedEdge = await page.$eval('#im-gallery-matrix [data-control="button-secondary"][data-state="selected"] .im-btn', (el) => getComputedStyle(el).borderBottomColor);
       await page.emulateMedia({ forcedColors: 'none' });
       assert.notEqual(forced.button.style, 'none', where('forced colours: a focused button keeps its outline'));
       assert.equal(forced.button.width, '2px', where('forced colours: the ring is 2px'));
@@ -458,6 +785,9 @@ export default async (page) => {
       assert.equal(forced.disabledRow, forced.grayText, where('forced colours: a disabled row is GrayText'));
       assert.equal(forced.progressFill, forced.highlight, where('forced colours: the progress fill is Highlight'));
       assert.equal(forced.checked, forced.highlight, where('forced colours: a checked box is Highlight'));
+      assert.equal(forced.nativeChecked, forced.highlight, where('forced colours: a checked native box is Highlight'));
+      assert.equal(pressedEdge, forced.highlight, where('forced colours: the bar of a pressed button is its Highlight edge'));
+      assert.ok(!/^none(, none)*$/.test(forced.nativeSelect.image) || forced.nativeSelect.appearance !== 'none', where(`forced colours: a native select keeps a chevron (${JSON.stringify(forced.nativeSelect)})`));
 
       // A selected item is a Highlight bar inside the item. It is not the outline, which is the focus ring, and the ring
       // (the outer band of the item) does not cover it: a focused selected item shows both.
@@ -523,7 +853,8 @@ export default async (page) => {
       },
       [control, state, inner],
     );
-  const LIVE = [['button-secondary', '.im-btn', true], ['button-primary', '.im-btn', true], ['icon-button', '.im-icon-btn', true], ['row', '.im-row', false], ['tab', '.im-tab', false]];
+  const LIVE = [['button-secondary', '.im-btn', true], ['button-primary', '.im-btn', true], ['icon-button', '.im-icon-btn', true], ['row', '.im-row', false], ['tab', '.im-tab', false],
+    ['field-bare', '.im-input', false], ['checkbox-native', '.im-check', false], ['select-native', '.im-select', false], ['segmented-native', '.im-seg > label:first-child', false], ['textarea', '.im-textarea', false]];
   for (const [control, inner, hasPress] of LIVE) {
     await page.locator(`[data-control="${control}"][data-state="rest"] ${inner}`).hover();
     await page.waitForTimeout(300);

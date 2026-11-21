@@ -274,7 +274,7 @@
 - Test: `tests/shell-markup.test.ts`, `tests/check.test.ts`, `tests/gallery/layout.mjs`, `tests/gallery/controls.mjs` (contrast of the letter on the accent, five apps, both looks and themes)
 
 **Interfaces:**
-- `TitlebarOptions.brand` is `{ name: string }`; `image` is removed. `titlebarHtml` writes `<div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>M</span><span class="im-wordmark" data-tauri-drag-region>Muro</span></div>`: the letter is the first letter of `name`, in capitals (`Array.from(name.trim())[0].toLocaleUpperCase()`); a name with no letter writes no mark.
+- `TitlebarOptions.brand` is `{ name: string }`; `image` is removed. `titlebarHtml` writes `<div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>M</span><span class="im-wordmark" data-tauri-drag-region>Muro</span></div>`: the letter is the first letter of `name`, in capitals, taken by `brandInitial(name)` with `toUpperCase()` (a correction of 2026-11-21: the first text prescribed `toLocaleUpperCase()`, which follows the machine's locale); a name with no letter writes no mark.
 - `.im-mark` keeps its box (22px, accent fill, radius of a control, ONI's cut) and draws text: `font: 700 var(--im-fs-body)/1 var(--im-font-head)`, colour `--im-accent-on`, no letter spacing, no text transform. The `svg` rules of the mark are removed.
 - `imago-check` rule `brand-mark`, app mode: an element with class `im-brand` in the app's markup or script whose content is not exactly one `im-mark` holding one letter followed by one `im-wordmark`; an `img` or `svg` inside `im-brand`; a class `im-brand-image`.
 - Mapping rows: `brand.image` and `im-brand-image` → the mark and the name; a drawn symbol in `im-mark` → the initial.
@@ -345,7 +345,7 @@ The planners of the five apps ran the check on a copy of each app and listed wha
 Source: the ledger's entries F1, F2, F3, F4, F13, F14, F19, F21, F22, and the minors parked by the reviews of Tasks 3 and 9.
 
 **Files:**
-- Modify: `css/primitives.css`, `css/content.css`, `css/controls.css`, `ts/ui/shell-markup.ts`, `ts/ui/shell-frame.ts`, `ts/ui/inspector.ts`, `react/index.js`, `react/index.d.ts`, `gallery/apps.ts`, `tokens/imago.tokens.json`, `docs/superpowers/moving/task-16.md`
+- Modify: `css/primitives.css`, `css/content.css`, `css/controls.css`, `ts/ui/shell-markup.ts`, `ts/ui/shell-frame.ts`, `ts/ui/inspector.ts`, `ts/shell/window-controls.ts`, `react/index.js`, `react/index.d.ts`, `gallery/apps.ts`, `tokens/imago.tokens.json`, `docs/superpowers/moving/task-16.md`
 - Test: `tests/shell-markup.test.ts`, `tests/react.test.ts`, `tests/tokens.test.ts`, `tests/gallery/layout.mjs`, `tests/gallery/controls.mjs`, `tests/gallery/workspace-integration.mjs`
 
 **Interfaces:**
@@ -359,6 +359,8 @@ Source: the ledger's entries F1, F2, F3, F4, F13, F14, F19, F21, F22, and the mi
 - React: `Workbench` gains `status`, `actions` and `footer` (the children of `im-status`, `im-actions` and `im-footer`), and `contentId` and `sidebarId` (defaults `main` and `sidebar`); `skipLabel` on `Shell` and `aria-label` on `Workbench` are required in the types. `ListAction` gains `tooltip` (the HTML `title`) and `rail` (the children of a `span.im-rail-item`). A test compares the exported names of `react/index.js` with those `react/index.d.ts` declares.
 - `renderShellFrame`: a kept control or region that held focus holds it after the repaint; the sidebar's list keeps its scroll; the fold button's `aria-expanded` follows the shell's state as its label does. The comment of `takeAttributes` says an attribute the markup drops is not removed.
 - `--im-w-inspector-wide: 360px` is a token (in `tokens/imago.tokens.json`), used by `data-im-inspector="wide"`.
+- An input that already carries `im-input` (from `uiInput()`) placed inside a wrapper `span.im-input` is drawn once: inside the wrapper it has no frame, no fill and no ring of its own (`.im-input > .im-input`), in every state. Test: `pathField(uiInput(), …)` disabled and focused has one edge and one ring.
+- `mountWindowControls` takes the words it writes on the maximize button when the window is maximized or restored (`labels: { maximize, restore, maximizeTitle, restoreTitle }`, English by default), so an app's own words are not replaced by English.
 
 - [ ] **Step 1:** Tests for each line above.
 - [ ] **Step 2:** Run; they fail.

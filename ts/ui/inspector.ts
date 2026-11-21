@@ -3,11 +3,17 @@
 // Escape closes it only when no menu, sheet, dialog or palette is above it. Leaving it with unsaved changes
 // asks once.
 
+import { claimKey } from './key-claim.ts';
 import { tabbables } from './layers.ts';
 
 export type Inspector = {
-  /** Shows `content` in the region. With an `opener`, focus moves into the inspector and `close()` gives it back. */
-  open(content: HTMLElement, opener?: HTMLElement): void;
+  /**
+   * Shows `content` in the region. With an `opener`, focus moves into the inspector and `close()` gives it back.
+   * `content` is one element, or a fragment whose children are an `im-panel-header`, an `im-panel-body` and an
+   * `im-panel-foot`: the inspector lays them out as a panel, the header at the top, the foot at the bottom and the body
+   * between them, which scrolls. One element whose children are those three (a `form` round them) is laid out the same.
+   */
+  open(content: HTMLElement | DocumentFragment, opener?: HTMLElement): void;
   /** Hides the region. With a dirty guard it asks first and stays open when the answer is no. */
   close(): void;
   /** Cover this view and keep its DOM, scroll position and dirty guard for the return. */
@@ -55,7 +61,7 @@ export function inspector(shell: HTMLElement): Inspector {
     }
   }
 
-  function show(content: HTMLElement, from: HTMLElement | undefined): void {
+  function show(content: HTMLElement | DocumentFragment, from: HTMLElement | undefined): void {
     guarded = null;
     if (from) opener = from;
     for (const node of currentNodes()) node.remove();
@@ -93,10 +99,13 @@ export function inspector(shell: HTMLElement): Inspector {
     }
   }
 
+  // Escape in the region is the inspector's: it claims the key, so no command of the app also runs on it, nor on its
+  // repeats while it is held (`claimKey`). A held key closes one view, as it closes one layer.
   region.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
-    close();
+    claimKey(event);
+    if (!event.repeat) close();
   });
 
   function close(): void {

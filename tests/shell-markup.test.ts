@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { shellMarkup } from '../gallery/apps.ts';
+import { APP_IDS, APPS, shellMarkup } from '../gallery/apps.ts';
 import { cellMarkup } from '../gallery/matrix.ts';
 import { iconHtml } from '../ts/ui/markup.ts';
-import { noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
+import { brandInitial, noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions, type SidebarOptions } from '../ts/ui/shell-markup.ts';
 import { renderShellFrame } from '../ts/ui/shell-frame.ts';
 
 test('tabs expose one initial keyboard stop and announced counts without repeating their visual badge', () => {
@@ -20,12 +20,12 @@ test('tabs expose one initial keyboard stop and announced counts without repeati
 test('shell text and identifiers cannot inject HTML or attributes', () => {
   const html = shellFrameHtml({
     contentId: 'm"<', skipLabel: '<skip>', contentLabel: '<content>', inspectorLabel: '"inspector',
-    titlebarHtml: titlebarHtml({ brand: { name: '<name>', image: '/image" onerror="x' }, navigationHtml: tabNavigationHtml([{ id: '"x', label: '<tab>', count: 2, countLabel: '"waiting' }], '"x', { label: '<sections>', action: '"click' }), commands: { label: '<commands>', action: '"cmd', shortcut: '<K>' } }),
+    titlebarHtml: titlebarHtml({ brand: { name: '<name>' }, navigationHtml: tabNavigationHtml([{ id: '"x', label: '<tab>', count: 2, countLabel: '"waiting' }], '"x', { label: '<sections>', action: '"click' }), commands: { label: '<commands>', action: '"cmd', shortcut: '<K>' } }),
     contentHtml: pageContentHtml('<p>Trusted page component</p>', 'narrow'), busy: true,
   });
   assert.doesNotMatch(html, /<skip>|<name>|<tab>|<commands>|<K>|<content>| onerror="/);
   assert.match(html, /href="#m&quot;&lt;"/);
-  assert.match(html, /src="\/image&quot; onerror=&quot;x"/);
+  assert.match(html, /<span class="im-mark" aria-hidden="true" data-tauri-drag-region>N<\/span><span class="im-wordmark" data-tauri-drag-region>&lt;name&gt;<\/span>/);
   assert.match(html, /<main id="m&quot;&lt;" class="im-panel im-content" tabindex="-1" aria-label="&lt;content&gt;" aria-busy="true"><div class="im-panel-body">/);
   assert.match(html, /<section class="im-panel im-inspector" aria-label="&quot;inspector" hidden><\/section>/);
   assert.match(html, /class="im-page-content im-page-content--narrow"><p>Trusted page component<\/p>/);
@@ -90,6 +90,30 @@ test('sidebarHtml writes the sidebar of section 4: a titled panel, a listbox of 
   assert.doesNotMatch(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '' }), /im-sidebar-collapse/, 'no fold button unless its two labels are given');
 });
 
+test('sidebarHtml writes a count in the header and a foot under the list, when they are given', () => {
+  const html = sidebarHtml({
+    id: 'side', label: 'Threads', rowsHtml: '<div class="im-row" role="option">Row</div>', count: 9,
+    footHtml: '<button type="button" class="im-btn">New thread</button>', collapse: { collapse: 'Fold', expand: 'Unfold' },
+  });
+  assert.match(html, /<header class="im-panel-header"><h4 class="im-panel-title">Threads<\/h4><span class="im-count">9<\/span><span class="im-spacer"><\/span><button type="button" class="im-icon-btn im-sidebar-collapse"/);
+  assert.match(html, /<div class="im-panel-body im-list" role="listbox" aria-label="Threads"><div class="im-row" role="option">Row<\/div><\/div><div class="im-panel-foot"><button type="button" class="im-btn">New thread<\/button><\/div><\/section>$/);
+  assert.match(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '', count: 0 }), /<\/h4><span class="im-count">0<\/span>/, 'none is a count too');
+  assert.doesNotMatch(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '' }), /im-count|im-panel-foot/, 'no count and no foot unless they are given');
+  assert.doesNotMatch(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '', count: Number.NaN }), /im-count/, 'a count that is not a number is not written');
+});
+
+test("the gallery's sidebars are the ones sidebarHtml writes: the count in the header, and a foot under the list", () => {
+  const sidebars = APP_IDS.flatMap((id) => {
+    const side = APPS[id].side;
+    return side ? [{ id, side, html: /<section class="im-panel im-sidebar"[^]*?<\/section>/.exec(shellMarkup(id))?.[0] ?? '' }] : [];
+  });
+  assert.ok(sidebars.length >= 4);
+  for (const { id, side, html } of sidebars) {
+    assert.ok(html.startsWith(`<section class="im-panel im-sidebar" id="g-sidebar" aria-label="${side.title}"><header class="im-panel-header"><h4 class="im-panel-title">${side.title}</h4><span class="im-count">${side.n}</span><span class="im-spacer"></span>`), `${id}: ${html.slice(0, 200)}`);
+  }
+  assert.ok(sidebars.some(({ html }) => /<\/div><div class="im-panel-foot">[^]*<\/div><\/section>$/.test(html)), 'a sidebar of the gallery has a foot under its list');
+});
+
 test('the content region is a panel: its header, tools, body and foot in that order, each part left out when not given', () => {
   const inside = (html: string): string => /<main [^>]*>([\s\S]*)<\/main>/.exec(html)?.[1] ?? '';
   const parts = { contentHeaderHtml: '<h4 class="im-panel-title">Sync</h4>', contentToolsHtml: '<span>Filter</span>', contentFootHtml: '<span>Foot</span>' };
@@ -116,6 +140,16 @@ class FakeNode {
     if (!parent) return;
     parent.childNodes.splice(parent.childNodes.indexOf(this), 1);
     this.parentNode = null;
+    // As in a browser, a node that is taken out loses the focus it held and the scroll of everything in it, even when it
+    // goes back in at once (a move is a removal, then an insertion).
+    for (let at: FakeNode | null = fakeDocument.activeElement; at; at = at.parentNode) {
+      if (at === this) fakeDocument.activeElement = null;
+    }
+    const unscroll = (node: FakeNode): void => {
+      if (node instanceof FakeElement) node.scrollTop = 0;
+      if (node instanceof FakeParent) node.childNodes.forEach(unscroll);
+    };
+    unscroll(this);
   }
   before(...nodes: FakeNode[]): void { this.parentNode?.insert(nodes, this); }
   after(...nodes: FakeNode[]): void {
@@ -175,7 +209,9 @@ class FakeFragment extends FakeParent {}
 class FakeElement extends FakeParent {
   localName: string;
   attrs = new Map<string, string>();
+  scrollTop = 0;
   constructor(localName: string) { super(); this.localName = localName; }
+  focus(): void { fakeDocument.activeElement = this; }
   get ownerDocument() { return fakeDocument; }
   get attributes(): { name: string; value: string }[] { return [...this.attrs].map(([name, value]) => ({ name, value })); }
   getAttribute(name: string): string | null { return this.attrs.get(name) ?? null; }
@@ -191,7 +227,10 @@ class FakeTemplate extends FakeElement {
   content = new FakeFragment();
   set innerHTML(html: string) { this.content = parse(html); }
 }
-const fakeDocument = { createElement: (tag: string) => (tag === 'template' ? new FakeTemplate('template') : new FakeElement(tag)) };
+const fakeDocument: { activeElement: FakeElement | null; createElement: (tag: string) => FakeElement } = {
+  activeElement: null,
+  createElement: (tag: string) => (tag === 'template' ? new FakeTemplate('template') : new FakeElement(tag)),
+};
 
 function parse(html: string): FakeFragment {
   const root = new FakeFragment();
@@ -416,6 +455,89 @@ test('the controls the package wires keep their element: the sidebar button, the
   assert.equal($(shell, 'im-sidebar-toggle'), toggle, 'and comes back as the same element');
 });
 
+test("a repaint shows the sidebar's new count and foot; its list stays the same element, in its place, with its scroll", () => {
+  const side = (paint: string, extra: Partial<SidebarOptions> = {}): string => sidebarHtml({
+    id: 'side', label: 'Threads', rowsHtml: `<div class="im-row" role="option">Row ${paint}</div>`, count: Number(paint),
+    footHtml: `<span>Foot ${paint}</span>`, collapse: { collapse: `Fold ${paint}`, expand: `Unfold ${paint}` }, ...extra,
+  });
+  const shell = mount(frame('1', { sidebarHtml: side('1') }));
+  const sidebar = $(shell, 'im-sidebar');
+  const list = $(sidebar, 'im-list');
+  const splitter = new FakeElement('div');
+  splitter.setAttribute('class', 'im-splitter im-sidebar-splitter');
+  sidebar.append(splitter);
+  const parts = () => sidebar.children.map((el) => el.getAttribute('class'));
+  list.scrollTop = 120;
+  renderShellFrame(shell as unknown as HTMLElement, frame('2', { sidebarHtml: side('2') }));
+  assert.equal($(sidebar, 'im-list'), list, 'the list is the same element');
+  assert.equal(list.scrollTop, 120, 'and it keeps its scroll');
+  assert.equal(list.textContent, 'Row 2', 'with the new rows');
+  assert.equal($(sidebar, 'im-count').textContent, '2', 'the header shows the new count');
+  assert.equal($(sidebar, 'im-panel-foot').textContent, 'Foot 2', 'the foot shows what the markup now gives');
+  assert.deepEqual(parts(), ['im-panel-header', 'im-panel-body im-list', 'im-panel-foot', 'im-splitter im-sidebar-splitter']);
+  renderShellFrame(shell as unknown as HTMLElement, frame('3', { sidebarHtml: side('3', { count: undefined, footHtml: undefined }) }));
+  assert.equal(sidebar.find('im-count'), null, 'a count the markup no longer has goes');
+  assert.deepEqual(parts(), ['im-panel-header', 'im-panel-body im-list', 'im-splitter im-sidebar-splitter'], 'and so does a foot');
+  assert.equal(list.scrollTop, 120);
+  renderShellFrame(shell as unknown as HTMLElement, frame('4', { sidebarHtml: side('4') }));
+  assert.deepEqual(parts(), ['im-panel-header', 'im-panel-body im-list', 'im-panel-foot', 'im-splitter im-sidebar-splitter'], 'the foot comes back under the list');
+  assert.equal($(sidebar, 'im-panel-foot').textContent, 'Foot 4');
+  assert.equal($(sidebar, 'im-list'), list);
+});
+
+test('a repaint gives the focus back to the kept control or region that held it', () => {
+  const shell = mount(frame('1'));
+  try {
+    for (const name of ['im-sidebar-collapse', 'im-sidebar-toggle', 'im-window-button', 'im-content', 'im-list']) {
+      const element = $(shell, name);
+      element.focus();
+      renderShellFrame(shell as unknown as HTMLElement, frame('2'));
+      assert.equal(fakeDocument.activeElement, element, `${name} still has the focus`);
+    }
+    // What the markup replaced is new: the app gives the focus back to it (captureDomState, restoreDomState).
+    const row = $(shell, 'im-row');
+    row.focus();
+    renderShellFrame(shell as unknown as HTMLElement, frame('3'));
+    assert.notEqual(fakeDocument.activeElement, row);
+  } finally {
+    fakeDocument.activeElement = null;
+  }
+});
+
+test("a repaint sets the fold button's aria-expanded from the shell's state, as it sets its name", () => {
+  const shell = mount(frame('1'));
+  const fold = $(shell, 'im-sidebar-collapse');
+  // An app that folds the sidebar itself (a choice it stored), not through the button.
+  shell.setAttribute('data-im-sidebar-collapsed', 'true');
+  renderShellFrame(shell as unknown as HTMLElement, frame('2'));
+  assert.equal(fold.getAttribute('aria-expanded'), 'false');
+  assert.equal(fold.getAttribute('aria-label'), 'Unfold 2');
+  shell.removeAttribute('data-im-sidebar-collapsed');
+  renderShellFrame(shell as unknown as HTMLElement, frame('3'));
+  assert.equal(fold.getAttribute('aria-expanded'), 'true');
+  assert.equal(fold.getAttribute('aria-label'), 'Fold 3');
+  // A fold button that the markup gives for the first time takes the state too.
+  const bare = mount(frame('1', { sidebarHtml: sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '' }) }));
+  bare.setAttribute('data-im-sidebar-collapsed', 'true');
+  renderShellFrame(bare as unknown as HTMLElement, frame('2'));
+  assert.equal($(bare, 'im-sidebar-collapse').getAttribute('aria-expanded'), 'false');
+  assert.equal($(bare, 'im-sidebar-collapse').getAttribute('aria-label'), 'Unfold 2');
+  assert.equal($(bare, 'im-sidebar-collapse').getAttribute('title'), 'Unfold 2');
+  // And so does the fold button of a sidebar that the markup gives for the first time.
+  const none = mount(frame('1', { sidebarHtml: undefined }));
+  none.setAttribute('data-im-sidebar-collapsed', 'true');
+  renderShellFrame(none as unknown as HTMLElement, frame('2'));
+  assert.equal($(none, 'im-sidebar-collapse').getAttribute('aria-expanded'), 'false');
+  assert.equal($(none, 'im-sidebar-collapse').getAttribute('aria-label'), 'Unfold 2');
+});
+
+test('a repaint gives a region the attributes the markup writes and removes none: one the markup drops stays', () => {
+  const shell = mount(frame('1', { titlebarHtml: '<header class="im-titlebar" data-x="1"></header>' }));
+  renderShellFrame(shell as unknown as HTMLElement, frame('2', { titlebarHtml: '<header class="im-titlebar" data-y="2"></header>' }));
+  assert.equal($(shell, 'im-titlebar').getAttribute('data-y'), '2');
+  assert.equal($(shell, 'im-titlebar').getAttribute('data-x'), '1', 'to take an attribute away, the markup writes its new value');
+});
+
 test('renderShellFrame refuses a frame without its fixed regions and changes nothing', () => {
   const shell = mount(frame('1'));
   const content = $(shell, 'im-content').find('im-panel-body')!;
@@ -433,12 +555,23 @@ test('renderShellFrame refuses a frame without its fixed regions and changes not
 });
 
 test('window buttons provide the native selectors and both maximize/restore icons', () => {
-  const html = windowButtonsHtml({ minimize: 'Hide <window>', maximize: 'Grow', close: 'Close' });
+  const html = windowButtonsHtml({ minimize: 'Hide <window>', maximize: 'Grow', close: 'Close', minimizeTitle: 'Hide', maximizeTitle: 'Grow', closeTitle: 'Close' });
   assert.deepEqual([...html.matchAll(/data-im-window="([^"]+)"/g)].map(match => match[1]), ['minimize', 'maximize', 'close']);
   assert.equal(html.match(/<svg/g)?.length, 4);
   assert.match(html, /aria-label="Hide &lt;window&gt;"/);
   assert.doesNotMatch(titlebarHtml({ brand: { name: 'Example' } }), /im-window-buttons/);
   assert.match(titlebarHtml({ brand: { name: 'Example' }, windowControls: true }), /im-window-buttons/);
+});
+
+test('each window button has a tooltip beside its accessible name: Minimize, Maximize, Close, or the app\'s words', () => {
+  const pairs = (html: string): (string | undefined)[][] =>
+    [...html.matchAll(/<button [^>]*>/g)].map(([button]) => [/aria-label="([^"]*)"/.exec(button)?.[1], /title="([^"]*)"/.exec(button)?.[1]]);
+  assert.deepEqual(pairs(windowButtonsHtml()), [['Minimize window', 'Minimize'], ['Maximize window', 'Maximize'], ['Close window', 'Close']]);
+  assert.deepEqual(pairs(titlebarHtml({ brand: { name: 'Example' }, windowControls: true })).slice(-3), [['Minimize window', 'Minimize'], ['Maximize window', 'Maximize'], ['Close window', 'Close']]);
+
+  const words = { minimize: 'Riduci a icona la finestra', maximize: 'Ingrandisci la finestra', close: 'Chiudi la finestra', minimizeTitle: 'Riduci <a icona>', maximizeTitle: 'Ingrandisci', closeTitle: 'Chiudi' };
+  assert.deepEqual(pairs(windowButtonsHtml(words)), [['Riduci a icona la finestra', 'Riduci &lt;a icona&gt;'], ['Ingrandisci la finestra', 'Ingrandisci'], ['Chiudi la finestra', 'Chiudi']]);
+  assert.deepEqual(pairs(titlebarHtml({ brand: { name: 'Esempio' }, windowControls: words })).slice(-3).map(([, title]) => title), ['Riduci &lt;a icona&gt;', 'Ingrandisci', 'Chiudi']);
 });
 
 // The approved note: its icon, then its title and its line (docs/reference/toolkit-preview.html, the gallery's `note` control).
@@ -485,6 +618,62 @@ test('titlebarHtml writes the sidebar toggle of section 4 right after the brand,
   assert.match(html, /<\/span><\/div><button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads &quot;all&quot;" title="Threads &quot;all&quot;" aria-expanded="false" aria-controls="side&lt;"><svg class="im-icon" viewBox="0 0 24 24" aria-hidden="true">[^]*?<\/svg><\/button><nav class="im-tabs">/);
   assert.ok(html.includes(iconHtml('sidebar')), 'the toggle draws the sidebar icon of the package');
   assert.doesNotMatch(titlebarHtml({ brand: { name: 'App' } }), /im-sidebar-toggle/, 'no toggle unless it is given');
+});
+
+// ---------- the mark at the top left: the initial of the name, in capitals, in the accent's square, then the name ----------
+
+/** The brand titlebarHtml writes for a name. */
+const brandOf = (name: string): string => /<div class="im-brand"[^]*?<\/div>/.exec(titlebarHtml({ brand: { name } }))?.[0] ?? '';
+const BRAND = (letter: string, name: string): string =>
+  `<div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>${letter}</span><span class="im-wordmark" data-tauri-drag-region>${name}</span></div>`;
+
+test('titlebarHtml writes the brand: the initial of the name in capitals in im-mark, then the name in im-wordmark', () => {
+  assert.equal(brandOf('muro'), BRAND('M', 'muro'));
+  assert.ok(titlebarHtml({ brand: { name: 'Muro' } }).startsWith(`<header class="im-titlebar" data-tauri-drag-region>${BRAND('M', 'Muro')}`), 'the brand is the first thing in the title bar');
+  assert.equal(brandOf('  xiox '), BRAND('X', '  xiox '), 'a name that starts with a space: its first letter');
+  assert.equal(brandOf('🦊 fox'), BRAND('F', '🦊 fox'), 'a name that starts with an emoji: the emoji is not a letter, the first letter is');
+  assert.equal(brandOf('élan'), BRAND('É', 'élan'), 'an accented letter keeps its accent');
+  assert.equal(brandOf('élan'), BRAND('É', 'élan'), 'a letter with a combining accent is one letter');
+  assert.equal(brandOf('<daodan>'), BRAND('D', '&lt;daodan&gt;'), 'the name is escaped');
+});
+
+test('the initial does not change with the locale of the machine: i is I under a Turkish default too', () => {
+  const original = String.prototype.toLocaleUpperCase;
+  // A machine whose default locale is Turkish: toLocaleUpperCase() with no locale makes i a dotted İ.
+  String.prototype.toLocaleUpperCase = function (this: string, locales?: string | string[]): string {
+    return original.call(this, locales ?? 'tr');
+  };
+  try {
+    assert.equal('i'.toLocaleUpperCase(), 'İ', 'the stub stands for a Turkish default');
+    assert.equal(brandOf('istanbul'), BRAND('I', 'istanbul'));
+    assert.equal(brandInitial('istanbul'), 'I');
+  } finally {
+    String.prototype.toLocaleUpperCase = original;
+  }
+});
+
+test('brandInitial is the letter titlebarHtml writes in the mark, and the gallery takes it from there', () => {
+  for (const name of ['muro', '  xiox ', '🦊 fox', 'élan', 'Daodan']) {
+    assert.ok(brandOf(name).includes(`data-tauri-drag-region>${brandInitial(name)}</span>`), name);
+  }
+  assert.equal(brandInitial('🦊 42'), '');
+});
+
+test('a name with no letter writes no mark, and the brand never holds an image', () => {
+  assert.equal(brandOf('🦊 42'), '<div class="im-brand" data-tauri-drag-region><span class="im-wordmark" data-tauri-drag-region>🦊 42</span></div>');
+  assert.equal(brandOf(''), '<div class="im-brand" data-tauri-drag-region><span class="im-wordmark" data-tauri-drag-region></span></div>');
+  // An app that still passes the removed brand.image gets the mark and the name, not its picture.
+  const old = titlebarHtml({ brand: { name: 'Muro', image: '/muro-logo.png' } } as unknown as Parameters<typeof titlebarHtml>[0]);
+  assert.doesNotMatch(old, /<img|im-brand-image|muro-logo/);
+  assert.ok(old.includes(BRAND('M', 'Muro')));
+});
+
+test("the gallery's title bar writes the brand of each app as titlebarHtml writes it, and draws no symbol in the mark", () => {
+  for (const id of APP_IDS) {
+    const html = shellMarkup(id);
+    assert.ok(html.includes(brandOf(APPS[id].name)), `${id}: the brand of titlebarHtml`);
+    assert.doesNotMatch(/<div class="im-brand"[^]*?<\/div>/.exec(html)?.[0] ?? '', /<svg|<img/, `${id}: no drawing in the brand`);
+  }
 });
 
 test('a title bar with its sidebar toggle keeps the toggle state across a repaint', () => {

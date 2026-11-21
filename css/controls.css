@@ -2,20 +2,31 @@
    ONI does differently (chamfered buttons, outlined chips, capitals), on the same classes and the same attributes.
 
    States are real attributes and pseudo-classes, never extra classes:
-     hover :hover   pressed :active   focus :focus-visible   selected [aria-selected="true"]
-     checked [aria-checked]   disabled :disabled or [aria-disabled="true"]   busy [aria-busy="true"]
+     hover :hover   pressed :active   focus :focus-visible
+     selected [aria-selected="true"], [aria-current] that is not "false", or [aria-pressed="true"]: one drawing whatever says it
+     checked [aria-checked="true"] or :checked; mixed [aria-checked="mixed"] or :indeterminate
+     disabled :disabled or [aria-disabled="true"]   busy [aria-busy="true"]
      invalid [aria-invalid="true"] (on the input)   read-only [readonly] (on the input)
    The gallery forces a pseudo-state with data-im-force="hover|press|focus"; each rule below that answers a pseudo-class
    answers the attribute with the same selector, so a forced cell and a real one cannot drift apart.
+
+   One drawing serves an ARIA element and the native one: each rule names both (the attribute and the pseudo-class of the
+   native state), so an app with native inputs in a form looks as one with ARIA elements.
 
    Disabled is a dashed border and the muted text colour, which passes 4.5:1 on every surface. Never an opacity.
 
    Markup the rules expect:
      button    <button class="im-btn im-btn--primary"> [<svg class="im-icon"> | <span class="im-spinner">] <span>Label</span> [<kbd class="im-key">]
      field     <div class="im-field"><label class="im-field-label">..</label><span class="im-input"><input aria-invalid aria-describedby></span>
-               <span class="im-field-hint">..</span><span class="im-field-error" id>Error: ..</span></div>
-     select    <button class="im-select" aria-haspopup="listbox"><span>Value</span><svg class="im-icon"></button>
-     option    <span class="im-option"><span class="im-check" role="checkbox" aria-checked tabindex></span>Label</span>
+               <span class="im-field-hint">..</span><span class="im-field-error" id>Error: ..</span></div>;
+               the box may be the input itself, <input class="im-input">, when it holds no icon and no key cap
+     text area <textarea class="im-textarea" aria-invalid aria-describedby>, in an im-field as the input's box is
+     select    <button class="im-select" aria-haspopup="listbox"><span>Value</span><svg class="im-icon"></button>, or <select class="im-select">
+     option    <span class="im-option"><span class="im-check" role="checkbox" aria-checked tabindex></span>Label</span>,
+               or <label class="im-option"><input type="checkbox" class="im-check">Label</label>; im-radio and im-switch
+               (an input with role="switch") the same
+     segmented <div class="im-seg"><button aria-selected>Label</button>..</div>,
+               or <div class="im-seg" role="radiogroup"><label><input type="radio" name><span>Label</span></label>..</div>
      tab       <button class="im-tab" role="tab" aria-selected>Label</button> inside .im-tabs
      row       <div class="im-row" role="option" aria-selected title><span class="im-row-text"><span class="im-row-title"></span><span class="im-row-sub"></span></span><span class="im-row-meta"></span></div>
      tree      <ul class="im-tree" role="tree"><li class="im-tree-item" role="treeitem" aria-level aria-expanded style="--im-level: 0"><svg class="im-icon im-tree-chevron"><span class="im-tree-label">
@@ -25,7 +36,7 @@
 
 /* ---------- reset of the elements a control is made of ---------- */
 
-:where(.im-btn, .im-icon-btn, .im-tab, .im-seg > button, .im-select, .im-check, .im-radio, .im-switch) {
+:where(.im-btn, .im-icon-btn, .im-tab, .im-seg > :is(button, label), .im-select, .im-check, .im-radio, .im-switch) {
   margin: 0;
   padding: 0;
   font: inherit;
@@ -42,9 +53,11 @@
      a control that stands alone (button, icon button, select, checkbox, radio, switch)   2px outside
      a field (input, search): its edge turns to the accent too, as in the approved preview   1px outside
      an item of a list, table, tree, menu, tab strip or segmented control: its container scrolls and clips   2px inside
-     an ONI chamfered button (looks/oni.css): a clip-path cuts an outer ring   5px inside */
+     an ONI chamfered button (looks/oni.css): a clip-path cuts an outer ring   5px inside
+   A segment over a native radio has its ring on the label: the radio under it is hidden. */
 
 :where(.im-btn, .im-icon-btn, .im-select, .im-check, .im-radio, .im-switch, .im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
+:where(.im-seg > label):has(> input:focus-visible),
 [data-im-force="focus"] {
   outline: 2px solid var(--im-accent-text);
   outline-offset: 2px;
@@ -52,7 +65,8 @@
 
 /* The items of a container that clips: the ring is drawn inside them. */
 :where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
-:where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item)[data-im-force="focus"] {
+:where(.im-seg > label):has(> input:focus-visible),
+:where(.im-row, .im-tab, .im-seg > :is(button, label), .im-tree-item, .im-table tbody tr, .im-menu-item)[data-im-force="focus"] {
   outline-offset: -2px;
 }
 
@@ -116,13 +130,14 @@
 }
 
 /* A toned chip has a ground of its own, 14% of its tone over the sheet, and not a wash over what is behind it: a row that is
-   hovered, pressed or selected (a fill the chip sits on) must not dim the text of the chip under 4.5:1. */
-.im-chip[data-im-tone] {
+   hovered, pressed or selected (a fill the chip sits on) must not dim the text of the chip under 4.5:1. A chip of a
+   category (data-im-cat) takes its colour as its tone. */
+.im-chip:is([data-im-tone], [data-im-cat]) {
   color: var(--im-tone);
   background: color-mix(in srgb, var(--im-tone) 14%, var(--im-sheet));
 }
 
-.im-chip[data-im-tone]::before {
+.im-chip:is([data-im-tone], [data-im-cat])::before {
   content: "";
   width: 6px;
   height: 6px;
@@ -144,6 +159,30 @@
   border: 1px solid var(--im-line);
   border-radius: var(--im-r-control);
 }
+
+/* A categorical colour: the colour of one thing among others of its kind (a thread, a project), data-im-cat="1" to "8", a
+   fixed hue each, the same in every app. It is never the only thing that tells the things apart: each is named in words.
+   A row draws it as a 3px mark at its start edge, beside its selection mark (in the rail its item's fill tells it, and
+   the mark is not drawn: css/primitives.css); an avatar, a rail item and a dot are filled
+   with it, their text in --im-cat-on; a chip takes it as its tone. As text, a categorical colour stands only on a ground
+   of its own (the chip's): on the fill of a selected row some reach barely 4.5:1. */
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="1"] { --im-item-color: var(--im-cat-1); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="2"] { --im-item-color: var(--im-cat-2); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="3"] { --im-item-color: var(--im-cat-3); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="4"] { --im-item-color: var(--im-cat-4); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="5"] { --im-item-color: var(--im-cat-5); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="6"] { --im-item-color: var(--im-cat-6); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="7"] { --im-item-color: var(--im-cat-7); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="8"] { --im-item-color: var(--im-cat-8); }
+
+:is(.im-rail-item, .im-avatar, .im-dot):not(.im-check)[data-im-cat] {
+  color: var(--im-cat-on);
+  background: var(--im-item-color);
+}
+
+.im-rail-item[data-im-cat]:not(.im-avatar, .im-check) { border-radius: var(--im-r-control); }
+
+.im-chip[data-im-cat] { --im-tone: var(--im-item-color); }
 
 /* The progress mark of a busy control: the size of an icon, so the control keeps its width. */
 .im-spinner {
@@ -275,6 +314,25 @@
   --im-btn-wash: transparent;
 }
 
+/* pressed down (aria-pressed), or selected, in both looks: the selection fill and the mark a selected segment has, a 2px bar
+   inside the bottom edge in the accent text colour, so it is not the colour alone (ONI's chamfer leaves the bar along the
+   straight part of the edge). The wash of hover and press stays under the bar. Smooth also takes the weight 600; ONI's
+   buttons are 700 already (looks/oni.css). The filled buttons keep their fill, and their bar is their text colour: the
+   accent text colour is the primary's fill. The exclusion of aria-current="false" is in :where(), so these rules weigh what
+   [aria-pressed] alone does and disabled still wins by order. */
+.im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) {
+  box-shadow: inset 0 -2px var(--im-accent-text), inset 0 0 0 99px var(--im-btn-wash);
+}
+
+.im-btn:is(.im-btn--primary, .im-btn--confirm-danger):is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) {
+  box-shadow: inset 0 -2px var(--im-btn-fg), inset 0 0 0 99px var(--im-btn-wash);
+}
+
+.im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]):where(:not(.im-btn--primary, .im-btn--confirm-danger)) {
+  --im-btn-bg: var(--im-selected);
+  font-weight: 600;
+}
+
 /* busy: the label and the width stay, the spinner takes the icon's place, a second press does nothing */
 .im-btn[aria-busy="true"] { pointer-events: none; }
 
@@ -346,7 +404,10 @@
   color: var(--im-err);
 }
 
+/* The box of a field: im-input round an input (the form that also holds an icon and a key cap) or on the input itself, and on
+   a text area and a select (a button or a native select). Each state below names both forms of im-input. */
 .im-input,
+.im-textarea,
 .im-select {
   display: flex;
   align-items: center;
@@ -363,6 +424,19 @@
   transition: border-color var(--im-t-fast) var(--im-ease);
 }
 
+/* A text area is the field on more than one line: it grows downwards, the text is content. */
+.im-textarea {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding-block: var(--im-s-2);
+  resize: vertical;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .im-input > input {
   all: unset;
   flex: 1;
@@ -375,7 +449,18 @@
   user-select: text;
 }
 
-.im-input > input::placeholder { color: var(--im-muted); }
+/* On the input itself the box is the input: it stays inline-level, as a native input is, so it keeps its place in a line of
+   text or beside a label; its text is content, as the text of an input in the box is. */
+input.im-input {
+  display: inline-block;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.im-input > input::placeholder,
+input.im-input::placeholder,
+.im-textarea::placeholder { color: var(--im-muted); }
 
 .im-input > .im-icon,
 .im-select > .im-icon { color: var(--im-muted); }
@@ -386,6 +471,23 @@
 .im-select {
   justify-content: space-between;
   text-align: start;
+  appearance: none;
+}
+
+/* A native select has no element inside it for the icon: its chevron is drawn in the background, two strokes where the
+   button's icon draws them (the path M7 10l5 5 5-5 of a 24px box drawn 16px wide, 10px in from the edge, a stroke of 1.6
+   at that scale). The value stops where the button's does, before the gap and the icon. */
+select.im-select {
+  /* imago-check: allow literal-space — the field's 10px padding, the 16px icon and the 8px gap of the select button */
+  padding-right: calc(10px + 16px + 8px);
+  background-image:
+    linear-gradient(to top right, transparent calc(50% - 0.53px), var(--im-muted) 0 calc(50% + 0.53px), transparent 0),
+    linear-gradient(to bottom right, transparent calc(50% - 0.53px), var(--im-muted) 0 calc(50% + 0.53px), transparent 0);
+  background-position:
+    right calc(10px + 16px * 12 / 24) top calc(50% + 16px * 0.5 / 24),
+    right calc(10px + 16px * 7 / 24) top calc(50% + 16px * 0.5 / 24);
+  background-size: calc(16px * 5 / 24) calc(16px * 5 / 24);
+  background-repeat: no-repeat;
 }
 
 .im-select > span:first-child {
@@ -397,11 +499,15 @@
 
 /* The states below stack by order: hover, focus, invalid, read-only, disabled; the last one that applies wins the edge. */
 .im-input:is(:hover, [data-im-force="hover"]),
+.im-textarea:is(:hover, [data-im-force="hover"]),
 .im-select:is(:hover, [data-im-force="hover"]) {
   border-color: var(--im-text-2);
 }
 
-.im-input:is(:focus-within, [data-im-force="focus"]) {
+/* The box round an input while the input has focus, the input itself on :focus-visible (a text input shows it for the
+   pointer too), a text area on focus: the edge turns to the accent and the ring is 1px outside. */
+.im-input:is(:focus-within, :focus-visible, [data-im-force="focus"]),
+.im-textarea:is(:focus, [data-im-force="focus"]) {
   border-color: var(--im-accent-text);
   outline: 2px solid var(--im-accent-text);
   outline-offset: 1px;
@@ -411,28 +517,48 @@
 .im-select:is(:focus-visible, [data-im-force="focus"]) { border-color: var(--im-accent-text); }
 
 .im-input:has(> input[aria-invalid="true"]),
+input.im-input[aria-invalid="true"],
+.im-textarea[aria-invalid="true"],
 .im-select[aria-invalid="true"] {
   border-color: var(--im-err);
 }
 
 /* Read-only: no fill, no frame, the text still selectable, no caret. */
-.im-input:has(> input[readonly]) {
+.im-input:has(> input[readonly]),
+input.im-input[readonly],
+.im-textarea[readonly] {
   padding-inline: 0;
   background: transparent;
   border-color: transparent;
 }
 
-.im-input > input[readonly] { caret-color: transparent; }
+.im-input > input[readonly],
+input.im-input[readonly],
+.im-textarea[readonly] { caret-color: transparent; }
 
+/* The fill goes, the chevron of a native select stays, and the fading the browser gives a disabled select is taken back. */
 .im-input:has(> input:disabled),
+input.im-input:disabled,
+.im-textarea:disabled,
 .im-select:is(:disabled, [aria-disabled="true"]) {
   color: var(--im-muted);
-  background: transparent;
+  background-color: transparent;
   border-style: dashed;
   border-color: var(--im-line);
+  opacity: 1;
 }
 
 .im-input > input:disabled { color: var(--im-muted); }
+
+/* An input that carries im-input itself (uiInput()) and sits in the box of a field (.im-input > .im-input, as pathField puts
+   it) is drawn once, by the box: in every state it has no frame, no fill and no ring of its own. */
+.im-input > input.im-input {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+}
 
 /* ---------- check, radio, switch ---------- */
 
@@ -445,8 +571,12 @@
   color: var(--im-text);
 }
 
-.im-option:has([aria-disabled="true"]) { color: var(--im-muted); }
+.im-option:has(:is([aria-disabled="true"], :disabled)) { color: var(--im-muted); }
 
+/* On a native input the class takes the browser's drawing away (appearance: none) and draws the box and its mark (::after)
+   as on the ARIA element: :checked is aria-checked="true", :indeterminate is "mixed", :disabled is aria-disabled. A checked
+   checkbox that is also indeterminate shows the mixed bar: the exclusion is in :where(), so the rule weighs what the
+   attribute alone does and the disabled rules below still win by order. */
 .im-check,
 .im-radio,
 .im-switch {
@@ -456,7 +586,11 @@
   flex: none;
   background: var(--im-field);
   border: 1.5px solid var(--im-line-strong);
+  appearance: none;
 }
+
+/* A native one keeps the arrow: the shell gives its inputs the text cursor (css/base.css), which is for text. */
+input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch) { cursor: default; }
 
 .im-check {
   width: 16px;
@@ -464,12 +598,12 @@
   border-radius: var(--im-r-chip);
 }
 
-.im-check[aria-checked="true"] {
+.im-check:is([aria-checked="true"], :checked:where(:not(:indeterminate))) {
   background: var(--im-accent);
   border-color: var(--im-accent);
 }
 
-.im-check[aria-checked="true"]::after {
+.im-check:is([aria-checked="true"], :checked:where(:not(:indeterminate)))::after {
   content: "";
   position: absolute;
   left: 4px;
@@ -481,9 +615,9 @@
   transform: rotate(45deg);
 }
 
-.im-check[aria-checked="mixed"] { border-color: var(--im-accent-text); }
+.im-check:is([aria-checked="mixed"], :indeterminate) { border-color: var(--im-accent-text); }
 
-.im-check[aria-checked="mixed"]::after {
+.im-check:is([aria-checked="mixed"], :indeterminate)::after {
   content: "";
   position: absolute;
   left: 3px;
@@ -499,9 +633,9 @@
   border-radius: 50%;
 }
 
-.im-radio[aria-checked="true"] { border-color: var(--im-accent); }
+.im-radio:is([aria-checked="true"], :checked) { border-color: var(--im-accent); }
 
-.im-radio[aria-checked="true"]::after {
+.im-radio:is([aria-checked="true"], :checked)::after {
   content: "";
   position: absolute;
   inset: 3px;
@@ -527,33 +661,33 @@
   transition: transform var(--im-t-base) var(--im-ease);
 }
 
-.im-switch[aria-checked="true"] {
+.im-switch:is([aria-checked="true"], :checked) {
   background: var(--im-accent);
   border-color: var(--im-accent);
 }
 
-.im-switch[aria-checked="true"]::after {
+.im-switch:is([aria-checked="true"], :checked)::after {
   background: var(--im-accent-on);
   transform: translateX(13px);
 }
 
-:is(.im-check, .im-radio, .im-switch):not([aria-disabled="true"]):is(:hover, [data-im-force="hover"]),
-.im-option:hover :is(.im-check, .im-radio, .im-switch):not([aria-disabled="true"]) {
+:is(.im-check, .im-radio, .im-switch):not([aria-disabled="true"], :disabled):is(:hover, [data-im-force="hover"]),
+.im-option:hover :is(.im-check, .im-radio, .im-switch):not([aria-disabled="true"], :disabled) {
   box-shadow: 0 0 0 4px var(--im-hover);
 }
 
 /* Disabled keeps its mark (tick, dot, thumb) in the muted colour, so on and off still read. */
-:is(.im-check, .im-radio, .im-switch)[aria-disabled="true"] {
+:is(.im-check, .im-radio, .im-switch):is([aria-disabled="true"], :disabled) {
   background: transparent;
   border-style: dashed;
   border-color: var(--im-muted);
 }
 
-.im-check[aria-checked="true"][aria-disabled="true"]::after { border-color: var(--im-muted); }
+.im-check:is([aria-checked="true"], :checked:where(:not(:indeterminate))):is([aria-disabled="true"], :disabled)::after { border-color: var(--im-muted); }
 
-.im-check[aria-checked="mixed"][aria-disabled="true"]::after,
-.im-radio[aria-checked="true"][aria-disabled="true"]::after,
-.im-switch[aria-disabled="true"]::after { background: var(--im-muted); }
+.im-check:is([aria-checked="mixed"], :indeterminate):is([aria-disabled="true"], :disabled)::after,
+.im-radio:is([aria-checked="true"], :checked):is([aria-disabled="true"], :disabled)::after,
+.im-switch:is([aria-disabled="true"], :disabled)::after { background: var(--im-muted); }
 
 /* ---------- tabs and segmented ---------- */
 
@@ -606,19 +740,22 @@
   transition: transform var(--im-t-base) var(--im-ease);
 }
 
-.im-tab:where(:not(:disabled, [aria-disabled="true"], [aria-selected="true"])):is(:hover, [data-im-force="hover"]) {
+.im-tab:where(:not(:disabled, [aria-disabled="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"])):is(:hover, [data-im-force="hover"]) {
   color: var(--im-text);
   background: var(--im-hover);
 }
 
 .im-tab:where(:not(:disabled, [aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
 
-.im-tab[aria-selected="true"] {
+/* Selected is drawn once, whatever attribute says it: aria-selected, an aria-current that is not "false", aria-pressed. The
+   exclusion of "false" is in :where(), so each selection rule weighs what [aria-selected] alone did, and the states after it
+   (pressed, disabled) still win by order. */
+.im-tab:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) {
   font-weight: 700;
   color: var(--im-text-hi);
 }
 
-.im-tab[aria-selected="true"]::after { transform: scaleX(1); }
+.im-tab:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"])::after { transform: scaleX(1); }
 
 .im-tab:is(:disabled, [aria-disabled="true"]) {
   color: var(--im-muted);
@@ -628,18 +765,33 @@
 
 .im-tab:is(:disabled, [aria-disabled="true"])::after { display: none; }
 
+/* A segmented control holds buttons (aria-selected) or labels over native radios (label > input[type=radio] + span): a
+   segment is drawn once for both, and a checked radio is the selected segment. The track may be a fieldset. */
 .im-seg {
   display: inline-flex;
   box-sizing: border-box;
   flex: none;
   gap: 2px;
+  margin: 0;
   padding: 2px;
   background: var(--im-field);
   border: 1px solid var(--im-line);
   border-radius: var(--im-r-control);
 }
 
-.im-seg > button {
+.im-seg > label { position: relative; }
+
+/* The radio stays in the form and takes the keys; the label is what is seen. */
+.im-seg > label > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.im-seg > :is(button, label) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -655,21 +807,21 @@
   border-radius: max(0px, calc(var(--im-r-control) - 2px));
 }
 
-.im-seg > button:where(:not(:disabled, [aria-disabled="true"], [aria-selected="true"])):is(:hover, [data-im-force="hover"]) {
+.im-seg > :is(button, label):where(:not(:disabled, [aria-disabled="true"], [aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"], :has(> input:is(:checked, :disabled)))):is(:hover, [data-im-force="hover"]) {
   color: var(--im-text);
   background: var(--im-hover);
 }
 
-.im-seg > button:where(:not(:disabled, [aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
+.im-seg > :is(button, label):where(:not(:disabled, [aria-disabled="true"], :has(> input:disabled))):is(:active, [data-im-force="press"]) { background: var(--im-press); }
 
-.im-seg > button[aria-selected="true"] {
+.im-seg > :is(button, label):is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"], :has(> input:checked)) {
   font-weight: 700;
   color: var(--im-text-hi);
   background: var(--im-selected);
   border-color: color-mix(in srgb, var(--im-accent-text) 55%, transparent);
 }
 
-.im-seg > button:is(:disabled, [aria-disabled="true"]) {
+.im-seg > :is(button, label):is(:disabled, [aria-disabled="true"], :has(> input:disabled)) {
   color: var(--im-muted);
   border-style: dashed;
   border-color: var(--im-line);
@@ -725,20 +877,21 @@
   color: var(--im-text-2);
 }
 
-.im-row:where(:not([aria-selected="true"], [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) { background: var(--im-hover); }
+.im-row:where(:not([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"], [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) { background: var(--im-hover); }
 
-/* Selected: the selection fill and a heavier title, so it is not the colour alone. */
-.im-row[aria-selected="true"] { background: var(--im-selected); }
+/* Selected, whatever attribute says it (a current page, a pressed row): the selection fill and a heavier title, so it is not
+   the colour alone. */
+.im-row:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { background: var(--im-selected); }
 
 .im-row:where(:not([aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
 
-.im-row[aria-selected="true"] .im-row-title {
+.im-row:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) .im-row-title {
   font-weight: 700;
   color: var(--im-text-hi);
 }
 
 /* The selection fill is lighter than the surface under it, so the muted lines on it step up to the second text colour. */
-:is([aria-selected="true"], [aria-current="step"]) :is(.im-row-sub, .im-cell-sub, .im-key) { color: var(--im-text-2); }
+:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) :is(.im-row-sub, .im-cell-sub, .im-key) { color: var(--im-text-2); }
 
 .im-row[aria-disabled="true"] {
   border-style: dashed;
@@ -746,6 +899,36 @@
 }
 
 .im-row[aria-disabled="true"] :is(.im-row-title, .im-row-sub, .im-row-meta) { color: var(--im-muted); }
+
+/* A row of a category (data-im-cat, above) has its mark at its start edge, inside the line ONI draws round a selected row:
+   beside the selection mark, never in its place. Forced colours draw no categorical colour; their selection bar takes
+   this place on a selected row. */
+.im-row[data-im-cat] { position: relative; }
+
+.im-row[data-im-cat]::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--im-s-1);
+  inset-inline-start: 1px;
+  inline-size: 3px;
+  border-radius: var(--im-r-chip);
+  background: var(--im-item-color);
+}
+
+/* A badge (data-im-badge): a dot that says the row wants something, at the end of the row, or on the corner of its rail
+   item in the rail (css/primitives.css). Its tone is the row's data-im-tone, warn when the row has none. A dot alone is
+   colour alone: the row's text says the same (its line, "needs you"), and so does its accessible name. */
+.im-row[data-im-badge] { --im-badge: var(--im-warn); }
+.im-row[data-im-badge][data-im-tone] { --im-badge: var(--im-tone); }
+
+.im-row[data-im-badge]::after {
+  content: "";
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--im-badge);
+}
 
 /* ---------- tree ---------- */
 
@@ -789,13 +972,13 @@
   font-weight: 500;
 }
 
-.im-tree-item:where(:not([aria-selected="true"], [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) { background: var(--im-hover); }
+.im-tree-item:where(:not([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"], [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) { background: var(--im-hover); }
 
-.im-tree-item[aria-selected="true"] { background: var(--im-selected); }
+.im-tree-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { background: var(--im-selected); }
 
 .im-tree-item:where(:not([aria-disabled="true"])):is(:active, [data-im-force="press"]) { background: var(--im-press); }
 
-.im-tree-item[aria-selected="true"] > .im-tree-label {
+.im-tree-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) > .im-tree-label {
   font-weight: 700;
   color: var(--im-text-hi);
 }
@@ -1150,6 +1333,7 @@
   .im-btn,
   .im-icon-btn,
   .im-input,
+  .im-textarea,
   .im-select,
   .im-tab,
   .im-tab::after,
@@ -1165,6 +1349,7 @@
 @media (forced-colors: active) {
   .im-btn,
   .im-input,
+  .im-textarea,
   .im-select,
   .im-seg,
   .im-check,
@@ -1176,14 +1361,22 @@
   .im-key,
   .im-avatar { border-color: ButtonText; }
 
+  /* A badge keeps its tone, as a status dot does (css/base.css): the row's text says the same. */
+  .im-row[data-im-badge]::after { forced-color-adjust: none; }
+
+  /* A pressed button: its fill and its bar vanish (a shadow), so its edge is the system's selection colour. */
+  .im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { border-color: Highlight; }
+
   .im-btn:is(:disabled, [aria-disabled="true"]),
   .im-input:has(> input:disabled),
+  input.im-input:disabled,
+  .im-textarea:disabled,
   .im-select:is(:disabled, [aria-disabled="true"]),
   .im-icon-btn:is(:disabled, [aria-disabled="true"]),
   .im-tab:is(:disabled, [aria-disabled="true"]),
   .im-row[aria-disabled="true"],
   .im-tree-item[aria-disabled="true"],
-  :is(.im-check, .im-radio, .im-switch)[aria-disabled="true"] {
+  :is(.im-check, .im-radio, .im-switch):is([aria-disabled="true"], :disabled) {
     color: GrayText;
     border-color: GrayText;
   }
@@ -1191,19 +1384,19 @@
   /* the text inside a disabled item has a colour of its own, which the system would replace */
   .im-row[aria-disabled="true"] :is(.im-row-title, .im-row-sub, .im-row-meta),
   .im-tree-item[aria-disabled="true"] > .im-tree-label,
-  .im-option:has([aria-disabled="true"]) { color: GrayText; }
+  .im-option:has(:is([aria-disabled="true"], :disabled)) { color: GrayText; }
 
   /* Selected: a Highlight bar drawn inside the item (a bar along the start of a row, a tree item and a table row, along the
      bottom of a segment and a tab). A bar takes no layout, so the box and the text of the item do not move when it is
      selected, and it is not the outline: the outline is the focus ring, which is the outer 2px of the item, so a focused
      selected item shows both. The bars stay 3px, or 2px for the segment, inside that ring. */
-  .im-row[aria-selected="true"],
-  .im-tree-item[aria-selected="true"],
-  .im-seg > button[aria-selected="true"],
+  .im-row:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]),
+  .im-tree-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]),
+  .im-seg > :is(button, label):is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"], :has(> input:checked)),
   .im-table tbody tr[aria-selected="true"] > :first-child { position: relative; }
 
-  .im-row[aria-selected="true"]::before,
-  .im-tree-item[aria-selected="true"]::before,
+  .im-row:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"])::before,
+  .im-tree-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"])::before,
   .im-table tbody tr[aria-selected="true"] > :first-child::before {
     content: "";
     position: absolute;
@@ -1214,7 +1407,7 @@
     background: Highlight;
   }
 
-  .im-seg > button[aria-selected="true"]::after {
+  .im-seg > :is(button, label):is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"], :has(> input:checked))::after {
     content: "";
     position: absolute;
     left: 6px;
@@ -1245,23 +1438,28 @@
 
   .im-progress::before { background: Highlight; }
 
-  .im-check[aria-checked="true"],
-  .im-switch[aria-checked="true"] {
+  .im-check:is([aria-checked="true"], :checked:where(:not(:indeterminate))),
+  .im-switch:is([aria-checked="true"], :checked) {
     background: Highlight;
     border-color: Highlight;
   }
 
-  .im-check[aria-checked="true"]::after { border-color: HighlightText; }
-  .im-radio[aria-checked="true"] { border-color: Highlight; }
+  .im-check:is([aria-checked="true"], :checked:where(:not(:indeterminate)))::after { border-color: HighlightText; }
+  .im-radio:is([aria-checked="true"], :checked) { border-color: Highlight; }
 
-  .im-radio[aria-checked="true"]::after,
-  .im-check[aria-checked="mixed"]::after { background: Highlight; }
+  .im-radio:is([aria-checked="true"], :checked)::after,
+  .im-check:is([aria-checked="mixed"], :indeterminate)::after { background: Highlight; }
 
   .im-switch::after { background: ButtonText; }
-  .im-switch[aria-checked="true"]::after { background: HighlightText; }
+  .im-switch:is([aria-checked="true"], :checked)::after { background: HighlightText; }
 
   .im-input:has(> input[aria-invalid="true"]),
+  input.im-input[aria-invalid="true"],
+  .im-textarea[aria-invalid="true"],
   .im-select[aria-invalid="true"] { border-color: Mark; }
+
+  /* The chevron of a native select is a gradient, which forced colours drop: the browser draws its own, in system colours. */
+  select.im-select { appearance: auto; }
 }
 
 .im-path-field, .im-loader {
@@ -1270,7 +1468,6 @@
   gap: 8px;
 }
 .im-loader { display: inline-flex; }
-textarea.im-input { height: auto; display: block; padding-block: var(--im-s-2); resize: vertical; }
 .im-steps > li:has(> button:only-child) { padding: 0; }
 .im-steps > li > button:only-child {
   display: flex; align-items: center; gap: var(--im-s-2); inline-size: 100%; min-block-size: var(--im-h-control);
@@ -1283,8 +1480,6 @@ textarea.im-input { height: auto; display: block; padding-block: var(--im-s-2); 
 .im-steps > li > button:is(:focus-visible, [data-im-force="focus"]) { outline: 2px solid var(--im-accent-text); outline-offset: -2px; }
 .im-steps > li:has(> button:disabled) { border-style: dashed; }
 .im-steps > li > button:disabled :is(.im-step-index, .im-step-text) { color: var(--im-muted); }
-.im-input:is(input, textarea)[aria-invalid="true"] { border-color: var(--im-err); }
-.im-input:is(input, textarea):disabled { border-style: dashed; color: var(--im-muted); }
 .im-steps > li[data-im-step="failed"] .im-step-index { color: var(--im-err); border-color: currentColor; }
 .im-steps > li[data-im-step="skipped"] .im-step-text { color: var(--im-muted); }
 .im-steps .im-step-sub { white-space: normal; overflow-wrap: anywhere; }

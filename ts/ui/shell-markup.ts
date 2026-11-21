@@ -21,19 +21,22 @@ export function tabNavigationHtml(tabs: readonly NavigationTab[], selected: stri
   }).join('')}</nav>`;
 }
 
-export interface WindowButtonLabels { minimize: string; maximize: string; close: string }
-export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Minimize window', maximize: 'Maximize window', close: 'Close window' }): string {
+/** The words of the window buttons: each one's accessible name and its tooltip (`title`), as an icon-only control has both. */
+export interface WindowButtonLabels { minimize: string; maximize: string; close: string; minimizeTitle: string; maximizeTitle: string; closeTitle: string }
+export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Minimize window', maximize: 'Maximize window', close: 'Close window', minimizeTitle: 'Minimize', maximizeTitle: 'Maximize', closeTitle: 'Close' }): string {
   const svg = (body: string) => `<svg class="im-icon" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
   const icons = {
     minimize: svg('<path d="M5 12h14"/>'),
     maximize: svg('<rect x="6" y="6" width="12" height="12"/>') + svg('<path d="M8 8V4h12v12h-4M4 8h12v12H4z"/>'),
     close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   };
-  return `<div class="im-window-buttons">${(['minimize', 'maximize', 'close'] as const).map(name => `<button type="button" class="im-window-button" data-im-window="${name}" aria-label="${escapeHtml(labels[name])}">${icons[name]}</button>`).join('')}</div>`;
+  const titles = { minimize: labels.minimizeTitle, maximize: labels.maximizeTitle, close: labels.closeTitle };
+  return `<div class="im-window-buttons">${(['minimize', 'maximize', 'close'] as const).map(name => `<button type="button" class="im-window-button" data-im-window="${name}" aria-label="${escapeHtml(labels[name])}" title="${escapeHtml(titles[name])}">${icons[name]}</button>`).join('')}</div>`;
 }
 
 export interface TitlebarOptions {
-  brand: { name: string; image?: string };
+  /** The product's name: the title bar shows its initial in capitals in the accent's square (`im-mark`), then the name. */
+  brand: { name: string };
   /** The button that opens the sidebar as a drawer under 620 (`sidebarDrawer`): its name and the id of the sidebar. */
   sidebarToggle?: { label: string; controls: string };
   navigationHtml?: string;
@@ -42,9 +45,21 @@ export interface TitlebarOptions {
   commands?: { label: string; action: string; shortcut?: string };
   windowControls?: boolean | WindowButtonLabels;
 }
+/**
+ * The initial the mark at the top left shows for a product's name: its first letter, in capitals, or '' when the name
+ * has no letter (an emoji is not one). `titlebarHtml` writes it in `im-mark`.
+ */
+export function brandInitial(name: string): string {
+  const letter = Array.from(name.trim().normalize('NFC')).find(character => /\p{L}/u.test(character));
+  // toUpperCase, not toLocaleUpperCase: the letter must not change with the machine (a Turkish default makes i a İ).
+  return letter ? Array.from(letter.toUpperCase())[0] : '';
+}
+
 export function titlebarHtml(options: TitlebarOptions): string {
   const { brand, sidebarToggle, views, commands } = options;
-  const brandHtml = brand.image ? `<img class="im-brand-image" src="${escapeHtml(brand.image)}" alt="${escapeHtml(brand.name)}" data-tauri-drag-region>` : `<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
+  const initial = brandInitial(brand.name);
+  const markHtml = initial ? `<span class="im-mark" aria-hidden="true" data-tauri-drag-region>${escapeHtml(initial)}</span>` : '';
+  const brandHtml = `${markHtml}<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
   const toggleHtml = sidebarToggle ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${escapeHtml(sidebarToggle.label)}" title="${escapeHtml(sidebarToggle.label)}" aria-expanded="false" aria-controls="${escapeHtml(sidebarToggle.controls)}">${iconHtml('sidebar')}</button>` : '';
   return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${toggleHtml}${options.navigationHtml ?? ''}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
 }
@@ -159,14 +174,24 @@ export interface SidebarOptions {
   rowsHtml: string;
   /** The two names of the header's fold button (`sidebarCollapse`). Without them the header has no fold button. */
   collapse?: { collapse: string; expand: string };
+  /** How many things the list holds: an `im-count` after the title. Without it the header has no count. */
+  count?: number;
+  /** Trusted component markup under the list: the children of an `im-panel-foot`. Not shown in the rail. */
+  footHtml?: string;
 }
-/** The sidebar region: a titled panel whose body is a listbox of rows, with the button that folds it into the rail. */
+/**
+ * The sidebar region: a titled panel whose body is a listbox of rows, with the button that folds it into the rail, a
+ * count in its header and a foot under its list when they are given. `renderShellFrame` repaints them all.
+ */
 export function sidebarHtml(options: SidebarOptions): string {
   const id = escapeHtml(options.id);
   const label = escapeHtml(options.label);
   const fold = options.collapse
     ? `<button type="button" class="im-icon-btn im-sidebar-collapse" aria-label="${escapeHtml(options.collapse.collapse)}" title="${escapeHtml(options.collapse.collapse)}" aria-expanded="true" aria-controls="${id}" data-im-label-collapse="${escapeHtml(options.collapse.collapse)}" data-im-label-expand="${escapeHtml(options.collapse.expand)}">${iconHtml('sidebar')}</button>`
     : '';
-  return `<section class="im-panel im-sidebar" id="${id}" aria-label="${label}"><header class="im-panel-header"><h4 class="im-panel-title">${label}</h4><span class="im-spacer"></span>${fold}</header>`
-    + `<div class="im-panel-body im-list" role="listbox" aria-label="${label}">${options.rowsHtml}</div></section>`;
+  const count = typeof options.count === 'number' && Number.isFinite(options.count) ? `<span class="im-count">${options.count}</span>` : '';
+  return `<section class="im-panel im-sidebar" id="${id}" aria-label="${label}"><header class="im-panel-header"><h4 class="im-panel-title">${label}</h4>${count}<span class="im-spacer"></span>${fold}</header>`
+    + `<div class="im-panel-body im-list" role="listbox" aria-label="${label}">${options.rowsHtml}</div>`
+    + (options.footHtml === undefined ? '' : `<div class="im-panel-foot">${options.footHtml}</div>`)
+    + '</section>';
 }

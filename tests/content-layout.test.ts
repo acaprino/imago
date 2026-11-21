@@ -15,15 +15,31 @@ const REMOVED = [
   'im-nav-entry', 'im-nav-line', 'im-nav-mark', 'im-nav-detail', 'im-signal', 'im-docked-inspector', 'im-inspection-rail',
   'im-detail-panel', 'im-document', 'im-toolbar', 'im-panel-strip', 'im-master-detail',
 ];
-const REMOVED_PROPERTIES = ['--im-nav-width', '--im-item-color', '--im-item-ink', '--im-inspector-size'];
+const REMOVED_PROPERTIES = ['--im-nav-width', '--im-item-ink', '--im-inspector-size'];
+
+/** The rules of the stylesheet, each selector with the body that follows it (no nesting: an at-rule's prelude goes with its first rule). */
+const RULES = [...ALL_CSS.replace(/\/\*[^]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({ selector: match[1].replace(/^[^]*\{/, '').trim(), body: match[2] }));
 
 test('the stylesheet has one frame: no rule is left for the removed frames or their parts', () => {
   for (const name of REMOVED) assert.doesNotMatch(ALL_CSS, new RegExp('\\.' + name + '(?![\\w-])'), `css/ still styles .${name}`);
   for (const name of REMOVED_PROPERTIES) assert.doesNotMatch(ALL_CSS, new RegExp(name + '(?![\\w-])'), `css/ still reads ${name}`);
-  assert.doesNotMatch(ALL_CSS, /\[data-im-badge\]/, 'css/ still draws data-im-badge');
   for (const name of ['im-aside-layout', 'im-page-content', 'im-content-toolbar', 'im-section-heading', 'im-definition-list']) {
     assert.match(ALL_CSS, new RegExp('\\.' + name + '(?![\\w-])'), `.${name} stays: page content keeps its helpers`);
   }
+});
+
+test('a thing among others of its kind takes its colour from data-im-cat alone, and a badge is drawn on a row', () => {
+  const setting = RULES.filter((rule) => /--im-item-color\s*:/.test(rule.body));
+  assert.equal(setting.length, 8, 'one rule per categorical colour sets --im-item-color, and nothing else does');
+  for (let n = 1; n <= 8; n++) {
+    const rule = setting.find((one) => one.selector.includes(`[data-im-cat="${n}"]`));
+    assert.ok(rule, `a rule for data-im-cat="${n}"`);
+    assert.match(rule.body, new RegExp(`--im-item-color:\\s*var\\(--im-cat-${n}\\);`));
+    for (const name of ['im-row', 'im-rail-item', 'im-avatar', 'im-dot', 'im-chip']) assert.match(rule.selector, new RegExp(`\\.${name}(?![\\w-])`), `${name} takes data-im-cat="${n}"`);
+  }
+  const badges = RULES.flatMap((rule) => rule.selector.split(',')).filter((part) => part.includes('data-im-badge'));
+  assert.ok(badges.length >= 3, 'the badge is drawn');
+  for (const part of badges) assert.match(part, /\.im-row\[data-im-badge\]/, `${part.trim()}: a badge is a row's`);
 });
 
 test('the breakpoints of the layout files are container queries on the shell at 1000, 850 or 620', () => {

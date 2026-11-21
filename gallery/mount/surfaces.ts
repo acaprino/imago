@@ -17,6 +17,7 @@ import {
   openMenu,
   openPalette,
   openSheet,
+  PALETTE_COMMAND,
   type MenuItem,
   type Registry,
 } from '../../ts/ui/index.ts';
@@ -87,7 +88,7 @@ function bindable(display: string | undefined): string | undefined {
   return /^(↵|enter|space)$/i.test(last) ? undefined : parts.join('+');
 }
 
-// Wires every surface on the live shell: the palette on the title bar's command button (Ctrl+K is `mountApp`'s), the
+// Wires every surface on the live shell: the palette on the title bar's command button (the command is `mountApp`'s), the
 // Views menu, a destructive action with its dialog, an undoable one with its notice. `data-act` is what the
 // shell markup carries (`pal`, `kill`, `undo`); `data-im-act` names the same hooks for any markup that uses them.
 export default function mount({ shell, app, registry }: MountContext): () => void {
@@ -108,7 +109,12 @@ export default function mount({ shell, app, registry }: MountContext): () => voi
     // A command never runs under an open surface: the key belongs to the surface.
     registry.register({ id: `action:${name}`, title: action.text, keys: bindable(action.keys), run: () => { if (!busy()) ran(action.text); } });
   }
-  const openCommandPalette = (): void => void openPalette(shell, registry, { placeholder: data.strings.palettePlaceholder, empty: data.strings.paletteEmpty });
+  // The title bar's command button runs the palette command `mountApp` registered, as Ctrl+K does: the same palette,
+  // with the words given to `mountApp` only.
+  const openCommandPalette = (): void => {
+    const command = registry.get(PALETTE_COMMAND);
+    if (command && command.when?.() !== false) void command.run();
+  };
 
   const viewsMenu = (anchor: HTMLElement): void => {
     openMenu(anchor, data.tabs.map((tab, index): MenuItem => ({ label: tab, run: () => selectTab(index) })));

@@ -5,9 +5,13 @@
    They are written as ranges, so no fractional width falls between two blocks. */
 
 /* ---------- the shell ---------- */
-/* A shell put directly in the page's body fills the window: the page has no margin of its own. */
-html:has(> body > .im-shell),
-body:has(> .im-shell) { block-size: 100%; margin: 0; }
+/* A shell fills the window wherever the app mounts it: directly in the page's body, or in a root of the app's own (the
+   <div id="app"> React renders into) that carries im-root, as every element between the body and the shell does. The
+   page then takes the window's height and has no margin of its own. A page that only shows a shell among other things
+   (the gallery) keeps its own height. */
+html:has(> body > :is(.im-shell, .im-root)),
+body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
+.im-root { block-size: 100%; }
 .im-shell {
   --im-pane-pad: var(--im-s-4);
   --im-rail-icon: 20px;
@@ -39,6 +43,7 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
 /* The brand gives way before the window buttons do: at the width of a 500px window at 200% zoom the name is cut with an
    ellipsis, then goes. */
 .im-brand { display: flex; flex: 0 1 auto; align-items: center; gap: var(--im-s-2); min-inline-size: 0; white-space: nowrap; }
+/* The mark is the initial of the product's name, in capitals, in the square of the app's accent. */
 .im-mark {
   display: grid;
   flex: none;
@@ -50,8 +55,13 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
   border-radius: var(--im-r-control);
   /* ONI cuts two corners of the square, as it cuts its buttons; Smooth's cut is 0 and this is the whole square */
   clip-path: polygon(var(--im-cut-sm) 0, 100% 0, 100% calc(100% - var(--im-cut-sm)), calc(100% - var(--im-cut-sm)) 100%, 0 100%, 0 var(--im-cut-sm));
+  font: 700 var(--im-fs-body)/1 var(--im-font-head);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.im-mark svg { inline-size: 14px; block-size: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+/* The grid centres the letter's line, and Bahnschrift's capitals sit at the top of it, 1.6px above the square's
+   middle: ONI moves the line 2px down. (The @supports block below centres the capitals themselves, and takes this off.) */
+[data-im-look="oni"] .im-mark { padding-block-start: var(--im-s-1); }
 .im-wordmark {
   min-inline-size: 0;
   overflow: hidden;
@@ -60,6 +70,25 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-text-hi);
+}
+/* Where the engine can trim a box to its capitals (WebView2 from 133), the letter and the name are drawn by them: the
+   letter's box is the band from the top of a capital to the baseline, centred in the square, so its ink sits in the
+   middle whatever the font's ascent and descent (centring the font's box, as the grid above does, puts the letter a
+   little low in Segoe UI and high in Bahnschrift); the name's box is that band too, with room above and below for
+   accents and descenders, and the brand centres the two boxes, so the square is level with the name's capitals in both
+   looks (ONI's larger, spaced name sat a pixel above the square's middle). Without it, the grid centres the letter. */
+@supports (text-box: trim-both cap alphabetic) {
+  .im-mark {
+    display: block;
+    align-content: center;
+    text-align: center;
+    text-box: trim-both cap alphabetic;
+  }
+  [data-im-look="oni"] .im-mark { padding-block-start: 0; }
+  .im-wordmark {
+    padding-block: var(--im-s-2);
+    text-box: trim-both cap alphabetic;
+  }
 }
 .im-titlebar .im-tabs { align-self: stretch; align-items: center; }
 .im-titlebar .im-tab { block-size: 100%; border-radius: 0; }
@@ -140,8 +169,8 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
 }
 /* The content region takes focus from the skip link (tabindex -1) without a ring round the whole region. */
 .im-columns > main[tabindex="-1"]:focus { outline: 0; }
-/* data-im-inspector="wide" on the shell: the inspector is 360, the top of the range the design allows. */
-.im-shell[data-im-inspector="wide"] { --im-w-inspector: 360px; }
+/* data-im-inspector="wide" on the shell: the inspector is --im-w-inspector-wide, 360, the top of the range the design allows. */
+.im-shell[data-im-inspector="wide"] { --im-w-inspector: var(--im-w-inspector-wide); }
 .im-actions {
   display: flex;
   align-items: center;
@@ -196,8 +225,13 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
 .im-panel-tools > .im-note { flex: 1 1 auto; }
 .im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
 .im-panel-foot { display: flex; flex: none; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3) var(--im-pane-pad); border-top: 1px solid var(--im-line-soft); }
-/* A row's icon for the rail is shown only in the rail (see the 850 breakpoint). */
-.im-row > .im-rail-item { display: none; }
+/* The inspector's content is a panel. Its header, body and foot are the inspector's own children (a fragment opened in
+   it), or the children of the one element it shows (a form): that element is then laid out as the panel is, so the body
+   scrolls between the header and the foot. */
+.im-inspector > :has(> .im-panel-body) { display: flex; flex: 1 1 auto; flex-direction: column; min-block-size: 0; }
+/* A row's icon for the rail is shown only in the rail (see the 850 breakpoint). A row whose control is a check has the
+   check as its rail item: it is shown in the whole sidebar too, and ticked in the rail as there. */
+.im-row > .im-rail-item:not(.im-check) { display: none; }
 /* The button that folds the sidebar into the rail is shown from 850 up, where the rail is a choice and not a necessity. */
 .im-sidebar .im-sidebar-collapse { display: none; }
 .im-list { display: flex; flex-direction: column; gap: 1px; padding: 0 var(--im-list-pad) var(--im-s-2); }
@@ -302,8 +336,44 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
   .im-sidebar .im-panel-tools,
   .im-sidebar .im-panel-foot { display: none; }
   .im-sidebar .im-row > :not(.im-rail-item, .im-row-text) { display: none; }
-  .im-sidebar .im-row > .im-rail-item { display: grid; }
-  .im-sidebar .im-row > .im-rail-item:not(.im-avatar) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
+  .im-sidebar .im-row > .im-rail-item:not(.im-check) { display: grid; }
+  .im-sidebar .im-row > .im-rail-item:not(.im-avatar, .im-check) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
+  /* What is under a rail item: the row's fill (none at rest, hovered, selected, pressed, as css/controls.css draws it)
+     over the sidebar's ground. A mark on the item, the ring of the selection or the badge, is set off from the item's
+     fill (a category, the accent of a ticked check) by a ring of it, so it never stands on that fill alone. */
+  .im-sidebar .im-row { --im-rail-ground: var(--im-ground); --im-rail-fill: transparent; }
+  [data-im-look="oni"] .im-sidebar .im-row { --im-rail-ground: var(--im-sheet); }
+  .im-sidebar .im-row:where(:not([aria-disabled="true"])):where(:hover, [data-im-force="hover"]) { --im-rail-fill: var(--im-hover); }
+  .im-sidebar .im-row:where([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"]) { --im-rail-fill: var(--im-selected); }
+  .im-sidebar .im-row:where(:not([aria-disabled="true"])):where(:active, [data-im-force="press"]) { --im-rail-fill: var(--im-press); }
+  /* A row's badge is a dot on the corner of its rail item, 3px out, not at the end of the row; a press on it is the
+     item's. --im-rail-half is half the item's box: an icon's, an avatar's (26), a check's (16). */
+  .im-sidebar .im-row[data-im-badge] { --im-rail-half: calc(var(--im-rail-icon) / 2); }
+  .im-sidebar .im-row[data-im-badge]:has(> .im-avatar.im-rail-item) { --im-rail-half: 13px; }
+  .im-sidebar .im-row[data-im-badge]:has(> .im-check.im-rail-item) { --im-rail-half: 8px; }
+  .im-sidebar .im-row[data-im-badge]::after {
+    position: absolute;
+    inset-block-start: calc(50% - var(--im-rail-half) - 3px);
+    inset-inline-start: calc(50% + var(--im-rail-half) - 5px);
+    pointer-events: none;
+    box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground);
+  }
+  /* In the rail a category is the rail item's own fill: the row's start mark is not drawn there, where it would cover the
+     ring round a selected item (forced colours, which draw no category, keep that place for their selection bar). */
+  @media (forced-colors: none) {
+    .im-sidebar .im-row[data-im-cat]::before { content: none; }
+  }
+  /* A check is all a row with a check shows in the rail: its target is 24 by 24, centred on its 16px box whatever the
+     width of its edge (an inset would be counted from inside the edge). */
+  .im-sidebar .im-row > .im-check.im-rail-item::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    inline-size: 24px;
+    block-size: 24px;
+    translate: -50% -50%;
+  }
   .im-sidebar .im-row > .im-row-text {
     position: absolute;
     inline-size: 1px;
@@ -312,10 +382,15 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
-  /* the selection is a heavier line, or a ringed avatar, as well as a fill */
+  /* Every row of the rail is as tall as a two-line row: it shows one item whatever its lines, and the ring round a selected
+     item stays a pixel or more inside the row's focus ring. */
+  .im-sidebar .im-row { position: relative; justify-content: center; min-block-size: var(--im-h-row-2); padding-inline: 0; }
+  /* the selection is a heavier line, or a ring round an avatar or a check, apart from it by a gap of what is under the
+     row, as well as a fill */
   .im-sidebar .im-row[aria-selected="true"] > .im-rail-item .im-icon { stroke-width: 2.4; }
-  .im-sidebar .im-row[aria-selected="true"] > .im-avatar.im-rail-item { border-color: var(--im-accent-text); font-weight: 700; }
+  .im-sidebar .im-row:is([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"]) > :is(.im-avatar, .im-check).im-rail-item {
+    box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground), 0 0 0 4px var(--im-accent-text);
+  }
   .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
 }

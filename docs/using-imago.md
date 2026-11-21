@@ -87,7 +87,7 @@ sidebar sets `data-im-sidebar="off"` and writes none.
 <div class="im-shell" data-im-sidebar="on">
   <a class="im-shell-skip-link" href="#main">Skip to content</a>
   <header class="im-titlebar" data-tauri-drag-region>
-    <div class="im-brand" data-tauri-drag-region><span class="im-mark" data-tauri-drag-region><svg viewBox="0 0 24 24" aria-hidden="true" data-tauri-drag-region>…</svg></span><span class="im-wordmark" data-tauri-drag-region>Name</span></div>
+    <div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>N</span><span class="im-wordmark" data-tauri-drag-region>Name</span></div>
     <button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="sidebar">…</button>
     <nav class="im-tabs" role="tablist" aria-label="Views">
       <button type="button" role="tab" class="im-tab" aria-selected="true">First view</button>
@@ -138,7 +138,14 @@ goes and comes back is the same element again, in its place. The content region 
 `contentToolsHtml` and `contentFootHtml` give its header, tools and foot around the body, which scrolls. Notes:
 
 - `im-shell` fills its parent (`block-size: 100%`) and measures its own width, so the breakpoints follow the window.
-  Put it directly in `<body>`, or in an element that fills the window.
+  Put it directly in `<body>`, or in a root of the app's own that carries `im-root` (`<div id="app" class="im-root">`,
+  where React renders), as every element between the body and the shell does. In a wrapper without it the shell is as
+  tall as its title bar and its content region 0 pixels; `renderShellFrame` and the React `Shell` say so once on the
+  console (`checkShellFill`).
+- The brand is the mark and the name: `im-mark` holds one letter, the initial of the product's name in capitals, on the
+  app's accent, and `im-wordmark` the name. No drawing and no logo: the app's logo is what Windows shows (the icons of
+  its executables). `titlebarHtml({ brand: { name } })` writes the two; `imago-check` reports a brand that is not
+  this markup (rule `brand-mark`).
 - `im-content` has no style of its own. It is the hook the `F6` key looks for, so every window that has a content
   region carries it.
 - Every sidebar row carries an `im-rail-item`: it is all the row shows in the rail. It is the row's own icon, as in the
@@ -147,8 +154,8 @@ goes and comes back is the same element again, in its place. The content region 
   tooltip, and its text stays in the rail, hidden, as the accessible name.
 - Tauri starts a window drag only when the pressed element itself carries `data-tauri-drag-region`, and nothing in
   `css/` changes what a child does with the pointer. Put the attribute on each element that should drag: the title
-  bar, the spacer, and the brand with everything inside it (`im-brand`, `im-mark`, the `svg` and each of its shapes,
-  `im-wordmark`), as `markDragRegion` in `gallery/mount/desktop.ts` does with `.im-brand *`. Leave the buttons, the
+  bar, the spacer, and the brand with everything inside it (`im-brand`, `im-mark`, `im-wordmark`), as `titlebarHtml`
+  writes them and as `markDragRegion` in `gallery/mount/desktop.ts` does with `.im-brand *`. Leave the buttons, the
   tabs and the command field unmarked. The drag needs two permissions: see "The capabilities" in section 5. Whether
   the window drags on a real window is in [verification.md](verification.md).
 - The inspector is closed with `hidden`; the content then takes its room. `inspector(shell).open(content)` opens it.
@@ -160,8 +167,8 @@ goes and comes back is the same element again, in its place. The content region 
 `mountWindowControls` finds the buttons by `data-im-window="minimize"`, `"maximize"` and `"close"` inside the title
 bar. A button that is missing is skipped. On the maximize button the page sets `data-im-os` (`hover` or `pressed`,
 from Windows' own hit test), and, when the app gives `onMaximized`, `data-im-maximized` (`true` or `false`) with a
-matching `aria-label` and `title`. The maximize button holds two icons, maximize first and restore last: the CSS shows
-one of them by `data-im-maximized`.
+matching `aria-label` and `title`, in the words of the option `labels` (English when it is not given). The maximize
+button holds two icons, maximize first and restore last: the CSS shows one of them by `data-im-maximized`.
 
 ## 5. The calls
 
@@ -171,7 +178,7 @@ A call that sets something up returns the function that undoes it. The calls tha
 
 | Call | What it does |
 |---|---|
-| `applyLook(root, state, deps)` | The look of the window. `state` is `{ app, look, theme, glass }`; `deps` is `{ systemIsDark?, setWindowTheme? }`. `setWindowTheme` receives `light`, `dark` or `system` and is called only when the word changed |
+| `applyLook(root, state, deps)` | The look of the window. `state` is `{ app, look, theme, glass }`; `deps` is `{ systemIsDark?, setWindowTheme? }`. `setWindowTheme` receives the window theme (`light`, `dark` or `system`) and `{ look, resolved }`, the look and the theme the page draws (`light` or `dark`), which the window uses to tint its acrylic on Windows 10. It is called again only when one of the three changed: under `system`, a change of Windows' colours changes `resolved`, so the app calls `applyLook` again at that change (section 3) |
 | `parseLook(value)`, `parseTheme(value)` | A stored value back into a look or a theme choice. A stale or corrupt value is the default |
 | `resolveTheme(choice, systemIsDark)`, `windowThemeFor(look, choice)` | The theme the page draws, and the theme the native window is asked for |
 | `guardDesktop(document, { allowReloadIn })` | With `keyPhase` set to `bubble`, register app shortcuts before the guard to handle keys such as Ctrl+F. The default is capture. Browser keys do nothing, the page menu stays out of the chrome, the mouse's back and forward buttons do nothing, images and links are not dragged out. `allowReloadIn` is a selector for places that run their own keys and menus, such as a terminal. The guard refuses F5, F12, Ctrl+R, Ctrl+Shift+I, J and C and the page menu in every build, so under `tauri dev` it also takes away reload and DevTools: call it only outside development, as the sketch below does |
@@ -194,7 +201,7 @@ import { tauriWindowApi } from '@acaprino/imago/tauri';
 const onError = (action: string, error: unknown) => notify(shell, `${action} failed: ${String(error)}`, { tone: 'err' });
 const api = tauriWindowApi(onError);
 applyLook(document.documentElement, { app: 'muro', look, theme, glass: true }, {
-  setWindowTheme: (word) => invoke('set_window_theme', { theme: word }),
+  setWindowTheme: (word, detail) => invoke('set_window_theme', { theme: word, look: detail.look, resolved: detail.resolved }),
 });
 // The guard refuses reload and DevTools too: leave it out under `tauri dev`.
 if (!import.meta.env.DEV) guardDesktop(document, { allowReloadIn: '.xterm' });

@@ -21,6 +21,7 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brandMark } from './brand.mjs';
 import { packageNames } from './names.mjs';
 import * as rules from './rules.mjs';
 import { importsOf, parseSource, SCRIPT_EXTENSIONS, SOURCE_EXTENSIONS } from './source.mjs';
@@ -398,6 +399,7 @@ function checkApp(root, findings, exceptions, notes) {
       findings.push(...rule(source));
     }
     for (const rule of [rules.literalColor, rules.literalFontSize, rules.literalSpace]) findings.push(...rule(source, properties));
+    findings.push(...brandMark(source));
   }
   notes.push(...rules.propertyNotes(properties));
   for (const source of [...sources, ...tests]) {

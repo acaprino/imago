@@ -34,7 +34,7 @@ test('wizard composition escapes text, references its progress, and leaves actio
 test('choice rows use native labeled checkboxes and retain disabled and checked states', () => {
   const html = choiceRowsHtml([{ name: 'pick', value: 'x"', label: '<Item>', checked: true, disabled: true, hintHtml: '<code>component output</code>' }]);
   assert.match(html, /im-choice-rows/);
-  assert.match(html, /<li><label class="im-option"><input type="checkbox" name="pick" value="x&quot;" checked disabled>/);
+  assert.match(html, /<li><label class="im-option"><input type="checkbox" class="im-check" name="pick" value="x&quot;" checked disabled>/);
   assert.match(html, /<strong>&lt;Item&gt;<\/strong><small><code>component output<\/code><\/small>/);
 });
 

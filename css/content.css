@@ -30,11 +30,22 @@
 .im-block { display: block; }
 .im-shell-skip-link { position: absolute; top: -100px; left: 8px; }
 .im-shell-skip-link:focus { top: 8px; z-index: 50; padding: 8px 12px; background: var(--im-sheet); border: 1px solid var(--im-line); border-radius: var(--im-r-control); }
-.im-brand-image { height: 28px; max-width: 84px; object-fit: contain; flex: none; }
 /* A page in the content region's panel body, which scrolls: the padding of the region round a column of 1180 (860
    narrow). The measure is the column's own: the padding is outside it. */
 .im-page-content { box-sizing: content-box; max-width: 1180px; margin: 0 auto; padding: var(--im-s-5); }
 .im-page-content--narrow { max-width: 860px; }
+/* A page is content: its text can be selected and copied (a path, a commit, an id), as im-content-text can elsewhere in
+   the shell. The controls on it are chrome, as everywhere: a button and a select, which are always a control, the
+   package's controls and their parts (the box of a field round its input, not the input), and every role of a control.
+   A link, a label, a summary or a key cap that holds prose is content; inside a control it is the control's. */
+.im-page-content { -webkit-user-select: text; user-select: text; }
+.im-page-content :is(button, select,
+  .im-btn, .im-icon-btn, .im-tab, .im-seg, .im-option, .im-row, .im-tree-item, .im-menu-item, .im-field-label, .im-input:not(input), .im-chip, .im-count,
+  [role="button"], [role="tab"], [role="treeitem"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"],
+  [role="switch"], [role="checkbox"], [role="radio"]) {
+  -webkit-user-select: none;
+  user-select: none;
+}
 .im-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .im-page-heading p { color: var(--im-muted); margin-top: 2px; }
 .im-action-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -128,8 +139,7 @@
 .im-choice-list { max-height: 420px; overflow: auto; }
 .im-choice-list button { display: grid; gap: 1px; width: 100%; padding: 9px 12px; border-bottom: 1px solid var(--im-line); }
 .im-choice-list li:last-child button { border-bottom: 0; }
-.im-choice-list button:hover { background: var(--im-hover); }
-.im-choice-list button[aria-pressed="true"] { background: var(--im-chip); box-shadow: inset 2px 0 0 var(--im-accent-text); }
+.im-choice-list button:not(.im-btn):hover { background: var(--im-hover); }
 .im-choice-list small { overflow-wrap: anywhere; }
 @container im-shell (width < 1000px) {
   .im-aside-layout { grid-template-columns: minmax(0,1fr); }

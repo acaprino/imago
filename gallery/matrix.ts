@@ -1,8 +1,9 @@
 // The state matrix of the gallery: one row for every control of gallery/manifest.ts, one column for every state, and in
 // each cell the control as the package draws it. Hover, pressed and focus are forced with data-im-force, which
 // css/controls.css answers with the same rule as the pseudo-class; every other state is the real attribute
-// (disabled, aria-busy, aria-invalid, readonly, aria-selected, aria-checked). The markup follows the contract at the
-// top of css/controls.css, and tests/gallery/controls.mjs measures it.
+// (disabled, aria-busy, aria-invalid, readonly, aria-selected, aria-pressed, aria-checked, checked). A control drawn on a
+// native element has a row of its own under its ARIA twin (gallery/manifest.ts, NATIVE_TWINS). The markup follows the
+// contract at the top of css/controls.css, and tests/gallery/controls.mjs measures it.
 
 import { noteHtml } from '../ts/ui/shell-markup.ts';
 import { CONTROLS, type State } from './manifest.ts';
@@ -27,13 +28,20 @@ const LABELS: Record<string, string> = {
   'button-confirm-danger': 'Confirming danger button',
   'icon-button': 'Icon button',
   field: 'Field',
+  'field-bare': 'Field, the class on the input',
+  textarea: 'Text area',
   search: 'Search',
   select: 'Select',
+  'select-native': 'Select, native',
   checkbox: 'Checkbox',
+  'checkbox-native': 'Checkbox, native',
   radio: 'Radio',
+  'radio-native': 'Radio, native',
   switch: 'Switch',
+  'switch-native': 'Switch, native',
   tab: 'Tab',
   segmented: 'Segmented',
+  'segmented-native': 'Segmented, native radios',
   row: 'Row',
   tree: 'Tree',
   'table-row': 'Table row',
@@ -85,7 +93,8 @@ const BUTTONS: Record<string, { modifier: string; label: string; icon: string }>
 function button(control: string, state: State): string {
   const { modifier, label, icon: name } = BUTTONS[control];
   const mark = state === 'busy' ? '<span class="im-spinner" aria-hidden="true"></span>' : icon(name);
-  const attrs = (state === 'disabled' ? ` disabled title="${REASON}"` : '') + (state === 'busy' ? ' aria-busy="true"' : '');
+  const attrs = (state === 'disabled' ? ` disabled title="${REASON}"` : '') + (state === 'busy' ? ' aria-busy="true"' : '') +
+    (state === 'selected' ? ' aria-pressed="true"' : '');
   return `<button type="button" class="im-btn${modifier}" tabindex="-1"${force(state)}${attrs}>${mark}<span>${label}</span></button>`;
 }
 
@@ -108,6 +117,31 @@ function field(state: State): string {
   return `<div class="im-field"><label class="im-field-label" for="${input}">Folder</label><span class="im-input im-input--code"${force(state)}><input id="${input}" type="text" value="${value}" tabindex="-1"${attrs}></span>${message}</div>`;
 }
 
+// The same field with im-input on the input itself, as uiInput() writes it: no box round it, the same drawing and states.
+function bareField(state: State): string {
+  const input = uid('field-bare', state, 'input');
+  const error = uid('field-bare', state, 'error');
+  const attrs =
+    (state === 'disabled' ? ' disabled' : '') +
+    (state === 'readonly' ? ' readonly' : '') +
+    (state === 'invalid' ? ` aria-invalid="true" aria-describedby="${error}"` : '');
+  const value = state === 'invalid' ? 'C:/Users/you/.claud' : 'C:/Users/you/.claude';
+  const message = state === 'invalid' ? `<span class="im-field-error" id="${error}">Error: this folder does not exist.</span>` : '';
+  return `<div class="im-field"><label class="im-field-label" for="${input}">Folder</label><input class="im-input im-input--code" id="${input}" type="text" value="${value}" tabindex="-1"${force(state)}${attrs}>${message}</div>`;
+}
+
+// The field's drawing on a text area: the same states, on the element itself.
+function textarea(state: State): string {
+  const input = uid('textarea', state, 'input');
+  const error = uid('textarea', state, 'error');
+  const attrs =
+    (state === 'disabled' ? ' disabled' : '') +
+    (state === 'readonly' ? ' readonly' : '') +
+    (state === 'invalid' ? ` aria-invalid="true" aria-describedby="${error}"` : '');
+  const message = state === 'invalid' ? `<span class="im-field-error" id="${error}">Error: say what the change does.</span>` : '';
+  return `<div class="im-field"><label class="im-field-label" for="${input}">Note</label><textarea class="im-textarea" id="${input}" rows="2" tabindex="-1"${force(state)}${attrs}>Rename the folder</textarea>${message}</div>`;
+}
+
 function search(state: State): string {
   const disabled = state === 'disabled' ? ' disabled' : '';
   return `<label class="im-input"${force(state)}>${icon('search')}<input type="search" placeholder="Search this view" aria-label="Search this view" tabindex="-1"${disabled}><kbd class="im-key">Ctrl F</kbd></label>`;
@@ -118,6 +152,12 @@ function select(state: State): string {
   const value = uid('select', state, 'value');
   const disabled = state === 'disabled' ? ' disabled' : '';
   return `<div class="im-field"><span class="im-field-label" id="${label}">Harness</span><button type="button" class="im-select" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="${label} ${value}" tabindex="-1"${force(state)}${disabled}><span id="${value}">Codex</span>${icon('chev')}</button></div>`;
+}
+
+function nativeSelect(state: State): string {
+  const id = uid('select-native', state, 'select');
+  const disabled = state === 'disabled' ? ' disabled' : '';
+  return `<div class="im-field"><label class="im-field-label" for="${id}">Harness</label><select class="im-select" id="${id}" tabindex="-1"${force(state)}${disabled}><option>Codex</option><option>Claude Code</option></select></div>`;
 }
 
 // ---- check, radio, switch ----------------------------------------------------------------------------------------
@@ -142,6 +182,26 @@ function option(kind: 'check' | 'radio' | 'switch', state: State, label: string)
   }
 }
 
+// The same three on native inputs, in their real states: checked, disabled, and the mixed checkbox made indeterminate by
+// the mount (gallery/mount/matrix.ts), since no attribute says it.
+function nativeOption(kind: 'check' | 'radio' | 'switch', state: State, label: string): string {
+  const type = kind === 'radio' ? 'radio' : 'checkbox';
+  const extra = (kind === 'switch' ? ' role="switch"' : '') + (kind === 'radio' ? ` name="${uid('radio-native', state, 'group')}"` : '');
+  const one = (attrs = '', text = label, style = ''): string =>
+    `<label class="im-option"${style}><input type="${type}" class="im-${kind}"${extra} tabindex="-1"${attrs}>${text}</label>`;
+  switch (state) {
+    case 'hover':
+    case 'focus':
+      return one(force(state));
+    case 'selected':
+      return one(' checked') + (kind === 'check' ? one(' data-indeterminate', 'Part', ' style="margin-left:10px"') : '');
+    case 'disabled':
+      return one(' checked disabled');
+    default:
+      return one();
+  }
+}
+
 // ---- tabs, segmented, rows, tree, table, menu --------------------------------------------------------------------
 
 function tab(state: State): string {
@@ -153,6 +213,16 @@ function tab(state: State): string {
 function segmented(state: State): string {
   const attrs = state === 'disabled' ? ` disabled title="${REASON}"` : '';
   return `<div class="im-seg" role="tablist" aria-label="View"><button type="button" role="tab" aria-selected="${state === 'selected'}" tabindex="-1"${force(state)}${attrs}>Graph</button><button type="button" role="tab" aria-selected="false" tabindex="-1">Lanes</button><button type="button" role="tab" aria-selected="false" tabindex="-1">Feed</button></div>`;
+}
+
+// The same segments as labels over native radios: checked is selected, the forced state sits on the label.
+function nativeSegmented(state: State): string {
+  const name = uid('segmented-native', state, 'group');
+  const segment = (text: string, input = '', label = ''): string =>
+    `<label${label}><input type="radio" name="${name}" value="${text.toLowerCase()}" tabindex="-1"${input}><span>${text}</span></label>`;
+  const input = (state === 'selected' ? ' checked' : '') + (state === 'disabled' ? ' disabled' : '');
+  const label = force(state) + (state === 'disabled' ? ` title="${REASON}"` : '');
+  return `<div class="im-seg" role="radiogroup" aria-label="View">${segment('Graph', input, label)}${segment('Lanes')}${segment('Feed')}</div>`;
 }
 
 function row(state: State): string {
@@ -212,13 +282,20 @@ export function cellMarkup(control: string, state: State): string {
   switch (control) {
     case 'icon-button': return iconButton(state);
     case 'field': return field(state);
+    case 'field-bare': return bareField(state);
+    case 'textarea': return textarea(state);
     case 'search': return search(state);
     case 'select': return select(state);
+    case 'select-native': return nativeSelect(state);
     case 'checkbox': return option('check', state, 'Keep');
+    case 'checkbox-native': return nativeOption('check', state, 'Keep');
     case 'radio': return option('radio', state, 'Trash');
+    case 'radio-native': return nativeOption('radio', state, 'Trash');
     case 'switch': return option('switch', state, 'Sync');
+    case 'switch-native': return nativeOption('switch', state, 'Sync');
     case 'tab': return tab(state);
     case 'segmented': return segmented(state);
+    case 'segmented-native': return nativeSegmented(state);
     case 'row': return row(state);
     case 'tree': return tree(state);
     case 'table-row': return tableRow(state);
@@ -299,7 +376,7 @@ export const MATRIX_CSS = `
 .g-mx tbody th { color: var(--im-text); }
 .g-mx tbody tr:last-child > * { border-bottom: 0; }
 .g-mx .g-mx-na { color: var(--im-muted); }
-.g-mx .im-input, .g-mx .im-select { width: 152px; }
+.g-mx .im-input, .g-mx .im-select, .g-mx .im-textarea { width: 152px; }
 .g-mx label.im-input:has(input[type="search"]) { width: 210px; }
 .g-mx .im-row, .g-mx .im-tree, .g-mx .im-table, .g-mx .im-progress-row { width: 152px; }
 .g-mx .im-progress-row { min-width: 0; }

@@ -8,4 +8,3 @@
 .im-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); gap: var(--im-s-2); }
 .im-choice-list { display: grid; max-block-size: 11rem; gap: var(--im-s-1); }
 .im-choice-row.im-btn { display: flex; justify-content: space-between; gap: var(--im-s-2); }
-.im-choice-row[aria-selected=true] { background: var(--im-selected); border-color: var(--im-accent-text); }

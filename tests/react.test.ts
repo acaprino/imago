@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { createElement as h, type ReactNode } from 'react';
+import { createElement as h, Fragment, Suspense, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { namesDefined, packageNames } from '../scripts/check/names.mjs';
 import { parseSource } from '../scripts/check/source.mjs';
@@ -16,6 +16,7 @@ import * as binding from '../react/index.js';
 import { shellFrameHtml, sidebarHtml } from '../ts/ui/shell-markup.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const read = (file: string): string => readFileSync(join(root, file), 'utf8');
 // The binding is plain JavaScript: take its components loosely, as a consumer's JSX would hand them props.
 const { Disclosure, ListAction, Shell, TabList, Timeline, Workbench } = binding as Record<string, (props: any) => any>;
 
@@ -82,6 +83,32 @@ describe('the exports', () => {
   test('are the five components and the shell, and DetailPanel is gone', () => {
     assert.deepEqual(Object.keys(binding).sort(), ['Disclosure', 'ListAction', 'Shell', 'TabList', 'Timeline', 'Workbench']);
   });
+
+  test('are the names react/index.d.ts declares, no more and no fewer', () => {
+    const declared = [...read('react/index.d.ts').matchAll(/^export (?:declare )?(?:function|const|class|let|var) ([A-Za-z_$][\w$]*)/gm)].map((match) => match[1]);
+    assert.ok(declared.length >= 6, 'the test reads the declarations (it would pass on an empty list otherwise)');
+    assert.deepEqual([...new Set(declared)].sort(), Object.keys(binding).sort());
+  });
+});
+
+describe('the types', () => {
+  const types = read('react/index.d.ts');
+  test("require the skip link's words on Shell and the content's name on Workbench", () => {
+    assert.match(types, /\bskipLabel: string;/);
+    assert.doesNotMatch(types, /\bskipLabel\?:/);
+    assert.match(types, /'aria-label': string;/);
+  });
+
+  test("declare Workbench's status row, action bar, footer and ids, and ListAction's tooltip and rail item", () => {
+    for (const name of ['status', 'actions', 'footer', 'rail']) assert.match(types, new RegExp(`\\b${name}\\?: ReactNode;`), name);
+    for (const name of ['contentId', 'sidebarId', 'tooltip']) assert.match(types, new RegExp(`\\b${name}\\?: string;`), name);
+    const shell = /export function Shell\([^]*?\): ReactElement;/.exec(types)?.[0] ?? '';
+    assert.match(shell, /\bcontentId\?: string;/, 'Shell takes contentId');
+  });
+
+  test('say that the Shell is mounted in a root that carries im-root', () => {
+    assert.match(types, /im-root/);
+  });
 });
 
 describe('Shell', () => {
@@ -108,6 +135,31 @@ describe('Shell', () => {
   test('never writes data-im-app: applyLook writes the app, the look and the theme on the root element, even if a consumer passes app', () => {
     assert.equal('data-im-app' in rootOf(render(h(Shell, null))).attrs, false);
     assert.equal('data-im-app' in rootOf(render(h(Shell, { app: 'daodan' }))).attrs, false);
+  });
+
+  test('sends the skip link to the content region of its Workbench: its contentId, main by default', () => {
+    const shell = (props: Record<string, unknown>): Element => rootOf(render(h(Shell, { skipLabel: 'Skip to content', titlebar },
+      h(Workbench, { detailsLabel: 'Details', 'aria-label': 'Viewer', ...props }, h('p', null, 'Page')))));
+    const custom = shell({ contentId: 'viewer' });
+    assert.equal(only(custom, '.im-shell-skip-link').attrs.href, '#viewer');
+    assert.equal(only(custom, '.im-content').attrs.id, 'viewer');
+    assert.equal(only(shell({}), '.im-shell-skip-link').attrs.href, '#main');
+  });
+
+  test('takes contentId itself, for a Workbench it cannot see (in a fragment, a Suspense or a component of the app)', () => {
+    const Page = ({ children }: { children?: ReactNode }) => h(Workbench, { contentId: 'viewer', detailsLabel: 'Details', 'aria-label': 'Viewer' }, children);
+    for (const [name, wrap] of [
+      ['a fragment', (node: ReactNode) => h(Fragment, null, node)],
+      ['a Suspense', (node: ReactNode) => h(Suspense, null, node)],
+      ['a component', () => h(Page, null, h('p', null, 'Page'))],
+    ] as const) {
+      const inner = h(Workbench, { contentId: 'viewer', detailsLabel: 'Details', 'aria-label': 'Viewer' }, h('p', null, 'Page'));
+      const written = rootOf(render(h(Shell, { skipLabel: 'Skip to content', titlebar, contentId: 'viewer' }, wrap(inner))));
+      assert.equal(only(written, '.im-shell-skip-link').attrs.href, '#viewer', name);
+      assert.equal(only(written, '.im-content').attrs.id, 'viewer', name);
+    }
+    assert.equal('contentId' in rootOf(render(h(Shell, { skipLabel: 'Skip', contentId: 'viewer' }))).attrs, false, 'contentId is not written on the shell');
+    assert.equal(rootOf(render(h(Shell, { skipLabel: 'Skip', contentId: 'viewer' }))).attrs['contentid'], undefined);
   });
 
   test('has no skip link without a label for it, and keeps its class whatever className it is given', () => {
@@ -204,6 +256,40 @@ describe('Workbench', () => {
     assert.equal(written, expected);
   });
 
+  test('writes the status row, the action bar and the footer around the columns, as shellFrameHtml does', () => {
+    const frame = shellFrameHtml({
+      titlebarHtml: '<header class="im-titlebar"></header>', contentHtml: '<p>Page</p>', contentLabel: 'Viewer', skipLabel: 'Skip to content', inspectorLabel: 'Details',
+      sidebarHtml: sidebarHtml({ id: 'sidebar', label: 'Threads', rowsHtml: '<div class="im-row"></div>' }),
+      statusHtml: '<span class="im-status-text">Ready</span>', actionsHtml: '<button type="button" class="im-btn">Apply</button>', footerHtml: '<span class="im-footer-text">State</span>',
+    });
+    const expected = outline(rootOf(`<div class="im-shell" data-im-sidebar="on">${frame}</div>`), isAppContent);
+    const workbench = h(Workbench, {
+      navigation: rows, navigationLabel: 'Threads', detailsLabel: 'Details', 'aria-label': 'Viewer',
+      status: h('span', { className: 'im-status-text' }, 'Ready'), actions: h('button', { type: 'button', className: 'im-btn' }, 'Apply'),
+      footer: h('span', { className: 'im-footer-text' }, 'State'),
+    }, content);
+    const written = rootOf(render(h(Shell, { sidebar: true, skipLabel: 'Skip to content', titlebar }, workbench)));
+    assert.equal(outline(written, isAppContent), expected);
+    const work = only(written, '.im-work');
+    assert.deepEqual(childrenOf(work).map((child) => `${child.tag}.${child.attrs.class}`), ['div.im-status', 'div.im-columns', 'div.im-actions', 'footer.im-footer']);
+    assert.deepEqual([textOf(only(work, '.im-status')), textOf(only(work, '.im-actions')), textOf(only(work, '.im-footer'))], ['Ready', 'Apply', 'State']);
+  });
+
+  test('leaves the status row, the action bar and the footer out when they are not given', () => {
+    for (const empty of [undefined, null, false]) {
+      const work = only(rootOf(render(h(Workbench, { detailsLabel: 'Details', 'aria-label': 'Viewer', status: empty, actions: empty, footer: empty }, content))), '.im-work');
+      assert.deepEqual(childrenOf(work).map((child) => child.attrs.class), ['im-columns'], String(empty));
+    }
+  });
+
+  test('takes the ids of the content region and of the sidebar, main and sidebar by default', () => {
+    const body = rootOf(render(h(Workbench, { navigation: rows, navigationLabel: 'Threads', detailsLabel: 'Details', 'aria-label': 'Viewer', contentId: 'viewer', sidebarId: 'threads' }, content)));
+    assert.equal(only(body, '.im-content').attrs.id, 'viewer');
+    assert.equal(only(body, '.im-sidebar').attrs.id, 'threads');
+    assert.equal(only(full(), '.im-content').attrs.id, 'main');
+    assert.equal(only(full(), '.im-sidebar').attrs.id, 'sidebar');
+  });
+
   test('writes the same attributes on the regions as shellFrameHtml', () => {
     const frame = rootOf(`<div class="im-shell">${shellFrameHtml({
       titlebarHtml: '', contentHtml: '', contentLabel: 'Viewer', skipLabel: 'Skip', inspectorLabel: 'Details',
@@ -248,6 +334,21 @@ describe('ListAction', () => {
   test('passes the attributes of a button on', () => {
     assert.equal(row({ id: 'r1', disabled: true }).attrs.id, 'r1');
     assert.equal(row({ disabled: true }).attrs.disabled, '');
+  });
+
+  test('takes its tooltip as the title attribute: title is the row\'s title', () => {
+    const button = row({ tooltip: 'Name, 3 sessions' });
+    assert.equal(button.attrs.title, 'Name, 3 sessions');
+    assert.equal(textOf(only(button, '.im-row-title')), 'Name');
+    assert.equal('title' in row({}).attrs, false, 'no tooltip, no title attribute');
+  });
+
+  test('writes its rail item first, the children of a span.im-rail-item, before its icon and its text', () => {
+    const button = row({ rail: 'NA', icon: h('svg', { className: 'im-icon' }) });
+    const [rail, icon, text] = childrenOf(button);
+    assert.deepEqual([rail.tag, rail.attrs.class, rail.attrs['aria-hidden'], textOf(rail)], ['span', 'im-rail-item', 'true', 'NA']);
+    assert.deepEqual([icon.tag, text.attrs.class], ['svg', 'im-row-text']);
+    assert.equal(find(row({}), '.im-rail-item'), undefined, 'no rail item unless it is given');
   });
 });
 

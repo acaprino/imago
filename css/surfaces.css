@@ -65,8 +65,9 @@
 
 .im-menu-item:active { background: var(--im-press); }
 
-/* A highlighted option of the palette: the selection fill, a bar and a heavier weight, so it is not colour alone. */
-.im-menu-item[aria-selected="true"] {
+/* A highlighted option of the palette, or a current or pressed item: the selection fill, a bar and a heavier weight, so it
+   is not colour alone. One rule whatever attribute says it, as every selected item in css/controls.css. */
+.im-menu-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) {
   font-weight: 600;
   background: var(--im-selected);
   box-shadow: inset 2px 0 0 var(--im-accent-text);
@@ -266,7 +267,7 @@
   .im-float { border-color: CanvasText; }
   .im-menu-item:hover,
   .im-menu-item:focus-visible,
-  .im-menu-item[aria-selected="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .im-menu-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { outline: 2px solid Highlight; outline-offset: -2px; }
   .im-menu-item[aria-disabled="true"] { color: GrayText; border-color: GrayText; }
 }
 

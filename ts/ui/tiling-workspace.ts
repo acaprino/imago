@@ -1,3 +1,5 @@
+import { claimKey } from './key-claim.ts';
+
 /** Controlled n-ary tabbed workspace. Layout validation and mutations belong to the caller. */
 export interface TilingView { readonly id: string; readonly hidden: boolean }
 type Direction = 'left' | 'right' | 'up' | 'down';
@@ -211,7 +213,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
     event.preventDefault(); const viewId = held.viewId; const action = held.action;
     commitGesture(held.gesture, action); if (action) focusView(viewId);
   }
-  function escapeDrag(event: KeyboardEvent): void { if (event.key === 'Escape' && drag) { event.preventDefault(); event.stopPropagation(); cancelGesture(); } }
+  function escapeDrag(event: KeyboardEvent): void { if (event.key === 'Escape' && drag) { event.preventDefault(); claimKey(event); event.stopPropagation(); cancelGesture(); } }
 
   function makeGroup(groupId: string): GroupDom {
     const pane = element('section', 'wm-pane'); pane.dataset.groupId = groupId; pane.setAttribute('aria-label', 'Workspace pane');
@@ -352,16 +354,16 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
   function onKey(event: KeyboardEvent): void {
     if (blocked() || !current || event.isComposing || !(event.target instanceof HTMLElement)) return;
     const target = event.target; if (!target.closest('.wm-chrome') || !canvas.contains(target)) return;
-    if (event.key === 'Escape' && (drag || resize)) { event.preventDefault(); cancelGesture(); return; }
+    if (event.key === 'Escape' && (drag || resize)) { event.preventDefault(); claimKey(event); cancelGesture(); return; }
     const pane = target.closest<HTMLElement>('.wm-pane'); const group = pane && tabGroups(current.root).find(group => group.id === pane.dataset.groupId);
     if (target.classList.contains('wm-pane-focus') && group && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-      event.preventDefault(); const direction: Direction = event.key === 'ArrowLeft' ? 'left' : event.key === 'ArrowRight' ? 'right' : event.key === 'ArrowUp' ? 'up' : 'down';
+      event.preventDefault(); claimKey(event); const direction: Direction = event.key === 'ArrowLeft' ? 'left' : event.key === 'ArrowRight' ? 'right' : event.key === 'ArrowUp' ? 'up' : 'down';
       const neighbor = keyboardNeighbor(current, group.id, direction, viewport()); if (neighbor) { emit({ type: 'focus', groupId: neighbor }); focusChrome(neighbor, 'pane-focus'); } return;
     }
     // The keyboard twin of a tab's "×", which stays out of the Tab order.
-    if (target.classList.contains('wm-tab') && event.key === 'Delete' && target.dataset.viewId) { event.preventDefault(); options.onCloseView?.(target.dataset.viewId); return; }
+    if (target.classList.contains('wm-tab') && event.key === 'Delete' && target.dataset.viewId) { event.preventDefault(); claimKey(event); options.onCloseView?.(target.dataset.viewId); return; }
     if (target.classList.contains('wm-tab') && group && event.altKey && event.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-      event.preventDefault(); const viewId = target.dataset.viewId; if (!viewId) return;
+      event.preventDefault(); claimKey(event); const viewId = target.dataset.viewId; if (!viewId) return;
       const direction: Direction = event.key === 'ArrowLeft' ? 'left' : event.key === 'ArrowRight' ? 'right' : event.key === 'ArrowUp' ? 'up' : 'down';
       const axis = direction === 'left' || direction === 'right' ? 'columns' as const : 'rows' as const;
       const side = direction === 'left' || direction === 'up' ? 'before' as const : 'after' as const;
@@ -371,7 +373,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
       focusView(viewId); return;
     }
     if (target.classList.contains('wm-tab') && group && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
-      event.preventDefault(); const filter = options.tabFilter?.() ?? null;
+      event.preventDefault(); claimKey(event); const filter = options.tabFilter?.() ?? null;
       const visible = group.tabs.filter(viewId => { const view = current?.views.find(view => view.id === viewId); return !!view && !view.hidden && (!filter || filter.shows(view)); }); const viewId = target.dataset.viewId; const index = visible.indexOf(viewId ?? '');
       if (event.shiftKey && viewId && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) emit({ type: 'move', viewId, groupId: group.id, index: Math.max(0, Math.min(group.tabs.length - 1, group.tabs.indexOf(viewId) + (event.key === 'ArrowLeft' ? -1 : 1))) });
       else { const next = event.key === 'Home' ? visible[0] : event.key === 'End' ? visible.at(-1) : visible[(index + (event.key === 'ArrowLeft' ? -1 : 1) + visible.length) % visible.length]; if (next) { emit({ type: 'activate', groupId: group.id, viewId: next }); focusChrome(group.id, `tab:${next}`); } }
@@ -380,7 +382,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
     if (target.classList.contains('wm-splitter')) {
       const split = findSplit(current.root, target.dataset.splitId ?? ''); const boundary = Number(target.dataset.boundary); if (!split) return;
       const negative = split.axis === 'columns' ? 'ArrowLeft' : 'ArrowUp'; const positive = split.axis === 'columns' ? 'ArrowRight' : 'ArrowDown';
-      if (![negative, positive, 'Home'].includes(event.key)) return; event.preventDefault(); const weights = [...split.weights]; const total = weights[boundary] + weights[boundary + 1];
+      if (![negative, positive, 'Home'].includes(event.key)) return; event.preventDefault(); claimKey(event); const weights = [...split.weights]; const total = weights[boundary] + weights[boundary + 1];
       const fraction = event.key === 'Home' ? 0.5 : Math.max(0.05, Math.min(0.95, weights[boundary] / total + (event.key === negative ? -0.05 : 0.05)));
       weights[boundary] = total * fraction; weights[boundary + 1] = total * (1 - fraction); emit({ type: 'resize', splitId: split.id, weights });
     }

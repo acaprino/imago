@@ -22,7 +22,7 @@ const parts = {
   text: ['span', 'im-text'], strong: ['strong', 'im-strong'], hint: ['small', 'im-muted'], paragraph: ['p', 'im-paragraph'],
   status: ['p', 'im-status-text'], alert: ['p', 'im-field-error'], list: ['ul', 'im-stack-list'], item: ['li', 'im-list-item'],
   body: ['div', 'im-region'], scroll: ['div', 'im-scroll'], viewport: ['div', 'im-viewport'], separator: ['hr', 'im-rule'],
-  spacer: ['span', 'im-grow'], dialog: ['dialog', 'im-content-dialog im-native-controls'], details: ['details', 'im-disclosure'],
+  spacer: ['span', 'im-grow'], dialog: ['dialog', 'im-content-dialog'], details: ['details', 'im-disclosure'],
   summary: ['summary', 'im-disclosure-title'], fieldset: ['fieldset', 'im-fieldset'], legend: ['legend', 'im-legend'],
   code: ['code', 'im-mono'], pre: ['pre', 'im-code-view'], time: ['time', 'im-time'],
   descriptionList: ['dl', 'im-definition-list'], term: ['dt', 'im-term'], definition: ['dd', 'im-definition'],
@@ -51,10 +51,13 @@ export function uiButton(label: string, options: ButtonMarkupOptions & { title?:
   return button;
 }
 
+/** A native input with the class of its drawing on it: `im-check` on a checkbox, `im-radio` on a radio, and on any other
+ * type `im-input`, the field's box, drawn on the input itself. A field with an icon or a key cap has the box round the input
+ * instead (`textFieldHtml`, or a part given the class `im-input`). */
 export function uiInput(type = 'text'): HTMLInputElement {
   const input = document.createElement('input');
   input.type = type;
-  input.className = type === 'checkbox' ? 'im-native-check' : type === 'radio' ? 'im-native-radio' : 'im-native-input';
+  input.className = type === 'checkbox' ? 'im-check' : type === 'radio' ? 'im-radio' : 'im-input';
   return input;
 }
 
@@ -65,16 +68,18 @@ export function uiOption(value: string, label: string): HTMLOptionElement {
   return option;
 }
 
+/** A native select with the drawing of the select button, `select.im-select`, as `selectHtml` writes it. */
 export function uiSelect(options: readonly (readonly [string, string])[] = [], value?: string): HTMLSelectElement {
   const select = document.createElement('select');
-  select.className = 'im-native-select';
+  select.className = 'im-select';
   for (const [key, label] of options) select.append(uiOption(key, label));
   if (value !== undefined) select.value = value;
   return select;
 }
 
+/** A native text area with the drawing of a field, `textarea.im-textarea`. */
 export function uiTextarea(): HTMLTextAreaElement {
   const control = document.createElement('textarea');
-  control.className = 'im-native-textarea';
+  control.className = 'im-textarea';
   return control;
 }
