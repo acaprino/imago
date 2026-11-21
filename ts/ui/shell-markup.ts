@@ -1,4 +1,5 @@
-import { escapeHtml, iconHtml, spinnerHtml } from './markup.ts';
+import { escapeHtml, iconHtml } from './markup.ts';
+import { toneAttribute, type Tone } from './tone.ts';
 
 /** String-rendered shell components. Text is escaped; named HTML slots contain trusted component output. */
 export interface NavigationTab {
@@ -32,6 +33,8 @@ export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Mini
 
 export interface TitlebarOptions {
   brand: { name: string; image?: string };
+  /** The button that opens the sidebar as a drawer under 620 (`sidebarDrawer`): its name and the id of the sidebar. */
+  sidebarToggle?: { label: string; controls: string };
   navigationHtml?: string;
   views?: { label: string; action: string };
   statusHtml?: string;
@@ -39,9 +42,10 @@ export interface TitlebarOptions {
   windowControls?: boolean | WindowButtonLabels;
 }
 export function titlebarHtml(options: TitlebarOptions): string {
-  const { brand, views, commands } = options;
+  const { brand, sidebarToggle, views, commands } = options;
   const brandHtml = brand.image ? `<img class="im-brand-image" src="${escapeHtml(brand.image)}" alt="${escapeHtml(brand.name)}" data-tauri-drag-region>` : `<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
-  return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${options.navigationHtml ?? ''}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
+  const toggleHtml = sidebarToggle ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${escapeHtml(sidebarToggle.label)}" title="${escapeHtml(sidebarToggle.label)}" aria-expanded="false" aria-controls="${escapeHtml(sidebarToggle.controls)}">${iconHtml('sidebar')}</button>` : '';
+  return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${toggleHtml}${options.navigationHtml ?? ''}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
 }
 
 export interface StatusButtonOptions {
@@ -49,28 +53,37 @@ export interface StatusButtonOptions {
   accessibleLabel: string;
   action: string;
   id?: string;
-  tone: 'ok' | 'warn' | 'err' | 'accent';
+  tone: Tone;
 }
 export function statusButtonHtml(options: StatusButtonOptions): string {
-  return `<button type="button" class="im-btn im-btn--ghost im-titlebar-status" data-action="${escapeHtml(options.action)}"${options.id === undefined ? '' : ` data-id="${escapeHtml(options.id)}"`} aria-label="${escapeHtml(options.accessibleLabel)}"><i class="im-dot" data-im-tone="${escapeHtml(options.tone)}" aria-hidden="true"></i><span>${escapeHtml(options.label)}</span></button>`;
+  return `<button type="button" class="im-btn im-btn--ghost im-titlebar-status" data-action="${escapeHtml(options.action)}"${options.id === undefined ? '' : ` data-id="${escapeHtml(options.id)}"`} aria-label="${escapeHtml(options.accessibleLabel)}"><i class="im-dot"${toneAttribute(options.tone)} aria-hidden="true"></i><span>${escapeHtml(options.label)}</span></button>`;
 }
 
-export interface BannerOptions {
-  title: string;
+export interface NoteOptions {
+  title?: string;
   message?: string;
   items?: readonly { label: string; message: string }[];
+  /** Trusted component markup: the note's buttons. */
   actionsHtml?: string;
-  tone: 'ok' | 'warn' | 'err' | 'accent';
+  tone?: Tone;
 }
-export function bannerHtml(options: BannerOptions): string {
+/**
+ * A message that stays in the page: an `im-note` with its message, or an `im-note--block` when it has more than a message
+ * (a title, a list, actions), one under the other. An `err` or `warn` note is announced at once (`role="alert"`), any
+ * other as a status. Text is escaped.
+ */
+export function noteHtml(options: NoteOptions): string {
+  const { title, message, items, actionsHtml } = options;
   const role = options.tone === 'err' || options.tone === 'warn' ? 'alert' : 'status';
-  return `<div class="im-banner" data-im-tone="${escapeHtml(options.tone)}" role="${role}"><div><strong>${escapeHtml(options.title)}</strong>${options.message ? `<p>${escapeHtml(options.message)}</p>` : ''}${options.items?.length ? `<ul>${options.items.map(item => `<li><b>${escapeHtml(item.label)}</b>: ${escapeHtml(item.message)}</li>`).join('')}</ul>` : ''}</div>${options.actionsHtml ?? ''}</div>`;
+  const open = (block: boolean): string => `<div class="im-note${block ? ' im-note--block' : ''}"${toneAttribute(options.tone)} role="${role}">`;
+  if (!title && !items?.length && !actionsHtml) return `${open(false)}${message ? `<span>${escapeHtml(message)}</span>` : ''}</div>`;
+  return open(true)
+    + (title ? `<b>${escapeHtml(title)}</b>` : '')
+    + (message ? `<p>${escapeHtml(message)}</p>` : '')
+    + (items?.length ? `<ul>${items.map(item => `<li><b>${escapeHtml(item.label)}</b>: ${escapeHtml(item.message)}</li>`).join('')}</ul>` : '')
+    + (actionsHtml ? `<div class="im-action-row">${actionsHtml}</div>` : '')
+    + '</div>';
 }
-
-export const busyIndicatorHtml = (label: string): string => `<div class="im-busy" role="status">${spinnerHtml}<span>${escapeHtml(label)}</span></div>`;
-
-/** A loading placeholder occupying an empty content surface. */
-export const loadingStateHtml = (label: string): string => `<div class="im-panel im-surface im-empty" data-im-surface="sheet" role="status">${spinnerHtml}<span>${escapeHtml(label)}</span></div>`;
 
 /** A constrained page inside the shell's scrolling content area. */
 export function pageContentHtml(contentHtml: string, width: 'normal' | 'narrow' = 'normal'): string {

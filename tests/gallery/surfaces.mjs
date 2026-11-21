@@ -730,8 +730,8 @@ async function everyApp(page) {
   });
   await page.click('#menu-hook');
   assert.equal(await count(page, '.im-shell .im-menu'), 1, 'the menu hook opens the sample menu');
-  assert.equal(await page.locator('.im-shell .im-menu-item[data-im-tone="danger"]').count(), 1, 'its danger item is marked');
-  await page.click('.im-shell .im-menu-item[data-im-tone="danger"]');
+  assert.equal(await page.locator('.im-shell .im-menu-item[data-im-tone="err"]').count(), 1, 'its danger item is marked with the err tone');
+  await page.click('.im-shell .im-menu-item[data-im-tone="err"]');
   assert.equal(await count(page, '.im-shell .im-menu'), 0, 'running the item closes the menu');
   assert.equal(await count(page, '.im-dialog'), 1, 'and the dialog opens');
   assert.equal((await active(page)).text, 'Cancel', 'with focus on Cancel');

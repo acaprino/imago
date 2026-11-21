@@ -80,7 +80,7 @@
 }
 .im-menu-item[aria-disabled="true"]:hover { background: transparent; }
 
-.im-menu-item[data-im-tone="danger"] { color: var(--im-err); }
+.im-menu-item[data-im-tone="err"] { color: var(--im-err); }
 
 .im-menu-sep {
   height: 0;
