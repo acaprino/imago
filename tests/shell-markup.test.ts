@@ -87,6 +87,17 @@ test('sidebarHtml writes the sidebar of section 4: a titled panel, a listbox of 
   assert.doesNotMatch(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '' }), /im-sidebar-collapse/, 'no fold button unless its two labels are given');
 });
 
+test('the content region is a panel: its header, tools, body and foot in that order, each part left out when not given', () => {
+  const inside = (html: string): string => /<main [^>]*>([\s\S]*)<\/main>/.exec(html)?.[1] ?? '';
+  const parts = { contentHeaderHtml: '<h4 class="im-panel-title">Sync</h4>', contentToolsHtml: '<span>Filter</span>', contentFootHtml: '<span>Foot</span>' };
+  assert.equal(inside(shellFrameHtml({ ...BASE, ...parts })),
+    '<header class="im-panel-header"><h4 class="im-panel-title">Sync</h4></header><div class="im-panel-tools"><span>Filter</span></div>'
+    + '<div class="im-panel-body"><p>Page</p></div><div class="im-panel-foot"><span>Foot</span></div>');
+  assert.equal(inside(shellFrameHtml(BASE)), '<div class="im-panel-body"><p>Page</p></div>', 'only the body when no part is given');
+  assert.equal(inside(shellFrameHtml({ ...BASE, contentToolsHtml: '' })), '<div class="im-panel-tools"></div><div class="im-panel-body"><p>Page</p></div>');
+  assert.equal(inside(shellFrameHtml({ ...BASE, contentFootHtml: '<b>F</b>' })), '<div class="im-panel-body"><p>Page</p></div><div class="im-panel-foot"><b>F</b></div>');
+});
+
 // ---------- renderShellFrame, on a small DOM ----------
 
 // A DOM just big enough for renderShellFrame: elements, text, fragments, and a template that parses the well-formed
@@ -137,6 +148,7 @@ class FakeParent extends FakeNode {
     }
   }
   append(...nodes: FakeNode[]): void { this.insert(nodes, null); }
+  prepend(...nodes: FakeNode[]): void { this.insert(nodes, this.childNodes[0] ?? null); }
   replaceChildren(...nodes: FakeNode[]): void {
     const flat = nodes.flatMap((node) => (node instanceof FakeFragment ? [...node.childNodes] : [node]));
     for (const node of flat) node.remove();
@@ -205,7 +217,10 @@ function frame(paint: string, options: Partial<ShellFrameOptions> = {}): string 
     titlebarHtml: `<header class="im-titlebar" data-tauri-drag-region><span class="im-wordmark">${paint}</span>${TOGGLE}${WINDOW}</header>`,
     sidebarHtml: sidebarHtml({ id: 'side', label: `Threads ${paint}`, rowsHtml: `<div class="im-row" role="option">Row ${paint}</div>`, collapse: { collapse: `Fold ${paint}`, expand: `Unfold ${paint}` } }),
     statusHtml: `<span class="im-status-text">Status ${paint}</span>`,
+    contentHeaderHtml: `<h4 class="im-panel-title">Head ${paint}</h4>`,
+    contentToolsHtml: `<span>Tools ${paint}</span>`,
     contentHtml: `<p>Content ${paint}</p>`,
+    contentFootHtml: `<span>Foot ${paint}</span>`,
     actionsHtml: `<button type="button" class="im-btn im-btn--primary">Apply ${paint}</button>`,
     footerHtml: `<span class="im-footer-text">Footer ${paint}</span>`,
     ...options,
@@ -226,12 +241,16 @@ const $ = (root: FakeParent, name: string): FakeElement => {
 const named = (shell: FakeElement) => Object.fromEntries(
   ['im-titlebar', 'im-body', 'im-sidebar', 'im-work', 'im-status', 'im-columns', 'im-content', 'im-inspector', 'im-actions', 'im-footer'].map((name) => [name, shell.find(name)]),
 );
+/** A part of the content region's panel: im-panel-header, im-panel-tools, im-panel-body or im-panel-foot. */
+const part = (shell: FakeElement, name: string): FakeElement | null => shell.find('im-content')?.children.find((el) => el.classList.contains(name)) ?? null;
+const PARTS = ['im-panel-header', 'im-panel-tools', 'im-panel-body', 'im-panel-foot'];
 
 test('renderShellFrame mounts a whole frame on an empty shell and says whether it has a sidebar', () => {
   const shell = mount(frame('1'));
   assert.equal(shell.getAttribute('data-im-sidebar'), 'on');
   assert.deepEqual(shell.children.map((el) => el.getAttribute('class')), ['im-shell-skip-link', 'im-titlebar', 'im-body']);
-  assert.equal($(shell, 'im-content').textContent, 'Content 1');
+  assert.equal(part(shell, 'im-panel-body')?.textContent, 'Content 1');
+  assert.deepEqual($(shell, 'im-content').children.map((el) => el.getAttribute('class')), PARTS, 'the content is a panel: header, tools, body, foot');
   const bare = mount(shellFrameHtml(BASE));
   assert.equal(bare.getAttribute('data-im-sidebar'), 'off');
 });
@@ -239,16 +258,16 @@ test('renderShellFrame mounts a whole frame on an empty shell and says whether i
 test('a repaint keeps every region element and replaces what is inside them', () => {
   const shell = mount(frame('1'));
   const before = named(shell);
-  const body = $(shell, 'im-content').find('im-panel-body');
+  const parts = PARTS.map((name) => part(shell, name));
   renderShellFrame(shell as unknown as HTMLElement, frame('2'));
   const after = named(shell);
   for (const [name, element] of Object.entries(before)) assert.equal(after[name], element, `${name} is the same element`);
-  assert.equal($(shell, 'im-content').find('im-panel-body'), body, 'the content keeps its panel body');
+  PARTS.forEach((name, at) => assert.equal(part(shell, name), parts[at], `the content keeps its ${name}`));
+  assert.deepEqual(PARTS.map((name) => part(shell, name)?.textContent), ['Head 2', 'Tools 2', 'Content 2', 'Foot 2'], 'the parts of the content show the new paint');
   assert.equal($(shell, 'im-titlebar').find('im-wordmark')?.textContent, '2', 'the title bar shows the new paint');
   assert.equal($(shell, 'im-sidebar').find('im-row')?.textContent, 'Row 2', 'the sidebar shows the new rows');
   assert.equal($(shell, 'im-sidebar').getAttribute('aria-label'), 'Threads 2', 'the sidebar takes its new name');
   assert.equal($(shell, 'im-status').textContent, 'Status 2');
-  assert.equal($(shell, 'im-content').textContent, 'Content 2');
   assert.equal($(shell, 'im-actions').textContent, 'Apply 2');
   assert.equal($(shell, 'im-footer').textContent, 'Footer 2');
   assert.equal(shell.children.filter((el) => el.classList.contains('im-shell-skip-link')).length, 1, 'one skip link');
@@ -289,27 +308,72 @@ test('a repaint while a dialog is open leaves the dialog, the notices and what t
   assert.equal(skip.textContent, 'Skip to content');
 });
 
-test('an optional region that goes is removed, and comes back in its place', () => {
+test('an optional region that goes is removed, and comes back in its place as the same element', () => {
   const shell = mount(frame('1'));
   const order = () => $(shell, 'im-work').children.map((el) => el.getAttribute('class'));
   for (const [option, region] of [['statusHtml', 'im-status'], ['actionsHtml', 'im-actions'], ['footerHtml', 'im-footer']] as const) {
+    const element = $(shell, region);
     renderShellFrame(shell as unknown as HTMLElement, frame('2', { [option]: undefined }));
     assert.equal(shell.find(region), null, `${region} is gone`);
     renderShellFrame(shell as unknown as HTMLElement, frame('3'));
     assert.deepEqual(order(), ['im-status', 'im-columns', 'im-actions', 'im-footer'], `${region} comes back in its place`);
+    assert.equal($(shell, region), element, `${region} comes back as the same element`);
     assert.match($(shell, region).textContent, /3$/);
   }
+  const inContent = () => $(shell, 'im-content').children.map((el) => el.getAttribute('class'));
+  for (const [option, name] of [['contentHeaderHtml', 'im-panel-header'], ['contentToolsHtml', 'im-panel-tools'], ['contentFootHtml', 'im-panel-foot']] as const) {
+    const element = part(shell, name);
+    const body = part(shell, 'im-panel-body');
+    renderShellFrame(shell as unknown as HTMLElement, frame('8', { [option]: undefined }));
+    assert.equal(part(shell, name), null, `the content's ${name} is gone`);
+    assert.equal(part(shell, 'im-panel-body'), body, 'the panel body stays');
+    renderShellFrame(shell as unknown as HTMLElement, frame('9'));
+    assert.deepEqual(inContent(), PARTS, `the content's ${name} comes back in its place`);
+    assert.equal(part(shell, name), element, `the content's ${name} comes back as the same element`);
+    assert.match(part(shell, name)?.textContent ?? '', /9$/);
+  }
+  renderShellFrame(shell as unknown as HTMLElement, frame('10', { contentHeaderHtml: undefined, contentToolsHtml: undefined, contentFootHtml: undefined }));
+  assert.deepEqual(inContent(), ['im-panel-body']);
+  renderShellFrame(shell as unknown as HTMLElement, frame('11'));
+  assert.deepEqual(inContent(), PARTS, 'the three parts come back in order');
   renderShellFrame(shell as unknown as HTMLElement, frame('4', { statusHtml: undefined, actionsHtml: undefined, footerHtml: undefined }));
   assert.deepEqual(order(), ['im-columns']);
   renderShellFrame(shell as unknown as HTMLElement, frame('5'));
   assert.deepEqual(order(), ['im-status', 'im-columns', 'im-actions', 'im-footer'], 'all three come back in order');
 
+  const sidebar = $(shell, 'im-sidebar');
   renderShellFrame(shell as unknown as HTMLElement, frame('6', { sidebarHtml: undefined }));
   assert.equal(shell.find('im-sidebar'), null, 'the sidebar is gone');
   assert.equal(shell.getAttribute('data-im-sidebar'), 'off');
   renderShellFrame(shell as unknown as HTMLElement, frame('7'));
   assert.deepEqual($(shell, 'im-body').children.map((el) => el.getAttribute('class')), ['im-panel im-sidebar', 'im-work'], 'the sidebar comes back before the work area');
+  assert.equal($(shell, 'im-sidebar'), sidebar, 'the sidebar comes back as the same element');
+  assert.equal(sidebar.find('im-row')?.textContent, 'Row 7', 'with the new rows');
   assert.equal(shell.getAttribute('data-im-sidebar'), 'on');
+});
+
+test('a sidebar, a sidebar button and window buttons that go and come back are the elements the modules wired', () => {
+  const shell = mount(frame('1'));
+  const sidebar = $(shell, 'im-sidebar');
+  const toggle = $(shell, 'im-sidebar-toggle');
+  const fold = $(shell, 'im-sidebar-collapse');
+  const buttons = $(shell, 'im-window-buttons');
+  const splitter = new FakeElement('div');
+  splitter.setAttribute('class', 'im-splitter im-sidebar-splitter');
+  sidebar.append(splitter);
+  toggle.setAttribute('aria-expanded', 'true');
+  renderShellFrame(shell as unknown as HTMLElement, frame('2', { sidebarHtml: undefined }).replace(TOGGLE, '').replace(WINDOW, ''));
+  for (const name of ['im-sidebar', 'im-sidebar-toggle', 'im-sidebar-collapse', 'im-window-buttons']) assert.equal(shell.find(name), null, `${name} is gone`);
+  renderShellFrame(shell as unknown as HTMLElement, frame('3'));
+  assert.equal($(shell, 'im-sidebar'), sidebar, 'the same sidebar');
+  assert.equal($(shell, 'im-sidebar-toggle'), toggle, 'the same sidebar button');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'with the state sidebarDrawer gave it');
+  assert.equal($(shell, 'im-sidebar-collapse'), fold, 'the same fold button');
+  assert.equal($(shell, 'im-window-buttons'), buttons, 'the same window buttons');
+  assert.equal(sidebar.children.at(-1), splitter, 'the splitter is back at the end of the sidebar');
+  assert.equal(sidebar.getAttribute('aria-label'), 'Threads 3', 'the sidebar takes its new name');
+  assert.equal(sidebar.find('im-row')?.textContent, 'Row 3', 'and its new rows');
+  assert.equal(fold.getAttribute('aria-label'), 'Fold 3', 'the fold button takes its new name');
 });
 
 test('the controls the package wires keep their element: the sidebar button, the fold button, the splitter, the window buttons', () => {
@@ -345,11 +409,13 @@ test('the controls the package wires keep their element: the sidebar button, the
   assert.equal(fold.getAttribute('aria-label'), 'Fold 3', 'unfolded, its name is the collapse label');
   renderShellFrame(shell as unknown as HTMLElement, frame('4').replace(TOGGLE, ''));
   assert.equal(shell.find('im-sidebar-toggle'), null, 'a control the markup no longer has goes');
+  renderShellFrame(shell as unknown as HTMLElement, frame('5'));
+  assert.equal($(shell, 'im-sidebar-toggle'), toggle, 'and comes back as the same element');
 });
 
 test('renderShellFrame refuses a frame without its fixed regions and changes nothing', () => {
   const shell = mount(frame('1'));
-  const content = $(shell, 'im-content');
+  const content = $(shell, 'im-content').find('im-panel-body')!;
   for (const broken of [
     frame('2').replace(/<section class="im-panel im-inspector"[^>]*><\/section>/, ''),
     frame('2').replace('<div class="im-panel-body"><p>Content 2</p></div>', '<p>Content 2</p>'),

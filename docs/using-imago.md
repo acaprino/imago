@@ -118,7 +118,10 @@ sidebar sets `data-im-sidebar="off"` and writes none.
     <div class="im-work">
       <div class="im-status"><span class="im-chip" data-im-tone="ok">Ready</span><span class="im-status-text">Summary</span><span class="im-spacer"></span><span class="im-status-end">Info</span></div>
       <div class="im-columns">
-        <main id="main" class="im-panel im-content" tabindex="-1" aria-label="First view"><div class="im-panel-body">…</div></main>
+        <main id="main" class="im-panel im-content" tabindex="-1" aria-label="First view">
+          <header class="im-panel-header"><h4 class="im-panel-title">First view</h4></header>
+          <div class="im-panel-body">…</div>
+        </main>
         <section class="im-panel im-inspector" aria-label="Inspector" hidden>…</section>
       </div>
       <div class="im-actions"><button type="button" class="im-btn im-btn--primary"><span>Apply</span><kbd class="im-key">↵</kbd></button></div>
@@ -131,7 +134,8 @@ sidebar sets `data-im-sidebar="off"` and writes none.
 The real, complete markup of all five apps is `shellMarkup` in `gallery/apps.ts`. An app that composes strings writes the
 same frame with `shellFrameHtml(options)`, the sidebar with `sidebarHtml(options)`, and repaints a mounted frame with
 `renderShellFrame(shell, markup)`: the regions keep their elements, the inspector is never touched, and a region that
-goes and comes back takes its place again. Notes:
+goes and comes back is the same element again, in its place. The content region is a panel: `contentHeaderHtml`,
+`contentToolsHtml` and `contentFootHtml` give its header, tools and foot around the body, which scrolls. Notes:
 
 - `im-shell` fills its parent (`block-size: 100%`) and measures its own width, so the breakpoints follow the window.
   Put it directly in `<body>`, or in an element that fills the window.

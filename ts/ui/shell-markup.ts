@@ -79,8 +79,14 @@ export function pageContentHtml(contentHtml: string, width: 'normal' | 'narrow' 
 
 export interface ShellFrameOptions {
   titlebarHtml: string;
-  /** What the content region shows: its panel body's children. */
+  /** What the content region shows: its panel body's children. The body scrolls. */
   contentHtml: string;
+  /** The children of the content panel's header (`.im-panel-header`), above the body: its title and tools. */
+  contentHeaderHtml?: string;
+  /** The children of the content panel's tools row (`.im-panel-tools`), between the header and the body. */
+  contentToolsHtml?: string;
+  /** The children of the content panel's foot (`.im-panel-foot`), under the body. */
+  contentFootHtml?: string;
   /** The accessible name of the content region. */
   contentLabel: string;
   /** The id of the content region, which the skip link goes to. Default `main`. */
@@ -102,7 +108,8 @@ export interface ShellFrameOptions {
 /**
  * Contents of an `.im-shell` root: the window's seven regions, in the order of docs/using-imago.md section 4. A region
  * that is not given (undefined) is left out; the content and the inspector are always there, the inspector empty and
- * hidden until `inspector(shell).open()`. Repaint a mounted frame with `renderShellFrame`.
+ * hidden until `inspector(shell).open()`. The content region is a panel: header, tools, body and foot, the three around
+ * the body left out when not given. Repaint a mounted frame with `renderShellFrame`.
  */
 export function shellFrameHtml(options: ShellFrameOptions): string {
   const id = escapeHtml(options.contentId ?? 'main');
@@ -110,7 +117,12 @@ export function shellFrameHtml(options: ShellFrameOptions): string {
   return `<a class="im-shell-skip-link" href="#${id}">${escapeHtml(options.skipLabel)}</a>${options.titlebarHtml}`
     + `<div class="im-body">${options.sidebarHtml ?? ''}<div class="im-work">`
     + region(options.statusHtml, '<div class="im-status">', '</div>')
-    + `<div class="im-columns"><main id="${id}" class="im-panel im-content" tabindex="-1" aria-label="${escapeHtml(options.contentLabel)}" aria-busy="${!!options.busy}"><div class="im-panel-body">${options.contentHtml}</div></main>`
+    + `<div class="im-columns"><main id="${id}" class="im-panel im-content" tabindex="-1" aria-label="${escapeHtml(options.contentLabel)}" aria-busy="${!!options.busy}">`
+    + region(options.contentHeaderHtml, '<header class="im-panel-header">', '</header>')
+    + region(options.contentToolsHtml, '<div class="im-panel-tools">', '</div>')
+    + `<div class="im-panel-body">${options.contentHtml}</div>`
+    + region(options.contentFootHtml, '<div class="im-panel-foot">', '</div>')
+    + '</main>'
     + `<section class="im-panel im-inspector" aria-label="${escapeHtml(options.inspectorLabel)}" hidden></section></div>`
     + region(options.actionsHtml, '<div class="im-actions">', '</div>')
     + region(options.footerHtml, '<footer class="im-footer">', '</footer>')

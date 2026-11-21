@@ -370,7 +370,7 @@ async function frame(page) {
     shell.style.cssText = 'width:1100px;height:600px';
     root.append(shell);
     const paint = (n, options = {}) => ui.shellFrameHtml({
-      titlebarHtml: ui.titlebarHtml({ brand: { name: 'App ' + n }, navigationHtml: '<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="side">T</button>', windowControls: true }),
+      titlebarHtml: ui.titlebarHtml({ brand: { name: 'App ' + n }, navigationHtml: options.sidebar === false ? '' : '<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="side">T</button>', windowControls: true }),
       sidebarHtml: options.sidebar === false ? undefined : ui.sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: `<div class="im-row" role="option" tabindex="0" aria-selected="true" title="Row ${n}"><span class="im-avatar im-rail-item" aria-hidden="true">R</span><span class="im-row-text"><span class="im-row-title">Row ${n}</span></span></div>`, collapse: { collapse: 'Collapse sidebar', expand: 'Expand sidebar' } }),
       statusHtml: options.status === false ? undefined : `<span class="im-status-text">Status ${n}</span>`,
       contentHtml: `<button type="button" id="opener">Delete item ${n}</button>`,
@@ -406,28 +406,27 @@ async function frame(page) {
   assert.equal(await page.evaluate(() => frameTest.answer), false, 'the dialog still answers after the repaint');
   assert.equal(await page.evaluate(() => frameTest.shell.querySelector('.im-body').inert), false, 'closing it releases the body');
 
-  // The status row comes back above the columns; the sidebar goes and comes back before the work area.
+  // The status row comes back above the columns; the sidebar and its button go and come back as the elements the
+  // modules were wired to once, at the first paint: nothing is wired again.
   const regions = await page.evaluate(() => {
     const { shell, paint } = frameTest;
+    const toggle = shell.querySelector('.im-sidebar-toggle');
     ui.renderShellFrame(shell, paint(3));
     const work = [...shell.querySelector('.im-work').children].map(el => el.className);
     ui.renderShellFrame(shell, paint(4, { sidebar: false }));
-    const without = { sidebar: shell.querySelector('.im-sidebar'), off: shell.dataset.imSidebar };
+    const without = { sidebar: shell.querySelector('.im-sidebar'), toggle: shell.querySelector('.im-sidebar-toggle'), off: shell.dataset.imSidebar };
     ui.renderShellFrame(shell, paint(5));
-    return { work, without, body: [...shell.querySelector('.im-body').children].map(el => el.className), on: shell.dataset.imSidebar };
+    return {
+      work, without, body: [...shell.querySelector('.im-body').children].map(el => el.className), on: shell.dataset.imSidebar,
+      sameSidebar: shell.querySelector('.im-sidebar') === frameTest.sidebar, sameToggle: shell.querySelector('.im-sidebar-toggle') === toggle,
+      rows: shell.querySelector('.im-sidebar .im-row-title').textContent,
+    };
   });
   assert.deepEqual(regions, {
-    work: ['im-status', 'im-columns', 'im-actions', 'im-footer'], without: { sidebar: null, off: 'off' },
-    body: ['im-panel im-sidebar', 'im-work'], on: 'on',
-  });
-  // The sidebar that came back is a new one: the app wires it again, as it does after any first paint.
-  await page.evaluate(() => {
-    for (const stop of frameTest.stops.splice(1)) stop();
-    const { shell } = frameTest;
-    frameTest.stops.push(ui.sidebarDrawer(shell), ui.sidebarCollapse(shell), ui.sidebarResize(shell, { label: 'Sidebar width' }));
-    frameTest.sidebar = shell.querySelector('.im-sidebar');
-    ui.renderShellFrame(shell, frameTest.paint(6));
-  });
+    work: ['im-status', 'im-columns', 'im-actions', 'im-footer'], without: { sidebar: null, toggle: null, off: 'off' },
+    body: ['im-panel im-sidebar', 'im-work'], on: 'on', sameSidebar: true, sameToggle: true, rows: 'Row 5',
+  }, 'the sidebar and its button come back as the same elements, with the new rows');
+  await page.evaluate(() => ui.renderShellFrame(frameTest.shell, frameTest.paint(6)));
   assert.equal(await page.evaluate(() => frameTest.shell.querySelector('.im-sidebar') === frameTest.sidebar), true, 'a repaint keeps the sidebar element');
   const fold = page.getByRole('button', { name: 'Collapse sidebar' });
   await fold.click();
@@ -441,7 +440,15 @@ async function frame(page) {
   assert.equal(await page.evaluate(() => frameTest.shell.style.getPropertyValue('--im-w-sidebar')), '240px', 'the splitter still resizes after a repaint');
   await page.evaluate(() => { frameTest.shell.style.width = '600px'; });
   await page.getByRole('button', { name: 'Threads' }).click();
-  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), 'true', 'the sidebar button still opens the drawer after a repaint');
+  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), 'true', 'the sidebar button still opens the drawer after the sidebar came back');
+  assert.deepEqual(await page.evaluate(() => {
+    const active = document.activeElement;
+    return { inSidebar: active?.closest('.im-sidebar') === frameTest.sidebar, connected: frameTest.sidebar.isConnected, rendered: !!active?.getClientRects().length };
+  }), { inSidebar: true, connected: true, rendered: true }, 'focus goes into the sidebar on screen');
+  await page.locator('.im-sidebar .im-panel-title').click();
+  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), 'true', 'a press inside the sidebar that came back keeps the drawer open');
+  await page.locator('.im-sidebar .im-row').click();
+  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), 'true', 'and so does a press on one of its rows');
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), undefined, 'and Escape closes it');
   await page.evaluate(() => {

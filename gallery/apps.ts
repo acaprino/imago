@@ -68,7 +68,7 @@ function table(cols: Column[], rows: TableRow[]): string {
 
 // ---- the five apps ---------------------------------------------------------------------------------------------
 
-type Strings = { cancel: string; undo: string; commands: string; views: string; collapse: string; expand: string };
+type Strings = { cancel: string; undo: string; commands: string; views: string; collapse: string; expand: string; skip: string };
 type App = {
   name: string; tabs: string[]; on?: number;
   primary: { text: string; keys?: string; icon?: string; act?: string };
@@ -79,7 +79,7 @@ type App = {
   strings: Strings;
 };
 
-const EN: Strings = { cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views', collapse: 'Collapse sidebar', expand: 'Expand sidebar' };
+const EN: Strings = { cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views', collapse: 'Collapse sidebar', expand: 'Expand sidebar', skip: 'Skip to content' };
 
 export const APPS: Record<AppId, App> = {
   xiox: {
@@ -127,7 +127,7 @@ export const APPS: Record<AppId, App> = {
       { dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
       { dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { t: 'Dunning emails', s: '1 session', m: '6m' },
       { t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
-    content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
+    content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<div class="im-panel-body g-term-body"><pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
 
 I will hand the tasks to implementer, and keep reviewer for the diff:
   1. exponential backoff in retry.ts
@@ -139,7 +139,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
 <span class="g-t-ok">+</span> Task 2  jitter and cap            <span class="g-t-ok">green</span>
 <span class="g-t-w">*</span> Task 3  idempotency key           <span class="g-t-w">running</span>
 
-<span class="g-t-m">[reviewer]</span> 2 findings, 0 blocking.</pre>`,
+<span class="g-t-m">[reviewer]</span> 2 findings, 0 blocking.</pre></div>`,
     inspector: () => `${header('Session', { right: chip('Running', 'ok') })}<div class="im-panel-body">${facts([['Harness', 'Claude Code'], ['Project', 'billing-service'], ['Branch', 'feature/retry-backoff'], ['Memory', '67 MiB'], ['Size', '120 × 32'], ['Folder', 'C:\\work\\acme\\billing-service', true]])}</div><div class="im-panel-foot">${button('End session', { danger: true, act: 'kill' })}</div>`,
     strings: EN,
   },
@@ -176,7 +176,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
       { c: [two('Dynamic', 'Osservazione dei test · esclusa dalla demo'), chip('Prevista'), '3 / 4', none] },
       { c: [two('Union', 'Collegamento dei grafi'), chip('In attesa'), '4 / 4', none] }])}</div>`,
     inspector: () => `${header('Grafo', { n: 18 })}<div class="im-panel-body">${facts([['Nodi', '10 / 18'], ['Relazioni', '23 / 43'], ['Inventario', '5e49ee96e', true], ['Snapshot', '42a63a9ac071', true]])}</div><div class="im-panel-foot">${button('Elimina analisi', { danger: true, act: 'kill' })}</div>`,
-    strings: { cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale' },
+    strings: { cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale', skip: 'Vai al contenuto' },
   },
 };
 
@@ -192,6 +192,7 @@ export function shellMarkup(id: AppId): string {
     : '';
   const keys = a.keys.map(([k, label]) => `<span>${key(k)}${label}</span>`).join('');
   return `<div class="im-shell" data-im-sidebar="${a.side ? 'on' : 'off'}">
+  <a class="im-shell-skip-link" href="#g-content">${a.strings.skip}</a>
   <header class="im-titlebar">
     <div class="im-brand"><span class="im-mark"><svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[id]}</svg></span><span class="im-wordmark">${a.name}</span></div>
     ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('list')}</button>` : ''}

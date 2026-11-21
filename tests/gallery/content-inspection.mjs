@@ -8,7 +8,7 @@ export default async function (page) {
       const fixture = document.createElement('div');
       fixture.id = 'content-inspection-fixture';
       fixture.innerHTML = `
-        <section class="im-shell" data-im-sidebar="off" data-im-look="${look}" data-im-theme="light" data-im-app="muro" style="width:1200px;height:600px">
+        <section class="im-shell" data-im-sidebar="off" data-im-look="${look}" data-im-theme="light" data-im-app="muro" style="width:1400px;height:600px">
           <header class="im-titlebar">Application</header>
           <div class="im-body"><div class="im-work"><div class="im-columns">
             <main class="im-panel im-content" id="content-main" tabindex="-1" aria-label="Page"><div class="im-panel-body"><div class="im-page-content" id="page">
@@ -48,7 +48,9 @@ export default async function (page) {
           paragraph: style('content-paragraph').marginTop,
           list: [style('plain-list').listStyleType, style('plain-list').paddingLeft],
           fieldset: style('plain-fieldset').borderTopWidth,
-          pagePadding: style('page').paddingTop, pageWidth: parseFloat(style('page').width), pageMax: style('page').maxWidth,
+          pagePadding: style('page').paddingTop,
+          // the column the text gets: the inner width, inside the padding
+          pageInner: fixture.querySelector('#page').clientWidth - parseFloat(style('page').paddingLeft) - parseFloat(style('page').paddingRight),
           inlinePadding: style('content-toolbar').paddingTop, toolbarInput: style('toolbar-input').maxWidth,
           asideColumns: style('content-columns').gridTemplateColumns.split(' ').map(parseFloat),
           activityDisplay: style('content-event').display,
@@ -71,7 +73,10 @@ export default async function (page) {
       assert.deepEqual(wide.list, ['none', '0px'], where('a bare list has no bullets in the shell'));
       assert.equal(wide.fieldset, '0px', where('a fieldset has no frame in the shell'));
       assert.equal(wide.pagePadding, '24px', where('page content has the padding of the content region'));
-      assert.equal(wide.pageMax, '1180px', where('page content keeps its measure'));
+      assert.equal(wide.pageInner, 1180, where('page content keeps its measure of 1180 inside its padding'));
+      await page.locator('#page').evaluate(el => el.classList.add('im-page-content--narrow'));
+      assert.equal((await measure()).pageInner, 860, where('narrow page content keeps its measure of 860 inside its padding'));
+      await page.locator('#page').evaluate(el => el.classList.remove('im-page-content--narrow'));
       assert.equal(wide.inlinePadding, '0px', where('the content toolbar is an inline row'));
       assert.equal(wide.toolbarInput, '100%', where('a field in the content toolbar never overflows it'));
       assert.equal(wide.asideColumns[0], 340, where('the aside column'));
