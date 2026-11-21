@@ -108,6 +108,22 @@ different in each. Nothing checks an app against the rules.
   nothing else (`Workbench` renders the shell's sidebar, content and inspector). It is the one exception to "no
   framework", written in `design.md`.
 
+### The mark at the top left
+
+The audit of 2026-11-21 found five different things at the left of the title bar: the gallery's square with a drawn
+symbol, Muro's PNG logo with no name, Mukade's own drawing with no square, Shinatama's name alone, Xiox's own amber
+square, Daodan's square with the text "d.". The owner asked for one treatment and took the agent's advice
+(2026-11-21, "cosa consigli?"):
+
+- The mark is `im-mark`: the 22px square in the app's accent (rounded in Smooth, cut in ONI) holding **one letter**,
+  the initial of the product's name in capitals, in the head font, weight 700, in `--im-accent-on`. No drawn symbol,
+  no image. The name (`im-wordmark`) is always beside it.
+- Mukade and Muro both show M; the hue and the name beside it tell them apart *(call)*.
+- `titlebarHtml` always writes the mark and the name from `brand.name`; `brand.image` and `im-brand-image` are
+  removed. The gallery's `MARKS` symbols go. An app's logo image stays what Windows shows (taskbar, executable),
+  not what the title bar shows.
+- `imago-check` reports a title bar whose brand is not that markup (rule `brand-mark`).
+
 ### One control for one need
 
 | Need | Stays | Removed or merged |

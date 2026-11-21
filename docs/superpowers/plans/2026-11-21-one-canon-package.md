@@ -267,6 +267,24 @@
 - [ ] **Step 3:** `npm test` passes.
 - [ ] **Step 4:** Commit.
 
+### Task 13: One mark at the top left (runs before Task 10)
+
+**Files:**
+- Modify: `ts/ui/shell-markup.ts` (`titlebarHtml`), `css/primitives.css` (`.im-mark`), `css/content.css` (drop `im-brand-image`), `css/looks/oni.css` if the mark's letter needs ONI's font, `gallery/apps.ts` (drop `MARKS`), `react/index.js` if `Shell` writes a brand, `scripts/check/rules.mjs` and `scripts/check/cli.mjs` (rule `brand-mark`), `docs/using-imago.md` section 4 and `docs/design-file.md` "Layout" (the sentence on the mark), `docs/superpowers/moving/task-13.md`
+- Test: `tests/shell-markup.test.ts`, `tests/check.test.ts`, `tests/gallery/layout.mjs`, `tests/gallery/controls.mjs` (contrast of the letter on the accent, five apps, both looks and themes)
+
+**Interfaces:**
+- `TitlebarOptions.brand` is `{ name: string }`; `image` is removed. `titlebarHtml` writes `<div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>M</span><span class="im-wordmark" data-tauri-drag-region>Muro</span></div>`: the letter is the first letter of `name`, in capitals (`Array.from(name.trim())[0].toLocaleUpperCase()`); a name with no letter writes no mark.
+- `.im-mark` keeps its box (22px, accent fill, radius of a control, ONI's cut) and draws text: `font: 700 var(--im-fs-body)/1 var(--im-font-head)`, colour `--im-accent-on`, no letter spacing, no text transform. The `svg` rules of the mark are removed.
+- `imago-check` rule `brand-mark`, app mode: an element with class `im-brand` in the app's markup or script whose content is not exactly one `im-mark` holding one letter followed by one `im-wordmark`; an `img` or `svg` inside `im-brand`; a class `im-brand-image`.
+- Mapping rows: `brand.image` and `im-brand-image` → the mark and the name; a drawn symbol in `im-mark` → the initial.
+
+- [ ] **Step 1:** Tests: `titlebarHtml({ brand: { name: 'muro' } })` writes the markup above with `M`; a name that starts with a space or an emoji; the gallery shows a letter in each app's mark and its contrast on the accent is 4.5:1 or more in both looks and themes; at 340 and under the brand is gone as before; the check rule on one string that must be found (an `img` in `im-brand`) and one that must not.
+- [ ] **Step 2:** Run; they fail.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** `npm test`, `npm run build`, `node tests/gallery/run.mjs` pass.
+- [ ] **Step 5:** Commit.
+
 ### Task 12: CI and `develop`
 
 **Files:**
