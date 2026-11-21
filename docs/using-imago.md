@@ -328,6 +328,44 @@ panel.append(path, tree.element);
 tree.destroy();
 ```
 
+### The icons of the executables
+
+The package carries one icon for each app, in `@acaprino/imago/icons/<app>/` with `<app>` one of `shinatama`, `xiox`,
+`mukade`, `muro` and `daodan`. It is the mark of the title bar: the app's accent in the dark themes as a rounded
+square, and the capital initial of its name in the accent's ink. The app's window program, its command-line program
+and a page of it served in a browser all use the same icon. Mukade and Muro both show an M, and no name stands beside
+an icon on a taskbar: the hue alone tells them apart. `npm run icons` makes the files from the token file, so an app
+copies them and never draws or recolours its own.
+
+A folder holds `icon.svg` (the source), `16x16.png` to `512x512.png` (16, 24, 32, 48, 64, 128, 256 and 512),
+`icon.png` (the 512 one), `icon.ico` (16, 24, 32, 48, 64 and 256), `favicon.ico` (16, 32 and 48) and `favicon.svg`.
+
+- **A Tauri app** puts these in its `src-tauri/icons/`: `32x32.png`, `128x128.png`, `128x128@2x.png` (the package's
+  `256x256.png`), `icon.png` and `icon.ico`.
+- **A command-line program built with a resource file** keeps a copy of `icon.ico` in the app, and its `.rc` points at
+  that copy: `1 ICON "icon.ico"`.
+- **A page served in a browser** links `favicon.svg` and `favicon.ico`:
+
+```html
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+```
+
+`imago-check` reports a copy that is not the package's file, byte for byte (rule `app-icon`). Tell it which app this is
+and which file is which in the `"imago"` block of the app's `package.json`: `"app"` is the app's id, and `"icons"` maps
+a path in the app to the file of `icons/<app>/` it must equal. Without `"icons"` the rule is skipped, and the program
+says so.
+
+```json
+"imago": {
+  "app": "muro",
+  "icons": {
+    "src-tauri/icons/icon.ico": "icon.ico",
+    "src-tauri/icons/128x128@2x.png": "256x256.png"
+  }
+}
+```
+
 ## 6. What the app must do itself
 
 The package does not do these. Each is a place where an app that forgets looks different from the others.
