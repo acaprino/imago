@@ -69,7 +69,7 @@ adds layout roles (`stack`, `row`, `scroll`, `bounded`, `grow`, `truncate`), lis
 roles (`choiceList`, `summaryList`, `conversation`), dialog roles
 (`sectionedDrawer`, `fileDialog`) and the regions of a desktop shell (`workArea`,
 `dockedInspector`, `resizableNav`, `navLine`). The `UiTrait` type lists every
-one. `uiTone(node, tone)` puts a text in the `ok`, `warn` or `err` tone, and
+one, among them `overlay`, a panel over the whole of its positioned host. `overviewStrip(options)` is the whole of a scrolling view in miniature at its edge: the app paints the trace in its canvas and places its frame and band, and Imago draws the strip and reports presses, drags and the wheel. `uiTone(node, tone)` puts a text in the `ok`, `warn` or `err` tone, and
 `null` gives it its own colour back; the words still say the state.
 `uiEmphasis(button, emphasis)` makes a button the `primary` action or the armed
 `danger` one, and `null` makes it plain again. The app keeps its own classes for

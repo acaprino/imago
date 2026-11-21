@@ -23,3 +23,6 @@
 .im-notice-bubble p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 .im-notice-bubble [role=status] { color: var(--im-err); }
 :where([data-im-look]) [hidden] { display: none !important; }
+/* A panel over the whole of its positioned host (uiTraits 'overlay'), its parts in a column. */
+.im-overlay { position: absolute; inset: 0; z-index: 8; }
+.im-overlay:not([hidden]) { display: flex; flex-direction: column; }

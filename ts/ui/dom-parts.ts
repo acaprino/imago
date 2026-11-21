@@ -40,6 +40,8 @@ const traits = {
   chip: 'im-chip', signal: 'im-signal', list: 'im-list', formGrid: 'im-form-grid', section: 'im-section',
   choiceList: 'im-choice-list', choiceRow: 'im-choice-row', summaryList: 'im-summary-list', conversation: 'im-scroll-log',
   emptyMessage: 'im-empty-message', renderView: 'im-render-view', viewportFooter: 'im-viewport-footer',
+  // A panel over the whole of its positioned host, its parts in a column (the archived lines over a live terminal).
+  overlay: 'im-overlay',
   paddedDrawer: 'im-padded-drawer', sectionedDrawer: 'im-sectioned-drawer', fileDialog: 'im-file-dialog',
   desktopContent: 'im-desktop-content', toolbar: 'im-toolbar', workArea: 'im-work-area', workspaceArea: 'im-workspace-area',
   noticeHost: 'im-notices', notice: 'im-float im-notice', dockedInspector: 'im-docked-inspector',

@@ -13,6 +13,7 @@
 @import "./file-workspace.css";
 @import "./navigation-panels.css";
 @import "./tiling-workspace.css";
+@import "./overview-strip.css";
 @import "./file-tree-detail.css";
 @import "./inspection.css";
 @import "./looks/oni.css";

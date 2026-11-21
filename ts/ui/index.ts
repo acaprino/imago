@@ -40,3 +40,4 @@ export * from './portrait-notice.ts';
 export * from './file-workspace.ts';
 export * from './keyed-list.ts';
 export * from './tiling-workspace.ts';
+export * from './overview-strip.ts';
