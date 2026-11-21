@@ -124,7 +124,6 @@ export function openDialogSheet(dialog: HTMLDialogElement, options: {
   dialog.dataset.imLayer = 'sheet';
   dialog.dataset.sheet = options.placement;
   dialog.removeAttribute('aria-modal');
-  dialog.removeAttribute('data-covered');
   if (options.placement === 'below') anchor.setAttribute('aria-expanded', 'true');
   shell.append(dialog);
   dialog.show();

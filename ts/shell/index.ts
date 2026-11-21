@@ -8,4 +8,3 @@ export { mountWindowControls } from './window-controls.ts';
 export type { WindowApi, WindowControlsOptions, WindowRect } from './window-controls.ts';
 export { guardDesktop } from './desktop-guard.ts';
 export type { KeyLike } from './desktop-guard.ts';
-export { applyShinatamaPalette, SHINATAMA_PALETTES, type ShinatamaPaletteTokens } from './shinatama-palette.ts';

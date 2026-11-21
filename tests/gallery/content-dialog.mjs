@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
 
+// A dialog sits in the middle of the layer under the title bar, whatever it holds: no side panel is drawn as a dialog.
+async function assertCentred(page, locator, text) {
+  const offset = await locator.evaluate((el) => {
+    const d = el.getBoundingClientRect(), z = el.closest('.im-scrim').getBoundingClientRect();
+    return [(d.left + d.right - z.left - z.right) / 2, (d.top + d.bottom - z.top - z.bottom) / 2];
+  });
+  assert.ok(offset.every((n) => Math.abs(n) <= 1.5), `${text}: the dialog is off the middle of its layer by ${offset.map(Math.round)}`);
+}
+
 export default async function(page) {
   for(const look of ['smooth','oni'])for(const theme of ['dark','light']){
     await page.evaluate(({look,theme})=>window.__imago.set({app:'muro',look,theme,glass:false}),{look,theme});
@@ -14,6 +23,7 @@ export default async function(page) {
       window.__native.open();
     });
     const dialog=page.getByRole('dialog',{name:'Native form'});
+    await assertCentred(page,dialog,`${look} ${theme}: an app-owned content dialog`);
     await dialog.getByRole('textbox',{name:'Name',exact:true}).fill('Kept after failure');
     await page.keyboard.press('Escape');
     assert.equal(await dialog.isVisible(),true,'locked Escape keeps the form');
@@ -32,11 +42,11 @@ export default async function(page) {
     assert.equal(await page.evaluate(()=>document.querySelector('.im-body').inert),false,'native form close releases modality');
     await page.evaluate(()=>{const shell=document.querySelector('.im-shell');window.__imagoSurfaces.notify(shell,'Dispose me');window.__imagoSurfaces.clearNotices(shell);});
     assert.equal(await page.locator('[data-im-notices]').count(),0);
-    await controllerContract(page);
+    await controllerContract(page, look, theme);
   }
 }
 
-async function controllerContract(page) {
+async function controllerContract(page, look, theme) {
   await page.evaluate(() => {
     const api = window.__imagoSurfaces;
     const shell = document.createElement('section');
@@ -54,15 +64,17 @@ async function controllerContract(page) {
       },
       fallbackFocus: () => shell.querySelector('#controller-main'),
     });
-    state.show = () => {
+    // `mode` is what an app written for 0.1.4 still passes to ask for a side panel: there is none, so it changes nothing.
+    state.show = (mode) => {
       shell.querySelector('#controller-opener').focus();
-      state.controller.show('<form class="im-form"><h2>Controller form</h2><label>Name<input name="name" value="Draft" autofocus></label><button type="button">Save</button></form>');
+      state.controller.show('<form class="im-form"><h2>Controller form</h2><label>Name<input name="name" value="Draft" autofocus></label><button type="button">Save</button></form>', mode);
     };
     window.__contentController = state;
     state.show();
   });
   try {
     const formDialog = page.locator('#content-controller-fixture').getByRole('dialog', { name: 'Controller form' });
+    await assertCentred(page, formDialog, `${look} ${theme}: a dialog of createContentDialog`);
     await formDialog.getByRole('textbox', { name: 'Name' }).fill('Kept draft');
     await page.evaluate(() => window.__contentController.controller.element.querySelector('form').setAttribute('aria-busy', 'true'));
     await page.keyboard.press('Escape');
@@ -106,6 +118,16 @@ async function controllerContract(page) {
       state.controller.dismiss();
     });
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'controller-main', 'callback-assigned focus is not replaced by opener restoration');
+
+    // The side panel is the inspector. A dialog asked to be a drawer is the one centred dialog, newly opened and repainted.
+    await page.evaluate(() => window.__contentController.show('drawer'));
+    assert.equal(await formDialog.evaluate((el) => /drawer/.test(el.className)), false, `${look} ${theme}: no drawer class`);
+    await assertCentred(page, formDialog, `${look} ${theme}: a dialog opened with the 'drawer' mode of 0.1.4`);
+    await page.evaluate(() => window.__contentController.controller.show('<form class="im-form"><h2>Controller form</h2><button type="button">Save</button></form>', 'drawer'));
+    assert.equal(await formDialog.evaluate((el) => /drawer/.test(el.className)), false, `${look} ${theme}: a repaint with the 'drawer' mode adds no drawer class`);
+    await assertCentred(page, formDialog, `${look} ${theme}: a repaint with the 'drawer' mode`);
+    assert.equal(await formDialog.evaluate((el) => getComputedStyle(el).borderTopLeftRadius === getComputedStyle(el).borderTopRightRadius), true, `${look} ${theme}: the corners are the dialog's, not a panel's with one square edge`);
+    await page.evaluate(() => window.__contentController.controller.dismiss());
   } finally {
     await page.evaluate(async () => {
       const state = window.__contentController;
