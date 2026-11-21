@@ -172,14 +172,35 @@ fn build_main(app: &AppHandle) -> tauri::Result<()> {
         config.use_https_scheme,
     )
     .build()?;
+    // A window opened anew counts from nothing, also under a label used before (a count closed with its last window
+    // would never let it reload again); a window built again after a lost browser process keeps its count, and a real
+    // app's rebuild does not come through here.
+    if let Ok(mut recoveries) = app.state::<Failures>().recoveries.lock() {
+        recoveries.insert(window.label().to_owned(), Recovery::new());
+    }
     wire(app, &window)
 }
 
 /// WebView2 reports the processes that end with the application, or with a window, as failed: that is not a failure
-/// to recover from. When the exit begins every window's count learns it, and when a window closes its own does; from
-/// then on their failures are ignored. A window destroyed to be built again is not closing, so nothing is marked while
-/// the windows are rebuilt (never, in the demo; a real app also prevents the exit then).
+/// to recover from. An exit the demo does not prevent (it prevents none: it never rebuilds and has no tray) closes
+/// every window's count, and a window that closes closes its own (the demo prevents no close, so a close asked for is
+/// the end of that window; an app that may prevent one waits for `Destroyed`). From then on their failures are ignored.
 fn on_run_event(app: &AppHandle, event: RunEvent) {
+    match event {
+        RunEvent::ExitRequested { .. } | RunEvent::Exit => close_recoveries(app, None),
+        RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed,
+            ..
+        } => close_recoveries(app, Some(label)),
+        _ => {}
+    }
+}
+
+/// Closes the count of the window `label`, or with `None` every count: of each window there is, also one that has not
+/// failed yet and has no count, and of the windows already gone. A window destroyed to be built again is not closing,
+/// so nothing is closed while the windows are rebuilt (never, in the demo; a real app also prevents the exit then).
+fn close_recoveries(app: &AppHandle, label: Option<String>) {
     let failures = app.state::<Failures>();
     if failures.rebuilding.load(Ordering::SeqCst) {
         return;
@@ -187,25 +208,16 @@ fn on_run_event(app: &AppHandle, event: RunEvent) {
     let Ok(mut recoveries) = failures.recoveries.lock() else {
         return;
     };
-    match event {
-        RunEvent::ExitRequested { .. } | RunEvent::Exit => {
-            // Every window, also one that has not failed yet and has no count of its own, and the counts of the
-            // windows already gone.
+    match label {
+        Some(label) => recoveries.entry(label).or_default().close(),
+        None => {
             for label in app.webview_windows().into_keys() {
-                recoveries.entry(label).or_default().close();
+                recoveries.entry(label).or_default();
             }
             for recovery in recoveries.values_mut() {
                 recovery.close();
             }
         }
-        RunEvent::WindowEvent {
-            label,
-            event: tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed,
-            ..
-        } => {
-            recoveries.entry(label).or_default().close();
-        }
-        _ => {}
     }
 }
 

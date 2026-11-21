@@ -226,10 +226,12 @@ mod win {
                 let item = items.GetValueAtIndex(index)?;
                 let mut name = PWSTR::null();
                 item.Name(&mut name)?;
+                // Copied and freed at once, so a failure below leaks nothing.
+                let name = take_pwstr(name);
                 let mut kind = COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND::default();
                 item.Kind(&mut kind)?;
                 let separator = kind == COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR;
-                entries.push((take_pwstr(name), separator));
+                entries.push((name, separator));
             }
             let keep = menu_keep(&entries);
             // From the last entry back, so the indices still to visit do not move.

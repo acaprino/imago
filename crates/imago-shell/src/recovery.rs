@@ -42,7 +42,8 @@ const LOAD_RETRY_DELAY: Duration = Duration::from_secs(1);
 /// The reloads of one window in the last minute, and whether it is closing. Keep one for each
 /// window, and keep it across rebuilds (a window built again after a lost browser process that
 /// failed three times a minute ago has still failed three times): a window that fails does not use
-/// up the reloads of another.
+/// up the reloads of another. A window opened anew, not rebuilt, gets a new one, also under a label
+/// used before.
 #[derive(Debug, Default)]
 pub struct Recovery {
     reloads: VecDeque<Instant>,
@@ -80,12 +81,16 @@ impl Recovery {
     /// answers every failure of this window with [`RecoveryAction::Ignore`] (no reload, no rebuild,
     /// no question). There is no way back, and [`reset`](Recovery::reset) does not undo it.
     ///
-    /// Call it on every window's `Recovery` when the application's exit begins
-    /// (`RunEvent::ExitRequested`, `RunEvent::Exit`), and on one window's when that window is
-    /// closed for good (a `WindowEvent::CloseRequested` the app does not prevent,
-    /// `WindowEvent::Destroyed`). A window destroyed to be built again is not closing: while the
-    /// app rebuilds its windows (see [`RecoveryAction::Rebuild`]) it calls this for none of them,
-    /// and it prevents that exit.
+    /// It stays on this `Recovery` for good, so it is for a window that will not come back: a
+    /// window opened anew under the same label, not rebuilt, gets a new `Recovery`
+    /// ([`Recovery::new`]), or it would never reload, rebuild or ask.
+    ///
+    /// Call it on every window's `Recovery` when an exit begins that the app does not prevent
+    /// (`RunEvent::ExitRequested`, `RunEvent::Exit`): an exit the app prevents (to rebuild its
+    /// windows, or to stay in the tray) closes nothing. Call it on one window's when that window is
+    /// closed for good: on `WindowEvent::Destroyed`, or already on `WindowEvent::CloseRequested`
+    /// when the app never prevents a close. A window destroyed to be built again is not closing:
+    /// while the app rebuilds its windows (see [`RecoveryAction::Rebuild`]) it calls this for none.
     pub fn close(&mut self) {
         self.closing = true;
     }

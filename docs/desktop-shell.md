@@ -37,8 +37,10 @@ Facts about the material:
   page sends with the window theme (1.2). `apply_theme` sets it: `acrylic_tint(look, theme)` is the ground of the look
   under glass (the row "Ground" of 1.3), with its alpha as a byte: Smooth dark `#0C111D` and 204, Smooth light
   `#F6F7F9` and 224, ONI dark `#0B0416` and 219, ONI light `#E9EEF8` and 230. A window on Windows 10 is then light
-  under a light look and dark under a dark one, also under the theme `system` when Windows changes its colours (the
-  page sends the theme it draws again). The first frame keeps the tint of the app's own config, which
+  under a light look and dark under a dark one. Under the theme `system` the tint follows a change of Windows' colours
+  only when the page calls `applyLook` again at that change, as [using-imago.md](using-imago.md), section 3, asks
+  (listening to `prefers-color-scheme`): then the page sends the theme it draws again. The demo's page does it
+  (`gallery/mount/desktop.ts`). The first frame keeps the tint of the app's own config, which
   `glass_window_config` leaves as it is, until the page's first `set_window_theme`. On Windows 11 22H2 and later
   nothing changes: setting the effect again sets the backdrop the window already has (the call Tauri made when it
   built the window), and that backdrop takes no tint.
@@ -70,8 +72,9 @@ and nothing else. The path of the word:
 
 1. The page calls `applyLook`, which sets the root attributes and sends the window theme to the window through the
    function the app gives as `setWindowTheme`, with `{ look, resolved }`: the look and the theme the page draws
-   (`light` or `dark`, never `system`). It sends again when the word, the look or the theme drawn changed, and not
-   otherwise; under `system` a change of Windows' colours changes the theme drawn.
+   (`light` or `dark`, never `system`). Called again, it sends again when the word, the look or the theme drawn
+   changed, and not otherwise; under `system` a change of Windows' colours changes the theme drawn, when the app calls
+   `applyLook` again at that change (1.1).
 2. The app's command `set_window_theme` calls `parse_theme` (a word that is not `light`, `dark` or `system` is
    refused) and `drawn_by_page` for the look and the theme drawn (a page that sends neither, an older one, is Smooth
    in the word's own theme, and dark for `system`), then `apply_theme(window, theme, look, resolved)` (Tauri's
@@ -161,7 +164,7 @@ Shinatama's method still holds:
 | WebView2 crash | A page reloaded at most three times a minute; a lost browser process rebuilds the windows; nothing is done while the app closes | `watch_process_failures`, `recovery_action`, `Recovery` (see section 4) |
 | Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, panels, notices and code are selectable | `css/base.css` |
 | Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `mountZoom` |
-| Theme | The window theme from the look, saved for the first frame (1.2) | `applyLook`, `parse_theme`, `apply_theme`, `save_theme`, `saved_theme` |
+| Theme | The window theme from the look, saved for the first frame (1.2), and the tint of the acrylic for Windows 10 (1.1) | `applyLook`, `parse_theme`, `drawn_by_page`, `apply_theme`, `acrylic_tint`, `Look`, `save_theme`, `saved_theme` |
 | Place of the window | The pieces to save the position, size and maximized state and to bring them back inside the monitors there are now. The crate gives the pieces and the app wires them, as the paragraph below says; the demo does not | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
 
 The place of the window is Xiox's, moved into the shell. Xiox saves it in `window.json` in the data folder with the
@@ -213,8 +216,9 @@ A window built again after a lost browser process goes through this again.
 4. `install_reload_menu(&window, "Reload interface", on_reload)`. The app words the label and decides what a reload
    is. `on_reload` runs on a thread of its own, because the window's thread may be the one waiting for a hung page.
 
-Each window also needs its own `Recovery`, kept per label and across rebuilds. When the application's exit begins, and
-when one window closes for good, the app calls `Recovery::close` on the `Recovery` of those windows (section 4).
+Each window also needs its own `Recovery`, kept per label and across rebuilds; a window opened anew, not rebuilt, gets a
+new one (`Recovery::new`), also under a label used before. When an exit begins that the app does not prevent, and when
+one window closes for good, the app calls `Recovery::close` on the `Recovery` of those windows (section 4).
 
 ### 3.3 Between the page and Rust
 
@@ -294,18 +298,24 @@ transparent window with nothing in it that takes no input.
 
 ### While the application closes
 
-WebView2 reports the processes that end with the application, or with a window, as failed (Xiox saw it): that is not
-a failure to recover from. `Recovery::close` tells it to a window's `Recovery`, and from then on `recovery_action`
-answers every failure of that window with `RecoveryAction::Ignore`: no reload, no rebuild, no question. Nothing undoes
-it, `Recovery::reset` included. The app calls it:
+Closing the application ends its WebView2 processes too, and WebView2 reports them as failed: that is not a failure
+to recover from. That is what Xiox found with its one window, and why it ignores every failure once its exit or the
+close of its window begins. A window closed while the application goes on is the same case for that window.
+`Recovery::close` tells it to a window's `Recovery`, and from then on `recovery_action` answers every failure of that
+window with `RecoveryAction::Ignore`: no reload, no rebuild, no question. Nothing undoes it, `Recovery::reset`
+included. The app calls it:
 
-- on every window's `Recovery` when the application's exit begins (Tauri's `ExitRequested` and `Exit`), a window that
-  has no `Recovery` yet included;
-- on one window's when that window is closed for good (a `CloseRequested` the app does not prevent, `Destroyed`).
+- on every window's `Recovery` when an exit begins that the app does not prevent (Tauri's `ExitRequested` and
+  `Exit`), a window that has no `Recovery` yet included. An exit the app prevents, to rebuild its windows or to stay
+  in the tray, closes nothing;
+- on one window's when that window is closed for good: on `Destroyed`, or already on `CloseRequested` when the app
+  never prevents a close.
 
-A window destroyed to be built again is not closing: while the rebuilding flag is set the app calls it for none of
-them, prevents the exit as the contract below says, and keeps each `Recovery` as it is. The demo does it in
-`on_run_event` (`examples/demo/src-tauri/src/main.rs`).
+A closed `Recovery` stays closed, so a window opened anew under the same label, and not rebuilt, gets a new one
+(`Recovery::new`): with the old one it would never reload, rebuild or ask again. A window destroyed to be built again
+is not closing: while the rebuilding flag is set the app calls it for none of them, prevents the exit as the contract
+below says, and keeps each `Recovery` as it is. The demo does it in `build_main`, `on_run_event` and
+`close_recoveries` (`examples/demo/src-tauri/src/main.rs`); it prevents no exit and no close.
 
 ### The rebuilding contract
 

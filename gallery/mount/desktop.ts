@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { applyLook, guardDesktop, mountWindowControls, mountZoom } from '../../ts/shell/index.ts';
+import { applyLook, guardDesktop, mountWindowControls, mountZoom, parseTheme, type WindowTheme, type WindowThemeDetail } from '../../ts/shell/index.ts';
 import { tauriWindowApi } from '../../ts/tauri.ts';
 import { notify } from '../../ts/ui/notice.ts';
 import type { MountContext } from '../main.ts';
@@ -11,7 +11,8 @@ import type { MountContext } from '../main.ts';
 //   - lets the shell fill the window, with no gallery page around it (the picker bar and the sample sections stay in
 //     the browser; the look and the theme change through `window.__imago.set`);
 //   - wires the title bar's buttons, the zoom keys and the guard that keeps the window from behaving as a web page;
-//   - tells the window the theme of the look after every change, which on Windows 11 is the theme of the acrylic.
+//   - tells the window the theme of the look after every change, which on Windows 11 is the theme of the acrylic, and
+//     with the Windows theme follows a change of Windows' colours.
 
 const inDesktopApp = (): boolean => '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
 
@@ -61,14 +62,32 @@ export default function mount(ctx: MountContext): (() => void) | undefined {
 
   // The theme of the look goes to the window each time it, the look or the theme drawn changes (the window saves the
   // word for the next start, and tints the acrylic with the look and the theme drawn).
-  applyLook(ctx.root, { app: ctx.app, look: ctx.look, theme: ctx.theme, glass: true }, {
-    setWindowTheme: (theme, { look, resolved }) => invoke('set_window_theme', { theme, look, resolved }),
-  });
+  const state = { app: ctx.app, look: ctx.look, theme: parseTheme(ctx.theme), glass: true };
+  const deps = {
+    setWindowTheme: (theme: WindowTheme, detail: WindowThemeDetail) =>
+      invoke('set_window_theme', { theme, look: detail.look, resolved: detail.resolved }),
+  };
+  applyLook(ctx.root, state, deps);
+  // With the Windows theme the page draws what Windows has: a change of Windows' colours applies the look again, which
+  // also tells the window (docs/using-imago.md, section 3).
+  const stopFollowing = followWindows(state.theme === 'system', () => applyLook(ctx.root, state, deps));
 
   const titlebar = shell.querySelector<HTMLElement>('.im-titlebar');
-  if (!titlebar) return undefined;
+  if (!titlebar) return stopFollowing;
   markDragRegion(titlebar);
-  return mountWindowControls(titlebar, tauriWindowApi(fail), {
+  const stopControls = mountWindowControls(titlebar, tauriWindowApi(fail), {
     onError: (action, error) => fail(action, error),
   });
+  return () => {
+    stopFollowing();
+    stopControls();
+  };
+}
+
+/** Calls `again` at every change of Windows' colours while `on`; the function it returns stops listening. */
+function followWindows(on: boolean, again: () => void): () => void {
+  if (!on) return () => {};
+  const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+  scheme.addEventListener('change', again);
+  return () => scheme.removeEventListener('change', again);
 }
