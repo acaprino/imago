@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { applyLook, guardDesktop, mountWindowControls, mountZoom, parseTheme, type WindowTheme, type WindowThemeDetail } from '../../ts/shell/index.ts';
+import { applyLook, guardDesktop, mountWindowControls, mountZoom, type WindowTheme, type WindowThemeDetail } from '../../ts/shell/index.ts';
 import { tauriWindowApi } from '../../ts/tauri.ts';
 import { notify } from '../../ts/ui/notice.ts';
 import type { MountContext } from '../main.ts';
@@ -62,7 +62,7 @@ export default function mount(ctx: MountContext): (() => void) | undefined {
 
   // The theme of the look goes to the window each time it, the look or the theme drawn changes (the window saves the
   // word for the next start, and tints the acrylic with the look and the theme drawn).
-  const state = { app: ctx.app, look: ctx.look, theme: parseTheme(ctx.theme), glass: true };
+  const state = { app: ctx.app, look: ctx.look, theme: ctx.choice, glass: true };
   const deps = {
     setWindowTheme: (theme: WindowTheme, detail: WindowThemeDetail) =>
       invoke('set_window_theme', { theme, look: detail.look, resolved: detail.resolved }),

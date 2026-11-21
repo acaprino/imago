@@ -21,6 +21,8 @@ export type MountContext = {
   look: Look;
   /** The theme drawn: the choice, or for `system` the one Windows has. */
   theme: Theme;
+  /** The theme as chosen, which an app keeps and gives to `applyLook`: `system` follows Windows. */
+  choice: ThemeChoice;
   /** An empty element under the window where a module may add its own sections of the gallery page. */
   sections: HTMLElement;
   /**
@@ -124,7 +126,7 @@ function redraw(): void {
   const shell = root.querySelector<HTMLElement>('.im-shell');
   if (!shell) throw new Error('shellMarkup() drew no .im-shell');
   const registry = createRegistry();
-  const ctx: MountContext = { shell, root, app: state.app, look: state.look, theme: drawnTheme(), sections, registry };
+  const ctx: MountContext = { shell, root, app: state.app, look: state.look, theme: drawnTheme(), choice: state.theme, sections, registry };
   for (const [path, module] of Object.entries(mounts).sort(([a], [b]) => a.localeCompare(b))) {
     try {
       const cleanup = module.default?.(ctx);
