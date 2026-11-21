@@ -23,6 +23,10 @@
 //! Other WebView2 processes (GPU, utility) are restarted by WebView2 itself
 //! ([`RecoveryAction::Ignore`]). WebView2's own error page ("can't reach this page") is turned off
 //! by the watcher: it has no way back into the app.
+//!
+//! And Xiox's rule: while the application closes, WebView2 reports the processes that end with it
+//! as failed, which is not a failure to recover from. Once the app has called [`Recovery::close`],
+//! every failure of that window is `Ignore`.
 use std::{
     collections::VecDeque,
     time::{Duration, Instant},
@@ -35,18 +39,23 @@ const PERIOD: Duration = Duration::from_secs(60);
 /// A page that failed to load waits a moment before it tries again.
 const LOAD_RETRY_DELAY: Duration = Duration::from_secs(1);
 
-/// The reloads of one window in the last minute. Keep one for each window, and keep it across
-/// rebuilds (a window built again after a lost browser process that failed three times a minute
-/// ago has still failed three times): a window that fails does not use up the reloads of another.
+/// The reloads of one window in the last minute, and whether it is closing. Keep one for each
+/// window, and keep it across rebuilds (a window built again after a lost browser process that
+/// failed three times a minute ago has still failed three times): a window that fails does not use
+/// up the reloads of another. A window opened anew, not rebuilt, gets a new one, also under a label
+/// used before.
 #[derive(Debug, Default)]
 pub struct Recovery {
     reloads: VecDeque<Instant>,
+    /// The application or this window is closing: no failure is acted on any more.
+    closing: bool,
 }
 
 impl Recovery {
     pub const fn new() -> Self {
         Self {
             reloads: VecDeque::new(),
+            closing: false,
         }
     }
 
@@ -65,6 +74,25 @@ impl Recovery {
     /// has a fresh minute.
     pub fn reset(&mut self) {
         self.reloads.clear();
+    }
+
+    /// The application is closing, or this window is. WebView2 reports the processes that end with
+    /// them as failed, and that is not a failure to recover from: from now on [`recovery_action`]
+    /// answers every failure of this window with [`RecoveryAction::Ignore`] (no reload, no rebuild,
+    /// no question). There is no way back, and [`reset`](Recovery::reset) does not undo it.
+    ///
+    /// It stays on this `Recovery` for good, so it is for a window that will not come back: a
+    /// window opened anew under the same label, not rebuilt, gets a new `Recovery`
+    /// ([`Recovery::new`]), or it would never reload, rebuild or ask.
+    ///
+    /// Call it on every window's `Recovery` when an exit begins that the app does not prevent
+    /// (`RunEvent::ExitRequested`, `RunEvent::Exit`): an exit the app prevents (to rebuild its
+    /// windows, or to stay in the tray) closes nothing. Call it on one window's when that window is
+    /// closed for good: on `WindowEvent::Destroyed`, or already on `WindowEvent::CloseRequested`
+    /// when the app never prevents a close. A window destroyed to be built again is not closing:
+    /// while the app rebuilds its windows (see [`RecoveryAction::Rebuild`]) it calls this for none.
+    pub fn close(&mut self) {
+        self.closing = true;
     }
 }
 
@@ -124,7 +152,8 @@ pub enum RecoveryAction {
     /// the render process is unresponsive. When the person says yes, call [`Recovery::reset`] and
     /// reload.
     GiveUp,
-    /// Nothing to do: WebView2 restarts the process itself, or the window is being rebuilt.
+    /// Nothing to do: WebView2 restarts the process itself, the window is being rebuilt, or the
+    /// application or the window is closing ([`Recovery::close`]).
     Ignore,
 }
 
@@ -137,12 +166,17 @@ pub enum RecoveryAction {
 /// `Ignore`, and spends no reload: that is the one case Shinatama guards with its flag
 /// (`!recovering()` on a failed navigation). Every other failure is the same either way: a second
 /// `Browser` report is `Rebuild` again, and it is the app's flag that makes it act once.
+///
+/// Once [`Recovery::close`] was called, every failure is `Ignore` and nothing is counted.
 pub fn recovery_action(
     failure: ProcessFailure,
     recovery: &mut Recovery,
     now: Instant,
     rebuilding: bool,
 ) -> RecoveryAction {
+    if recovery.closing {
+        return RecoveryAction::Ignore;
+    }
     match failure {
         ProcessFailure::Browser => RecoveryAction::Rebuild,
         ProcessFailure::NotLoaded(_) if rebuilding => RecoveryAction::Ignore,
@@ -558,6 +592,40 @@ mod tests {
                 Some(ProcessFailure::NotLoaded(aborted))
             );
         }
+    }
+
+    #[test]
+    fn once_the_application_is_closing_no_failure_is_acted_on() {
+        let mut recovery = Recovery::default();
+        let start = Instant::now();
+        assert_eq!(
+            decide(ProcessFailure::Browser, &mut recovery, start),
+            RecoveryAction::Rebuild,
+            "before closing, a lost browser process rebuilds the windows"
+        );
+        // The application exits: WebView2 reports the processes that end with it as failed.
+        recovery.close();
+        for failure in [
+            ProcessFailure::Browser,
+            ProcessFailure::Renderer,
+            ProcessFailure::Unresponsive,
+            ProcessFailure::NotLoaded(1),
+            ProcessFailure::Other,
+        ] {
+            for rebuilding in [false, true] {
+                assert_eq!(
+                    recovery_action(failure, &mut recovery, start + SECOND, rebuilding),
+                    RecoveryAction::Ignore,
+                    "{failure:?}: no reload, no rebuild, no question"
+                );
+            }
+        }
+        recovery.reset();
+        assert_eq!(
+            decide(ProcessFailure::Browser, &mut recovery, start + 2 * SECOND),
+            RecoveryAction::Ignore,
+            "answering a question does not undo the closing"
+        );
     }
 
     #[test]
