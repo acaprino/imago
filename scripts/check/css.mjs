@@ -58,12 +58,24 @@ export function parseCss(text, firstLine = 1) {
   let braces = 0;
   let i = 0;
 
+  // Whether the buffer holds a character that is not a space, and its last four characters: kept beside it, because
+  // reading a buffer that grows one character at a time makes a statement of length L cost L squared.
+  let hasText = false;
+  let tail = '';
+
   const startBuffer = () => {
-    if (!buffer.trim()) bufferLine = line;
+    if (!hasText) bufferLine = line;
+  };
+  /** Appends a space, or a character that is one. */
+  const space = (/** @type {string} */ part) => {
+    buffer += part;
+    tail = (tail + part).slice(-4);
   };
   /** Appends text that is not a space, which ends on the current line. */
   const take = (/** @type {string} */ part) => {
     buffer += part;
+    tail = (tail + part).slice(-4);
+    hasText = true;
     bufferEnd = line;
   };
   const chain = () => stack.flatMap((entry) => (entry.kind === 'at' ? [entry.atRule] : []));
@@ -96,6 +108,8 @@ export function parseCss(text, firstLine = 1) {
       stack.push({ kind: 'rule', rule });
     }
     buffer = '';
+    hasText = false;
+    tail = '';
     parens = 0;
   };
 
@@ -106,6 +120,8 @@ export function parseCss(text, firstLine = 1) {
   const flush = (endLine = bufferEnd) => {
     const statement = buffer.trim();
     buffer = '';
+    hasText = false;
+    tail = '';
     parens = 0;
     braces = 0;
     if (!statement) return;
@@ -135,7 +151,7 @@ export function parseCss(text, firstLine = 1) {
     const c = text[i];
     if (c === '\n') {
       line++;
-      buffer += ' ';
+      space(' ');
       i++;
       continue;
     }
@@ -145,7 +161,7 @@ export function parseCss(text, firstLine = 1) {
       const body = text.slice(i + 2, end === -1 ? text.length : end);
       sheet.comments.push({ text: body, line });
       line += countLines(body);
-      buffer += ' ';
+      space(' ');
       i = stop;
       continue;
     }
@@ -168,7 +184,7 @@ export function parseCss(text, firstLine = 1) {
     }
     if (c === '(') {
       startBuffer();
-      if (/(?:^|[^\w-])url$/i.test(buffer)) {
+      if (/(?:^|[^\w-])url$/i.test(tail)) {
         let j = i + 1;
         while (j < text.length && /\s/.test(text[j])) j++;
         if (text[j] !== '"' && text[j] !== "'") {
@@ -220,7 +236,7 @@ export function parseCss(text, firstLine = 1) {
     if (!/\s/.test(c)) {
       startBuffer();
       take(c);
-    } else buffer += c;
+    } else space(c);
     i++;
   }
   flush();

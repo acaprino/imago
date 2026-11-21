@@ -118,7 +118,11 @@ const read = (dir: string): string => readdirSync(new URL(`../${dir}/`, import.m
 const CSS = read('css');
 const SOURCE = read('ts');
 
+<<<<<<< HEAD
 // The second drawings of a control that 0.1.2 to 0.1.4 added (the table "Moving from 0.1.4" in docs/using-imago.md): one drawing is left.
+=======
+// The second drawings of a control that 0.1.2 to 0.1.4 added (docs/using-imago.md, section 11): one drawing is left.
+>>>>>>> worktree-wf_224aac0d-88e-3
 const REMOVED = ['im-native-controls', 'im-native-input', 'im-native-select', 'im-native-textarea', 'im-native-check', 'im-native-radio',
   'im-native-choice', 'im-seg--native', 'im-seg--choice', 'im-switch-knob'];
 

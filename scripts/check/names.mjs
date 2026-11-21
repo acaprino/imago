@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { classesOf } from './css.mjs';
-import { DYNAMIC, lineAt, parseSource } from './source.mjs';
+import { DYNAMIC, lineCounter, parseSource } from './source.mjs';
 
 /**
  * @typedef {import('./source.mjs').Source} Source
@@ -27,10 +27,12 @@ const PROPERTY = /--im-[a-z0-9][a-z0-9-]*/g;
 const whole = (text, start, name) => !name.endsWith('-') && text[start + name.length] !== DYNAMIC;
 
 /** @param {string} text @param {RegExp} pattern @param {number} line @returns {Use[]} */
-const usesIn = (text, pattern, line) =>
-  [...text.matchAll(pattern)]
+const usesIn = (text, pattern, line) => {
+  const lineOf = lineCounter(text, line);
+  return [...text.matchAll(pattern)]
     .filter((match) => whole(text, match.index ?? 0, match[0]))
-    .map((match) => ({ name: match[0], line: lineAt(text, match.index ?? 0, line) }));
+    .map((match) => ({ name: match[0], line: lineOf(match.index ?? 0) }));
+};
 
 /**
  * The classes a string holds that `pattern` matches (the im- classes by default): every one of a class list
@@ -45,12 +47,13 @@ function classesInString(str, pattern = CLASS) {
   if (/^[\s\w\u0001-]*$/.test(text)) return usesIn(text, pattern, line);
   /** @type {Use[]} */
   const uses = [];
+  const lineOf = lineCounter(text, line);
   for (const match of text.matchAll(/\bclass(?:Name)?\s*=\s*(["'])([^"']*)\1/g)) {
-    uses.push(...usesIn(match[2], pattern, lineAt(text, (match.index ?? 0) + match[0].indexOf(match[2]), line)));
+    uses.push(...usesIn(match[2], pattern, lineOf((match.index ?? 0) + match[0].indexOf(match[2]))));
   }
   for (const match of text.matchAll(pattern)) {
     const at = match.index ?? 0;
-    if (text[at - 1] === '.' && whole(text, at, match[0])) uses.push({ name: match[0], line: lineAt(text, at, line) });
+    if (text[at - 1] === '.' && whole(text, at, match[0])) uses.push({ name: match[0], line: lineOf(at) });
   }
   return uses;
 }
@@ -117,7 +120,8 @@ export function namesIn(source, wanted) {
     if (namespaces.length) {
       const member = new RegExp(`(?<![\\w$.])(?:${namespaces.map(escapeRegExp).join('|')})\\s*\\.\\s*([A-Za-z_$][\\w$]*)`, 'g');
       for (const chunk of source.code) {
-        for (const match of chunk.text.matchAll(member)) if (exports.has(match[1])) uses.push({ name: match[1], line: lineAt(chunk.text, match.index ?? 0, chunk.line) });
+        const lineOf = lineCounter(chunk.text, chunk.line);
+        for (const match of chunk.text.matchAll(member)) if (exports.has(match[1])) uses.push({ name: match[1], line: lineOf(match.index ?? 0) });
       }
     }
   }
@@ -150,9 +154,10 @@ export function namesUsed(source) {
   }
   for (const chunk of source.code) {
     attributes.push(...usesIn(chunk.text, ATTRIBUTE, chunk.line));
+    const lineOf = lineCounter(chunk.text, chunk.line);
     for (const match of chunk.text.matchAll(/\.dataset\.im([A-Z][A-Za-z0-9]*)/g)) {
       const name = `data-im-${match[1].replace(/[A-Z]/g, (letter, at) => (at ? '-' : '') + letter.toLowerCase())}`;
-      attributes.push({ name, line: lineAt(chunk.text, match.index ?? 0, chunk.line) });
+      attributes.push({ name, line: lineOf(match.index ?? 0) });
     }
   }
   return { classes, attributes };

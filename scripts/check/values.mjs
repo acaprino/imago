@@ -23,4 +23,12 @@ export const VALUES = {
   // The categorical colour of a row, a rail item, an avatar, a dot or a chip: --im-cat-1 to --im-cat-8. (data-im-badge,
   // the badge of a row, is an attribute without a value, and has no set.)
   'data-im-cat': ['1', '2', '3', '4', '5', '6', '7', '8'],
+  // The direction of a split view: its panes side by side or one over the other.
+  'data-im-axis': ['columns', 'rows'],
+  // The line of a key's sample in a graph legend.
+  'data-im-stroke': ['dashed', 'dotted'],
+  // A pane or a cell pushed to the end of its row (an app writes the class im-end).
+  'data-im-align': ['end'],
+  // A forced pseudo-state of a cell, as the gallery shows them.
+  'data-im-force': ['focus', 'hover', 'press'],
 };

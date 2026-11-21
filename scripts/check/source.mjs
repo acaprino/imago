@@ -11,11 +11,12 @@ import { parseCss, parseDeclarations } from './css.mjs';
  * @typedef {import('./css.mjs').Sheet} Sheet
  * @typedef {import('./css.mjs').Rule} Rule
  * @typedef {import('./css.mjs').Comment} Comment
- * @typedef {{ text: string, line: number, before: string, template: boolean, attribute?: string, at?: number }} Str
+ * @typedef {{ text: string, line: number, before: string, template: boolean, attribute?: string, at?: number, lead?: string }} Str
  *   A string of a script, or an attribute value of a page. In `text` each ${} of a template literal is the character
  *   DYNAMIC followed by as many new lines as the expression held, so that a line counted in `text` is a line of the file.
  *   `before` is the code just before the string (strings and comments in it blanked), or `name=` for an attribute.
  *   `at` is the offset of a script string's opening quote in the code it was lexed from.
+ *   `lead` is, for a string inside the ${} of a template literal, the text of that template before the ${ (its own substitutions as DYNAMIC).
  * @typedef {{ text: string, line: number }} Chunk
  *   Code with its strings' contents and its comments blanked, new lines kept.
  * @typedef {{ imported: string, local: string }} Binding
@@ -236,7 +237,9 @@ export function lexScript(text, firstLine = 1) {
       if (text[i] === '$' && text[i + 1] === '{') {
         str.text += text.slice(literal, i);
         blank(literal, i);
+        const inside = strings.length;
         const end = codeUntil(i + 2, true);
+        for (const nested of strings.slice(inside)) nested.lead ??= str.text;
         str.text += DYNAMIC + '\n'.repeat(text.slice(i, end).split('\n').length - 1);
         i = end;
         literal = end;
@@ -339,17 +342,18 @@ function inlineSheet(strings) {
   };
   strings.forEach((str, index) => {
     if (str.attribute !== undefined) return;
+    const lineOf = lineCounter(str.text, str.line);
     for (const match of str.text.matchAll(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/g)) {
-      const at = lineAt(str.text, (match.index ?? 0) + match[0].indexOf(match[2]), str.line);
+      const at = lineOf((match.index ?? 0) + match[0].indexOf(match[2]));
       add(parseDeclarations(match[2], at), at);
     }
     for (const match of str.text.matchAll(/<meta\b[^>]*>/gi)) {
-      const at = lineAt(str.text, match.index ?? 0, str.line);
+      const at = lineOf(match.index ?? 0);
       const color = themeColor(match[0]);
       if (color !== null) add(parseDeclarations(`theme-color: ${color}`, at), at);
     }
     for (const match of str.text.matchAll(MARKUP_COLOR)) {
-      const at = lineAt(str.text, match.index ?? 0, str.line);
+      const at = lineOf(match.index ?? 0);
       add(parseDeclarations(`${match[1].toLowerCase()}: ${match[2] ?? match[3] ?? ''}`, at), at);
     }
     const canvas = /\.(fillStyle|strokeStyle|shadowColor)\s*=\s*$/.exec(str.before);
@@ -552,8 +556,23 @@ function parseHtml(file, text) {
   const objects = [];
   let rest = text;
   const line = lineCounter(text, 1);
+  // The ranges of one pass, in order: they are blanked together when the pass is over, so that a page of thousands of
+  // comments or scripts is cut once and not once for each.
+  /** @type {[number, number][]} */
+  let ranges = [];
   const blankOut = (from, to) => {
-    rest = rest.slice(0, from) + rest.slice(from, to).replace(/[^\n]/g, ' ') + rest.slice(to);
+    ranges.push([from, to]);
+  };
+  const blankRanges = () => {
+    const parts = [];
+    let last = 0;
+    for (const [from, to] of ranges) {
+      parts.push(rest.slice(last, from), rest.slice(from, to).replace(/[^\n]/g, ' '));
+      last = to;
+    }
+    parts.push(rest.slice(last));
+    rest = parts.join('');
+    ranges = [];
   };
 
   for (const match of text.matchAll(/<!--([\s\S]*?)-->/g)) {
@@ -561,6 +580,7 @@ function parseHtml(file, text) {
     source.comments.push({ text: match[1], line: line(at) });
     blankOut(at, at + match[0].length);
   }
+  blankRanges();
   for (const match of rest.matchAll(/(<style\b[^>]*>)([\s\S]*?)<\/style\s*>/gi)) {
     const at = (match.index ?? 0) + match[1].length;
     const sheet = parseCss(match[2], line(at));
@@ -568,6 +588,7 @@ function parseHtml(file, text) {
     source.comments.push(...sheet.comments);
     blankOut(at, at + match[2].length);
   }
+  blankRanges();
   for (const match of rest.matchAll(/(<script\b[^>]*>)([\s\S]*?)<\/script\s*>/gi)) {
     const at = (match.index ?? 0) + match[1].length;
     const first = line(at);
@@ -580,6 +601,7 @@ function parseHtml(file, text) {
     objects.push(...styleObjects(lexed.code, lexed.strings, first), ...jsxColors(lexed.code, lexed.strings, first));
     blankOut(at, at + match[2].length);
   }
+  blankRanges();
   const scripts = inlineSheet(source.strings);
   scripts.rules.push(...objects);
   source.sheets.push(scripts);

@@ -11,7 +11,7 @@ import { CASE, COLOR, FONT_SIZE, OPACITY, SPACE, SYSTEM_COLORS, TRACKING } from 
 import { classesOf, COLOR_FUNCTIONS, COLOR_WORDS, isLength, SIZE_KEYWORDS, takesColor, valueTokens } from './css.mjs';
 import { namesIn, namesUsed } from './names.mjs';
 import { ELSEWHERE, REMOVED } from './removed.mjs';
-import { DYNAMIC, lineAt } from './source.mjs';
+import { DYNAMIC, lineAt, lineCounter } from './source.mjs';
 import { VALUES } from './values.mjs';
 
 /**
@@ -23,7 +23,7 @@ import { VALUES } from './values.mjs';
  * @typedef {import('./removed.mjs').Removed} Removed
  * @typedef {{ file: string, line: number, endLine?: number }} Place
  * @typedef {{ file: string, line: number, endLine?: number, rule: string, message: string, via?: Place }} Finding
- * @typedef {{ file: string, line: number, rule: string, reason: string }} Exception
+ * @typedef {{ file: string, line: number, endLine?: number, rule: string, reason: string }} Exception
  * @typedef {{ name: string, file: string, line: number, endLine: number, value: string }} Definition
  *   A custom property of the app, where it is set and to what.
  * @typedef {Map<string, Definition[]>} Properties
@@ -330,8 +330,9 @@ export function literalFontSize(source, properties) {
 
 const SPACE_PROPERTY = /^(?:padding|margin)(?:-[a-z]+)*$|^(?:grid-)?(?:row-|column-)?gap$|^border(?:-[a-z]+)*-radius$/;
 
+// A negative length is the same hairline or ring laid over a neighbour (margin: -1px joins two borders): it is judged by its size.
 /** @param {string} property @param {Token} token */
-const allowedSpace = (property, token) => SPACE.some((entry) => entry.value === asAllowed(token) && (!entry.properties || entry.properties.includes(property)));
+const allowedSpace = (property, token) => SPACE.some((entry) => entry.value === asAllowed({ ...token, number: Math.abs(token.number ?? 0) }) && (!entry.properties || entry.properties.includes(property)));
 
 /**
  * A padding, margin, gap or border-radius with a length that is not a token or an allowed literal (allowed.mjs), here
@@ -402,7 +403,7 @@ function withoutNot(/** @type {string} */ selector) {
   }
 }
 
-const DISABLED = /:disabled\b|\[\s*disabled\b|aria-disabled/i;
+const DISABLED = /:disabled\b|\[\s*disabled\b|aria-disabled|\.(?:is-)?disabled(?![\w-])|\[\s*data-disabled\b/i;
 
 /**
  * An opacity in a rule whose selector, or a selector it is nested in, is a disabled state. Disabled is a dashed edge
@@ -487,7 +488,8 @@ export function ownKeydown(source) {
 const REPORTED_ELSEWHERE = new Set([...REMOVED.map((entry) => entry.old), ...ELSEWHERE.map((entry) => entry.old)]);
 
 /**
- * An im- class or a data-im- attribute that the installed package does not define: a removed or mistyped name. A name
+ * An im- class, a data-im- attribute or a --im- custom property (read with var()) that the installed package does not
+ * define: a removed or mistyped name. A name
  * of removed.mjs is left to removed-name, which says what replaces it, and im-brand-image to brand-mark.
  * @param {Source} source @param {Names} defined @returns {Finding[]}
  */
@@ -504,6 +506,16 @@ export function unknownName(source, defined) {
   };
   for (const use of used.classes) if (!defined.classes.has(use.name)) report(use, 'a class');
   for (const use of used.attributes) if (!defined.attributes.has(use.name)) report(use, 'an attribute');
+  // A --im- token that a var() reads: a mistyped one computes to the initial value, and the colour or the space is lost.
+  for (const sheet of source.sheets) {
+    for (const rule of sheet.rules) {
+      for (const declaration of rule.declarations) {
+        for (const match of declaration.value.matchAll(/var\(\s*(--im-[a-z0-9][a-z0-9-]*)(?![\w-])/g)) {
+          if (!defined.properties.has(match[1])) report({ name: match[1], line: declaration.line }, 'a custom property');
+        }
+      }
+    }
+  }
   return findings.sort(byLine);
 }
 
@@ -528,6 +540,28 @@ export function removedName(source, removed = REMOVED) {
 }
 
 /**
+ * Where the expression that ends `before` starts: walks back over the brackets it closes to the `{`, `(`, `[`, `,` or
+ * `=` (an assignment, not `==`, `<=`, `=>`) that holds it, and gives that character, its index, and the code up to and
+ * including it. Null when a `;` or the start of `before` comes first.
+ * @param {string} before
+ * @returns {{ char: string, index: number, head: string, before: string } | null}
+ */
+function expressionStart(before) {
+  let depth = 0;
+  for (let k = before.length - 1; k >= 0; k--) {
+    const c = before[k];
+    if (c === ')' || c === ']' || c === '}') depth++;
+    else if (c === '(' || c === '[' || c === '{') {
+      if (depth === 0) return { char: c, index: k, head: before.slice(0, k + 1), before: before.slice(0, k) };
+      depth--;
+    } else if (depth === 0 && c === ',') return { char: c, index: k, head: before.slice(0, k + 1), before: before.slice(0, k) };
+    else if (depth === 0 && c === '=' && !/[=!<>]/.test(before[k - 1] ?? '') && !/[=>]/.test(before[k + 1] ?? '')) return { char: c, index: k, head: before.slice(0, k + 1), before: before.slice(0, k) };
+    else if (c === ';') return null;
+  }
+  return null;
+}
+
+/**
  * A value outside the set of an attribute that takes a closed set (values.mjs): in a page, in the markup and the
  * selectors of a script's strings, in JSX, in setAttribute( and dataset, and in a selector of the app's CSS. A value
  * built at run time is not judged.
@@ -547,24 +581,41 @@ export function unknownValue(source, values = VALUES) {
   };
   // name="value", name='value' or name=value, in markup or in a selector; `^=` and its kin are not an equal value.
   const pairs = (/** @type {string} */ text, /** @type {number} */ line) => {
+    const lineOf = lineCounter(text, line);
     for (const match of text.matchAll(/(?<![\w-])(data-im-[a-z0-9-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>\]]+))/g)) {
-      judge(match[1], match[2] ?? match[3] ?? match[4] ?? '', lineAt(text, match.index ?? 0, line));
+      judge(match[1], match[2] ?? match[3] ?? match[4] ?? '', lineOf(match.index ?? 0));
     }
   };
   // `dataset.imSidebarCollapsed` is data-im-sidebar-collapsed.
   const attributeOf = (/** @type {string} */ key) => `data-im-${key.replace(/[A-Z]/g, (letter, at) => (at ? '-' : '') + letter.toLowerCase())}`;
+  // What a string is the value of: the code before it ends with the attribute (`data-im-tone={`), the setAttribute( and
+  // its name, or the dataset key and `=`. `head` is that code, `named` the string that holds the attribute's name.
+  const valueOf = (/** @type {Str} */ str, /** @type {string} */ head, /** @type {Str | undefined} */ named) => {
+    const jsx = /(?<![\w-])(data-im-[a-z0-9-]+)\s*=\s*\{?\s*$/.exec(head);
+    if (jsx) judge(jsx[1], str.text, str.line);
+    if (named && /\.setAttribute\(\s*(["'`])\s*\1\s*,\s*$/.test(head)) judge(named.text, str.text, str.line);
+    const dataset = /\.dataset\.im([A-Z][A-Za-z0-9]*)\s*(?:={1,3}|!==?)\s*$/.exec(head);
+    if (dataset) judge(attributeOf(dataset[1]), str.text, str.line);
+  };
   source.strings.forEach((str, index) => {
     if (str.attribute !== undefined) {
       judge(str.attribute, str.text, str.line);
       return;
     }
     pairs(str.text, str.line);
-    const jsx = /(?<![\w-])(data-im-[a-z0-9-]+)\s*=\s*\{?\s*$/.exec(str.before);
-    if (jsx) judge(jsx[1], str.text, str.line);
-    const previous = source.strings[index - 1];
-    if (previous && /\.setAttribute\(\s*(["'`])\s*\1\s*,\s*$/.test(str.before)) judge(previous.text, str.text, str.line);
-    const dataset = /\.dataset\.im([A-Z][A-Za-z0-9]*)\s*(?:={1,3}|!==?)\s*$/.exec(str.before);
-    if (dataset) judge(attributeOf(dataset[1]), str.text, str.line);
+    valueOf(str, str.before, source.strings[index - 1]);
+    // A string that ends a conditional or a fallback (`ok ? 'ok' : 'bad'`, `tone || 'bad'`) is a value of what the
+    // whole expression is the value of: the walk back goes to where the expression starts.
+    const start = /(?:[?:]|\|\||&&)\s*$/.test(str.before) ? expressionStart(str.before) : null;
+    if (!start) return;
+    if (start.char === '{' && start.before.endsWith('$') && str.lead !== undefined) {
+      const attribute = /(?<![\w-])(data-im-[a-z0-9-]+)\s*=\s*["']?$/.exec(str.lead);
+      if (attribute) judge(attribute[1], str.text, str.line);
+      return;
+    }
+    const where = str.at === undefined ? Number.NaN : str.at - str.before.length + start.index;
+    const named = source.strings.filter((other) => other.at !== undefined && other.at < where).sort((a, b) => /** @type {number} */ (b.at) - /** @type {number} */ (a.at))[0];
+    valueOf(str, start.head, named);
   });
   for (const rule of selectorRules(source)) pairs(rule.selector, rule.line);
   return findings.sort(byLine);
@@ -776,7 +827,9 @@ const DESIGN_PATH = /[^\s`'"()<>[\]]*design-file\.md/g;
 
 /**
  * The files of the app's coding agents (AGENTS.md, CLAUDE.md) name the design file of the installed package, by a path
- * that exists from the folder of the file or from the root of the app.
+ * that exists from the folder of the file or from the root of the app, and that is the installed package's file, not
+ * another design-file.md. A file that only imports another agent file of the list (`@AGENTS.md`) names what that file
+ * names.
  * @param {{ file: string, text: string | null }[]} files `text` is null for a file that does not exist
  * @param {{ designFile: string, resolves: (file: string, path: string) => boolean }} installed `designFile` is the
  *   design file of the installed package from the root; `resolves` says whether a path written in a file exists, from
@@ -784,16 +837,34 @@ const DESIGN_PATH = /[^\s`'"()<>[\]]*design-file\.md/g;
  * @returns {Finding[]}
  */
 export function agentRules(files, { designFile, resolves }) {
+  const texts = new Map(files.map(({ file, text }) => [posix.normalize(file), text]));
+  const writtenIn = (/** @type {string} */ text) => [...text.matchAll(DESIGN_PATH)].filter((match) => match[0].includes('/') && !match[0].includes('://'));
+  // Whether a path written in `file` is the installed package's design file, and not another design-file.md that exists.
+  const isDesignFile = (/** @type {string} */ file, /** @type {string} */ written) => {
+    const path = written.replace(/^@/, '');
+    return resolves(file, path) && [posix.join(posix.dirname(file), path), path].some((candidate) => posix.normalize(candidate) === posix.normalize(designFile));
+  };
+  // Whether a file, or one it imports with `@file` (to any depth), names the design file of the package.
+  const names = (/** @type {string} */ file, /** @type {Set<string>} */ seen = new Set()) => {
+    const path = posix.normalize(file);
+    const text = texts.get(path);
+    if (text == null || seen.has(path)) return false;
+    seen.add(path);
+    if (writtenIn(text).some((match) => isDesignFile(path, match[0]))) return true;
+    return [...text.matchAll(/^[ \t]*@(?!\S*design-file\.md)(\S+)/gm)].some((match) => names(posix.join(posix.dirname(path), match[1]), seen));
+  };
   return files.flatMap(({ file, text }) => {
     const expected = posix.relative(posix.dirname(file), designFile) || designFile;
     if (text === null) return [finding(file, 1, 'agent-rules', `${file} does not exist: it holds the lines of using-imago.md section 9, which name ${expected}`)];
-    const written = [...text.matchAll(DESIGN_PATH)].filter((match) => match[0].includes('/') && !match[0].includes('://'));
-    if (!written.length) return [finding(file, 1, 'agent-rules', `${file} does not name ${expected}: paste the lines of using-imago.md section 9`)];
-    return written.flatMap((match) => {
+    const written = writtenIn(text);
+    if (!written.length) return names(file) ? [] : [finding(file, 1, 'agent-rules', `${file} does not name ${expected}: paste the lines of using-imago.md section 9`)];
+    const missing = written.flatMap((match) => {
       const path = match[0];
       if (resolves(file, path) || (path.startsWith('@') && resolves(file, path.slice(1)))) return [];
       return [finding(file, lineAt(text, match.index ?? 0, 1), 'agent-rules', `${path.replace(/^@/, '')} does not exist, from the folder of ${file} or from the root: the design file of the installed @acaprino/imago is ${expected}`)];
     });
+    if (missing.length || names(file)) return missing;
+    return [finding(file, lineAt(text, written[0].index ?? 0, 1), 'agent-rules', `${written[0][0].replace(/^@/, '')} exists, and is not the design file of the installed @acaprino/imago: it is ${expected}`)];
   });
 }
 
@@ -863,7 +934,7 @@ export function mountApp(sources, links = new Map()) {
   });
   if (calls || !sources.length) return [];
   const { file } = sources[0];
-  return [finding(file, 1, 'mount-app', `neither ${file} nor a file it imports calls mountApp imported from @acaprino/imago/ui, mountApp(shell, registry, options), which attaches the layers, the keys, the regions, the sidebar and the standard commands; a function of the app with that name is not it`)];
+  return [finding(file, 1, 'mount-app', `neither ${file} nor a file it imports by a relative path calls mountApp imported from @acaprino/imago/ui, mountApp(shell, registry, options), which attaches the layers, the keys, the regions, the sidebar and the standard commands; a function of the app with that name is not it. An import through an alias (@/boot) is not followed: name in "imago.entry" the file that calls it, or take an exception: imago-check: allow mount-app — <reason>`)];
 }
 
 // ---------- app-icon ----------
@@ -900,7 +971,10 @@ export function exceptionsIn(source) {
   return source.comments.flatMap((comment) => [...comment.text.matchAll(EXCEPTION)].map((match) => {
     const rest = match[2].replace(/(?:\*\/|-->)\s*$/, '');
     const reason = /^\s*(?:—|–|-{1,2})\s*(.*?)\s*$/.exec(rest)?.[1] ?? '';
-    return { file: source.file, line: lineAt(comment.text, match.index ?? 0, comment.line), rule: match[1], reason };
+    const line = lineAt(comment.text, match.index ?? 0, comment.line);
+    // A block comment that wraps its reason ends on a later line, and it is that line the declaration sits under.
+    const endLine = lineAt(comment.text, comment.text.length, comment.line);
+    return endLine > line ? { file: source.file, line, endLine, rule: match[1], reason } : { file: source.file, line, rule: match[1], reason };
   }));
 }
 
@@ -918,7 +992,7 @@ export function applyExceptions(findings, exceptions) {
   /** @type {Set<Exception>} */
   const accepted = new Set();
   const covers = (/** @type {Exception} */ exception, /** @type {Place} */ place) => exception.file === place.file
-    && exception.line >= place.line - 1 && exception.line <= (place.endLine ?? place.line);
+    && (exception.endLine ?? exception.line) >= place.line - 1 && exception.line <= (place.endLine ?? place.line);
   for (const each of findings) {
     const near = exceptions.filter((exception) => exception.rule === each.rule && (covers(exception, each) || (each.via !== undefined && covers(exception, each.via))));
     const allowing = near.find((exception) => exception.reason);

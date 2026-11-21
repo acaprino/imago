@@ -54,6 +54,8 @@ const OTHER_SHA = '964266f0000000000000000000000000000000aa';
 const INSTALLED = {
   'node_modules/@acaprino/imago/package.json': '{ "name": "@acaprino/imago", "version": "0.1.4" }\n',
   'node_modules/@acaprino/imago/css/imago.css': '.im-btn { color: var(--im-text); }\n.im-btn--primary { color: var(--im-accent-on); }\n[data-im-tone="ok"] { color: var(--im-ok); }\n',
+  // The tokens the fixtures' apps read: a var(--im-…) the package does not define is unknown-name.
+  'node_modules/@acaprino/imago/css/tokens.css': `:root {\n${['accent', 'accent-on', 'case', 'err', 'font-head', 'fs-body', 'fs-title', 'h-control', 'item-color', 'line', 'muted', 'nav-width', 'ok', 'r-control', 's-1', 's-2', 's-3', 'sheet', 'text', 'track'].map((name) => `  --im-${name}: 0;\n`).join('')}}\n`,
   'node_modules/@acaprino/imago/ts/ui/keys.ts': "export const find = (el: Element) => el.querySelector('.im-content');\nexport const mark = (el: HTMLElement) => { el.dataset.imLayer = 'x'; };\n",
   'node_modules/@acaprino/imago/docs/design-file.md': '# The design file\n',
   // The icon files of the app "shinatama" (the bytes do not matter: the rule compares them as they are).
@@ -392,6 +394,11 @@ describe('literal-space', () => {
     assert.deepEqual(found(rules.literalSpace, css), []);
   });
 
+  test('leaves the hairline and the ring as an overlap too: -1px and -2px', () => {
+    assert.deepEqual(found(rules.literalSpace, '.a { margin-left: -1px; }\n.b { margin: -2px; }\n.c { margin: -1.0px -2px; }\n'), []);
+    assert.deepEqual(found(rules.literalSpace, '.a { margin-left: -3px; }\n.b { margin: -12px; }\n'), ['1 literal-space', '2 literal-space']);
+  });
+
   test('finds a literal space in a style attribute written from a script', () => {
     assert.deepEqual(found(rules.literalSpace, 'el.innerHTML = `<div style="padding: 12px; margin: ${gap}px">x</div>`;\n', 'src/view.ts'), ['1 literal-space']);
   });
@@ -411,6 +418,12 @@ describe('disabled-opacity', () => {
   test('finds an opacity on a disabled selector, by pseudo-class, attribute or aria, or inside a nested rule', () => {
     const css = '.a:disabled { opacity: .5; }\n.b[aria-disabled="true"] { opacity: .4; }\nlabel:has(:disabled) { opacity: .65; }\n.c[disabled] { color: var(--im-muted); opacity: 0.6; }\n.d { &:disabled { opacity: .5; } }\n';
     assert.deepEqual(found(rules.disabledOpacity, css), ['1 disabled-opacity', '2 disabled-opacity', '3 disabled-opacity', '4 disabled-opacity', '5 disabled-opacity']);
+  });
+
+  test('finds an opacity on a disabled class and a disabled data attribute too', () => {
+    const css = '.a.disabled { opacity: .5; }\n.b.is-disabled { opacity: .3; }\n.c[data-disabled] { opacity: .4; }\n.d[data-disabled="true"] { opacity: .4; }\n';
+    assert.deepEqual(found(rules.disabledOpacity, css), [1, 2, 3, 4].map((line) => `${line} disabled-opacity`));
+    assert.deepEqual(found(rules.disabledOpacity, '.a.disabled-note { opacity: .5; }\n.b.undisabled { opacity: .5; }\n'), []);
   });
 
   test('leaves an opacity on another state, a negated disabled, and a disabled state drawn without opacity', () => {
@@ -488,12 +501,22 @@ describe('unknown-value', () => {
     assert.deepEqual(found(rules.unknownValue, '[data-im-tone="ok"] .mk-a { color: var(--im-text); }\n[data-im-tone] .mk-b { color: var(--im-text); }\n[data-im-look^="o"] .mk-c { color: var(--im-text); }\n'), []);
   });
 
+  test('a conditional or a fallback of literals is judged: each string that can become the value', () => {
+    const tsx = "const a = <b data-im-tone={ok ? 'ok' : 'good'}>x</b>;\nconst b = <b data-im-tone={ok ? 'ok' : warn ? 'warn' : 'danger'}>x</b>;\nconst c = <b data-im-tone={tone || 'bad'}>x</b>;\n";
+    assert.deepEqual(found(rules.unknownValue, tsx, 'src/view.tsx'), ['1 unknown-value', '2 unknown-value', '3 unknown-value']);
+    const ts = "el.setAttribute('data-im-tone', ok ? 'ok' : 'bad');\nel.dataset.imTone = ok ? 'ok' : 'bad';\nel.dataset.imTone = kind === 'a' ? 'ok' : 'bad';\nel.innerHTML = `<b data-im-tone=\"${ok ? 'ok' : 'bad'}\">x</b>`;\nel.innerHTML = `<b class=\"im-chip\" data-im-tone='${ok ? 'good' : 'ok'}'>x</b>`;\n";
+    assert.deepEqual(found(rules.unknownValue, ts, 'src/view.ts'), [1, 2, 3, 4, 5].map((line) => `${line} unknown-value`));
+    const fine = "const a = <b data-im-tone={ok ? 'ok' : 'warn'}>x</b>;\nel.setAttribute('data-im-tone', ok ? 'ok' : 'err');\nel.dataset.imTone = tone || 'info';\nel.innerHTML = `<b data-im-tone=\"${ok ? 'ok' : 'warn'}\">x</b>`;\nconst label = ok ? 'good' : 'bad';\nconst o = { tone: ok ? 'good' : 'bad' };\nel.setAttribute('title', ok ? 'good' : 'bad');\nconst d = <b data-label={ok ? 'good' : 'bad'}>x</b>;\n";
+    assert.deepEqual(found(rules.unknownValue, fine, 'src/view.tsx'), []);
+  });
+
   test('values.mjs holds the sets of the brief, and the failed and skipped steps the package draws', () => {
     assert.deepEqual(VALUES['data-im-tone'], ['ok', 'warn', 'err', 'info', 'accent']);
     assert.deepEqual(VALUES['data-im-surface'], ['ground', 'sheet', 'dense', 'float']);
     assert.deepEqual(VALUES['data-im-step'], ['done', 'now', 'todo', 'failed', 'skipped']);
     assert.deepEqual(VALUES['data-im-cat'], ['1', '2', '3', '4', '5', '6', '7', '8']);
-    assert.deepEqual(Object.keys(VALUES).sort(), ['data-im-app', 'data-im-cat', 'data-im-inspector', 'data-im-look', 'data-im-sidebar', 'data-im-step', 'data-im-surface', 'data-im-theme', 'data-im-tone']);
+    assert.deepEqual(Object.keys(VALUES).sort(), ['data-im-align', 'data-im-app', 'data-im-axis', 'data-im-cat', 'data-im-force', 'data-im-inspector', 'data-im-look', 'data-im-sidebar', 'data-im-step', 'data-im-stroke', 'data-im-surface', 'data-im-theme', 'data-im-tone']);
+    assert.deepEqual(found(rules.unknownValue, '<div data-im-axis="rows" data-im-stroke="dashed" data-im-align="end" data-im-force="press"></div>\n<div data-im-axis="row"></div>\n<i data-im-stroke="solid"></i>\n<i data-im-force="active"></i>\n<i data-im-align="start"></i>\n', 'index.html'), ['2 unknown-value', '3 unknown-value', '4 unknown-value', '5 unknown-value']);
     assert.deepEqual(found(rules.unknownValue, '<li class="im-row" data-im-cat="3" data-im-badge>a</li>\n<li class="im-row" data-im-cat="9">b</li>\n<li class="im-row" data-im-cat="red">c</li>\n', 'index.html'), ['2 unknown-value', '3 unknown-value']);
     assert.deepEqual(found(rules.unknownValue, '<ol class="im-steps"><li data-im-step="failed">a</li><li data-im-step="skipped">b</li></ol>\n', 'index.html'), []);
   });
@@ -642,7 +665,16 @@ describe('show-modal', () => {
 });
 
 describe('unknown-name', () => {
-  const defined: Names = { classes: new Set(['im-btn', 'im-btn--primary', 'im-row']), attributes: new Set(['data-im-tone']), properties: new Set() };
+  const defined: Names = { classes: new Set(['im-btn', 'im-btn--primary', 'im-row']), attributes: new Set(['data-im-tone']), properties: new Set(['--im-text', '--im-muted', '--im-s-2']) };
+
+  test('finds a --im- token that a var() reads and the package does not define', () => {
+    const css = '.mk-a { color: var(--im-text-mutedd); }\n.mk-b { color: var(--im-text); padding: var(--im-s-2, 8px) var(--im-s-9); }\n.mk-c { border-color: color-mix(in srgb, var(--im-gone) 50%, var(--im-muted)); }\n';
+    assert.deepEqual(found(rules.unknownName, css, 'src/app.css', defined), ['1 unknown-name', '2 unknown-name', '3 unknown-name']);
+    const [finding] = rules.unknownName(parseSource('src/app.css', css), defined);
+    assert.ok(finding.message.includes('--im-text-mutedd') && finding.message.includes('custom property'), finding.message);
+    assert.deepEqual(found(rules.unknownName, '.mk-a { color: var(--mk-own); background: var(--im-muted); --mk-own: var(--im-text); }\n', 'src/app.css', defined), []);
+    assert.deepEqual(found(rules.unknownName, "el.innerHTML = `<i style=\"color: var(--im-nope)\">x</i>`;\n", 'src/view.ts', defined), ['1 unknown-name']);
+  });
 
   test('finds a class or an attribute the package does not define, in markup, script and CSS; a modifier is a name of its own', () => {
     const ts = "el.innerHTML = `<button class=\"im-btnn\">x</button>`;\nel.classList.add('im-ribbon');\nel.className = 'im-btn im-btn--ghost';\nel.setAttribute('data-im-nope', '');\nel.dataset.imGone = 'x';\n";
@@ -749,6 +781,22 @@ describe('agent-rules', () => {
     assert.deepEqual(agents(Object.entries(AGENTS).map(([file, text]) => ({ file, text }))), []);
   });
 
+  test('a CLAUDE.md that only imports AGENTS.md names what AGENTS.md names', () => {
+    assert.deepEqual(agents([{ file: 'AGENTS.md', text: AGENTS['AGENTS.md'] }, { file: 'CLAUDE.md', text: '@AGENTS.md\n\nNever run cargo here.\n' }]), []);
+    assert.deepEqual(agents([{ file: 'AGENTS.md', text: 'Be careful.\n' }, { file: 'CLAUDE.md', text: '@AGENTS.md\n' }]), ['AGENTS.md:1 agent-rules', 'CLAUDE.md:1 agent-rules'], 'the import names nothing when the file imported names nothing');
+    assert.deepEqual(agents([{ file: 'AGENTS.md', text: '@CLAUDE.md\n' }, { file: 'CLAUDE.md', text: '@AGENTS.md\n' }]), ['AGENTS.md:1 agent-rules', 'CLAUDE.md:1 agent-rules'], 'a cycle of imports ends');
+  });
+
+  test('a design-file.md that exists and is not the installed package\'s is a finding', () => {
+    const own = [{ file: 'AGENTS.md', text: 'Read docs/design-file.md before UI work.\n' }];
+    const exists = (file: string, path: string) => true;
+    const found = rules.agentRules(own, { designFile: DESIGN, resolves: exists });
+    assert.deepEqual(found.map((f: Finding) => `${f.line} ${f.rule}`), ['1 agent-rules']);
+    assert.match(found[0].message, /is not the design file of the installed/);
+    assert.ok(found[0].message.includes(DESIGN));
+    assert.deepEqual(rules.agentRules([{ file: 'AGENTS.md', text: `Read docs/design-file.md and ./${DESIGN}.\n` }], { designFile: DESIGN, resolves: exists }), [], 'one of the paths is the package\'s');
+  });
+
   test('an agent file whose path does not exist is a finding on its line, and the message says the path that does', () => {
     const design = 'viewer/node_modules/@acaprino/imago/docs/design-file.md';
     assert.deepEqual(agents([{ file: 'AGENTS.md', text: `Intro.\n${AGENTS['AGENTS.md']}` }], design), ['AGENTS.md:2 agent-rules']);
@@ -779,6 +827,7 @@ describe('mount-app', () => {
     assert.deepEqual(lines([parseSource('src/main.ts', 'function mountApp(): void {}\nmountApp();\n')]), ['src/main.ts:1 mount-app']);
     assert.deepEqual(lines([parseSource('src/main.ts', "import { mountApp } from './mount.ts';\nmountApp(shell);\n")]), ['src/main.ts:1 mount-app']);
     assert.deepEqual(lines([parseSource('src/main.ts', "import { mountApp } from '@acaprino/imago/ui';\nexport { mountApp };\n")]), ['src/main.ts:1 mount-app'], 'imported and never called');
+    assert.match(rules.mountApp([parseSource('src/main.ts', "import { boot } from '@/boot';\n")])[0].message, /relative path/, 'the message says which imports are followed');
     assert.deepEqual(lines([parseSource('src/main.ts', "import { mountApp } from '@acaprino/imago/ui';\n"), parseSource('src/boot.ts', 'mountApp(shell);\n')]), ['src/main.ts:1 mount-app'], 'imported in one file and an own name called in another');
   });
 });
@@ -848,12 +897,63 @@ describe('exceptions', () => {
     assert.equal(allowed('/* imago-check: allow literal-space — too far */\n\n.a { padding: 3px; }\n').findings.length, 1);
   });
 
+  test('a block comment that wraps its reason covers the declaration under its last line', () => {
+    const { findings, accepted } = allowed('.a {\n  /* imago-check: allow literal-space — the icon box,\n     which is 3px because the glyph is\n     drawn on a grid of three */\n  padding: 3px;\n}\n');
+    assert.deepEqual(findings, []);
+    assert.deepEqual(accepted.map((e: any) => [e.line, e.reason]), [[2, 'the icon box,']]);
+    assert.equal(allowed('.a {\n  /* imago-check: allow literal-space — far\n     one\n     two */\n\n  padding: 3px;\n}\n').findings.length, 1, 'a blank line between still breaks it');
+  });
+
   test('an exception covers a declaration over lines from the line above its property', () => {
     assert.deepEqual(allowed('.a {\n  /* imago-check: allow literal-space — the icon box */\n  padding:\n    var(--im-s-2)\n    3px;\n}\n').findings, []);
   });
 });
 
 // ---------- the names the package defines ----------
+
+describe('large generated files', () => {
+  // Each input took more than 5 seconds when a line was counted from the start of the text for every match, and a
+  // statement was read from its start for every character; read once, it takes a few tens of milliseconds.
+  const within = (label: string, work: () => void) => {
+    const start = Date.now();
+    work();
+    assert.ok(Date.now() - start < 2000, `${label} took ${Date.now() - start} ms`);
+  };
+
+  test('a page, a template and a stylesheet of thousands of elements, selectors or layers are read in linear time', () => {
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => `<div class="im-row" data-im-tone="ok">${i}</div>\n`).join('');
+    within('a page of 4000 elements', () => {
+      const source = parseSource('index.html', `<!doctype html>\n${rows(4000)}`);
+      namesUsed(source);
+      rules.unknownValue(source);
+    });
+    within('a template of 4000 elements', () => {
+      const source = parseSource('src/view.ts', `el.innerHTML = \`${rows(4000)}\`;\n`);
+      namesUsed(source);
+      rules.unknownValue(source);
+    });
+    within('a page of 10000 comments and 10000 styles', () => {
+      const page = `<!doctype html>\n${Array.from({ length: 10000 }, (_, i) => `<!-- c${i} --><style>.mk-${i} { color: var(--im-text); }</style>\n`).join('')}`;
+      const source = parseSource('index.html', page);
+      assert.equal(source.comments.length, 10000);
+      assert.equal(source.sheets.flatMap((sheet: any) => sheet.rules).filter((rule: any) => !rule.inline).length, 10000, 'every style is read');
+    });
+    within('one list of 16000 selectors', () => {
+      parseSource('src/app.css', `${Array.from({ length: 16000 }, (_, i) => `.mk-${i}`).join(',\n')} { color: var(--im-text); }\n`);
+    });
+    within('one declaration of 16000 layers', () => {
+      parseSource('src/app.css', `.a { box-shadow: ${Array.from({ length: 16000 }, () => '0 0 0 1px red').join(', ')}; }\n`);
+    });
+  });
+
+  test('a url( of a stylesheet and a statement that begins after a comment still read as they did', () => {
+    const sheet = parseCss('.a { background: url(data:image/png;base64,AAAA) no-repeat; padding: 3px; }\n/* c */\n.b { margin: 5px; }\n');
+    assert.deepEqual(sheet.rules.map((rule: any) => [rule.selector, rule.line, rule.declarations.map((d: any) => `${d.property}:${d.value}`)]), [
+      ['.a', 1, ['background:url(data:image/png;base64,AAAA) no-repeat', 'padding:3px']],
+      ['.b', 3, ['margin:5px']],
+    ]);
+  });
+});
 
 describe('names', () => {
   test('the package defines the classes of its css/, the classes and attributes its scripts write, and its custom properties', () => {
