@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bannerHtml, busyIndicatorHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
+import { shellMarkup } from '../gallery/apps.ts';
+import { cellMarkup } from '../gallery/matrix.ts';
+import { iconHtml } from '../ts/ui/markup.ts';
+import { noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
 import { renderShellFrame } from '../ts/ui/shell-frame.ts';
 
 test('tabs expose one initial keyboard stop and announced counts without repeating their visual badge', () => {
@@ -438,13 +441,59 @@ test('window buttons provide the native selectors and both maximize/restore icon
   assert.match(titlebarHtml({ brand: { name: 'Example' }, windowControls: true }), /im-window-buttons/);
 });
 
-test('banners announce errors and safely render labeled details and action component slots', () => {
-  const html = bannerHtml({ title: '<failure>', message: 'a & b', items: [{ label: '<item>', message: '"reason' }], tone: 'err', actionsHtml: '<button>Retry</button>' });
-  assert.match(html, /data-im-tone="err" role="alert"/);
-  assert.match(html, /<strong>&lt;failure&gt;<\/strong><p>a &amp; b<\/p>/);
-  assert.match(html, /<li><b>&lt;item&gt;<\/b>: &quot;reason<\/li>/);
-  assert.match(html, /<button>Retry<\/button>/);
-  assert.match(bannerHtml({ title: 'Done', tone: 'ok' }), /role="status"/);
-  assert.match(busyIndicatorHtml('<loading>'), /role="status">.*aria-hidden="true".*&lt;loading&gt;/);
-  assert.match(statusButtonHtml({ label: '<ready>', accessibleLabel: 'Open "status"', action: 'status', tone: 'ok' }), /aria-label="Open &quot;status&quot;"/);
+// The approved note: its icon, then its title and its line (docs/reference/toolkit-preview.html, the gallery's `note` control).
+const APPROVED_NOTE = `<div class="im-note" data-im-tone="warn" role="alert">${iconHtml('warning')}<div><b>3 changes ready to apply</b><span>Nothing changes until you apply.</span></div></div>`;
+const NOTE = { icon: 'warning', title: '3 changes ready to apply', message: 'Nothing changes until you apply.', tone: 'warn' } as const;
+const openingTag = (html: string): string => html.slice(0, html.indexOf('>') + 1);
+
+test("noteHtml writes the approved note, its icon before its title and its line, and the gallery's note is that markup", () => {
+  assert.equal(noteHtml(NOTE), APPROVED_NOTE);
+  assert.equal(cellMarkup('note', 'rest'), APPROVED_NOTE, "the gallery's own note, nothing stripped");
+  assert.ok(shellMarkup('muro').includes(noteHtml({ icon: 'reload', title: '3 changes ready to apply', message: '1 install, 1 update, 1 removal. Nothing changes until you apply.', tone: 'warn' })), "Muro's note in the gallery is noteHtml's");
+  assert.ok(!shellMarkup('muro').includes('<div class="im-note" data-im-tone="warn"><svg'), 'and no longer written by hand');
+  assert.equal(noteHtml({ ...NOTE, icon: 'x' }), APPROVED_NOTE.replace(iconHtml('warning'), iconHtml('close')), 'an alias of the package is an icon name');
+  for (const icon of ['no-such-icon', '', 'constructor', '<svg onload=x>']) {
+    assert.equal(noteHtml({ ...NOTE, icon }), APPROVED_NOTE.replace(iconHtml('warning'), ''), `an unknown icon name (${JSON.stringify(icon)}) writes no icon`);
+  }
+  assert.equal(noteHtml({ message: 'Saved <all> & done', tone: 'ok' }), '<div class="im-note" data-im-tone="ok" role="status"><div><span>Saved &lt;all&gt; &amp; done</span></div></div>', 'a line alone');
+  assert.equal(noteHtml({ title: 'Done <now>', tone: 'info' }), '<div class="im-note" data-im-tone="info" role="status"><div><b>Done &lt;now&gt;</b></div></div>', 'a title alone');
+  assert.equal(noteHtml({ title: 'Check', message: 'x', items: [] }), '<div class="im-note" role="status"><div><b>Check</b><span>x</span></div></div>', 'an empty list is no list');
+});
+
+test("noteHtml writes the block note only with a list or actions: the approved note, its parts one under the other", () => {
+  const block = noteHtml({ title: '3 changes ready to apply', message: 'a & b', items: [{ label: '<item>', message: '"reason' }], actionsHtml: '<button>Apply</button>', tone: 'warn' });
+  assert.equal(block, '<div class="im-note im-note--block" data-im-tone="warn" role="alert"><b>3 changes ready to apply</b><p>a &amp; b</p><ul><li><b>&lt;item&gt;</b>: &quot;reason</li></ul><div class="im-action-row"><button>Apply</button></div></div>');
+  assert.equal(openingTag(block), openingTag(APPROVED_NOTE).replace('class="im-note"', 'class="im-note im-note--block"'), 'the block is the approved note, with im-note--block');
+  assert.equal(noteHtml({ ...NOTE, actionsHtml: '<button>Apply</button>' }), `<div class="im-note im-note--block" data-im-tone="warn" role="alert">${iconHtml('warning')}<b>3 changes ready to apply</b><p>Nothing changes until you apply.</p><div class="im-action-row"><button>Apply</button></div></div>`, 'a block note has its icon first too');
+  assert.equal(noteHtml({ message: 'Check', items: [{ label: 'a', message: 'b' }] }), '<div class="im-note im-note--block" role="status"><p>Check</p><ul><li><b>a</b>: b</li></ul></div>', 'a list makes a block');
+  assert.equal(noteHtml({ title: 'Check', actionsHtml: '<button>Fix</button>' }), '<div class="im-note im-note--block" role="status"><b>Check</b><div class="im-action-row"><button>Fix</button></div></div>', 'actions make a block');
+});
+
+test('a note is an alert for err and warn, and a status otherwise', () => {
+  const role = (tone?: Parameters<typeof noteHtml>[0]['tone']): string | undefined => /role="([a-z]+)"/.exec(noteHtml({ message: 'x', tone }))?.[1];
+  assert.deepEqual([role('err'), role('warn'), role('ok'), role('info'), role()], ['alert', 'alert', 'status', 'status', 'status']);
+});
+
+test('statusButtonHtml escapes its labels and puts its tone on the dot', () => {
+  const html = statusButtonHtml({ label: '<ready>', accessibleLabel: 'Open "status"', action: 'status', tone: 'ok' });
+  assert.match(html, /aria-label="Open &quot;status&quot;"/);
+  assert.match(html, /<i class="im-dot" data-im-tone="ok" aria-hidden="true"><\/i><span>&lt;ready&gt;<\/span>/);
+});
+
+test('titlebarHtml writes the sidebar toggle of section 4 right after the brand, when it is given', () => {
+  const html = titlebarHtml({ brand: { name: 'App' }, sidebarToggle: { label: 'Threads "all"', controls: 'side<' }, navigationHtml: '<nav class="im-tabs"></nav>' });
+  assert.match(html, /<\/span><\/div><button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads &quot;all&quot;" title="Threads &quot;all&quot;" aria-expanded="false" aria-controls="side&lt;"><svg class="im-icon" viewBox="0 0 24 24" aria-hidden="true">[^]*?<\/svg><\/button><nav class="im-tabs">/);
+  assert.ok(html.includes(iconHtml('sidebar')), 'the toggle draws the sidebar icon of the package');
+  assert.doesNotMatch(titlebarHtml({ brand: { name: 'App' } }), /im-sidebar-toggle/, 'no toggle unless it is given');
+});
+
+test('a title bar with its sidebar toggle keeps the toggle state across a repaint', () => {
+  const titlebar = (name: string): string => titlebarHtml({ brand: { name }, sidebarToggle: { label: 'Threads', controls: 'side' } });
+  const shell = mount(frame('1', { titlebarHtml: titlebar('One') }));
+  const toggle = $(shell, 'im-sidebar-toggle');
+  toggle.setAttribute('aria-expanded', 'true');
+  renderShellFrame(shell as unknown as HTMLElement, frame('2', { titlebarHtml: titlebar('Two') }));
+  assert.equal($(shell, 'im-sidebar-toggle'), toggle, 'the toggle is the same element');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'and keeps its state');
+  assert.equal($(shell, 'im-wordmark').textContent, 'Two');
 });

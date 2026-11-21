@@ -23,9 +23,11 @@ async function inPage(page, fn, arg) {
 }
 
 async function frames(page) {
-  // The header of every panel keeps its place and size in every state, the panel keeps its place and width.
+  // The header of every panel keeps its place and size in every state, the panel keeps its place and width: the panels
+  // setPanelState filled, and the panels filled from strings, which setPanelState then takes over.
   return inPage(page, () => {
-    const { setPanelState, panels } = window.__imagoPanelState;
+    const { setPanelState, panels: dom, fromStrings } = window.__imagoPanelState;
+    const panels = { ...dom, ...Object.fromEntries(Object.entries(fromStrings).map(([name, panel]) => [`string ${name}`, panel])) };
     const box = (element) => {
       const r = element.getBoundingClientRect();
       return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height };
@@ -82,6 +84,60 @@ async function check(page, label) {
     );
   });
   assert.deepEqual(initial, { empty: 'empty', loading: 'loading', error: 'error' }, at('the gallery starts the panels empty, loading and failed'));
+
+  // 0. A panel filled by panelStateHtml is the panel setPanelState fills: the same layer, element for element, and the same
+  // boxes. Only the listeners of the buttons are not in a string.
+  const strings = await inPage(page, () => {
+    const { panels, fromStrings } = window.__imagoPanelState;
+    const layer = (panel) => panel.querySelector(':scope > .im-panel-body > [data-im-state-layer]');
+    const box = (element) => {
+      const r = element.getBoundingClientRect();
+      return { width: r.width, height: r.height };
+    };
+    const boxes = (element) => [element, ...element.querySelectorAll('*')].map(box);
+    return Object.fromEntries(Object.keys(panels).map((kind) => {
+      const dom = layer(panels[kind]);
+      const string = layer(fromStrings[kind]);
+      return [kind, {
+        dom: dom?.outerHTML ?? null,
+        string: string?.outerHTML ?? null,
+        domBoxes: dom ? boxes(dom) : [],
+        stringBoxes: string ? boxes(string) : [],
+        domPanel: box(panels[kind]),
+        stringPanel: box(fromStrings[kind]),
+        domBusy: panels[kind].getAttribute('aria-busy'),
+        stringBusy: fromStrings[kind].getAttribute('aria-busy'),
+      }];
+    }));
+  });
+  for (const [kind, seen] of Object.entries(strings)) {
+    assert.ok(seen.string, at(`the ${kind} panel filled from a string has its layer`));
+    assert.equal(seen.string, seen.dom, at(`panelStateHtml writes the ${kind} layer setPanelState builds`));
+    assert.deepEqual(seen.stringBoxes, seen.domBoxes, at(`every element of the ${kind} layer from a string has the size of its twin`));
+    assert.deepEqual(seen.stringPanel, seen.domPanel, at(`the ${kind} panel from a string has the size of its twin`));
+    assert.equal(seen.stringBusy, seen.domBusy, at(`the ${kind} panel from a string is busy as its twin is`));
+  }
+
+  // A layer from a string is setPanelState's to replace: focus on its button moves to the new layer, ready removes it.
+  const takeover = await inPage(page, () => {
+    const { setPanelState, panelStateHtml, fromStrings } = window.__imagoPanelState;
+    const panel = fromStrings.error;
+    const body = panel.querySelector(':scope > .im-panel-body');
+    const layers = () => [...body.querySelectorAll(':scope > [data-im-state-layer]')].map((layer) => layer.getAttribute('data-im-state-layer'));
+    body.querySelector('[data-im-state-layer] button').focus();
+    setPanelState(panel, { kind: 'empty', text: 'Nothing.', action: { label: 'Add one', run() {} } });
+    const afterEmpty = { layers: layers(), focus: document.activeElement.textContent };
+    setPanelState(panel, { kind: 'ready' });
+    const afterReady = { layers: layers(), onBody: document.activeElement === body, busy: panel.getAttribute('aria-busy') };
+    window.__injected = 0;
+    body.innerHTML = panelStateHtml({ kind: 'error', text: '<img src=x onerror="window.__injected++">', errorWord: '<b>x</b>', retryHtml: '<button class="im-btn" type="button"><span>Retry</span></button>' });
+    const injection = { images: body.querySelectorAll('img').length, bolds: body.querySelectorAll('b').length, word: body.querySelector('b').textContent };
+    return { afterEmpty, afterReady, injection };
+  });
+  assert.deepEqual(takeover.afterEmpty, { layers: ['empty'], focus: 'Add one' }, at('setPanelState replaces a layer from a string and moves its focus to the new button'));
+  assert.deepEqual(takeover.afterReady, { layers: [], onBody: true, busy: null }, at('ready removes a layer from a string'));
+  assert.deepEqual(takeover.injection, { images: 0, bolds: 1, word: '<b>x</b>' }, at('panelStateHtml escapes its text'));
+  assert.equal(await page.evaluate(() => new Promise((resolve) => setTimeout(() => resolve(window.__injected), 100))), 0, at('markup in the text of a string layer never runs'));
 
   // 1. Header and frame stay in every state.
   for (const frame of await frames(page)) {

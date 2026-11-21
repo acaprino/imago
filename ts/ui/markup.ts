@@ -1,5 +1,8 @@
 import { iconMarkup, isIconName } from './icon.ts';
+import { panelStateHtml } from './panel-state.ts';
+import { chipToneAttribute, type ChipTone } from './tone.ts';
 export type { IconName } from './icon.ts';
+export type { ChipTone, Tone } from './tone.ts';
 
 // String rendering for apps that compose HTML before mounting it. Text and attribute values are
 // escaped here; the explicitly named HTML slots accept trusted component output, never user text.
@@ -23,10 +26,9 @@ export const spinnerHtml = '<i class="im-spinner" aria-hidden="true"></i>';
 export const avatarHtml = (text: string): string => `<span class="im-avatar" aria-hidden="true">${escapeHtml(text)}</span>`;
 export const initialsAvatarHtml = (name: string): string => avatarHtml(Array.from(name).slice(0, 2).join('').toUpperCase());
 
-export type ChipTone = '' | 'ok' | 'err' | 'warn' | 'accent' | 'good' | 'bad';
-export function chipHtml(label: string, tone: ChipTone | string = ''): string {
-  const resolved = tone === 'good' ? 'ok' : tone === 'bad' ? 'err' : tone;
-  return `<span class="im-chip" data-im-tone="${['ok', 'err', 'warn', 'accent'].includes(resolved) ? resolved : ''}">${escapeHtml(label)}</span>`;
+/** A chip without a tone (`''`) is the neutral chip. */
+export function chipHtml(label: string, tone: ChipTone = ''): string {
+  return `<span class="im-chip"${chipToneAttribute(tone)}>${escapeHtml(label)}</span>`;
 }
 
 export type MarkupAttributes = Readonly<Record<string, string>>;
@@ -83,9 +85,9 @@ export function pageHeadingHtml(title: string, description: string, actionsHtml 
   return `<header class="im-page-heading"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div>${actionsHtml ? `<div class="im-action-row">${actionsHtml}</div>` : ''}</header>`;
 }
 
-/** The action slot accepts trusted component HTML. */
+/** The empty layer of `setPanelState`, its title in `strong` (none when empty). The action slot accepts trusted component HTML. */
 export function emptyStateHtml(title: string, description: string, actionHtml = ''): string {
-  return `<div class="im-panel im-surface im-empty" data-im-surface="sheet"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span>${actionHtml}</div>`;
+  return panelStateHtml({ kind: 'empty', title, text: description, actionHtml });
 }
 
 export function switchHtml(on: boolean, label: string, action: string, id = '', disabled = false): string {

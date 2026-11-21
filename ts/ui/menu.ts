@@ -94,7 +94,7 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], options: {
     label.textContent = item.label;
     if (!item.control) row.append(label);
     if (item.keys && !item.control) row.append(keyCaps(doc, item.keys));
-    if (item.danger) row.dataset.imTone = 'danger';
+    if (item.danger) row.dataset.imTone = 'err';
     if (item.disabled !== undefined) {
       row.setAttribute('aria-disabled', 'true');
       row.title = item.disabled;

@@ -927,16 +927,48 @@
 
 .im-note > .im-icon { color: var(--im-tone, var(--im-info)); }
 
-.im-note b {
+/* The note's own text only: the title and the line of a compact note (<div><b>title</b><span>line</span></div>), the title
+   of a block note. What a block note holds in its list and its actions (buttons, chips, key caps) draws as it does anywhere. */
+.im-note:not(.im-note--block) > div > b,
+.im-note--block > b {
   display: block;
   font-weight: 600;
   color: var(--im-text-hi);
 }
 
-.im-note span {
+.im-note:not(.im-note--block) > div > span {
   display: block;
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   color: var(--im-text-2);
+}
+
+/* A note with a list or actions (noteHtml): its title, a paragraph, the list and the actions, one under the other. */
+.im-note--block {
+  display: grid;
+  justify-items: start;
+  gap: var(--im-s-2);
+  overflow-wrap: anywhere;
+}
+
+.im-note--block > p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--im-text-2);
+}
+
+.im-note--block > ul {
+  display: grid;
+  gap: var(--im-s-1);
+  margin: 0;
+  padding-inline-start: var(--im-s-4);
+  list-style: disc;
+  color: var(--im-text-2);
+}
+
+/* A list label: the weight and colour of the title, in the line. */
+.im-note--block > ul > li > b {
+  font-weight: 600;
+  color: var(--im-text-hi);
 }
 
 /* ---------- progress and steps ---------- */
@@ -1048,12 +1080,13 @@
   border-color: color-mix(in srgb, var(--im-ok) 60%, transparent);
 }
 
-.im-steps > li[aria-current="step"] {
+/* The current step, and the selected step of a list of steps that can be opened (stepNavigationHtml). */
+.im-steps > li:is([aria-current="step"], :has(> button[aria-selected="true"])) {
   background: var(--im-selected);
   border-color: var(--im-accent-text);
 }
 
-.im-steps > li[aria-current="step"] .im-step-index {
+.im-steps > li:is([aria-current="step"], :has(> button[aria-selected="true"])) .im-step-index {
   color: var(--im-accent-on);
   background: var(--im-accent);
   border-color: var(--im-accent);
@@ -1072,6 +1105,12 @@
   color: var(--im-text-2);
   border: 1px dashed var(--im-line-strong);
   border-radius: var(--im-r-sheet);
+}
+
+/* The title of an empty layer (emptyStateHtml, or setPanelState's `empty` with a title). */
+.im-empty > strong {
+  font: 600 var(--im-fs-title)/1.45 var(--im-font-head);
+  color: var(--im-text-hi);
 }
 
 /* Flat bars at the real sizes: nothing shimmers and nothing moves when the data lands. */
@@ -1185,10 +1224,17 @@
     background: Highlight;
   }
 
-  /* A step is not focusable, so its mark may be an outline. */
-  .im-steps > li[aria-current="step"] {
+  /* A step that only shows is not focusable, so its mark may be an outline. A step that can be opened has a focus ring
+     of its own: its mark is its index, filled with Highlight. */
+  .im-steps > li[aria-current="step"]:not(:has(> button)) {
     outline: 2px solid Highlight;
     outline-offset: -2px;
+  }
+
+  .im-steps > li:is([aria-current="step"], :has(> button[aria-selected="true"])):has(> button) .im-step-index {
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
   }
 
   /* the tab's line sits above the ring of a focused tab */
@@ -1230,8 +1276,13 @@ textarea.im-input { height: auto; display: block; padding-block: var(--im-s-2); 
   display: flex; align-items: center; gap: var(--im-s-2); inline-size: 100%; min-block-size: var(--im-h-control);
   padding: var(--im-s-2); text-align: start; color: inherit; font: inherit; background: transparent; border: 0; border-radius: inherit;
 }
-.im-steps > li > button:not(:disabled):hover { background: var(--im-hover); }
+/* A step that can be opened is a button in its item, with the common states: hover, pressed, the focus ring 2px inside
+   (the list is a strip of items, like a tab strip), selected as the current step, disabled as a dashed edge and muted text. */
+.im-steps > li > button:not(:disabled):is(:hover, [data-im-force="hover"]) { background: var(--im-hover); }
+.im-steps > li > button:not(:disabled):is(:active, [data-im-force="press"]) { background: var(--im-press); }
+.im-steps > li > button:is(:focus-visible, [data-im-force="focus"]) { outline: 2px solid var(--im-accent-text); outline-offset: -2px; }
 .im-steps > li:has(> button:disabled) { border-style: dashed; }
+.im-steps > li > button:disabled :is(.im-step-index, .im-step-text) { color: var(--im-muted); }
 .im-input:is(input, textarea)[aria-invalid="true"] { border-color: var(--im-err); }
 .im-input:is(input, textarea):disabled { border-style: dashed; color: var(--im-muted); }
 .im-steps > li[data-im-step="failed"] .im-step-index { color: var(--im-err); border-color: currentColor; }

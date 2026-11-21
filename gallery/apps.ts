@@ -1,6 +1,7 @@
 // The five apps' sample content, ported from docs/reference/toolkit-preview.html: the live shell of the gallery is
 // drawn from here. The markup uses the classes of css/primitives.css (regions) and css/controls.css (controls);
 // nothing in this file styles anything.
+import { noteHtml } from '../ts/ui/shell-markup.ts';
 
 export type AppId = 'xiox' | 'mukade' | 'shinatama' | 'muro' | 'daodan';
 type Tone = 'ok' | 'warn' | 'err' | 'info' | 'accent';
@@ -158,7 +159,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
     status: ['3 changes ready', 'warn', 'Last check today 08:07 · next check today 09:07', '4 harnesses'],
     footer: 'Last sync yesterday 07:07 · 5 plugins in your list', keys: [['↵', 'apply'], ['r', 'check now']],
     side: null,
-    content: () => `${header('Sync', { sub: 'Rows are your plugins, columns are your harnesses.', right: segmented(['All', 'Needs action']) })}<div class="im-panel-tools"><div class="im-note" data-im-tone="warn">${icon('reload')}<div><b>3 changes ready to apply</b><span>1 install, 1 update, 1 removal. Nothing changes until you apply.</span></div></div></div><div class="im-panel-body">${table([{ t: 'Plugin' }, { t: 'Latest' }, { t: 'Claude Code' }, { t: 'Codex' }, { t: 'OpenCode' }], [
+    content: () => `${header('Sync', { sub: 'Rows are your plugins, columns are your harnesses.', right: segmented(['All', 'Needs action']) })}<div class="im-panel-tools">${noteHtml({ icon: 'reload', title: '3 changes ready to apply', message: '1 install, 1 update, 1 removal. Nothing changes until you apply.', tone: 'warn' })}</div><div class="im-panel-body">${table([{ t: 'Plugin' }, { t: 'Latest' }, { t: 'Claude Code' }, { t: 'Codex' }, { t: 'OpenCode' }], [
       { c: [two('Marionette', 'github.com/acaprino/marionette'), num('0.4.0'), chip('Update 0.3.0 → 0.4.0', 'warn'), num('0.4.0'), num('0.4.0')], sel: true },
       { c: [two('commit-helper', 'github.com/example/commit-helper'), num('2.1.0'), num('2.1.0'), num('2.1.0'), none] },
       { c: [two('test-runner', 'github.com/example/test-runner'), num('1.0.4'), none, none, chip('Install 1.0.4', 'accent')] },
@@ -208,7 +209,7 @@ export function shellMarkup(id: AppId): string {
   <a class="im-shell-skip-link" href="#g-content">${a.strings.skip}</a>
   <header class="im-titlebar">
     <div class="im-brand"><span class="im-mark"><svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[id]}</svg></span><span class="im-wordmark">${a.name}</span></div>
-    ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('list')}</button>` : ''}
+    ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('sidebar')}</button>` : ''}
     <nav class="im-tabs" role="tablist" aria-label="${a.strings.views}">${tabs}</nav>
     <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">${a.strings.views}${icon('chev')}</button>
     ${spacer}
