@@ -115,6 +115,57 @@ async function pathFieldTests(page) {
   });
 }
 
+async function pathFieldCommitTests(page) {
+  const results = await page.evaluate(async () => {
+    const { pathField } = await import('/test-controls/file-selector.js');
+    const input = document.createElement('input');
+    input.value = 'typed';
+    const requests = [];
+    const committed = [];
+    const changes = [];
+    const errors = [];
+    input.addEventListener('change', () => changes.push(input.value));
+    let failNext = false;
+    let settleCommit;
+    const field = pathField(input, {
+      buttonLabel: 'Open folder',
+      choose: () => new Promise(resolve => requests.push(resolve)),
+      onError: error => errors.push(error.message),
+      commit: path => {
+        if (failNext) { failNext = false; throw new Error('refused'); }
+        committed.push(path);
+        return new Promise(resolve => { settleCommit = resolve; });
+      },
+    });
+    document.body.append(field);
+    const button = field.querySelector('button');
+    button.click();
+    input.dispatchEvent(new Event('input')); // an edit does not drop a choice that is acted on
+    requests.at(-1)('first');
+    await Promise.resolve(); await Promise.resolve();
+    const busyDuringCommit = button.getAttribute('aria-busy');
+    button.click(); // ignored while the commit runs
+    const requestsWhileBusy = requests.length;
+    settleCommit();
+    await Promise.resolve(); await Promise.resolve();
+    failNext = true;
+    button.click();
+    requests.at(-1)('second');
+    await Promise.resolve(); await Promise.resolve();
+    button.click();
+    requests.at(-1)(null);
+    await Promise.resolve();
+    button.click();
+    field.remove();
+    requests.at(-1)('after removal');
+    await Promise.resolve(); await Promise.resolve();
+    return { committed, value: input.value, changes, errors, busyDuringCommit, requestsWhileBusy };
+  });
+  assert.deepEqual(results, {
+    committed: ['first'], value: 'typed', changes: [], errors: ['refused'], busyDuringCommit: 'true', requestsWhileBusy: 1,
+  });
+}
+
 async function largeTree(page) {
   const result = await page.evaluate(async () => {
     const { createFileTree } = await import('/test-controls/file-tree.js');
@@ -222,6 +273,7 @@ export default async function workspace(page) {
   }
   await providerTests(page);
   await pathFieldTests(page);
+  await pathFieldCommitTests(page);
   await largeTree(page);
   const guarded = await page.evaluate(async () => {
     const api = window.__imagoSurfaces.inspector;

@@ -102,6 +102,10 @@ different in each. Nothing checks an app against the rules.
   `im-inspection-rail`, `im-detail-panel` and the three modal drawers are removed. The inspector's width is
   `--im-w-inspector` (300); `data-im-inspector="wide"` on the shell makes it 360, the top of the range the design
   allows *(call)*.
+  (Added when the owner's `drawer` was merged: "no drawers" is about the modal drawers, the forms that blocked the
+  window while they saved, which are a dialog with `canDismiss` or `lock`. `openDialogDrawer` is another thing: an
+  app-owned `dialog`, not modal, a layer of the one stack beside live panels, which blocks nothing and holds no form that
+  must not be left. It keeps the class `im-content-drawer`; the modal ones stay removed.)
 - Page content inside the content region (Muro's pages, Daodan's documents) keeps its helpers: `im-page-content`,
   `im-page-heading`, `im-section-heading`, `im-content-toolbar`, `im-definition-list` and the lists. `im-document`
   and `im-toolbar` merge into `im-page-content` and `im-content-toolbar` *(call)*.

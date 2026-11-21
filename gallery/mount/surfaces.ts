@@ -6,6 +6,7 @@ import {
   notify,
   clearNotices,
   openContentDialog,
+  openDialogDrawer,
   createContentDialog,
   runFormOperation,
   renderShellFrame,
@@ -37,6 +38,7 @@ declare global {
     /** The surfaces and the registry of the live shell, for the gallery's test to drive them directly. */
     __imagoSurfaces?: {
       openContentDialog: typeof openContentDialog;
+      openDialogDrawer: typeof openDialogDrawer;
       createContentDialog: typeof createContentDialog;
       runFormOperation: typeof runFormOperation;
       renderShellFrame: typeof renderShellFrame;
@@ -155,7 +157,7 @@ export default function mount({ shell, app, registry }: MountContext): () => voi
   };
   shell.addEventListener('click', onClick);
 
-  window.__imagoSurfaces = { openContentDialog, createContentDialog, runFormOperation, renderShellFrame, shellFrameHtml, sidebarHtml, titlebarHtml, pageContentHtml, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
+  window.__imagoSurfaces = { openContentDialog, openDialogDrawer, createContentDialog, runFormOperation, renderShellFrame, shellFrameHtml, sidebarHtml, titlebarHtml, pageContentHtml, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
 
   return () => {
     shell.removeEventListener('click', onClick);

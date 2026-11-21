@@ -80,7 +80,6 @@ export const REMOVED = [
   { old: 'im-error', kind: 'class', now: 'im-text-err' },
   // moving/task-6.md: dialogs and the skins
   { old: 'im-content-dialog--drawer', kind: 'class', now: 'inspector(shell).open(content, opener?) for a panel of the selected object; a dialog is centred' },
-  { old: 'im-content-drawer', kind: 'class', now: 'inspector(shell).open(content, opener?)' },
   { old: 'im-sectioned-drawer', kind: 'class', now: 'inspector(shell).open(content, opener?); its sections are im-section' },
   { old: 'im-padded-drawer', kind: 'class', now: 'inspector(shell).open(content, opener?)' },
   { old: 'applyShinatamaPalette', kind: 'export', now: 'nothing in the package: the skins are Shinatama\'s own overrides of tokens (git show v0.1.4:ts/shell/shinatama-palette.ts)' },
@@ -132,6 +131,7 @@ export const REMOVED = [
  */
 export const KEPT = [
   { old: 'data-im-badge', why: 'task-16.md: the badge of an im-row, a dot at its end and on the corner of its rail item' },
+  { old: 'im-content-drawer', why: 'the drawer: the class openDialogDrawer writes on an app-owned dialog it shows beside live panels, not modal. The modal side panel it once named is still gone (im-content-dialog--drawer, im-sectioned-drawer, im-padded-drawer)' },
 ];
 
 /**

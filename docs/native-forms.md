@@ -3,7 +3,8 @@
 How a form is written with native controls, how it is checked and saved, which dialog holds it, and how a first run is
 written in steps. The rules are in [design-file.md](design-file.md): in a `form` a control is the native element with
 the class of its drawing; a form that must block the window while it saves is a dialog; a form for the selected object
-that does not block it is the inspector's.
+that does not block it is the inspector's; a form the app owns that stays beside live panels is a drawer, which blocks
+nothing.
 
 Import everything below from `@acaprino/imago/ui`.
 
@@ -76,6 +77,7 @@ uses `showModal()`.
 | `openContentDialog(shell, dialog, options)` | A `dialog` element the app owns, with its own heading, name and form | `{ close(), dispose() }`. `ContentDialogOptions`: `canDismiss?`, `onClose?`. It opens at its top with the focus on the dialog, or on the control that carries `autofocus` |
 | `createContentDialog(shell, options)` | A `dialog` the package makes and the app fills again and again with trusted markup | `{ element, show(markup), close(), dismiss(), dispose() }`. `ContentDialogControllerOptions`: `label?` (its name when the markup has no `h1` or `h2`), `canDismiss?`, `onClose?`, `fallbackFocus?` |
 | `openDialogSheet(dialog, options)` | A native form `dialog` docked as a sheet to a control or a pane | Whether it opened. `{ anchor, placement, lightDismiss? }`; its own cancel event still decides whether it closes |
+| `openDialogDrawer(dialog, options)` | A `dialog` the app owns that stays beside live panels: not a dialog of the list above | Whether it opened. `{ opener?, acceptsEscape? }`. See "A drawer" below |
 
 A form that must block the window while it saves:
 
@@ -86,6 +88,18 @@ A form that must block the window while it saves:
   `close()` and `dispose()` end the dialog even then: they are for the app's own completed action. Both are idempotent,
   and `onClose` runs once, after the page is released. A native `dialog.close()` and `method="dialog"` release the layer
   too, and the same `dialog` can be opened again after it closed. The app's own close buttons ask the same condition.
+
+A drawer is not a way to block the window, and not a second inspector. It is the same app-owned `dialog` element, shown
+beside the panels (`im-content-drawer`, on the `im-float im-dialog` drawing) at the window's edge under the title bar, as
+a layer of the same stack, but not modal: the panels stay live, and a press in them leaves it open. Escape closes the top
+drawer, unless `acceptsEscape` leaves it to the focused target (a terminal that reads Escape itself), and a press on the
+control that opened it, from the pointer or the keyboard, closes it again and does nothing else. A drawer opened from
+inside another covers it (`data-im-covered`: it keeps its DOM and scroll, and cannot be reached) until the one over it
+closes; one opened from anywhere else replaces the open drawers. A menu or a sheet opened over a drawer closes first, a
+dialog makes the drawer under it inert, and no drawer opens under a dialog or the palette. From 900 the work area gives
+the drawer its width (`data-im-drawer-open` and `--im-drawer-width` on the shell); narrower, it overlaps the panels.
+Closing the dialog natively (`dialog.close()`, `method="dialog"`, its `cancel`) releases the layer. Because it never
+blocks, a form that must not be left while it saves does not go in a drawer: it is a dialog, as above.
 
 The app keeps the shell's body element when it repaints its contents (`renderShellFrame` does), and blocks the title
 bar's view tabs while `hasModal()` is true. On unmount it calls `clearNotices(shell)` and the function `attachLayers`

@@ -34,10 +34,14 @@ test('@acaprino/imago/shell no longer exports the Shinatama skins: Shinatama tak
 });
 
 test('the modal drawers are gone from the package: a side panel is the inspector, a dialog is centred', () => {
-  const removed = /im-content-dialog--drawer|im-content-drawer|im-sectioned-drawer|im-padded-drawer/;
+  const removed = /im-content-dialog--drawer|im-sectioned-drawer|im-padded-drawer/;
   const files = [...walk('css'), ...walk('ts'), ...walk('react')].filter((file) => /\.(css|ts|tsx)$/.test(file));
   assert.ok(files.length > 20, 'the walk found the package sources');
   for (const file of files) assert.ok(!removed.test(read(file)), `${file} still names a removed drawer class`);
+  // The drawer that is left is not modal: a layer beside live panels (openDialogDrawer), never a way to block the window.
+  const drawer = read('ts/ui/drawer.ts');
+  assert.ok(drawer.includes('dialog.show()') && !drawer.includes('showModal'), 'a drawer is shown, not modal');
+  for (const file of files) if (!['css/surfaces.css', 'ts/ui/drawer.ts'].includes(file.replaceAll('\\', '/'))) assert.ok(!/im-content-drawer/.test(read(file)), `${file} names im-content-drawer, which only the drawer writes`);
   assert.ok(!/['"]drawer['"]/.test(read('ts/ui/content-dialog.ts')), "createContentDialog's show still takes a 'drawer' mode");
 });
 

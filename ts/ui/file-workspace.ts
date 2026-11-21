@@ -36,3 +36,17 @@ export function fileWorkspace(options: {
   element.append(navigation, handle.element, main);
   return { element, navigation, toolbar, location, panes, status, destroy: () => observer.disconnect() };
 }
+
+export type DocumentPaneKind = 'source' | 'rendered' | 'picture' | 'form';
+
+/** One pane of the document region (`panes` of fileWorkspace). `source` hosts the app's editor, which fills it;
+ * `rendered` shows a rendered document (headings, paragraphs, lists, quotes, code, tables, links) in the look's
+ * reading type; `picture` shows an image at most as wide as the pane; `form` holds the fields of a visual editor,
+ * whose heading, code and kept-source parts take the `documentHeading` (with `data-im-level`), `documentCode`
+ * and `documentKept` roles. Panes side by side are divided by a rule; a hidden pane takes no room. */
+export function documentPane(kind: DocumentPaneKind, label?: string): HTMLDivElement {
+  const pane = document.createElement('div');
+  pane.className = `im-document-pane im-document-pane--${kind}`;
+  if (label) pane.setAttribute('aria-label', label);
+  return pane;
+}

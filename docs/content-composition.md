@@ -54,6 +54,15 @@ instead of strings.
 
 `im-truncate` cuts a line of a part with an ellipsis.
 
+A part takes further roles by name, never by class: `uiTraits(node, ...traits)` adds layout roles (`stack`, `row`,
+`scroll`, `bounded`, `grow`, `truncate`, and `overlay`, `im-overlay`, a panel over the whole of its positioned host, its parts in a column), list roles
+(`choiceList`, `summaryList`, `conversation`) and the dialog role `fileDialog`. The regions of the window are not
+roles: they are the frame's (`shellFrameHtml`), and the side panel is the inspector. The `UiTrait` type lists every
+role, and `UI_TRAITS` the classes that draw it. `uiTone(node, tone)` puts a text in a `UiTone`, `ok`, `warn` or `err`, and `null`
+gives it its own colour back; the words still say the state. `uiEmphasis(button, emphasis)` makes a button the `primary`
+action or the armed `danger` one, and `null` makes it plain again. The app keeps its own classes for its own hooks;
+the classes Imago draws with stay Imago's.
+
 ## Workspaces, projects and files
 
 The gallery's Shinatama shows them together: tabs moved between panes, a project search, a folder read on demand, and a
@@ -68,8 +77,9 @@ return from an event to its session.
 | `createFileTree(doc, entries, options)` | A tree of files the app lists (`FileTreeEntry`: `id`, `name`, `icon?`, `detail?`, `title?`, `disabled?`, `children?`, `lazy?`; a row's detail is `im-tree-detail`). `FileTreeOptions`: `label`, `singleClick?`, `expanded?`, `selected?`, `active?`, `onToggle?`, `onSelect?`, `onOpen?`, `loadChildren?` (for a `lazy` folder, cancellable), `onLoadError?`. Ids are unique in the whole tree; typing searches the visible names; children are kept once loaded, and a failed folder can be opened again. It returns `{ element, reveal(ids, focus), setSelected(id), destroy() }`. `fileTree(doc, entries, options)` is its element alone, for a tree that is never revealed or destroyed |
 | `breadcrumbs(doc, label, segments, reveal)` | Where an item is, `im-breadcrumbs`: each parent a button that calls `reveal(id)`, the last segment the current item |
 | `fileSelector(doc, options)` | A native file input, `im-file-selector`: `{ label, accept?, multiple?, directory? }`. Read its `FileList` on `change` |
-| `pathField(input, options)` | A path the person types or picks, `im-path-field`: the input in an `im-input--code` box and a button that calls `choose()`, the app's native chooser. `{ buttonLabel, choose, onError }`. Cancelling keeps the input as it was; a choice still pending is dropped when the field is edited or removed |
-| `fileWorkspace(options)` | A document browser, `im-file-workspace`: a navigator, a separator, a toolbar with the item's location (`im-file-location`), the panes of the documents (`im-document-panes`) and a status. `{ resizeLabel, toolbarLabel, initialWidth, onWidthCommit? }`. The app loads each document and puts its editor or its preview in the panes |
+| `pathField(input, options)` | A path the person types or picks, `im-path-field`: the input in an `im-input--code` box and a button that calls `choose()`, the app's native chooser. `{ buttonLabel, choose, onError, commit? }`. Cancelling keeps the input as it was; a choice still pending is dropped when the field is edited or removed. With `commit(path)` the choice is acted on at once (open that folder, add that root) instead of being written into the field, which keeps what was typed: an edit no longer drops the choice, a removal still does, and a failure goes to `onError` |
+| `fileWorkspace(options)` | A document browser, `im-file-workspace`: a navigator, a separator, a toolbar with the item's location (`im-file-location`), the panes of the documents (`im-document-panes`, each made by `documentPane(kind, label)`, an `im-document-pane` of a `DocumentPaneKind`: a `source` pane the editor fills (`im-document-pane--source`), a `rendered` pane for a rendered document in the look's reading type (`im-document-pane--rendered`), a `picture` pane at most as wide as it (`im-document-pane--picture`), and a `form` pane for a visual editor (`im-document-pane--form`), whose fields take the `documentHeading` (`im-document-heading`, with `data-im-level`), `documentCode` (`im-document-code`) and `documentKept` (`im-document-kept`) roles. Panes side by side are divided by a rule, and a hidden pane takes no room) and a status. `{ resizeLabel, toolbarLabel, initialWidth, onWidthCommit? }`. The app loads each document and puts its editor or its preview in the panes |
+| `overviewStrip(options)` | A scrolling view in miniature at its edge, `im-overview`: an `OverviewStripOptions`, `{ press(y, on), drag(y), release(completed), wheel(deltaY) }`, where `on` is an `OverviewTarget` (`band`, `frame` or `track`). It returns an `OverviewStrip`, `{ element, canvas, ink, setFrame, setBand, destroy }`. The app paints the trace in the strip's `canvas` (the colours of `ink()`), says where the frame over what is on screen (`setFrame(top, height)`, `im-overview-frame`) and the band of what has scrolled out into an archive (`setBand(height)`, `im-overview-band`) are, and turns a press on the `band`, the `frame` or the `track` into its own lines. Imago draws the strip and reports presses, drags and the wheel. The host places it with `--im-overview-top`, `--im-overview-end`, `--im-overview-bottom` and `--im-overview-width`; `data-im-dragging` is on it while a drag holds. It is hidden from assistive technology: it is a pointer shortcut beside a view that scrolls by itself |
 | `createTilingWorkspace(options)` | A workspace of panes with tabs, in splits the person resizes (`TilingWorkspaceOptions`): the app gives the layout (`TilingLayout` of `TilingView`s), its model (validation, a preview of each `TilingAction`, the rectangles of the panes, the neighbour of a pane), the element of each view keyed by its id (`bindings`), and `dispatch(action, expectedLayout)`, which applies an accepted action to its own layout. A view's element moves with its tab, and its resource is started and stopped by the app, not by whether it is shown. `placeWorkspaceBinding(parent, binding, visible)` puts a view's element in its pane |
 | `portraitNotice(options)` | A notice for a small window of its own (an attention window): a portrait, the name, a message and two actions, `im-portrait-notice` with `im-notice-figure` and `im-notice-bubble`. `{ label, name, dismiss, open }`. The app decides what it is about, whether the window is shown, and when the event is acknowledged |
 
@@ -132,4 +142,7 @@ with the person.
 A graph in the content region is `graphView` from `@acaprino/imago/graph`, in an element with `im-graph-host`; a grouped
 scene is `groupedGraphScene` from `@acaprino/imago/graph-layout`, and an editable graph the editor of the same entry. The
 app turns its domain into nodes, edges and groups; the package owns positions, text measures, routes, the drawing, the
-keys and the camera. See [graphs.md](graphs.md).
+keys and the camera. See [graphs.md](graphs.md). The parts an app puts in an editable graph's workspace take the editor
+roles by name: `uiTraits(list, 'editorItems')` for a popup's list, `editorShelf` and `editorSource` for the shelf of
+things to drop, `editorNodeTitle`, `editorCaption` and `editorNodeFoot` for a card, and `editorOptions` and
+`editorChoice` for a choice.

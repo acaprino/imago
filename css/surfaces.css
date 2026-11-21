@@ -299,4 +299,12 @@ dialog.im-content-dialog:not([open]) { display: none; }
 
 /* Native forms share the sheet chrome. Keep their author-controlled close/open state. */
 dialog.im-form-sheet { position: absolute; margin: 0; width: min(600px, calc(100% - 16px)); max-height: calc(100% - var(--im-h-titlebar) - 32px); }
-dialog:not([open]).im-dialog, dialog:not([open]).im-sheet { display: none; }
+/* A drawer (openDialogDrawer) is an app-owned dialog that is not modal: a layer of the stack at the window's edge, under
+   the title bar, beside live panels. A drawer covered by another (data-im-covered) leaves the screen until it comes back. */
+dialog.im-content-drawer { position: absolute; inset: var(--im-h-titlebar) 0 0 auto; width: min(580px, 100%); max-height: none; margin: 0; overflow: auto; }
+dialog.im-content-drawer[data-im-covered], dialog:not([open]).im-dialog, dialog:not([open]).im-sheet { display: none; }
+/* Beside the panels: from 900 the work area (status row, columns, action bar and footer) gives the drawer the width it
+   has, and takes it back when it closes; narrower, the drawer overlaps the panels. */
+@container im-shell (width >= 900px) {
+  [data-im-drawer-open] .im-work { margin-inline-end: var(--im-drawer-width, 0px); }
+}

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { keyClaimed } from '../ts/ui/key-claim.ts';
-import { attachLayers, closeLayers, hasDialog, hasModal, pushLayer, topLayer, type Layer, type LayerKind } from '../ts/ui/layers.ts';
+import { attachLayers, closeLayers, hasDialog, hasModal, pushLayer, topLayer, topLayerOf, type Layer, type LayerKind } from '../ts/ui/layers.ts';
 
 // Plain objects stand in for elements: the module must not need a DOM.
 type Fake = { inert?: boolean; contains?: (other: unknown) => boolean };
@@ -39,13 +39,14 @@ function fakeShell() {
 }
 
 // A layer whose close pops it, as the real surfaces do; `closed` counts the calls.
-function fakeLayer(kind: LayerKind, from: FakeOpener | null = null, made: { el?: unknown; toggles?: boolean } = {}) {
+function fakeLayer(kind: LayerKind, from: FakeOpener | null = null, made: { el?: unknown; toggles?: boolean; acceptsEscape?: Layer['acceptsEscape'] } = {}) {
   const el: Fake = (made.el as Fake | undefined) ?? {};
   const state = { closed: 0, pop: () => {} };
   const layer: Layer = {
     el: el as unknown as HTMLElement,
     kind,
     toggles: made.toggles,
+    acceptsEscape: made.acceptsEscape,
     close() {
       state.closed++;
       state.pop();
@@ -56,7 +57,7 @@ function fakeLayer(kind: LayerKind, from: FakeOpener | null = null, made: { el?:
 }
 
 function emptyStack() {
-  closeLayers(['menu', 'sheet', 'dialog', 'palette']);
+  closeLayers(['menu', 'sheet', 'drawer', 'dialog', 'palette']);
   assert.equal(topLayer(), undefined);
 }
 
@@ -327,6 +328,110 @@ test('a modal layer makes the notice hosts inert, and its removal gives them bac
   assert.deepEqual(hosts.map((host) => host.inert), [false, false], 'live again when no modal layer is left');
   assert.equal(hasModal(), false);
   sheet.state.pop();
+});
+
+// A fake element that records the attributes the stack toggles on it.
+const marked = () => {
+  const attributes = new Set<string>();
+  return { attributes, inert: false, toggleAttribute(name: string, on: boolean) { if (on) attributes.add(name); else attributes.delete(name); } };
+};
+
+test('a drawer under another drawer is covered; a menu over a drawer leaves it live', () => {
+  const lower = fakeLayer('drawer', null, { el: marked() });
+  const upper = fakeLayer('drawer', null, { el: marked() });
+  const covered = (layer: typeof lower) => (layer.el as ReturnType<typeof marked>).attributes.has('data-im-covered');
+  assert.equal(lower.el.inert, true, 'the lower drawer cannot be reached');
+  assert.equal(covered(lower), true, 'and is taken off the screen');
+  assert.equal(upper.el.inert, false);
+  assert.equal(covered(upper), false);
+  const menu = fakeLayer('menu');
+  assert.equal(upper.el.inert, false, 'a menu over the top drawer leaves it live');
+  assert.equal(covered(upper), false);
+  menu.state.pop();
+  upper.state.pop();
+  assert.equal(lower.el.inert, false, 'uncovered when the drawer over it closes');
+  assert.equal(covered(lower), false);
+  const dialog = fakeLayer('dialog');
+  assert.equal(lower.el.inert, true, 'a dialog makes the drawer under it inert');
+  dialog.state.pop();
+  lower.state.pop();
+  emptyStack();
+});
+
+test('topLayerOf finds the highest layer of the kinds asked, under a menu or a sheet', () => {
+  const drawer = fakeLayer('drawer');
+  const sheet = fakeLayer('sheet');
+  const menu = fakeLayer('menu');
+  assert.equal(topLayer(), menu.layer);
+  assert.equal(topLayerOf(['drawer', 'dialog']), drawer.layer);
+  assert.equal(topLayerOf(['palette']), undefined);
+  emptyStack();
+  assert.equal(topLayerOf(['drawer']), undefined);
+  void sheet;
+});
+
+test('Escape closes the top drawer unless the focused target keeps Escape', () => {
+  const { shell, press } = fakeShell();
+  const detach = attachLayers(shell);
+  const terminal = { inTerminal: true };
+  const drawer = fakeLayer('drawer', null, { acceptsEscape: (target) => target !== (terminal as unknown as EventTarget) });
+  const kept = press('Escape', { target: terminal });
+  assert.equal(drawer.state.closed, 0, 'the terminal keeps its Escape');
+  assert.equal(kept.defaultPrevented, false, 'and the press reaches it');
+  press('Escape', { target: {} });
+  assert.equal(drawer.state.closed, 1, 'anywhere else Escape closes the drawer');
+  detach();
+  emptyStack();
+});
+
+test('a press beside a drawer leaves it open; its control closes it, with the drawers over it, and swallows the click', async () => {
+  await withFakeDom(() => {
+    const { shell, fire } = fakeShell();
+    const detach = attachLayers(shell);
+    const { control, inControl, layerEl, elsewhere } = parts();
+    const lower = fakeLayer('drawer', asOpener(control), { el: layerEl, toggles: true });
+    const inLower = new FakeElement(layerEl);
+    const upper = fakeLayer('drawer', asOpener(inLower), { el: new FakeElement(), toggles: true });
+    fire('pointerdown', { target: elsewhere });
+    assert.equal(lower.state.closed + upper.state.closed, 0, 'a press in the panels beside it keeps every drawer');
+    assert.equal(fire('click', { target: elsewhere }).stopped, false, 'and reaches what was pressed');
+    fire('pointerdown', { target: inControl });
+    assert.equal(lower.state.closed + upper.state.closed, 0, 'a press is not yet the click');
+    assert.equal(fire('click', { target: inControl }).stopped, true, 'the click on the control is taken');
+    assert.equal(upper.state.closed, 1, 'the control of the lower drawer closes the drawer over it');
+    assert.equal(lower.state.closed, 1, 'and its own');
+    detach();
+    emptyStack();
+  });
+});
+
+test('a click on the control of an open drawer from the keyboard closes it too', async () => {
+  await withFakeDom(() => {
+    const { shell, fire } = fakeShell();
+    const detach = attachLayers(shell);
+    const { control, layerEl } = parts();
+    const drawer = fakeLayer('drawer', asOpener(control), { el: layerEl, toggles: true });
+    fire('keydown', { key: 'Enter', target: control });
+    assert.equal(fire('click', { target: control }).stopped, true, 'the click is taken');
+    assert.equal(drawer.state.closed, 1, 'and the drawer is closed');
+    detach();
+    emptyStack();
+  });
+});
+
+test('a sheet over a drawer closes on a press outside it, and the drawer stays', async () => {
+  await withFakeDom(() => {
+    const { shell, fire } = fakeShell();
+    const detach = attachLayers(shell);
+    const { control, layerEl, elsewhere } = parts();
+    const drawer = fakeLayer('drawer', asOpener(control), { el: layerEl, toggles: true });
+    const sheet = fakeLayer('sheet', null, { el: new FakeElement() });
+    fire('pointerdown', { target: elsewhere });
+    assert.equal(sheet.state.closed, 1, 'the sheet closes');
+    assert.equal(drawer.state.closed, 0, 'the drawer under it stays');
+    detach();
+    emptyStack();
+  });
 });
 
 // Source files that call the native modal: it makes the HTML title bar inert.

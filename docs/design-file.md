@@ -35,9 +35,9 @@ and this file differ, this file wins.
 | The whole stylesheet, in order | `css/imago.css`, which imports every file below |
 | The window layout and its breakpoints | `css/primitives.css` |
 | The controls and their states | `css/controls.css`, and `css/looks/oni.css` for what ONI draws differently |
-| The floating surfaces (menu, sheet, dialog, notice, palette) | `css/surfaces.css` |
+| The floating surfaces (menu, sheet, drawer, dialog, notice, palette) | `css/surfaces.css` |
 | The page in the content region and its patterns | `css/content.css`, `css/patterns.css`, `css/inspection.css`, `css/navigation-panels.css`, `css/content-surfaces.css`, `css/forms.css`, `css/dom-parts.css` |
-| The workspace and file controls, the graph | `css/workspace.css`, `css/tiling-workspace.css`, `css/file-workspace.css`, `css/file-tree-detail.css`, `css/graph.css` |
+| The workspace and file controls, the graph | `css/workspace.css`, `css/tiling-workspace.css`, `css/file-workspace.css`, `css/overview-strip.css`, `css/file-tree-detail.css`, `css/graph.css` |
 | Behaviour: commands, keys, surfaces, panel states, the renderers | `ts/ui/` (import `@acaprino/imago/ui`) |
 | The desktop window: look, theme, zoom, buttons, guard | `ts/shell/` (import `@acaprino/imago/shell`), `ts/tauri.ts` (`@acaprino/imago/tauri`) and the crate `imago-shell` |
 | The graph | `ts/graph.ts` and `ts/graph-layout.ts` (`@acaprino/imago/graph`, `@acaprino/imago/graph-layout`) |
@@ -120,7 +120,7 @@ theme, which are the five commands above.
 | `--im-ground` | The window's ground. Translucent under `im-glass` |
 | `--im-sheet` | A sheet on the ground: the work area, panels |
 | `--im-sheet-solid` | The sheet as an opaque colour, also under `im-glass`: for what rows scroll under, such as the sticky header of a table |
-| `--im-float` | A floating surface: menu, sheet, dialog, notice, palette |
+| `--im-float` | A floating surface: menu, sheet, drawer, dialog, notice, palette |
 | `--im-field` | The fill of a field |
 | `--im-button` | The fill of a neutral button |
 | `--im-terminal` | A dense surface for terminals and tables |
@@ -537,12 +537,16 @@ an editable path `im-path-field` (`pathField`). A page's own headings are `h1` 1
 | A few commands | Menu | Under its control. Escape or a press outside closes it. Focus returns to the control |
 | A short choice tied to one control or pane | Sheet | Docked to its control or pane. One at a time. Tab stays inside it |
 | Details or a form for the selected object | Inspector | Not modal. The rest of the window keeps working. Leaving it with unsaved changes asks once |
+| Content the app owns, beside the panels, that does not block them | Drawer | `openDialogDrawer(dialog)`: an app-owned `dialog` shown, not modal, at the window's edge under the title bar. The panels stay live and a press in them leaves it open. Escape or its control closes it. Nothing is inert |
 | A decision about the whole window | Dialog | Everything under the title bar is inert. Focus is contained and starts on Cancel. Actions at the bottom right |
 | A form that must block the window while it saves | Dialog | `openFormDialog`, locked while it writes, or `createContentDialog` with `canDismiss`. Never the inspector, which is not modal |
 | A short result | Notice | Bottom centre, above the footer. It never takes focus. An error stays until dismissed and says "Error" in words |
 | A command by name | Command palette | Opened with `Ctrl+K`. Modal like a dialog |
 
-The inspector is the only side panel: there is no drawer and no second detail box. Every dialog is one drawing,
+The inspector is the only side panel for the selected object: there is no second detail box, and no modal drawer.
+A drawer is not a second inspector and not a way to block the window: it is a layer of the one stack, not modal, for
+content the app owns beside live panels (the archive of a terminal, a list the person keeps while working). What must
+block the window while it saves is a dialog, never a drawer. Every dialog is one drawing,
 `im-dialog`, centred in the window: `confirm` for a decision, `openFormDialog` for a form the package lays out,
 `openContentDialog` or `createContentDialog` for a `dialog` element the app owns. The calls are in
 [native-forms.md](native-forms.md) and [using-imago.md](using-imago.md), section 5.
@@ -552,7 +556,7 @@ be moved, minimized or closed. A dialog makes the regions under the title bar in
 window except what an app already has.
 
 Surfaces float inside the shell and are placed from the rectangle of their anchor. They stack from the bottom:
-sheet, dialog and palette, notice, menu. Escape closes the top surface only. An app's own floating surface goes through
+sheet, drawer, dialog and palette, notice, menu. Escape closes the top surface only. An app's own floating surface goes through
 the same layer stack (`pushLayer`).
 
 ## Behaviour
@@ -674,7 +678,10 @@ of the second for itself: an app never writes or styles them.
 | `data-im-sidebar-open` | `sidebarDrawer` | The sidebar is open as an overlay under 620 |
 | `data-im-layer`, `data-im-notices` | The layer stack, `notify` | A floating surface, the host of the notices |
 | `data-im-state-layer`, `data-im-state-hidden` | `setPanelState`, `panelStateHtml` | The state layer of a panel, and the content it hides |
-| `data-im-covered` | `inspector(shell).push` | A view of the inspector covered by a detail view |
+| `data-im-covered` | `inspector(shell).push`, the layer stack | A view of the inspector covered by a detail view, and a drawer covered by one opened from inside it |
+| `data-im-drawer-open` | `openDialogDrawer` | On the shell: a drawer is shown, and from 900 the work area gives it its width (`--im-drawer-width`) |
+| `data-im-dragging` | `overviewStrip` | A drag holds the strip |
+| `data-im-level` | The app, on a `documentHeading` field | The level of the heading, `1` to `6` |
 | `data-im-operation` | `runFormOperation` | A form operation runs |
 | `data-im-error-for` | `showFieldErrors` | The field an error is about |
 | `data-im-entry` | `createFileTree` | The id of a row of the tree |

@@ -32,6 +32,55 @@ const parts = {
   optionGroup: ['optgroup', ''], article: ['article', 'im-region'],
 } as const satisfies Record<string, readonly [keyof HTMLElementTagNameMap, string]>;
 
+/** What a part can also be: the layout, list and dialog roles that combine with any kind. The app names the role; the
+ * classes that draw it are Imago's, and each is one the canon keeps (the regions of the window are `shellFrameHtml`'s,
+ * and a side panel is the inspector). */
+const traits = {
+  stack: 'im-stack', row: 'im-inline-row', scroll: 'im-scroll', bounded: 'im-scroll--bounded', grow: 'im-grow',
+  spacer: 'im-spacer', truncate: 'im-truncate', wrap: 'im-wrap-text', muted: 'im-muted', visuallyHidden: 'im-visually-hidden',
+  chip: 'im-chip', list: 'im-list', formGrid: 'im-form-grid', section: 'im-section',
+  choiceList: 'im-choice-list', choiceRow: 'im-choice-row', summaryList: 'im-summary-list', conversation: 'im-scroll-log',
+  renderView: 'im-render-view', viewportFooter: 'im-viewport-footer',
+  // A panel over the whole of its positioned host, its parts in a column (the archived lines over a live terminal).
+  overlay: 'im-overlay',
+  fileDialog: 'im-file-dialog', toolbar: 'im-content-toolbar',
+  noticeHost: 'im-notices', notice: 'im-float im-notice',
+  statusText: 'im-status-text', fieldError: 'im-field-error', actions: 'im-action-row',
+  // The parts of a graph editor's workspace (graphEditorWorkspace): its shelf of sources, popups, cards and choices.
+  editorShelf: 'im-editor-shelf', editorSource: 'im-editor-source', editorGhost: 'im-editor-ghost',
+  editorPopup: 'im-editor-popup', editorItems: 'im-editor-items', editorPreset: 'im-editor-preset',
+  editorInlineForm: 'im-editor-inline-form', editorIssues: 'im-editor-issues', editorEmpty: 'im-editor-empty',
+  editorSummary: 'im-editor-summary', editorCaption: 'im-editor-caption', editorDescription: 'im-editor-description',
+  editorNodeTitle: 'im-editor-node-title', editorNodeFoot: 'im-editor-node-foot', editorDot: 'im-editor-dot',
+  editorOptions: 'im-editor-options', editorChoice: 'im-editor-choice', editorSample: 'im-editor-sample',
+  // The fields of a visual document editor (documentPane('form')): a heading (with data-im-level), code, kept source.
+  documentHeading: 'im-document-heading', documentCode: 'im-document-code', documentKept: 'im-document-kept',
+} as const satisfies Record<string, string>;
+
+/** Every role and the classes that draw it, for a check that each is in Imago's stylesheets. */
+export const UI_TRAITS: Readonly<Record<UiTrait, string>> = Object.freeze({ ...traits });
+export type UiTrait = keyof typeof traits;
+/** Gives `node` these roles (`uiTraits(uiPart('orderedList'), 'scroll', 'bounded')`) and returns it. */
+export function uiTraits<T extends Element>(node: T, ...names: readonly UiTrait[]): T {
+  for (const name of names) node.classList.add(...traits[name].split(' '));
+  return node;
+}
+
+const tones = { ok: 'im-text-ok', warn: 'im-text-warn', err: 'im-text-err' } as const;
+export type UiTone = keyof typeof tones;
+/** The text of `node` in a semantic tone, or in its own colour again with `null`. Say the state in words too. */
+export function uiTone<T extends Element>(node: T, tone: UiTone | null): T {
+  for (const [name, className] of Object.entries(tones)) node.classList.toggle(className, name === tone);
+  return node;
+}
+
+const emphases = { primary: 'im-btn--primary', danger: 'im-btn--danger' } as const;
+/** A button that becomes the primary action, or the armed destructive one, and back to plain with `null`. */
+export function uiEmphasis(button: HTMLButtonElement, emphasis: keyof typeof emphases | null): HTMLButtonElement {
+  for (const [name, className] of Object.entries(emphases)) button.classList.toggle(className, name === emphasis);
+  return button;
+}
+
 export type UiPart = keyof typeof parts;
 export function uiPart<K extends UiPart>(kind: K, text?: string, className?: string): HTMLElementTagNameMap[(typeof parts)[K][0]] {
   const [tag, classes] = parts[kind];
