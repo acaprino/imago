@@ -4,6 +4,15 @@ This file lists what Imago's demo app (`examples/demo`) showed on a real Windows
 run. A statement in [desktop-shell.md](desktop-shell.md), [design-file.md](design-file.md) or
 [using-imago.md](using-imago.md) about the window on screen holds only as far as this file says.
 
+## What this file does not cover
+
+Everything above describes the build of commit `85b7472` (2026-11-20). The canon that followed (the one frame and its
+regions, the mark and the icons, the five appearance commands, `mountApp`, the title bar at 340 and 450, the rail, the
+drawer, the sidebar fold) has not been photographed on a real window: its measures and its contrast are checked by the
+gallery and its tests in a browser, which cannot judge the glass. Until the capture is run again on a build of the
+canon, every claim in [design-file.md](design-file.md) about how these look on screen holds as far as the gallery shows
+it, and no further.
+
 ## The machine and the program
 
 - Windows 11 Home 10.0.26200, one display of 1920x1200 at 100% scale, transparency effects on, apps in the light

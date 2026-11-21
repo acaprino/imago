@@ -3,6 +3,8 @@
 Date: 2026-11-21. Status: approved by the owner on 2026-11-21 ("ok fallo"), after the audit of the five apps.
 Every decision marked *(call)* was made by the agent, not agreed with the owner.
 
+> This is the design as approved, before the build. Where it differs from the built package (a name, a signature, a tone on a notice, which calls `mountApp` makes), [design-file.md](../../design-file.md) wins.
+
 ## Intent
 
 The five apps still look and behave differently, and not only because they adopted Imago to different degrees.

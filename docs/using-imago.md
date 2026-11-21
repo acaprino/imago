@@ -40,8 +40,10 @@ imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
   Imago that raises the pins.
 - A git install runs the package's prepare script, which compiles its TypeScript into ES modules and type declarations.
   Vite and Node use the same entry points. A consumer test can import the command registry directly with Node 24;
-  browser interactions still need a DOM. The package carries its documents under `docs/` and its check under
-  `scripts/check/`.
+  browser interactions still need a DOM. The package carries its documents under `docs/`, its check under
+  `scripts/check/`, and `css/`, `lib/`, `ts/`, `icons/`, `tokens/` and `react/`. The gallery (`gallery/`), the demo app
+  (`examples/demo/`) and the tests are in the repository `acaprino/imago` only: where these documents name a file of
+  them, it is on GitHub, not in `node_modules`.
 
 ## 2. Package imports
 
@@ -98,7 +100,7 @@ sidebar sets `data-im-sidebar="off"` and writes none.
       <button type="button" role="tab" class="im-tab" aria-selected="true">First view</button>
       <button type="button" role="tab" class="im-tab" aria-selected="false">Settings</button>
     </nav>
-    <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">Views</button>
+    <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">Views…chevron icon</button>
     <span class="im-spacer" data-tauri-drag-region></span>
     <button type="button" class="im-titlebar-command" aria-label="Commands">…<b>Commands</b><kbd class="im-key">Ctrl K</kbd></button>
     <div class="im-window-buttons">
@@ -141,11 +143,11 @@ sidebar sets `data-im-sidebar="off"` and writes none.
 </div>
 ```
 
-The real, complete markup of all five apps is `shellMarkup` in `gallery/apps.ts`. An app that composes strings writes the
+The real, complete markup of all five apps is `shellMarkup` in `gallery/apps.ts` of the repository `acaprino/imago`. An app that composes strings writes the
 same frame with `shellFrameHtml(options)`, the title bar with `titlebarHtml(options)`, the sidebar with
 `sidebarHtml(options)`, and repaints a mounted frame with `renderShellFrame(shell, markup)`; the calls are in
-[html-composition.md](html-composition.md). An app in React writes it with `Shell` and `Workbench`
-([inspection.md](inspection.md)). Notes:
+[html-composition.md](html-composition.md). An app in React writes it with `Shell` and `Workbench`, which
+write fewer parts of it ([inspection.md](inspection.md) says which). Notes:
 
 - `im-shell` fills its parent (`block-size: 100%`) and measures its own width, so the breakpoints follow the window.
   Put it directly in `<body>`, or in a root of the app's own that carries `im-root` (`<div id="app" class="im-root">`,
@@ -156,7 +158,16 @@ same frame with `shellFrameHtml(options)`, the title bar with `titlebarHtml(opti
   app's accent, and `im-wordmark` the name. No drawing and no logo: the app's logo is what Windows shows (the icons of
   its executables). `titlebarHtml({ brand: { name } })` writes the two; `imago-check` reports a brand that is not
   this markup (rule `brand-mark`).
-- The view tabs are the app's views; when the app has settings, the last tab is its Settings view.
+- The view tabs are the app's views; when the app has settings, the last tab is its Settings view. Under 620 the tabs are
+  hidden and the Views button (`im-views-menu`) stands for them, but nothing in the package opens it: the app opens a menu
+  of its views from it (`openMenu`, each tab an item with `checked`), or its user cannot change view in a narrow window
+  (500 is the minimum). In the same way a sidebar needs its toggle: `sidebarDrawer` does nothing without the
+  `im-sidebar-toggle` button (`titlebarHtml`'s `sidebarToggle`), and under 620 the sidebar can then not be opened.
+- The sample is the gallery's markup. `titlebarHtml` writes the command button as its label and its key cap, with no icon
+  and no `b`, and the Views button as its label, with no chevron, no `aria-haspopup` and no `im-btn--sm`; the CSS steps
+  of 620 (the word of the command button goes) and of 340 (the Views button is its chevron) are written for the sample's
+  markup, so with `titlebarHtml` the word stays under 620 and the Views button is an empty box under 340. An app that
+  needs those two steps writes the title bar as above.
 - `im-content` has no style of its own. It is the hook the `F6` key looks for, so every window that has a content
   region carries it. `shellFrameHtml` writes `aria-busy="false"` on it, and `"true"` with its `busy` option.
 - Every sidebar row carries an `im-rail-item`: it is all the row shows in the rail. It is the row's own icon, or, when
@@ -171,7 +182,7 @@ same frame with `shellFrameHtml(options)`, the title bar with `titlebarHtml(opti
 - Tauri starts a window drag only when the pressed element itself carries `data-tauri-drag-region`, and nothing in
   `css/` changes what a child does with the pointer. Put the attribute on each element that should drag: the title
   bar, the spacer, and the brand with everything inside it (`im-brand`, `im-mark`, `im-wordmark`), as `titlebarHtml`
-  writes them and as `markDragRegion` in `gallery/mount/desktop.ts` does with `.im-brand *`. Leave the buttons, the
+  writes them and as `markDragRegion` in the repository's `gallery/mount/desktop.ts` does with `.im-brand *`. Leave the buttons, the
   tabs and the command field unmarked. The drag needs two permissions: see "The capabilities" in section 5. Whether
   the window drags on a real window is in [verification.md](verification.md).
 - The inspector is closed with `hidden`; the content then takes its room. `inspector(shell).open(content)` opens it.
@@ -203,7 +214,7 @@ cancels it), `formatKeys` (a `string[]`), `keyCaps` and `footerKeys` (an element
 | `parseLook(value)`, `parseTheme(value)` | A stored value back into a look or a theme choice. A stale or corrupt value is the default |
 | `resolveTheme(choice, systemIsDark)`, `windowThemeFor(look, choice)` | The theme the page draws, and the theme the native window is asked for |
 | `guardDesktop(document, { allowReloadIn })` | Browser keys do nothing, the page menu stays out of the chrome, the mouse's back and forward buttons do nothing, images and links are not dragged out. `allowReloadIn` is a selector for places that run their own keys and menus, such as a terminal. A browser key is refused to the browser, not to the app: the registry still runs the app's command on it (Ctrl+F). The guard refuses the key in the capture phase. The guard refuses F5, F12, Ctrl+R, Ctrl+Shift+I, J and C and the page menu in every build, so under `tauri dev` it also takes away reload and DevTools: call it only outside development, as the sketch below does. `KeyLike` is what it reads of a key event |
-| `mountZoom(document, { apply, storage?, storageKey?, applyDefaultOnStart?, onChange? })` | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, from 50 to 200% in steps of 10, saved. The saved level is applied at start, also at 100% (`applyDefaultOnStart: false` leaves a window that already starts at 100% alone). `apply` gives the level to the webview. A refusal moves the level back. `storageKey` defaults to `imago.zoom`: an app passes its own key to keep the level it already saved. The options are a `ZoomOptions` |
+| `mountZoom(document, { apply, storage?, storageKey?, applyDefaultOnStart?, onChange? })` | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, from 50 to 200% in steps of 10, saved. The saved level is applied at start, also at 100% (`applyDefaultOnStart: false` leaves a window that already starts at 100% alone). `apply` gives the level to the webview. A refusal moves the level back. A level is a factor, not a percentage: 1 is 100%, 1.2 is 120%, and `apply`, `onChange` and the saved value all say `1.2`. The zoom keys are the zoom's: it stops the key event, so no command of the registry runs on them. `storageKey` defaults to `imago.zoom`: an app passes its own key to keep the level it already saved. The options are a `ZoomOptions` |
 | `mountWindowControls(titlebar, api, { onError, labels })` | The three window buttons, and the maximize button's rectangle for Snap Layouts, reported in physical pixels (`WindowRect`). The options are a `WindowControlsOptions` |
 
 `clampZoom`, `stepZoom`, `zoomDirection` and `wheelPixels` are the pure parts of the zoom, exported for tests.
@@ -235,8 +246,8 @@ mountWindowControls(document.querySelector<HTMLElement>('.im-titlebar')!, api, {
 });
 ```
 
-This is the wiring the package was written for. The demo app, `examples/demo`, is the version that runs on a real
-window; where the two differ, the demo is right. The two commands `set_window_theme` and `window_caption_maximize`,
+This is the wiring the package was written for. The demo app, `examples/demo` of the repository `acaprino/imago`, is the
+version that runs on a real window; where the two differ, the demo is right. The two commands `set_window_theme` and `window_caption_maximize`,
 and the event `caption-maximize`, are the app's side of the contract and are described in
 [desktop-shell.md](desktop-shell.md), section 3.3.
 
@@ -268,7 +279,7 @@ permissions go with them: `core:window:allow-is-maximized` is needed only with `
 ```
 
 What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
-`examples/demo/src-tauri/capabilities/default.json`. The app's own commands, `set_window_theme` and
+`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The app's own commands, `set_window_theme` and
 `window_caption_maximize`, need no permission of this list.
 
 Without a permission Tauri refuses the call, as a rejected promise, and who sees it depends on the call.
@@ -276,7 +287,7 @@ Without a permission Tauri refuses the call, as a rejected promise, and who sees
 else. It does not see a refused `listen`, `unlisten`, drag or zoom. `mountZoom` moves a refused zoom back to the level
 it had, and a refused drag leaves the window where it is. A refused `listen` is a rejection that only the app can
 catch, where it calls `listen`; `tauriWindowApi` catches it and passes it to its `onError` (as the demo's
-`stopOnResolve` in `gallery/mount/desktop.ts` does). Left alone it is an unhandled rejection, and the page never hears
+`stopOnResolve` in the repository's `gallery/mount/desktop.ts` does). Left alone it is an unhandled rejection, and the page never hears
 `caption-maximize`, so the maximize button draws no hover or press from Windows.
 
 ### `@acaprino/imago/ui`: behaviour
@@ -285,11 +296,11 @@ The calls an app makes itself. `mountApp` (section 6) makes several of them for 
 
 | Call | What it does |
 |---|---|
-| `createRegistry()` | The command registry of the app, a `Registry`. `register(command)` takes a `Command`, `{ id, title, keys?, group?, when?, run }`, and returns the function that unregisters; it throws on an id or keys already taken. `list()`, `get(id)`, `match(event)` (a `KeyEventLike`); `attach(target, options)` (a `KeyEventTarget`, `AttachOptions`) runs the matching command on `keydown` and cancels the browser's own action. `keys` is `Ctrl`, `Shift` and `Alt` in that order, then one key name, joined by `+`: `Ctrl+K`, `F6`, `Ctrl+=`. In a text field (`isTextTarget`: an `input`, a `textarea`, a `select`, editable content) a key pressed without Ctrl or Alt belongs to the field, whether it types (`a`, Space) or edits and moves (Delete, Backspace, Home, End, the arrows, Enter, Tab): a binding of it does not run there and the key is not cancelled. Escape, `F1` to `F24` and every binding with Ctrl or Alt still run in a field. No command runs while a dialog or the palette is open, nor on a key a handler claimed (`claimKey`) |
+| `createRegistry()` | The command registry of the app, a `Registry`. `register(command)` takes a `Command`, `{ id, title, keys?, group?, when?, run }`, and returns the function that unregisters; it throws on an id or keys already taken. `list()`, `get(id)`, `match(event)` (a `KeyEventLike`); `attach(target, options)` (a `KeyEventTarget`, `AttachOptions`) runs the matching command on `keydown` and cancels the browser's own action. `keys` is any of `Ctrl`, `Shift` and `Alt`, then one key name, joined by `+`: `Ctrl+K`, `F6`, `Ctrl+=` (the key caps always show them as Ctrl, Shift, Alt). The key name is what `event.key` says, in either case, with the Shift flag kept apart: a key that types a character only with Shift is bound with `Shift+`, so write `Shift+?` and not `?` (a binding of `?` never matches), and `Ctrl+=` depends on the keyboard layout. In a text field (`isTextTarget`: an `input`, a `textarea`, a `select`, editable content) a key pressed without Ctrl or Alt belongs to the field, whether it types (`a`, Space) or edits and moves (Delete, Backspace, Home, End, the arrows, Enter, Tab): a binding of it does not run there and the key is not cancelled. Escape, `F1` to `F24` and every binding with Ctrl or Alt still run in a field. No command runs while a dialog or the palette is open, nor on a key a handler claimed (`claimKey`) |
 | `formatKeys(keys)`, `keyCaps(document, keys)` | The key caps of a binding, as text and as `im-key` elements in an `im-keys` span. Every key cap of an app comes from them |
 | `claimKey(event)`, `keyClaimed(event)` | A handler that answers a key claims it, beside its `preventDefault()`, so the registry runs no command on it; `keyClaimed` says whether one did. A claimed Escape stays claimed until its keyup. From a React handler, `claimKey(event.nativeEvent)` |
 | `attachLayers(shell)` | Escape closes the top surface only, and a press outside closes a menu or a sheet (a drawer stays: its control closes it). `confirm` and `openPalette` rely on it for Escape. Its returned function also closes every open surface |
-| `openMenu(anchor, items, options)` | A menu under `anchor`. An item (`MenuItem`) is `{ label, keys?, disabled?, danger?, checked?, run }` or `'separator'`. `disabled` is the reason, shown as the item's tooltip; `checked` makes a radio item, which stays open while its choice changes. `options` is `{ heading?, configure?, onClose? }` |
+| `openMenu(anchor, items, options)` | A menu under `anchor`. An item (`MenuItem`) is `{ label, keys?, disabled?, danger?, checked?, run }` or `'separator'`, with `control?` (an existing button the item stands for), `initialFocus?` and `configure?` (a function of the item's button) for the rare case. `disabled` is the reason, shown as the item's tooltip; `checked` is a function, `() => boolean`, and makes a radio item, which stays open while its choice changes. `options` is `{ heading?, configure?, onClose? }` |
 | `openSheet(anchor, content, { placement, onClose })` | A sheet docked to `anchor`. `placement` (`SheetPlacement`) is `below` (the default), `pane-top` or `pane-bottom`. Closing it gives focus back to `anchor`, or, for a pane placement (a pane takes no focus), to what had focus when the sheet opened. A native form as a sheet is `openDialogSheet` ([native-forms.md](native-forms.md)) |
 | `openDialogDrawer(dialog, options)` | An app-owned `dialog` shown as a drawer beside live panels, at the window's edge under the title bar; it is not modal, and it is not the inspector or a way to block the window. `options` is a `DialogDrawerOptions`, `{ opener?, acceptsEscape? }`: `opener` is the control that toggles it and gets focus back (by default what had focus), and `acceptsEscape` leaves Escape to the focused target when it says `false` (a terminal that reads Escape itself). From 900 the work area gives it its width (`data-im-drawer-open` and `--im-drawer-width` on the shell); narrower, it overlaps the panels. The panels stay live and a press in them leaves it open; Escape closes the top drawer, and its control closes it, from the pointer or the keyboard. Opened from inside another drawer it covers that one until it closes; opened from anywhere else it replaces the open drawers. A menu or a sheet over it closes first (`topLayerOf(['drawer', 'dialog'])` is the drawer or the dialog a menu or a sheet was opened over), a dialog makes it inert, and it does not open under a dialog or the palette (it returns `false`). Closing the dialog natively releases it. A form that must block the window while it saves is a dialog instead ([native-forms.md](native-forms.md)) |
 | `confirm(shell, options)` | A dialog for a decision. Resolves `true` on the confirming button, `false` on Cancel or Escape. `options` is a `ConfirmOptions`, `{ title, body, confirm, cancel, danger? }`; `danger` makes the confirming button the filled danger button |
@@ -297,7 +308,7 @@ The calls an app makes itself. `mountApp` (section 6) makes several of them for 
 | `notify(shell, text, options)` | A notice. `options` is a `NoticeOptions`, `{ tone?: 'err', action?: { label, run }, timeoutMs?, errorWord?, dismissLabel? }`. A plain notice goes after `timeoutMs` (6000) and a new one replaces it; an error stays until it is dismissed, up to three at once. Returns the function that closes it. `clearNotices(shell)` removes every notice and its timer when the app unmounts |
 | `inspector(shell)` | The inspector of the shell, an `Inspector`: `open(content, opener?)`, `push(content, opener?)` (a detail view over the current one; closing it returns to the one under it, with its fields, its scroll and its guard), `close()`, `isOpen()`, and `guard(isDirty, ask)`, which asks once before the content is closed or replaced while it has unsaved changes. `content` is one element, or a fragment whose children are an `im-panel-header`, an `im-panel-body` and an `im-panel-foot`, laid out as a panel whose body scrolls. Calls for the same shell share one controller |
 | `openPalette(shell, registry, options)` | The command palette over the shell: every available command of the registry, filtered as the user types. `options` is a `PaletteOptions`, `{ placeholder?, empty? }`. `mountApp` binds it to `Ctrl+K` |
-| `roving(container, options)` | One tab stop for a list, and the arrows, Home and End inside it. `options` is a `RovingOptions`, `{ item, orientation, onSelect? }` (`Orientation`: `vertical` or `horizontal`). This is how an app's own list takes the common keys. Bind it to an element a repaint of the frame keeps (`.im-titlebar`, the sidebar's `im-list`), not to one it replaces (the title bar's `im-tabs`, a row): `renderShellFrame` replaces what is inside the title bar, and a container that left the page keeps its handler for nothing. `nextIndex(current, count, key, orientation)` is its arithmetic, for a `NavKey` |
+| `roving(container, options)` | One tab stop for a list, and the arrows, Home and End inside it. `options` is a `RovingOptions`, `{ item, orientation, onSelect? }` (`Orientation`: `vertical` or `horizontal`). This is how an app's own list takes the common keys. `nextIndex(current, count, key, orientation)` is its arithmetic, for a `NavKey`. The arrows stop at the first and the last item (they do not wrap); the tabs of `stepNavigationHtml`, which `nextStepId` moves, wrap round. Bind it to an element a repaint keeps (`.im-titlebar`, the sidebar's `.im-list`), with `item` for what is inside: `renderShellFrame` replaces what is inside the title bar, and a handler bound to its `.im-tabs` is lost at the first repaint |
 | `regions(shell)` | `F6` and `Shift+F6` move focus between the sidebar, the content and the inspector. `mountApp` calls it |
 | `setPanelState(panel, state)` | A panel is `ready`, `loading` with `rows`, `empty` with a sentence (and a title) and an action, or `error` with a sentence and a Retry (`PanelState`). The panel keeps its header and frame. Focus that was in the layer being replaced (a pressed Retry) moves to the new layer's button, or to the panel body when it has none |
 | `panelStateHtml(state)` | The same layer as a string (`PanelStateMarkup`), for a panel body painted from strings: the action and the Retry are buttons the app writes and wires. The app sets `aria-busy="true"` on a loading panel itself. `setPanelState` replaces a layer written so as its own |
@@ -454,6 +465,14 @@ others.
    `title`.
 10. **Check the window.** A screenshot of the page cannot judge the glass: capture the real window in both looks
     (see [desktop-shell.md](desktop-shell.md), section 1.5).
+11. **Write the close control of the inspector.** `inspector(shell)` writes none: the content the app opens carries its
+    own close button (`iconButtonHtml('Close', …)` in its `im-panel-header`) and wires it to `close()`. Under 1000, where
+    the inspector is a drawer, nothing else closes it but Escape.
+12. **Start a field's error with the word.** `showFieldErrors` and the `error` of a field write the text as it is given:
+    the sentence under an invalid field starts with the word "Error" in the app's language, which the app writes.
+13. **Put `autofocus` on Cancel in a destructive dialog of its own.** `confirm` focuses Cancel itself. A dialog built on
+    `openContentDialog` or `createContentDialog` is focused as a whole, unless a control carries `autofocus`: give it to
+    the Cancel button of a dialog that confirms a destructive action.
 
 ## 7. A control of your own
 
@@ -489,7 +508,13 @@ tokens, take the common states and keys, and keep it in the app until a second a
 .mk-lane[aria-selected="true"] { background: var(--im-selected); font-weight: 600; box-shadow: inset 3px 0 0 var(--im-accent); }
 .mk-lane:focus-visible { outline: 2px solid var(--im-accent-text); outline-offset: -2px; }
 .mk-lane:is(:disabled, [aria-disabled="true"]) { color: var(--im-muted); border-style: dashed; }
+.mk-lane-title { font: 600 var(--im-fs-title)/1.3 var(--im-font-head); text-transform: var(--im-case); letter-spacing: var(--im-track); }
 ```
+
+A title, a tab or a label of the app's own is written in the head font, and takes the look's capitals and spacing through
+`text-transform: var(--im-case)` and `letter-spacing: var(--im-track)` (none in Smooth, ONI's in ONI), as the package's titles do. These two properties
+are the only case and spacing an app writes: a literal `text-transform` or `letter-spacing` is a finding (rule
+`literal-case`).
 
 In ONI the radius is 0 and the corners are cut. A control that wants the ONI shape clips itself with a `clip-path`
 that uses `--im-cut-md`, and then draws its focus ring inside: a clip-path cuts a ring drawn outside. The package's
@@ -529,7 +554,9 @@ this order: Muro and Shinatama, then Mukade, Daodan and Xiox.
 
 ## 9. For the app's coding agents and its check
 
-Paste this into the app's `AGENTS.md`:
+Paste this into the app's `AGENTS.md`, and write the path where the package is installed: `node_modules/@acaprino/imago`
+at the root of the app, but `viewer/node_modules/@acaprino/imago` when the package is installed in the folder `viewer/`
+(the check looks for the written path from the file's folder and from the root of the repository):
 
 ```markdown
 Before UI work, read node_modules/@acaprino/imago/docs/design-file.md and the component or style files it references.
@@ -795,8 +822,6 @@ In TypeScript a tone outside its set is a type error; from plain JavaScript it i
 | An app's own handler (on the window, while capturing) that prevents the default of Escape, then expects the top layer to close as well | The layer stays: `attachLayers` closes nothing for an Escape that is already prevented |
 | A held Escape in the inspector that closed every view pushed with `push` | One view per press, as one layer per press. The repeats of a held key are claimed: they run no command |
 | `attachLayers`, `registry.attach`, `regions`, `sidebarDrawer`, `sidebarCollapse` called one by one; `Ctrl+K` and `Ctrl+F` registered by the app | `mountApp(shell, registry, options)` makes these calls, and registers `Ctrl+K` (`PALETTE_COMMAND`) and `Ctrl+F` (`SEARCH_COMMAND`, which calls `options.search`). Remove the app's own commands with those ids or keys, or `mountApp` throws |
-| `mountApp` attaching the registry before the sidebar drawer and the fold | The drawer and the fold are attached before the registry, after the layers: the drawer claims the Escape that closes it before the registry sees it. The order of `register` calls and of the undo is unchanged |
-| The errors of `mountApp`, which were the registry's own message (`Command "imago.palette" is already registered`, `Keys "Ctrl+K" of "imago.palette" are already bound to "open"`) | The same message after `mountApp: `, with the registry's error as its `cause`. Every error that `mountApp` or the function it returns throws starts with `mountApp: ` |
 | `footerKeys(doc, registry, ids)` | `footerKeys(doc, registry, entries)`: an entry is a command id, as before, or `{ keys, title }` for a key of a list that is not a command (the arrows, Space, Enter). `keys` is in the grammar of a command's keys; several bindings are separated by a space (`'ArrowUp ArrowDown'`). A footer key list written by hand (`<kbd class="im-key">↑↓</kbd>move`) goes through `footerKeys` |
 
 ### Look and theme
@@ -825,7 +850,7 @@ In TypeScript a tone outside its set is a type error; from plain JavaScript it i
 
 | Old name | New name, or what to do instead |
 |---|---|
-| `ZoomOptions.levels` (`mountZoom`, `createZoomController`) | Remove it. The steps are 10: 50, 60, ... 200%. A level an app saved earlier is rounded to the nearest multiple of 10, half up, and kept from 50 to 200 (a saved 67 becomes 70, 175 becomes 180, 125 becomes 130). The levels of 0.1.4 that were not multiples of 10 (67, 75, 125, 175) are not offered any more |
+| `ZoomOptions.levels` (`mountZoom`, `createZoomController`) | Remove it. The steps are 10: 50, 60, ... 200%. A level an app saved earlier is rounded to the nearest tenth of the factor, half up, and kept from 0.5 to 2 (a saved `0.67` becomes `0.7`, `1.75` becomes `1.8`, `1.25` becomes `1.3`: the level is a factor, 1 is 100%). The levels of 0.1.4 that were not multiples of 10% (67%, 75%, 125%, 175%) are not offered any more |
 | `guardDesktop(…, { keyPhase })` | Drop `keyPhase`: the guard always refuses the key in the capture phase, and the registry still runs the app's command on it |
 | `clampZoom(value, levels)`, `stepZoom(current, direction, levels)` | `clampZoom(value)`, `stepZoom(current, direction)`: the last parameter is gone |
 | `WindowButtonLabels` with `minimize`, `maximize`, `close` | `windowButtonsHtml` (and `titlebarHtml`'s `windowControls`) also writes a `title` on each button, `Minimize`, `Maximize` and `Close` by default. The labels object gains three required words, `minimizeTitle`, `maximizeTitle`, `closeTitle`: an app that passes its labels passes the three tooltips too |
