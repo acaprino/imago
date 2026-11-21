@@ -92,7 +92,7 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
 }
 .im-titlebar .im-tabs { align-self: stretch; align-items: center; }
 .im-titlebar .im-tab { block-size: 100%; border-radius: 0; }
-.im-titlebar .im-tab:hover { background: none; }
+.im-titlebar .im-tab:hover:not(:active, [data-im-force="press"]) { background: none; }
 .im-titlebar .im-views-menu,
 .im-titlebar .im-sidebar-toggle { display: none; }
 .im-titlebar-command {
@@ -107,6 +107,14 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   color: var(--im-muted);
   font-size: var(--im-fs-meta);
   white-space: nowrap;
+}
+/* The command is 22px high in ONI and the target at least 24: the 1px above and below, in the title bar's room, is the button's too. */
+.im-titlebar-command { position: relative; }
+.im-titlebar-command::before {
+  content: "";
+  position: absolute;
+  inset-block: min(0px, calc((100% - 24px) / 2));
+  inset-inline: 0;
 }
 .im-titlebar-command b { font-weight: 500; }
 .im-titlebar-command:hover { background: var(--im-hover); color: var(--im-text); }
@@ -223,7 +231,7 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
 .im-panel-tools { display: flex; flex: none; align-items: center; gap: var(--im-s-2); min-inline-size: 0; padding: 0 var(--im-pane-pad) var(--im-s-3); }
 .im-panel-tools > * { min-inline-size: 0; }
 .im-panel-tools > .im-note { flex: 1 1 auto; }
-.im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
+.im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line-strong) transparent; }
 .im-panel-foot { display: flex; flex: none; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3) var(--im-pane-pad); border-top: 1px solid var(--im-line-soft); }
 /* The inspector's content is a panel. Its header, body and foot are the inspector's own children (a fragment opened in
    it), or the children of the one element it shows (a form): that element is then laid out as the panel is, so the body
@@ -240,10 +248,10 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
 .im-spacer { flex: 1 1 auto; }
 .im-num { font-variant-numeric: tabular-nums; }
 /* A column of things, a wrapping row of things, two groups at the two ends of a row, and a region that scrolls. */
-.im-stack { display: flex; flex-direction: column; gap: var(--im-gap, var(--im-s-3)); min-inline-size: 0; }
+.im-stack { display: flex; flex-direction: column; align-items: stretch; gap: var(--im-gap, var(--im-s-2)); min-inline-size: 0; }
 .im-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--im-gap, var(--im-s-2)); min-inline-size: 0; }
 .im-split { display: flex; align-items: center; justify-content: space-between; gap: var(--im-gap, var(--im-s-3)); min-inline-size: 0; }
-.im-scroll { min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
+.im-scroll { min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line-strong) transparent; }
 
 /* A surface is one of four materials: the window's ground, a sheet, a dense one for terminals and tables, a floating one. */
 .im-surface { min-inline-size: 0; }

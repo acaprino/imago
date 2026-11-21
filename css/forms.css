@@ -5,7 +5,12 @@
 .im-form-head { display: flex; align-items: flex-start; gap: var(--im-s-2); }
 .im-form-head > div { display: grid; gap: var(--im-s-1); flex: 1; min-width: 0; }
 .im-form > footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--im-s-2); margin-top: auto; }
-.im-field > span:first-child { font-weight: 600; }
+/* The label a renderer writes as a bare span is drawn as `im-field-label` (css/controls.css): one drawing of a field's label. */
+.im-field > span:first-child:not(.im-input, .im-select, .im-field-hint, .im-field-error, .im-field-label) {
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--im-text-2);
+}
 .im-field em { font-style: normal; font-weight: 400; color: var(--im-muted); margin-inline-start: var(--im-s-1); }
 .im-field-error:empty { display: none; }
 .im-option > span:last-child { min-width: 0; }

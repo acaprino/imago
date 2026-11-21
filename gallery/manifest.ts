@@ -36,7 +36,7 @@ export const CONTROLS: Control[] = [
   { id: 'button-ghost', states: PUSH },
   { id: 'button-danger', states: PUSH },
   { id: 'button-confirm-danger', states: PUSH },
-  { id: 'icon-button', states: ['rest', 'hover', 'press', 'focus', 'disabled'] },
+  { id: 'icon-button', states: ['rest', 'hover', 'press', 'focus', 'selected', 'disabled'] },
   { id: 'field', states: FIELD },
   { id: 'field-bare', states: FIELD },
   { id: 'textarea', states: FIELD },
