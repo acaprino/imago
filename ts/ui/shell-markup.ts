@@ -1,3 +1,4 @@
+import { isIconName } from './icon.ts';
 import { escapeHtml, iconHtml } from './markup.ts';
 import { chipToneAttribute, toneAttribute, type ChipTone, type Tone } from './tone.ts';
 
@@ -61,6 +62,8 @@ export function statusButtonHtml(options: StatusButtonOptions): string {
 }
 
 export interface NoteOptions {
+  /** An icon of the package (`IconName`), before the note's text; an unknown name writes no icon. */
+  icon?: string;
   title?: string;
   message?: string;
   items?: readonly { label: string; message: string }[];
@@ -70,14 +73,16 @@ export interface NoteOptions {
   tone?: Tone;
 }
 /**
- * A message that stays in the page. A title and a line make the compact `im-note` of the design (the title in `b`, the
- * line in `span`); a list or actions make an `im-note--block`, its title, paragraph, list and actions one under the
- * other. An `err` or `warn` note is announced at once (`role="alert"`), any other as a status. Text is escaped.
+ * A message that stays in the page. A title and a line make the compact `im-note` of the design (its icon, then the
+ * title in `b` and the line in `span`); a list or actions make an `im-note--block`, its icon, title, paragraph, list and
+ * actions one under the other. An `err` or `warn` note is announced at once (`role="alert"`), any other as a status.
+ * Text is escaped.
  */
 export function noteHtml(options: NoteOptions): string {
   const { title, message, items, actionsHtml } = options;
   const role = options.tone === 'err' || options.tone === 'warn' ? 'alert' : 'status';
-  const open = (block: boolean): string => `<div class="im-note${block ? ' im-note--block' : ''}"${toneAttribute(options.tone)} role="${role}">`;
+  const icon = options.icon && isIconName(options.icon) ? iconHtml(options.icon) : '';
+  const open = (block: boolean): string => `<div class="im-note${block ? ' im-note--block' : ''}"${toneAttribute(options.tone)} role="${role}">${icon}`;
   if (!items?.length && !actionsHtml) {
     return `${open(false)}<div>${title ? `<b>${escapeHtml(title)}</b>` : ''}${message ? `<span>${escapeHtml(message)}</span>` : ''}</div></div>`;
   }

@@ -927,15 +927,18 @@
 
 .im-note > .im-icon { color: var(--im-tone, var(--im-info)); }
 
-.im-note b {
+/* The note's own text only: the title and the line of a compact note (<div><b>title</b><span>line</span></div>), the title
+   of a block note. What a block note holds in its list and its actions (buttons, chips, key caps) draws as it does anywhere. */
+.im-note:not(.im-note--block) > div > b,
+.im-note--block > b {
   display: block;
   font-weight: 600;
   color: var(--im-text-hi);
 }
 
-.im-note span {
+.im-note:not(.im-note--block) > div > span {
   display: block;
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   color: var(--im-text-2);
 }
 
@@ -962,7 +965,11 @@
   color: var(--im-text-2);
 }
 
-.im-note--block > ul b { display: inline; }
+/* A list label: the weight and colour of the title, in the line. */
+.im-note--block > ul > li > b {
+  font-weight: 600;
+  color: var(--im-text-hi);
+}
 
 /* ---------- progress and steps ---------- */
 

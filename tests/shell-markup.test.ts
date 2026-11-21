@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { shellMarkup } from '../gallery/apps.ts';
 import { cellMarkup } from '../gallery/matrix.ts';
 import { iconHtml } from '../ts/ui/markup.ts';
 import { noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
@@ -440,24 +441,30 @@ test('window buttons provide the native selectors and both maximize/restore icon
   assert.match(titlebarHtml({ brand: { name: 'Example' }, windowControls: true }), /im-window-buttons/);
 });
 
-// The gallery's own note (gallery/matrix.ts, the `note` control): a title and a line beside an icon, the approved note. Less
-// its icon, and with the role noteHtml gives a warning, it is what noteHtml writes for a title and a line.
-const GALLERY_NOTE = cellMarkup('note', 'rest');
-const galleryNote = (role: string): string => GALLERY_NOTE.replace(/<svg class="im-icon"[^]*?<\/svg>/, '').replace('role="note"', `role="${role}"`);
+// The approved note: its icon, then its title and its line (docs/reference/toolkit-preview.html, the gallery's `note` control).
+const APPROVED_NOTE = `<div class="im-note" data-im-tone="warn" role="alert">${iconHtml('warning')}<div><b>3 changes ready to apply</b><span>Nothing changes until you apply.</span></div></div>`;
+const NOTE = { icon: 'warning', title: '3 changes ready to apply', message: 'Nothing changes until you apply.', tone: 'warn' } as const;
 const openingTag = (html: string): string => html.slice(0, html.indexOf('>') + 1);
 
-test("noteHtml writes the gallery's compact note for a title and a line", () => {
-  assert.match(GALLERY_NOTE, /^<div class="im-note" data-im-tone="warn" role="note"><svg class="im-icon"[^]*<\/svg><div><b>3 changes ready to apply<\/b><span>Nothing changes until you apply.<\/span><\/div><\/div>$/, 'the gallery still draws the note this test reads');
-  assert.equal(noteHtml({ title: '3 changes ready to apply', message: 'Nothing changes until you apply.', tone: 'warn' }), galleryNote('alert'));
+test("noteHtml writes the approved note, its icon before its title and its line, and the gallery's note is that markup", () => {
+  assert.equal(noteHtml(NOTE), APPROVED_NOTE);
+  assert.equal(cellMarkup('note', 'rest'), APPROVED_NOTE, "the gallery's own note, nothing stripped");
+  assert.ok(shellMarkup('muro').includes(noteHtml({ icon: 'reload', title: '3 changes ready to apply', message: '1 install, 1 update, 1 removal. Nothing changes until you apply.', tone: 'warn' })), "Muro's note in the gallery is noteHtml's");
+  assert.ok(!shellMarkup('muro').includes('<div class="im-note" data-im-tone="warn"><svg'), 'and no longer written by hand');
+  assert.equal(noteHtml({ ...NOTE, icon: 'x' }), APPROVED_NOTE.replace(iconHtml('warning'), iconHtml('close')), 'an alias of the package is an icon name');
+  for (const icon of ['no-such-icon', '', 'constructor', '<svg onload=x>']) {
+    assert.equal(noteHtml({ ...NOTE, icon }), APPROVED_NOTE.replace(iconHtml('warning'), ''), `an unknown icon name (${JSON.stringify(icon)}) writes no icon`);
+  }
   assert.equal(noteHtml({ message: 'Saved <all> & done', tone: 'ok' }), '<div class="im-note" data-im-tone="ok" role="status"><div><span>Saved &lt;all&gt; &amp; done</span></div></div>', 'a line alone');
   assert.equal(noteHtml({ title: 'Done <now>', tone: 'info' }), '<div class="im-note" data-im-tone="info" role="status"><div><b>Done &lt;now&gt;</b></div></div>', 'a title alone');
   assert.equal(noteHtml({ title: 'Check', message: 'x', items: [] }), '<div class="im-note" role="status"><div><b>Check</b><span>x</span></div></div>', 'an empty list is no list');
 });
 
-test("noteHtml writes the block note only with a list or actions: the gallery's note, its parts one under the other", () => {
+test("noteHtml writes the block note only with a list or actions: the approved note, its parts one under the other", () => {
   const block = noteHtml({ title: '3 changes ready to apply', message: 'a & b', items: [{ label: '<item>', message: '"reason' }], actionsHtml: '<button>Apply</button>', tone: 'warn' });
   assert.equal(block, '<div class="im-note im-note--block" data-im-tone="warn" role="alert"><b>3 changes ready to apply</b><p>a &amp; b</p><ul><li><b>&lt;item&gt;</b>: &quot;reason</li></ul><div class="im-action-row"><button>Apply</button></div></div>');
-  assert.equal(openingTag(block), openingTag(galleryNote('alert')).replace('class="im-note"', 'class="im-note im-note--block"'), "the block is the gallery's note, with im-note--block");
+  assert.equal(openingTag(block), openingTag(APPROVED_NOTE).replace('class="im-note"', 'class="im-note im-note--block"'), 'the block is the approved note, with im-note--block');
+  assert.equal(noteHtml({ ...NOTE, actionsHtml: '<button>Apply</button>' }), `<div class="im-note im-note--block" data-im-tone="warn" role="alert">${iconHtml('warning')}<b>3 changes ready to apply</b><p>Nothing changes until you apply.</p><div class="im-action-row"><button>Apply</button></div></div>`, 'a block note has its icon first too');
   assert.equal(noteHtml({ message: 'Check', items: [{ label: 'a', message: 'b' }] }), '<div class="im-note im-note--block" role="status"><p>Check</p><ul><li><b>a</b>: b</li></ul></div>', 'a list makes a block');
   assert.equal(noteHtml({ title: 'Check', actionsHtml: '<button>Fix</button>' }), '<div class="im-note im-note--block" role="status"><b>Check</b><div class="im-action-row"><button>Fix</button></div></div>', 'actions make a block');
 });

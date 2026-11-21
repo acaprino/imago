@@ -11,7 +11,8 @@ written as no tone. In TypeScript a tone outside its set is a type error; from p
 
 | Old name | New name, or what to do instead |
 |---|---|
-| `bannerHtml(options)` | `noteHtml({ title, message, items, actionsHtml, tone })`, in the panel or page it is about, never across the window. A title and a line write the compact `im-note`; a list or actions write `im-note im-note--block` |
+| `bannerHtml(options)` | `noteHtml({ icon, title, message, items, actionsHtml, tone })`, in the panel or page it is about, never across the window. A title and a line write the compact `im-note` (an icon of the package first, when given); a list or actions write `im-note im-note--block` |
+| A note written by hand (`<div class="im-note">` with its icon, `b` and `span`) | `noteHtml({ icon, title, message, tone })` writes the same markup |
 | `BannerOptions` | `NoteOptions`; its `title` is optional and its `tone` is a status tone |
 | `im-banner` | `im-note im-note--block`: a title in `b`, the message in `p`, a `ul` of `<b>label</b>: message`, the buttons in `im-action-row` |
 | `im-callout` | `im-note` (`noteHtml({ message })`); its tone, if any, in `data-im-tone` |
