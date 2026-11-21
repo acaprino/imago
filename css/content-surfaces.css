@@ -7,10 +7,6 @@ dialog.im-content-dialog.im-native-controls:has(> .im-section-heading) {
   overflow: auto;
   overflow-wrap: anywhere;
 }
-dialog.im-content-drawer {
-  max-height: calc(100% - var(--im-h-titlebar));
-  overscroll-behavior: contain;
-}
 .im-content-dialog > .im-section-heading {
   margin-block: 0;
   justify-content: space-between;

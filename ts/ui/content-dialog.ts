@@ -27,12 +27,12 @@ export function createContentDialog(shell: HTMLElement, options: ContentDialogCo
     && element.getAttribute('aria-busy') !== 'true'
     && !element.querySelector('form[aria-busy="true"]')
     && !isFormOperationPending(element);
-  function show(markup: string, mode: 'dialog' | 'drawer' = 'dialog') {
+  function show(markup: string) {
     if (disposed) return element;
     const wasOpen = element.open;
     const focus = wasOpen ? captureFocus(element) : null;
     if (!wasOpen) opener = captureFocus(shell);
-    element.className = 'im-float im-dialog im-content-dialog' + (mode === 'drawer' ? ' im-content-dialog--drawer' : '');
+    element.className = 'im-float im-dialog im-content-dialog';
     element.innerHTML = markup;
     const heading = element.querySelector('h1,h2');
     if (heading) {

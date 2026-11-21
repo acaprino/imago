@@ -1,6 +1,8 @@
 // A confirm dialog: a decision about the whole window. It never uses the native modal, which would make
 // the HTML title bar inert too and leave a borderless window nobody can move or close. Instead the
 // regions under the title bar are made inert, focus starts on Cancel and stays inside, and Escape cancels.
+// Every dialog here (`confirm`, `openFormDialog`, `openContentDialog`) is one drawing, centred in the window. A panel
+// for the selected object is not a dialog: it is the inspector (`inspector(shell)`), which is not modal.
 
 import { inertShell, pushLayer, topLayer, trapTab } from './layers.ts';
 import { captureFocus, restoreFocus } from './dom-state.ts';

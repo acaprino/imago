@@ -23,7 +23,7 @@ both are idempotent. `onClose` runs once after the page is released. Native
 `dialog.close()` and `method="dialog"` also release the shared layer. Reusing the
 same dialog after closing is supported. App close buttons should consult the
 same dismissal condition. App-owned content may be repainted without remounting
-the dialog. Add `im-content-dialog--drawer` for a modal side panel.
+the dialog. The dialog is always centred; a side panel is the inspector (`inspector(shell).open`), which is not modal.
 
 `im-form`, `im-form-head` and the direct footer provide form layout. `im-step-nav`
 styles actionable workflow tabs; use the existing `im-steps` for progress only.
