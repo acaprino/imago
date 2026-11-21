@@ -64,14 +64,23 @@ const wordsPattern = (/** @type {string[]} */ names) =>
 /**
  * Where a source uses any of these names: classes (in selectors, class lists, markup and selector strings), data-im-
  * attributes (wherever namesUsed reads them), --im- properties (in declarations and strings) and exports of the
- * package (an import from @acaprino/imago, or `ns.name` through a namespace import of it). Comments are not read.
+ * package (an import from @acaprino/imago, or `ns.name` through a namespace import of it). `set` are --im- properties
+ * found only where the source sets them: a declaration of one (in CSS, in a style a script writes, in a React style
+ * object) or a setProperty('--im-…', …), not a var() that reads one. Comments are not read.
  * @param {Source} source
- * @param {{ classes: string[], attributes: string[], properties: string[], exports: string[] }} wanted
+ * @param {{ classes: string[], attributes: string[], properties: string[], exports: string[], set?: string[] }} wanted
  * @returns {Use[]} once per name and line, in the order of the lines
  */
 export function namesIn(source, wanted) {
   /** @type {Use[]} */
   const uses = [];
+  if (wanted.set?.length) {
+    const set = new Set(wanted.set);
+    for (const sheet of source.sheets) {
+      for (const rule of sheet.rules) for (const declaration of rule.declarations) if (set.has(declaration.property)) uses.push({ name: declaration.property, line: declaration.line });
+    }
+    for (const str of source.strings) if (set.has(str.text) && /\.setProperty\(\s*$/.test(str.before)) uses.push({ name: str.text, line: str.line });
+  }
   if (wanted.classes.length) {
     const classes = new Set(wanted.classes);
     const pattern = wordsPattern(wanted.classes);

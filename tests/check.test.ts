@@ -12,7 +12,7 @@ import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { classesOf, parseCss, valueTokens } from '../scripts/check/css.mjs';
 import { packageNames, namesUsed } from '../scripts/check/names.mjs';
-import { REMOVED } from '../scripts/check/removed.mjs';
+import { ELSEWHERE, KEPT, REMOVED } from '../scripts/check/removed.mjs';
 import * as rules from '../scripts/check/rules.mjs';
 import { check, main } from '../scripts/check/cli.mjs';
 import { parseSource } from '../scripts/check/source.mjs';
@@ -236,6 +236,21 @@ describe('literal-color', () => {
     assert.deepEqual(found(rules.literalColor, huge, 'src/c.tsx'), ['1 literal-color'], 'a tag of several hundred characters');
   });
 
+  test('reads JSX colours only in files that can hold JSX: .tsx, .jsx, .js, .mjs and the scripts of a page, not .ts', () => {
+    const jsx = 'const a = <path d={d} fill="#fff" />;\n';
+    for (const file of ['src/a.tsx', 'src/a.jsx', 'src/a.js', 'src/a.mjs']) assert.deepEqual(found(rules.literalColor, jsx, file), ['1 literal-color'], file);
+    assert.deepEqual(found(rules.literalColor, `<script type="module">\n${jsx}</script>\n`, 'index.html'), ['2 literal-color']);
+    assert.deepEqual(found(rules.literalColor, 'for (let i = 0; i<n; i++) total += i\nlet x = a <b\ncolor = \'#fff\'\n', 'src/loop.ts'), [], 'a comparison in TypeScript is not a tag');
+  });
+
+  test('reading JSX colours is linear: five thousand bare assignments without semicolons take well under a second', () => {
+    const js = `let color\n${"color = '#abc'\n".repeat(5000)}`;
+    const started = performance.now();
+    assert.deepEqual(found(rules.literalColor, js, 'src/many.js'), []);
+    const took = performance.now() - started;
+    assert.ok(took < 1000, `took ${Math.round(took)} ms`);
+  });
+
   test('leaves a fill that is not the attribute of a tag: a variable, a default, an assignment in an expression', () => {
     const tsx = "const fill = '#fff';\nconst draw = ({ fill = '#fff', color = 'red' }) => fill + color;\nconst a = <div>{items.map((item) => { const stroke = '#000'; return item; })}</div>;\nconst b = <path d={d} />; let color = 'red';\nif (a <b) color = '#fff';\n";
     assert.deepEqual(found(rules.literalColor, tsx, 'src/d.tsx'), []);
@@ -443,6 +458,11 @@ describe('own-keydown', () => {
     assert.deepEqual(found(rules.ownKeydown, ts, 'src/keys.ts'), []);
   });
 
+  test('the message says what to do instead: a handler the app keeps calls claimKey(event) when it answers a key', () => {
+    const [finding] = rules.ownKeydown(parseSource('src/keys.ts', "document.addEventListener('keydown', onKey);\n"));
+    assert.ok(finding.message.includes('claimKey(event)') && finding.message.includes('@acaprino/imago/ui'), finding.message);
+  });
+
   test('a widget that runs its own keys carries the exception comment', () => {
     const source = parseSource('src/terminal.ts', "// imago-check: allow own-keydown — the terminal runs its own keys\ndocument.addEventListener('keydown', onKey);\n");
     const { findings, accepted } = rules.applyExceptions(rules.ownKeydown(source), rules.exceptionsIn(source));
@@ -472,7 +492,9 @@ describe('unknown-value', () => {
     assert.deepEqual(VALUES['data-im-tone'], ['ok', 'warn', 'err', 'info', 'accent']);
     assert.deepEqual(VALUES['data-im-surface'], ['ground', 'sheet', 'dense', 'float']);
     assert.deepEqual(VALUES['data-im-step'], ['done', 'now', 'todo', 'failed', 'skipped']);
-    assert.deepEqual(Object.keys(VALUES).sort(), ['data-im-app', 'data-im-inspector', 'data-im-look', 'data-im-sidebar', 'data-im-step', 'data-im-surface', 'data-im-theme', 'data-im-tone']);
+    assert.deepEqual(VALUES['data-im-cat'], ['1', '2', '3', '4', '5', '6', '7', '8']);
+    assert.deepEqual(Object.keys(VALUES).sort(), ['data-im-app', 'data-im-cat', 'data-im-inspector', 'data-im-look', 'data-im-sidebar', 'data-im-step', 'data-im-surface', 'data-im-theme', 'data-im-tone']);
+    assert.deepEqual(found(rules.unknownValue, '<li class="im-row" data-im-cat="3" data-im-badge>a</li>\n<li class="im-row" data-im-cat="9">b</li>\n<li class="im-row" data-im-cat="red">c</li>\n', 'index.html'), ['2 unknown-value', '3 unknown-value']);
     assert.deepEqual(found(rules.unknownValue, '<ol class="im-steps"><li data-im-step="failed">a</li><li data-im-step="skipped">b</li></ol>\n', 'index.html'), []);
   });
 
@@ -518,6 +540,22 @@ describe('removed-name', () => {
     const ts = "// the old im-main is gone\nconst a = 'im-main-x wm-drop-preview-old';\nfunction applyShinatamaPalette() {}\napplyShinatamaPalette();\nel.className = `im-main${suffix}`;\n";
     assert.deepEqual(found(rules.removedName, ts, 'src/view.ts', removed), []);
   });
+
+  test('--im-item-color set by the app is a finding that names data-im-cat; read with var(), it is not; data-im-badge is the package\'s again', () => {
+    const css = '.mk-thread { --im-item-color: #4a8; }\n.mk-mark { background: var(--im-item-color); }\n';
+    const findings = rules.removedName(parseSource('src/app.css', css));
+    assert.deepEqual(findings.map((f: Finding) => `${f.line} ${f.rule}`), ['1 removed-name']);
+    assert.ok(findings[0].message.includes('data-im-cat'), findings[0].message);
+    const ts = "el.innerHTML = '<li class=\"im-row\" style=\"--im-item-color: red\" data-im-badge>x</li>';\nel.style.setProperty('--im-item-color', color);\nconst a = <li style={{ '--im-item-color': 'red' }} />;\nconst ink = getComputedStyle(el).getPropertyValue('--im-item-color');\nel.dataset.imBadge = '';\n";
+    assert.deepEqual(found(rules.removedName, ts, 'src/rows.tsx'), ['1 removed-name', '2 removed-name', '3 removed-name']);
+    assert.deepEqual(found(rules.imSelector, css), [], 'removed-name owns the custom property the app sets: im-selector leaves it');
+    assert.deepEqual(found(rules.imSelector, '.mk-a { --im-accent: red; }\n'), ['1 im-selector'], 'im-selector still reports the others');
+  });
+
+  test('the names of the canon\'s latest tables: the native controls of task 4', () => {
+    const html = '<form class="im-native-controls"><input class="im-native-input"><span class="im-switch-knob"></span></form>\n';
+    assert.deepEqual(found(rules.removedName, html, 'index.html'), ['1 removed-name', '1 removed-name', '1 removed-name']);
+  });
 });
 
 describe('removed.mjs', () => {
@@ -544,31 +582,43 @@ describe('removed.mjs', () => {
     return { names, skipped };
   }
 
-  test('holds every name of the mapping tables, with its kind; the rows that describe a change of behaviour are skipped', (t) => {
+  test('holds every name of the mapping tables, with its kind, but those a later table brings back; the rows that describe a change of behaviour are skipped', (t) => {
     const { names, skipped } = rows();
     const byName = new Map(REMOVED.map((entry: any) => [entry.old, entry]));
-    const missing = names.flat().filter((name) => byName.get(name)?.kind !== kindOf(name));
+    const kept = new Set(KEPT.map((entry: any) => entry.old));
+    const missing = names.flat().filter((name) => !kept.has(name) && byName.get(name)?.kind !== kindOf(name));
     t.diagnostic(`rows read as a change of behaviour, not a name (${skipped.length}):\n${skipped.join('\n')}`);
     assert.deepEqual(missing, [], `names of the tables missing from scripts/check/removed.mjs, or of another kind: ${missing.join(', ')}\nRows skipped:\n${skipped.join('\n')}`);
-    assert.ok(names.flat().length >= 40, `only ${names.flat().length} names read from the tables`);
+    assert.ok(names.flat().length >= 50, `only ${names.flat().length} names read from the tables`);
+    for (const entry of KEPT as { old: string; why: string }[]) {
+      assert.ok(names.flat().includes(entry.old), `${entry.old} is kept, and no table names it`);
+      assert.ok(!byName.has(entry.old), `${entry.old} is both kept and removed`);
+      assert.ok(entry.why.trim().length > 2, `${entry.old} says not why it is kept`);
+    }
   });
 
   test('every entry is a name of its kind, once, with what replaces it', () => {
     assert.equal(new Set(REMOVED.map((entry: any) => entry.old)).size, REMOVED.length, 'a name listed twice');
-    for (const entry of REMOVED as { old: string; kind: string; now: string }[]) {
+    for (const entry of REMOVED as { old: string; kind: string; now: string; when?: string }[]) {
       assert.ok(NAME.test(entry.old), `${entry.old} is not a name`);
       assert.equal(entry.kind, kindOf(entry.old), `${entry.old}`);
       assert.ok(entry.now.trim().length > 2, `${entry.old} gives no replacement`);
+      assert.ok(entry.when === undefined || (entry.when === 'set' && entry.kind === 'property'), `${entry.old}: "when" is "set", on a custom property`);
     }
+    for (const entry of ELSEWHERE as { old: string; rule: string }[]) assert.ok(!REMOVED.some((other: any) => other.old === entry.old), `${entry.old} is reported by ${entry.rule}, not by removed-name`);
   });
 
-  test('no removed name is one the package still defines or exports', () => {
+  test('no removed name is one the package still defines or exports; a name the app must not set, a kept name, is the package\'s', () => {
     const names = packageNames(root);
+    const has = (name: string) => names.classes.has(name) || names.attributes.has(name) || names.properties.has(name);
     const sources = [join(root, 'ts'), join(root, 'react')].flatMap((dir) => readdirSync(dir, { recursive: true }).map(String).filter((name) => /\.(ts|js)$/.test(name)).map((name) => readFileSync(join(dir, name), 'utf8'))).join('\n');
-    for (const entry of REMOVED as { old: string; kind: string }[]) {
-      if (entry.kind === 'export') assert.ok(!new RegExp(`(?<![\\w$])${entry.old}(?![\\w$])`).test(sources), `${entry.old} is still in ts/ or react/`);
-      else assert.ok(!names.classes.has(entry.old) && !names.attributes.has(entry.old) && !names.properties.has(entry.old), `${entry.old} is still defined by the package`);
+    for (const entry of REMOVED as { old: string; kind: string; when?: string }[]) {
+      if (entry.when === 'set') assert.ok(has(entry.old), `${entry.old} is the package's, which the app must not set: the package does not define it`);
+      else if (entry.kind === 'export') assert.ok(!new RegExp(`(?<![\\w$])${entry.old}(?![\\w$])`).test(sources), `${entry.old} is still in ts/ or react/`);
+      else assert.ok(!has(entry.old), `${entry.old} is still defined by the package`);
     }
+    for (const entry of KEPT as { old: string }[]) assert.ok(has(entry.old), `${entry.old} is kept, and the package does not define it`);
+    for (const entry of ELSEWHERE as { old: string }[]) assert.ok(!has(entry.old), `${entry.old} is still defined by the package`);
   });
 });
 
@@ -603,8 +653,8 @@ describe('unknown-name', () => {
   });
 
   test('leaves a name the canon removed to removed-name, which says what replaces it', () => {
-    assert.deepEqual(found(rules.unknownName, "el.classList.add('im-main', 'im-banner');\nel.dataset.imBadge = '2';\n", 'src/view.ts', defined), []);
-    assert.deepEqual(found(rules.removedName, "el.classList.add('im-main', 'im-banner');\nel.dataset.imBadge = '2';\n", 'src/view.ts'), ['1 removed-name', '1 removed-name', '2 removed-name']);
+    assert.deepEqual(found(rules.unknownName, "el.classList.add('im-main', 'im-banner');\nel.dataset.imCompact = '';\n", 'src/view.ts', defined), []);
+    assert.deepEqual(found(rules.removedName, "el.classList.add('im-main', 'im-banner');\nel.dataset.imCompact = '';\n", 'src/view.ts'), ['1 removed-name', '1 removed-name', '2 removed-name']);
   });
 });
 
@@ -1002,6 +1052,11 @@ describe('imago-check on an app', () => {
     assert.equal(clean.status, 0, clean.stdout + clean.stderr);
     assert.match(clean.stdout, /^imago-check: no findings in 3 files \(1 css, 2 script\)\.$/m);
     assert.deepEqual(check({ root: folder(cleanApp()), packageMode: false }).read, { css: 1, script: 2, html: 0 });
+  });
+
+  test('im-brand-image is brand-mark\'s to report: neither unknown-name nor removed-name says it again on its line', () => {
+    const files = { ...cleanApp(), 'src/brand.ts': "const logo = document.createElement('img');\nlogo.className = 'im-brand-image';\n" };
+    assert.deepEqual(check({ root: folder(files), packageMode: false }).findings.map((f: Finding) => `${f.file}:${f.line} ${f.rule}`), ['src/brand.ts:2 brand-mark']);
   });
 
   test('a dangling symlink in src is skipped with a note: no stack, and no exit 1 of its own', () => {

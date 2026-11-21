@@ -3,9 +3,17 @@
 // docs/superpowers/moving/*.md) that a program can match: a class (with or without the im- prefix), a data-im-
 // attribute, a --im- custom property or an export of the package. A row of a table that describes a change of behaviour
 // (an argument that went, an option that changed) is not a name, and is not here. tests/check.test.ts asserts that
-// every name of the tables is here, and that the package no longer defines any of them.
+// every name of the tables is here, but those of KEPT, and that the package no longer defines any of them.
+//
+// Built from moving-from-0.1.4.md and moving/task-4.md, task-5.md, task-6.md, task-9.md, task-13.md, task-14.md,
+// task-16.md, task-17.md and task-18.md. A later table may correct an earlier one: task-16.md brings back
+// data-im-badge (KEPT), and keeps --im-item-color as the package's, which the app reads and never sets (`when: 'set'`).
 
-/** @typedef {{ old: string, kind: 'class' | 'attribute' | 'property' | 'export', now: string }} Removed */
+/**
+ * @typedef {{ old: string, kind: 'class' | 'attribute' | 'property' | 'export', now: string, when?: 'set' }} Removed
+ *   `when: 'set'`, on a custom property the package still has: only the app's setting it is removed (a declaration of
+ *   it, in CSS, in a style a script writes or in setProperty); reading it with var() is the package's way.
+ */
 
 /** @type {Removed[]} */
 export const REMOVED = [
@@ -29,12 +37,12 @@ export const REMOVED = [
   { old: 'im-nav-rail', kind: 'class', now: 'the sidebar\'s rail: every row carries an im-rail-item' },
   { old: 'im-nav-entry', kind: 'class', now: 'im-row with role="option" in the sidebar\'s im-list; the current one has aria-selected="true"' },
   { old: 'im-nav-line', kind: 'class', now: 'im-row, with im-row-text (im-row-title, im-row-sub) and im-row-meta' },
-  { old: 'im-nav-mark', kind: 'class', now: 'im-dot in the row, coloured with --im-cat-1 to --im-cat-8; a mark that turns on and off is an im-check' },
+  { old: 'im-nav-mark', kind: 'class', now: 'im-dot in the row with data-im-cat="1" to "8"; a mark that turns on and off is an im-check' },
   { old: 'im-nav-detail', kind: 'class', now: 'im-row-sub, the row\'s second line' },
   { old: 'im-signal', kind: 'class', now: 'im-dot with data-im-tone, and the word for the state beside it' },
-  { old: 'data-im-badge', kind: 'attribute', now: 'im-count in the row for a number, or im-dot with data-im-tone and a word in im-row-sub' },
-  { old: '--im-item-color', kind: 'property', now: 'the categorical colours --im-cat-1 to --im-cat-8' },
-  { old: '--im-item-ink', kind: 'property', now: '--im-cat-on, the text on a categorical colour' },
+  // moving-from-0.1.4.md, as task-16.md corrects it
+  { old: '--im-item-color', kind: 'property', when: 'set', now: 'data-im-cat="1" to "8" on the im-row, im-rail-item, im-avatar, im-dot or im-chip: the package sets --im-item-color from it; read it with var(--im-item-color)' },
+  { old: '--im-item-ink', kind: 'property', now: '--im-cat-on, the text on a categorical fill, which the package writes' },
   // moving-from-0.1.4.md: the inspector and the toolbars
   { old: 'im-docked-inspector', kind: 'class', now: 'im-inspector (inspector(shell)); data-im-inspector="wide" on the shell makes it 360' },
   { old: '--im-inspector-size', kind: 'property', now: '--im-w-inspector, or data-im-inspector="wide" on the shell' },
@@ -44,6 +52,18 @@ export const REMOVED = [
   { old: 'im-toolbar', kind: 'class', now: 'im-content-toolbar' },
   { old: 'im-panel-strip', kind: 'class', now: 'im-content-toolbar; at the head of a panel, im-panel-tools' },
   { old: 'im-master-detail', kind: 'class', now: 'nothing: the detail is the inspector' },
+  // moving/task-4.md: the native controls take the class of their drawing
+  { old: 'im-native-controls', kind: 'class', now: 'nothing: each native control carries the class of its drawing (input.im-input, select.im-select, textarea.im-textarea, input.im-check, input.im-radio, input.im-switch)' },
+  { old: 'im-native-input', kind: 'class', now: 'im-input on the input, or <span class="im-input"><input></span> when the field holds an icon or a key cap' },
+  { old: 'im-native-select', kind: 'class', now: 'im-select on the select' },
+  { old: 'im-native-textarea', kind: 'class', now: 'im-textarea on the textarea' },
+  { old: 'im-native-check', kind: 'class', now: 'im-check on the input type="checkbox"' },
+  { old: 'im-native-radio', kind: 'class', now: 'im-radio on the input type="radio"' },
+  { old: 'im-native-choice', kind: 'class', now: 'im-check or im-radio on the input: nothing is drawn with accent-color' },
+  { old: 'im-seg--native', kind: 'class', now: 'im-seg alone, over label > input[type=radio] + span' },
+  { old: 'im-seg--choice', kind: 'class', now: 'im-seg alone, as segmentedControl writes it' },
+  { old: 'im-switch-knob', kind: 'class', now: 'nothing: im-switch draws its thumb; switchHtml writes an empty button' },
+  { old: 'data-im-checked', kind: 'attribute', now: 'a span.im-check with role="checkbox" and aria-checked in the mark of a picker' },
   // moving/task-5.md: messages, loading, empty and steps
   { old: 'bannerHtml', kind: 'export', now: 'noteHtml({ icon, title, message, items, actionsHtml, tone }), in the panel or page it is about' },
   { old: 'BannerOptions', kind: 'export', now: 'NoteOptions' },
@@ -68,4 +88,22 @@ export const REMOVED = [
   { old: 'ShinatamaPaletteTokens', kind: 'export', now: 'nothing in the package: the skins are Shinatama\'s own overrides of tokens' },
   // moving/task-9.md: the React binding
   { old: 'DetailPanel', kind: 'export', now: 'the details as the children of the inspector: give them to Workbench as details, with detailsLabel' },
+];
+
+/**
+ * The names an earlier table removed and a later one brought back: they are the package's again, and no rule reports
+ * them as removed.
+ * @type {{ old: string, why: string }[]}
+ */
+export const KEPT = [
+  { old: 'data-im-badge', why: 'task-16.md: the badge of an im-row, a dot at its end and on the corner of its rail item' },
+];
+
+/**
+ * The names the tables removed that another rule reports, with what replaces them: removed-name and unknown-name leave
+ * them to it, so that a line has one finding for one name.
+ * @type {{ old: string, rule: string }[]}
+ */
+export const ELSEWHERE = [
+  { old: 'im-brand-image', rule: 'brand-mark' },
 ];

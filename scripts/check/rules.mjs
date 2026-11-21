@@ -10,7 +10,7 @@ import { posix } from 'node:path';
 import { CASE, COLOR, FONT_SIZE, OPACITY, SPACE, SYSTEM_COLORS, TRACKING } from './allowed.mjs';
 import { classesOf, COLOR_FUNCTIONS, COLOR_WORDS, isLength, SIZE_KEYWORDS, takesColor, valueTokens } from './css.mjs';
 import { namesIn, namesUsed } from './names.mjs';
-import { REMOVED } from './removed.mjs';
+import { ELSEWHERE, REMOVED } from './removed.mjs';
 import { DYNAMIC, lineAt } from './source.mjs';
 import { VALUES } from './values.mjs';
 
@@ -218,9 +218,14 @@ const literalText = (/** @type {Token} */ token) => (token.type === 'function' ?
 
 // ---------- im-selector ----------
 
+// The custom properties of the package that only the package sets, which removed-name reports when the app sets one.
+const SET_BY_THE_PACKAGE = new Set(REMOVED.filter((entry) => entry.when === 'set').map((entry) => entry.old));
+
 /**
  * A selector of the app's CSS that names a class of the package, or a declaration that sets a --im- property. The
- * style written inline by a script is not judged: `style="--im-level: 2"` is how a tree item gets its depth.
+ * style written inline by a script is not judged: `style="--im-level: 2"` is how a tree item gets its depth. A
+ * property removed.mjs says the app must not set (`--im-item-color`) is left to removed-name, which names what to
+ * write instead.
  * @param {Source} source @returns {Finding[]}
  */
 export function imSelector(source) {
@@ -235,7 +240,7 @@ export function imSelector(source) {
       }
     }
     for (const declaration of rule.declarations) {
-      if (declaration.property.startsWith('--im-')) {
+      if (declaration.property.startsWith('--im-') && !SET_BY_THE_PACKAGE.has(declaration.property)) {
         findings.push(finding(source.file, declaration.line, 'im-selector', `${declaration.property} is set: an app never sets a custom property of the package; name its own with its prefix`, declaration.endLine));
       }
     }
@@ -460,7 +465,7 @@ const KEY_EVENT = /^key(?:down|up|press)$/;
  * @param {Source} source @returns {Finding[]}
  */
 export function ownKeydown(source) {
-  const message = (/** @type {string} */ what) => `${what}: a key of the window is a command of the registry, which mountApp attaches; a widget that runs its own keys (a terminal) takes an exception, imago-check: allow own-keydown — <reason>`;
+  const message = (/** @type {string} */ what) => `${what}: a key of the window is a command of the registry, which mountApp attaches. A handler the app must keep (a terminal, an editor) calls claimKey(event) from @acaprino/imago/ui when it answers a key, so that the registry does not also run a command, and takes an exception: imago-check: allow own-keydown — <reason>`;
   /** @type {Finding[]} */
   const findings = [];
   for (const str of source.strings) {
@@ -477,11 +482,13 @@ export function ownKeydown(source) {
 
 // ---------- unknown-name, removed-name, unknown-value and class-prefix ----------
 
-const REMOVED_NAMES = new Set(REMOVED.map((entry) => entry.old));
+// The names another rule reports with what replaces them: removed-name the names of removed.mjs, brand-mark the
+// mark's (removed.mjs, ELSEWHERE).
+const REPORTED_ELSEWHERE = new Set([...REMOVED.map((entry) => entry.old), ...ELSEWHERE.map((entry) => entry.old)]);
 
 /**
  * An im- class or a data-im- attribute that the installed package does not define: a removed or mistyped name. A name
- * of removed.mjs is left to removed-name, which says what replaces it.
+ * of removed.mjs is left to removed-name, which says what replaces it, and im-brand-image to brand-mark.
  * @param {Source} source @param {Names} defined @returns {Finding[]}
  */
 export function unknownName(source, defined) {
@@ -491,7 +498,7 @@ export function unknownName(source, defined) {
   const findings = [];
   const report = (/** @type {{ name: string, line: number }} */ use, /** @type {string} */ what) => {
     const key = `${use.line} ${use.name}`;
-    if (seen.has(key) || REMOVED_NAMES.has(use.name)) return;
+    if (seen.has(key) || REPORTED_ELSEWHERE.has(use.name)) return;
     seen.add(key);
     findings.push(finding(source.file, use.line, 'unknown-name', `${use.name} is not ${what} of the installed @acaprino/imago: a removed or mistyped name`));
   };
@@ -509,10 +516,12 @@ export function unknownName(source, defined) {
  */
 export function removedName(source, removed = REMOVED) {
   const byName = new Map(removed.map((entry) => [entry.old, entry]));
-  const of = (/** @type {Removed['kind']} */ kind) => removed.filter((entry) => entry.kind === kind).map((entry) => entry.old);
-  const uses = namesIn(source, { classes: of('class'), attributes: of('attribute'), properties: of('property'), exports: of('export') });
+  const of = (/** @type {Removed['kind']} */ kind) => removed.filter((entry) => entry.kind === kind && !entry.when).map((entry) => entry.old);
+  const set = removed.filter((entry) => entry.when === 'set').map((entry) => entry.old);
+  const uses = namesIn(source, { classes: of('class'), attributes: of('attribute'), properties: of('property'), exports: of('export'), set });
   return uses.map((use) => {
     const entry = /** @type {Removed} */ (byName.get(use.name));
+    if (entry.when === 'set') return finding(source.file, use.line, 'removed-name', `${use.name} is set by the app, and only the package sets it: ${entry.now}`);
     const what = entry.kind === 'export' ? `${use.name}, an export of @acaprino/imago,` : use.name;
     return finding(source.file, use.line, 'removed-name', `${what} was removed: ${entry.now}`);
   });

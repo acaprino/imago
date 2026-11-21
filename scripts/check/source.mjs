@@ -31,6 +31,8 @@ import { parseCss, parseDeclarations } from './css.mjs';
 export const DYNAMIC = '\u0001';
 
 export const SCRIPT_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
+/** The scripts that can hold JSX (a page's scripts can too). */
+const JSX_FILE = /\.(?:tsx|jsx|js|mjs)$/;
 export const SOURCE_EXTENSIONS = ['.css', '.html', ...SCRIPT_EXTENSIONS];
 
 /**
@@ -82,7 +84,9 @@ export function parseSource(file, text) {
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return parseHtml(file, text);
   const lexed = lexScript(text);
   const sheet = inlineSheet(lexed.strings);
-  sheet.rules.push(...styleObjects(lexed.code, lexed.strings, 1), ...jsxColors(lexed.code, lexed.strings, 1));
+  sheet.rules.push(...styleObjects(lexed.code, lexed.strings, 1));
+  // JSX is in a .tsx or a .jsx, and may be in a .js or a .mjs; a .ts cannot hold it, and `i<n` there is a comparison.
+  if (JSX_FILE.test(lower)) sheet.rules.push(...jsxColors(lexed.code, lexed.strings, 1));
   return {
     file,
     kind: 'script',
@@ -383,7 +387,7 @@ const JSX_COLOR = /(?<=\s)(fill|stroke|stopColor|floodColor|lightingColor|color|
 
 /**
  * The colours of the attributes of COLOR_ATTRIBUTES in JSX (`<path d={d} fill="#fff" />`), however far the attribute
- * is from the `<` of its tag.
+ * is from the `<` of its tag. Only for code that can hold JSX: parseSource does not call it for a .ts file.
  * @param {string} code the code of the script, its strings blanked
  * @param {Str[]} strings its strings, with their offsets in `code`
  * @param {number} firstLine
@@ -391,13 +395,17 @@ const JSX_COLOR = /(?<=\s)(fill|stroke|stopColor|floodColor|lightingColor|color|
  */
 function jsxColors(code, strings, firstLine) {
   const line = lineCounter(code, firstLine);
+  /** @type {Uint8Array | null} */
+  let inside = null;
   /** @type {Rule[]} */
   const rules = [];
   for (const str of strings) {
     if (str.at === undefined) continue;
     const head = code.slice(Math.max(0, str.at - 40), str.at);
     const attribute = JSX_COLOR.exec(head);
-    if (!attribute || !insideTag(code, str.at - head.length + (attribute.index ?? 0))) continue;
+    if (!attribute) continue;
+    inside ??= tagStates(code);
+    if (!inside[str.at - head.length + (attribute.index ?? 0) - 1]) continue;
     const at = line(str.at);
     const declarations = parseDeclarations(`${kebab(attribute[1])}: ${str.text}`, at);
     if (declarations.length) rules.push(inlineRule(declarations, at));
@@ -405,30 +413,34 @@ function jsxColors(code, strings, firstLine) {
   return rules;
 }
 
+// What a JSX tag holds between its name and its end: names, spaces, `=`, `.`, `:`, `-`, and strings, blanked so that
+// a quote holds only spaces. A `{ … }` is skipped whole.
+const IN_A_TAG = /[\w$\s=."'`:-]/;
+
 /**
- * Whether the code just before `offset` is inside a JSX tag that has not closed: walking back, past the other
- * attributes, their strings (blanked, so a quote holds only spaces) and their `{ … }` (skipped whole, a template's
- * ${} with them), to a `<` and the letter of a tag's name. A `>`, an unmatched `{`, a `;`, a parenthesis or an
- * operator met first means the code is not a tag: `const fill = '#fff'`, `({ fill = '#fff' }) =>`.
- * @param {string} code @param {number} offset
+ * For each character of the code, whether it is inside a JSX tag that has not closed: after a `<` and the letter of a
+ * tag's name, with only what a tag holds since. A `>`, a `/`, a `;`, a parenthesis, a comma or an operator ends it, so
+ * `const fill = '#fff'` and `({ fill = '#fff' }) =>` are not in a tag. One pass over the code: each `{` opens a level
+ * of its own (an expression, which may hold a tag of its own), and its `}` gives the level outside its state again.
+ * @param {string} code the code of the script, its strings blanked
+ * @returns {Uint8Array} 1 at each character inside a tag
  */
-function insideTag(code, offset) {
-  for (let k = offset - 1; k >= 0; k--) {
+function tagStates(code) {
+  const inside = new Uint8Array(code.length);
+  /** @type {boolean[]} */
+  const levels = [];
+  let open = false;
+  for (let k = 0; k < code.length; k++) {
     const c = code[k];
-    if (c === '}') {
-      let depth = 1;
-      while (k > 0 && depth > 0) {
-        k--;
-        if (code[k] === '}') depth++;
-        else if (code[k] === '{') depth--;
-      }
-      if (depth > 0) return false;
-      continue;
-    }
-    if (c === '<') return /[A-Za-z]/.test(code[k + 1] ?? '');
-    if (!/[\w$\s=."'`:-]/.test(c)) return false;
+    if (c === '{') {
+      levels.push(open);
+      open = false;
+    } else if (c === '}') open = levels.pop() ?? false;
+    else if (c === '<' && /[A-Za-z]/.test(code[k + 1] ?? '')) open = true;
+    else if (open && !IN_A_TAG.test(c)) open = false;
+    inside[k] = open ? 1 : 0;
   }
-  return false;
+  return inside;
 }
 
 /** The content of a `<meta name="theme-color" content="…">` tag, or null for another tag. */

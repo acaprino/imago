@@ -20,4 +20,7 @@ export const VALUES = {
   'data-im-surface': ['ground', 'sheet', 'dense', 'float'],
   // The state of a step of im-steps: a failed or a skipped stage is drawn too (css/controls.css).
   'data-im-step': ['done', 'now', 'todo', 'failed', 'skipped'],
+  // The categorical colour of a row, a rail item, an avatar, a dot or a chip: --im-cat-1 to --im-cat-8. (data-im-badge,
+  // the badge of a row, is an attribute without a value, and has no set.)
+  'data-im-cat': ['1', '2', '3', '4', '5', '6', '7', '8'],
 };
