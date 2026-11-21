@@ -5,7 +5,7 @@
 // one over it closes. Every drawer is a layer of the one stack, so a menu or a sheet opened over a drawer closes
 // first, and a dialog makes the drawers under it inert.
 
-import { closeLayers, hasModal, pushLayer, topLayer, type Layer } from './layers.ts';
+import { closeLayers, hasModal, pushLayer, shellOf, topLayer, type Layer } from './layers.ts';
 
 export interface DialogDrawerOptions {
   /** The control that opened the drawer: it toggles the drawer and gets focus back. By default, what had focus. */
@@ -52,19 +52,40 @@ export function openDialogDrawer(dialog: HTMLDialogElement, options: DialogDrawe
     dispose: () => { dialog.close(); release(); },
   };
   const pop = pushLayer(layer, opener);
+  const shell = shellOf(dialog);
+  makeRoom(shell);
   const observed = new MutationObserver(() => { if (!dialog.open) release(); });
   observed.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+  // The room follows the drawer's width (a narrow window, a drawer whose content changes its size).
+  const resized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => makeRoom(shell));
+  resized?.observe(dialog);
   let released = false;
   function release(): void {
     if (released) return;
     released = true;
     observed.disconnect();
+    resized?.disconnect();
     openDrawers.delete(dialog);
     pop();
     delete dialog.dataset.imLayer;
     dialog.removeAttribute('data-im-covered');
     dialog.inert = false;
     dialog.classList.remove(...added);
+    makeRoom(shell);
   }
   return true;
+}
+
+/** A drawer sits beside the panels: the shell says how wide the shown drawer is (`data-im-drawer-open` and
+ * `--im-drawer-width`), and from 900px its work area gives it that room; narrower, the drawer overlaps it. */
+function makeRoom(shell: HTMLElement): void {
+  const shown = [...openDrawers].filter((open) => open.open && !open.hasAttribute('data-im-covered') && shellOf(open) === shell);
+  const width = Math.max(0, ...shown.map((open) => open.getBoundingClientRect().width));
+  if (width > 0) {
+    shell.dataset.imDrawerOpen = '';
+    shell.style.setProperty('--im-drawer-width', `${Math.round(width)}px`);
+  } else {
+    delete shell.dataset.imDrawerOpen;
+    shell.style.removeProperty('--im-drawer-width');
+  }
 }

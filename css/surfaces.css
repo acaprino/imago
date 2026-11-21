@@ -303,3 +303,7 @@ dialog.im-content-dialog--drawer { height: 100%; max-height: 100%; width: min(30
 dialog.im-form-sheet { position: absolute; margin: 0; width: min(600px, calc(100% - 16px)); max-height: calc(100% - var(--im-h-titlebar) - 32px); }
 dialog.im-content-drawer { position: absolute; inset: var(--im-h-titlebar) 0 0 auto; width: min(580px, 100%); max-height: none; margin: 0; overflow: auto; }
 dialog.im-content-drawer:is([data-covered], [data-im-covered]), dialog:not([open]).im-dialog, dialog:not([open]).im-sheet { display: none; }
+/* A drawer sits beside the panels (openDialogDrawer): from 900px the work area gives it its width; narrower, it overlaps. */
+@container im-shell (width >= 900px) {
+  [data-im-drawer-open] :is(.im-work-area, .im-content) { margin-inline-end: var(--im-drawer-width, 0px); }
+}

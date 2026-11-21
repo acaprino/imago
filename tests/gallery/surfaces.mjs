@@ -1288,6 +1288,8 @@ async function drawers(page, look, theme) {
     window.__settings = settings;
   });
   const shown = (id) => page.evaluate((id) => { const el = document.getElementById(id); return Boolean(el?.open && el.getClientRects().length); }, id);
+  // One panel at the right edge at a time: the sample's docked inspector makes way for the drawer.
+  await page.evaluate(() => window.__imagoSurfaces.inspector.close());
 
   // It opens at the window's edge under the title bar, takes focus, and leaves the panels live.
   await page.click('#anchor');
@@ -1298,6 +1300,10 @@ async function drawers(page, look, theme) {
   assert.ok(Math.abs(drawer.top - (await box(page, '.im-titlebar')).bottom) <= 1, where('under the title bar'));
   assert.equal(await page.evaluate(() => document.getElementById('drawer-library').contains(document.activeElement)), true, where('focus is in the drawer'));
   assert.equal(await count(page, '[inert]'), 0, where('a drawer makes nothing inert'));
+  // Beside the panels: from 900px the content gives the drawer its width, and takes it back when it closes.
+  const beside = await box(page, '.im-content');
+  assert.ok(beside.right <= drawer.left + 1, where(`the content ends where the drawer starts (${beside.right} vs ${drawer.left})`));
+
   await page.fill('.im-content input', 'beside');
   assert.equal(await page.inputValue('.im-content input'), 'beside', where('the panels beside it take input'));
   assert.equal(await shown('drawer-library'), true, where('and a press in them leaves it open'));
@@ -1306,6 +1312,8 @@ async function drawers(page, look, theme) {
   // focus goes back to its control. The control toggles it.
   await press(page, 'Escape');
   assert.equal(await shown('drawer-library'), false, where('Escape in the panels closes the drawer'));
+  assert.ok((await box(page, '.im-content')).right > beside.right + 100, where('the content takes its width back'));
+  assert.equal(await page.evaluate(() => document.querySelector('.im-shell').hasAttribute('data-im-drawer-open')), false, where('and the shell has no drawer open'));
   assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('.im-content input')), true, where('and focus stays in the field'));
   await page.click('#anchor');
   await page.focus('#drawer-library-field');
@@ -1366,6 +1374,22 @@ async function drawers(page, look, theme) {
   await press(page, 'Escape');
   assert.equal(await shown('drawer-library'), false, where('the next Escape closes the drawer'));
   assert.equal(await count(page, '[inert], [data-im-covered], [data-im-layer="drawer"]'), 0, where('nothing is left behind'));
+
+  // Narrower than 900px the drawer overlaps the panels instead (the redraw removes this test's own drawers after).
+  await page.evaluate(() => window.__imago.set({ width: 860 }));
+  await page.evaluate(() => {
+    const dialog = document.createElement('dialog');
+    dialog.id = 'drawer-narrow';
+    dialog.innerHTML = '<p>Narrow</p>';
+    document.querySelector('.im-shell').append(dialog);
+    window.__imagoSurfaces.openDialogDrawer(dialog);
+  });
+  const narrow = await box(page, '.im-content');
+  const narrowDrawer = await box(page, '#drawer-narrow');
+  assert.ok(narrow.right > narrowDrawer.left + 50, where(`at 860 the drawer overlaps the content (${narrow.right} vs ${narrowDrawer.left})`));
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => document.querySelector('.im-shell').hasAttribute('data-im-drawer-open')), false, where('closed'));
+  await fresh(page); // the sample shell again, its inspector open
 }
 
 export default async (page, url) => {

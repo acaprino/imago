@@ -151,7 +151,8 @@ describe('custom properties', () => {
 describe('classes and attributes', () => {
   // A class a script selects by but no stylesheet styles: the shell's content region, which regions() (F6) looks for.
   // Delete the entry the day a stylesheet defines the class, and the check on css/ is the strict one again.
-  const HOOK_CLASSES: Record<string, string> = { 'im-content': 'ts/ui/keys.ts' };
+  // im-content was a hook class until a drawer gave it a style (its room beside an open drawer).
+  const HOOK_CLASSES: Record<string, string> = {};
   const styled = (name: string): boolean => new RegExp(`\\.${name}(?![\\w-])`).test(ALL_CSS);
   const hooked = (name: string): boolean => name in HOOK_CLASSES && read(HOOK_CLASSES[name]).includes(`'.${name}'`);
 
