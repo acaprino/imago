@@ -6,15 +6,18 @@
 //!
 //! 1. before the window exists: its config with the glass material and the saved window theme, and the navigation
 //!    guard on the builder;
-//! 2. right after it is built: the browser accelerators off (a release build only), the WebView2 failure watcher, the
-//!    Snap Layouts overlay, kept by window label, and the "Reload interface" item of the window menu;
-//! 3. two commands the page calls: `set_window_theme` and `window_caption_maximize`.
+//! 2. right after it is built: the browser accelerators off and the context menu trimmed to editing (a release build
+//!    only), the WebView2 failure watcher, the Snap Layouts overlay, kept by window label, and the "Reload interface"
+//!    item of the window menu;
+//! 3. two commands the page calls: `set_window_theme` and `window_caption_maximize`;
+//! 4. while the application or a window closes, the failures WebView2 reports are not acted on.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use imago_shell::{
     apply_theme, disable_browser_accelerators, glass_window_config, guard_navigation_with_scheme,
-    install_reload_menu, install_snap_layouts, parse_theme, recovery_action, save_theme,
-    saved_theme, watch_process_failures, ProcessFailure, Recovery, RecoveryAction, SnapLayouts,
+    install_reload_menu, install_snap_layouts, parse_look, parse_theme, recovery_action,
+    save_theme, saved_theme, trim_context_menu, watch_process_failures, Look, ProcessFailure,
+    Recovery, RecoveryAction, SnapLayouts,
 };
 use std::{
     collections::HashMap,
@@ -26,7 +29,7 @@ use std::{
     thread,
     time::Instant,
 };
-use tauri::{AppHandle, Manager, State, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, RunEvent, State, WebviewWindow, WebviewWindowBuilder};
 
 /// The one window of the demo. Its config is in `tauri.conf.json`, with `"create": false`: it is built in `setup`.
 const MAIN: &str = "main";
@@ -38,9 +41,9 @@ const DEV_ORIGIN: &str = "http://127.0.0.1:1420";
 #[derive(Default)]
 struct Overlays(Mutex<HashMap<String, SnapLayouts>>);
 
-/// What the failure watcher needs to decide: the reloads of each window in the last minute, kept across rebuilds,
-/// and whether the windows are being rebuilt. The demo does not rebuild (it logs what a real app would do), so the
-/// flag stays false; an app that does sets it for the time it takes.
+/// What the failure watcher needs to decide: the reloads of each window in the last minute (and whether it is
+/// closing), kept across rebuilds, and whether the windows are being rebuilt. The demo does not rebuild (it logs what
+/// a real app would do), so the flag stays false; an app that does sets it for the time it takes.
 #[derive(Default)]
 struct Failures {
     recoveries: Mutex<HashMap<String, Recovery>>,
@@ -57,11 +60,20 @@ fn data_dir(app: &AppHandle) -> tauri::Result<PathBuf> {
 }
 
 /// The page tells the window the theme of its look (`light`, `dark` or `system`), and the window keeps it for the
-/// first frame of the next start.
+/// first frame of the next start. The page may also say its look (`smooth` or `oni`), whose ground tints the acrylic
+/// on Windows 10; a page that says none is Smooth, the default look.
 #[tauri::command]
-fn set_window_theme(window: WebviewWindow, theme: String) -> Result<(), String> {
+fn set_window_theme(
+    window: WebviewWindow,
+    theme: String,
+    look: Option<String>,
+) -> Result<(), String> {
     let theme = parse_theme(&theme).ok_or_else(|| format!("unknown window theme \"{theme}\""))?;
-    apply_theme(&window, theme).map_err(|error| error.to_string())?;
+    let look = match look.as_deref() {
+        None => Look::Smooth,
+        Some(word) => parse_look(word).ok_or_else(|| format!("unknown look \"{word}\""))?,
+    };
+    apply_theme(&window, theme, look).map_err(|error| error.to_string())?;
     let dir = data_dir(window.app_handle()).map_err(|error| error.to_string())?;
     save_theme(&dir, theme).map_err(|error| error.to_string())
 }
@@ -123,9 +135,10 @@ fn on_failure(app: &AppHandle, window: &WebviewWindow, failure: ProcessFailure) 
 
 /// Everything a window gets right after it is built, a rebuilt one included.
 fn wire(app: &AppHandle, window: &WebviewWindow) -> tauri::Result<()> {
-    // A development build keeps reload and DevTools.
+    // A development build keeps reload, DevTools and the engine's whole context menu (Inspect).
     if !tauri::is_dev() {
         disable_browser_accelerators(window)?;
+        trim_context_menu(window)?;
     }
     let (handle, watched) = (app.clone(), window.clone());
     watch_process_failures(window, move |failure| {
@@ -163,6 +176,40 @@ fn build_main(app: &AppHandle) -> tauri::Result<()> {
     wire(app, &window)
 }
 
+/// WebView2 reports the processes that end with the application, or with a window, as failed: that is not a failure
+/// to recover from. When the exit begins every window's count learns it, and when a window closes its own does; from
+/// then on their failures are ignored. A window destroyed to be built again is not closing, so nothing is marked while
+/// the windows are rebuilt (never, in the demo; a real app also prevents the exit then).
+fn on_run_event(app: &AppHandle, event: RunEvent) {
+    let failures = app.state::<Failures>();
+    if failures.rebuilding.load(Ordering::SeqCst) {
+        return;
+    }
+    let Ok(mut recoveries) = failures.recoveries.lock() else {
+        return;
+    };
+    match event {
+        RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+            // Every window, also one that has not failed yet and has no count of its own, and the counts of the
+            // windows already gone.
+            for label in app.webview_windows().into_keys() {
+                recoveries.entry(label).or_default().close();
+            }
+            for recovery in recoveries.values_mut() {
+                recovery.close();
+            }
+        }
+        RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed,
+            ..
+        } => {
+            recoveries.entry(label).or_default().close();
+        }
+        _ => {}
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Overlays::default())
@@ -175,6 +222,7 @@ fn main() {
             build_main(app.handle())?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("the Imago demo failed to start");
+        .build(tauri::generate_context!())
+        .expect("the Imago demo failed to start")
+        .run(on_run_event);
 }
