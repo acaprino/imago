@@ -4,6 +4,7 @@
 // It renders each component with react-dom/server (a dev dependency; the binding itself needs only the consumer's react).
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -106,6 +107,22 @@ describe('the types', () => {
     assert.match(shell, /\bcontentId\?: string;/, 'Shell takes contentId');
   });
 
+  test('are checked by tsc against @types/react: a Shell takes a ref, a Workbench has no wide (tests/types/react.tsx)', () => {
+    const tsc = join(root, 'node_modules', 'typescript', 'bin', 'tsc');
+    const args = [tsc, '--ignoreConfig', '--noEmit', '--strict', '--skipLibCheck', '--target', 'es2022', '--module', 'esnext',
+      '--moduleResolution', 'bundler', '--jsx', 'react-jsx', '--lib', 'es2022,dom,dom.iterable', join(root, 'tests', 'types', 'react.tsx')];
+    try {
+      execFileSync(process.execPath, args, { cwd: root, encoding: 'utf8', stdio: 'pipe' });
+    } catch (error) {
+      const { stdout = '', stderr = '' } = error as { stdout?: string; stderr?: string };
+      assert.fail(`tsc found a type the binding's declarations get wrong:\n${stdout}${stderr}`);
+    }
+  });
+
+  test('do not keep the ignored wide alive', () => {
+    assert.doesNotMatch(types, /\bwide\?:/);
+  });
+
   test('say that the Shell is mounted in a root that carries im-root', () => {
     assert.match(types, /im-root/);
   });
@@ -125,6 +142,22 @@ describe('Shell', () => {
     assert.equal(rootOf(render(h(Shell, { sidebar: true }))).attrs['data-im-sidebar'], 'on');
     assert.equal(rootOf(render(h(Shell, { sidebar: false }))).attrs['data-im-sidebar'], 'off');
     assert.equal(rootOf(render(h(Shell, null))).attrs['data-im-sidebar'], 'off');
+  });
+
+  test('writes data-im-sidebar on when its Workbench has navigation rows, as the Workbench draws the sidebar, and sidebar overrides it', () => {
+    const shell = (props: Record<string, unknown>, navigation: unknown): Element => rootOf(render(h(Shell, props,
+      h(Workbench, { navigation, navigationLabel: 'Threads', detailsLabel: 'Details', 'aria-label': 'Viewer' }, h('p', null, 'Page')))));
+    assert.equal(shell({}, rows).attrs['data-im-sidebar'], 'on', 'a Workbench with navigation: a sidebar, written on the shell');
+    assert.ok(find(shell({}, rows), '.im-sidebar'), 'and the Workbench draws it');
+    assert.equal(shell({}, null).attrs['data-im-sidebar'], 'off');
+    assert.equal(shell({}, []).attrs['data-im-sidebar'], 'off', 'no rows, no sidebar');
+    assert.equal(find(shell({}, []), '.im-sidebar'), undefined, 'the Workbench draws none for no rows');
+    assert.equal(shell({ sidebar: true }, null).attrs['data-im-sidebar'], 'on', 'sidebar says it for a Workbench the shell cannot see');
+    assert.equal(shell({ sidebar: false }, rows).attrs['data-im-sidebar'], 'off', 'and overrides what it sees');
+  });
+
+  test('is a component that takes a ref in React 18 and 19: forwardRef', () => {
+    assert.equal((Shell as unknown as { $$typeof: symbol }).$$typeof, Symbol.for('react.forward_ref'));
   });
 
   test('writes data-im-inspector="wide" for inspector="wide" and nothing otherwise', () => {
@@ -349,6 +382,7 @@ describe('ListAction', () => {
     assert.deepEqual([rail.tag, rail.attrs.class, rail.attrs['aria-hidden'], textOf(rail)], ['span', 'im-rail-item', 'true', 'NA']);
     assert.deepEqual([icon.tag, text.attrs.class], ['svg', 'im-row-text']);
     assert.equal(find(row({}), '.im-rail-item'), undefined, 'no rail item unless it is given');
+    for (const nothing of ['', [], [null, false]]) assert.equal(find(row({ rail: nothing }), '.im-rail-item'), undefined, `no empty rail item for ${JSON.stringify(nothing)}`);
   });
 });
 
