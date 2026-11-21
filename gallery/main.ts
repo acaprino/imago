@@ -78,6 +78,23 @@ slider.addEventListener('input', () => set({ width: Number(slider.value) }));
 const mounts = import.meta.glob<MountModule>('./mount/*.ts', { eager: true });
 let cleanups: (() => void)[] = [];
 
+// The sections under the window, in the order a reader scans the page: the controls, the page patterns, the forms, what
+// tells a person how things went, then the files and the workspaces. A module's sections go in its group; a section may
+// name its own (`data-g-group`, as gallery/mount/patterns.ts does); a module not listed goes last.
+const GROUPS = ['controls', 'patterns', 'forms', 'feedback', 'files'];
+const GROUP_OF: Record<string, string> = {
+  matrix: 'controls', steps: 'controls', notes: 'feedback', 'panel-state': 'feedback', inspection: 'feedback', files: 'files', graph: 'files', workspace: 'files',
+};
+function orderSections(groupOf: Map<Element, string>): void {
+  const rank = (el: Element): number => {
+    const group = (el instanceof HTMLElement && el.dataset.gGroup) || groupOf.get(el) || '';
+    return group && GROUPS.includes(group) ? GROUPS.indexOf(group) : GROUPS.length;
+  };
+  const children = Array.from(sections.children).map((el, at) => ({ el, at }));
+  children.sort((a, b) => rank(a.el) - rank(b.el) || a.at - b.at);
+  sections.append(...children.map(({ el }) => el));
+}
+
 // The choice to fold the sidebar into its rail outlives a redraw of the gallery, as an app would store it.
 let sidebarCollapsed = false;
 
@@ -127,14 +144,19 @@ function redraw(): void {
   if (!shell) throw new Error('shellMarkup() drew no .im-shell');
   const registry = createRegistry();
   const ctx: MountContext = { shell, root, app: state.app, look: state.look, theme: drawnTheme(), choice: state.theme, sections, registry };
+  const groupOf = new Map<Element, string>();
   for (const [path, module] of Object.entries(mounts).sort(([a], [b]) => a.localeCompare(b))) {
+    const before = new Set(Array.from(sections.children));
     try {
       const cleanup = module.default?.(ctx);
       if (typeof cleanup === 'function') cleanups.push(cleanup);
     } catch (error) {
       console.error(`gallery/${path.slice(2)} failed to mount: ${error instanceof Error ? error.message : String(error)}`);
     }
+    const group = GROUP_OF[path.replace(/^\.\/mount\//, '').replace(/\.ts$/, '')];
+    for (const child of Array.from(sections.children)) if (group && !before.has(child)) groupOf.set(child, group);
   }
+  orderSections(groupOf);
 
   // The app is mounted like any app: once its commands are registered, with its words. Mounted last, so undone first.
   // The look and the theme are the gallery's choice, kept in `state`: the five commands and the pickers above both call

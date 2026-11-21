@@ -140,7 +140,14 @@ export function openContentDialog(shell: HTMLElement, dialog: HTMLDialogElement,
   dialog.addEventListener('close', nativeClose);
   root.addEventListener('pointerdown', event => { if (event.target === root && topLayer()?.el === root) dismiss(); });
   try { dialog.show(); } catch (error) { close(); throw error; }
-  (dialog.querySelector<HTMLElement>('[autofocus]:not(:disabled)') ?? dialog).focus();
+  const wanted = dialog.querySelector<HTMLElement>('[autofocus]:not(:disabled)');
+  if (wanted) wanted.focus();
+  else {
+    // show() focused the first control, which scrolled it into view (a Close button under a long text is at the end):
+    // the focus goes to the dialog, and a dialog without a control that asked for the focus opens at its top.
+    dialog.focus({ preventScroll: true });
+    root.scrollTop = dialog.scrollTop = 0;
+  }
   return { close, dispose: close };
 }
 

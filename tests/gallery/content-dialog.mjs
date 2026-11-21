@@ -9,6 +9,88 @@ async function assertCentred(page, locator, text) {
   assert.ok(offset.every((n) => Math.abs(n) <= 1.5), `${text}: the dialog is off the middle of its layer by ${offset.map(Math.round)}`);
 }
 
+// A dialog taller than its layer stays inside the layer, under the title bar, and scrolls; at every width of the shell,
+// under 620 too, a dialog of each kind (an app's own, a form, a confirmation) stays inside its layer and in its middle.
+async function tallAndNarrow(page, look, theme) {
+  const where = (text) => `${look} ${theme}: ${text}`;
+  // Each kind of dialog, opened on the live shell; `long` fills it with more than its layer can hold.
+  const open = (kind, long) => page.evaluate(({ kind, long }) => {
+    const api = window.__imagoSurfaces;
+    const shell = document.querySelector('#g-window .im-shell');
+    const lines = Array.from({ length: long ? 60 : 2 }, (_, n) => `<p>Line ${n + 1} of what the dialog says: a sentence long enough to wrap in a narrow window.</p>`).join('');
+    if (kind === 'content') {
+      const dialog = document.createElement('dialog');
+      dialog.setAttribute('aria-label', 'Long form');
+      dialog.innerHTML = `<form class="im-form" method="dialog"><h2>Long form</h2>${lines}<button class="im-btn" type="submit">Close</button></form>`;
+      const control = api.openContentDialog(shell, dialog);
+      window.__closeDialog = () => control.close();
+    } else if (kind === 'form') {
+      const form = api.openFormDialog(shell, { title: 'Long form', closeLabel: 'Close' });
+      form.body.innerHTML = lines;
+      window.__closeDialog = () => form.close();
+    } else {
+      void api.confirm(shell, { title: 'Delete 8 items permanently?', body: '13.48 GB in 46,999 files will be deleted. This cannot be undone.', confirm: 'Delete 8 items', cancel: 'Cancel', danger: true });
+      window.__closeDialog = () => document.querySelector('#g-window .im-dialog .im-btn:not(.im-btn--confirm-danger)').click();
+    }
+  }, { kind, long });
+  // Where the dialog is in its layer, and the part of it that scrolls (the dialog, or the body of a form dialog).
+  const measure = () => page.evaluate(() => {
+    const dialog = document.querySelector('#g-window .im-scrim .im-dialog');
+    const layer = dialog.closest('.im-scrim').getBoundingClientRect();
+    const box = dialog.getBoundingClientRect();
+    const scroller = [dialog, ...dialog.querySelectorAll('*')].find((el) => /auto|scroll/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1) ?? null;
+    const openedAt = scroller?.scrollTop ?? 0;
+    // The wheel is tried from the top, wherever the dialog opened (see openedAtTop).
+    if (scroller) scroller.scrollTop = 0;
+    return {
+      inside: box.left >= layer.left - 0.5 && box.right <= layer.right + 0.5 && box.top >= layer.top - 0.5 && box.bottom <= layer.bottom + 0.5,
+      offset: [(box.left + box.right - layer.left - layer.right) / 2, (box.top + box.bottom - layer.top - layer.bottom) / 2],
+      box: { left: box.left, right: box.right, top: box.top, bottom: box.bottom }, layer: { left: layer.left, right: layer.right, top: layer.top, bottom: layer.bottom },
+      scrolls: Boolean(scroller), openedAt, wide: dialog.scrollWidth > dialog.clientWidth + 1,
+    };
+  });
+  const tallOpenedAt = [];
+  for (const width of [1160, 600, 500, 250]) {
+    await page.evaluate((w) => window.__imago.set({ width: w }), width);
+    for (const kind of ['content', 'form', 'confirm']) {
+      for (const long of kind === 'confirm' ? [false] : [false, true]) {
+        const said = (text) => where(`${kind} dialog${long ? ', taller than its layer,' : ''} at ${width}: ${text}`);
+        await open(kind, long);
+        const seen = await measure();
+        assert.ok(seen.inside, said(`stays inside its layer (${JSON.stringify({ box: seen.box, layer: seen.layer })})`));
+        assert.ok(seen.offset.every((n) => Math.abs(n) <= 1.5), said(`is in the middle of its layer, off by ${seen.offset.map(Math.round)}`));
+        assert.ok(!seen.wide, said('does not scroll sideways'));
+        if (long) {
+          assert.ok(seen.scrolls, said('scrolls'));
+          tallOpenedAt.push({ what: `${kind} at ${width}`, at: seen.openedAt });
+          // The wheel over the dialog scrolls what scrolls in it.
+          const before = await page.evaluate(() => [...document.querySelectorAll('#g-window .im-scrim .im-dialog, #g-window .im-scrim .im-dialog *')].map((el) => el.scrollTop).join());
+          const box = seen.box;
+          await page.mouse.move((box.left + box.right) / 2, (box.top + box.bottom) / 2);
+          await page.mouse.wheel(0, 400);
+          await page.waitForFunction((was) => [...document.querySelectorAll('#g-window .im-scrim .im-dialog, #g-window .im-scrim .im-dialog *')].map((el) => el.scrollTop).join() !== was, before, { timeout: 2000 }).catch(() => {});
+          const after = await page.evaluate(() => [...document.querySelectorAll('#g-window .im-scrim .im-dialog, #g-window .im-scrim .im-dialog *')].map((el) => el.scrollTop).join());
+          assert.notEqual(after, before, said('the wheel scrolls it'));
+        }
+        await page.evaluate(() => window.__closeDialog());
+        await page.waitForFunction(() => !document.querySelector('#g-window .im-scrim'));
+      }
+    }
+  }
+  await page.evaluate(() => window.__imago.set({ width: 1160 }));
+  openedAtTop(tallOpenedAt, where);
+}
+
+/**
+ * A tall dialog opens at its top. An app's own dialog whose first control is at its end (a Close button under a long text)
+ * would open scrolled to that end if the focus on its first control scrolled it into view: openContentDialog
+ * (ts/ui/dialog.ts) keeps it at its top.
+ */
+function openedAtTop(seen, where) {
+  assert.ok(seen.length >= 4, where(`the opening position of the tall dialogs is measured (${seen.length})`));
+  for (const { what, at } of seen) assert.equal(at, 0, where(`a tall ${what} opens at its top, not scrolled by ${at}px`));
+}
+
 export default async function(page) {
   for(const look of ['smooth','oni'])for(const theme of ['dark','light']){
     await page.evaluate(({look,theme})=>window.__imago.set({app:'muro',look,theme,glass:false}),{look,theme});
@@ -58,6 +140,7 @@ export default async function(page) {
     await page.evaluate(()=>{const shell=document.querySelector('.im-shell');window.__imagoSurfaces.notify(shell,'Dispose me');window.__imagoSurfaces.clearNotices(shell);});
     assert.equal(await page.locator('[data-im-notices]').count(),0);
     await controllerContract(page, look, theme);
+    await tallAndNarrow(page, look, theme);
   }
 }
 

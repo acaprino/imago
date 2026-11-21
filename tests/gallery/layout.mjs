@@ -982,7 +982,7 @@ export default async (page, url) => {
       const closed = async (label) => {
         assert.equal(await visible(page, '.im-sidebar'), false, where(`sidebar hidden ${label}`));
         assert.equal(await toggle.getAttribute('aria-expanded'), 'false', where(`sidebar button closed ${label}`));
-        assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-open'), null, where(`shell not open ${label}`));
+        assert.equal(await page.locator('#g-window > .im-shell').getAttribute('data-im-sidebar-open'), null, where(`shell not open ${label}`));
       };
       const contentBefore = await box(page, '.im-content');
       await page.focus('#g-width'); // the last control before the window, in the page's order
@@ -1100,7 +1100,7 @@ export default async (page, url) => {
       await removeSidebarParts(page);
       await fold.focus();
       await page.keyboard.press('Enter');
-      assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-collapsed'), 'true', where('the shell says it is folded'));
+      assert.equal(await page.locator('#g-window > .im-shell').getAttribute('data-im-sidebar-collapsed'), 'true', where('the shell says it is folded'));
       assert.equal(await fold.getAttribute('aria-expanded'), 'false', where('the button says it is folded'));
       const unfoldName = await fold.getAttribute('aria-label');
       assert.ok(unfoldName && unfoldName !== foldName, where('the button is renamed when folded'));
@@ -1137,7 +1137,7 @@ export default async (page, url) => {
       await at(1160, 'mukade');
       await page.locator('.im-sidebar-collapse').click();
       near((await box(page, '.im-sidebar')).width, widths.sidebar, where('unfolded again'));
-      assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar-collapsed'), null, where('the shell is not folded'));
+      assert.equal(await page.locator('#g-window > .im-shell').getAttribute('data-im-sidebar-collapsed'), null, where('the shell is not folded'));
       assert.equal(await page.locator('.im-sidebar-collapse').getAttribute('aria-label'), foldName, where('the button has its first name back'));
       assert.equal(await page.locator('.im-sidebar-collapse').getAttribute('title'), foldName, where('and its first title'));
 
@@ -1209,7 +1209,7 @@ export default async (page, url) => {
       // Muro has no sidebar and no button for it, at any width.
       for (const width of [1160, 990, 840, 610, 500]) {
         await at(width, 'muro');
-        assert.equal(await page.locator('.im-shell').getAttribute('data-im-sidebar'), 'off');
+        assert.equal(await page.locator('#g-window > .im-shell').getAttribute('data-im-sidebar'), 'off');
         assert.equal(await visible(page, '.im-sidebar'), false, where(`Muro has no sidebar at ${width}`));
         assert.equal(await page.locator('.im-sidebar-toggle').count(), 0, where(`Muro has no sidebar button at ${width}`));
         assert.equal(await page.locator('.im-sidebar-collapse').count(), 0, where(`Muro has no fold button at ${width}`));

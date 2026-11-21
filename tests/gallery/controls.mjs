@@ -338,6 +338,123 @@ function checkReadable(rows, where) {
   assert.deepEqual(unreadable, [], where('text under 4.5:1'));
 }
 
+// The text helpers, each measured on the ground and on a sheet (gallery/patterns.ts, the feedback section).
+const HELPERS = ['im-text-ok', 'im-text-warn', 'im-text-err', 'im-text-info', 'im-text-accent', 'im-muted', 'im-caption'];
+
+// Every text of the page patterns (gallery/mount/patterns.ts), on the colour under it, as a cell of the matrix is read: for
+// each pattern its hardest text. A text that is not drawn (hidden, or one pixel, as a visually hidden legend) is not read; a
+// text under an opacity is set aside, since the package fades only what it means to be out of the way (the pane of the
+// tiling workspace whose tabs are all filtered out). The text of an SVG is its fill on the halo it is drawn on (the ground
+// a graph's label is stroked with), or on what is under it. And the text helpers, each on the ground and on a sheet.
+const measurePatterns = (page) =>
+  page.evaluate((helperClasses) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const flatten = (colours) => {
+      g.clearRect(0, 0, 1, 1);
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 1, 1);
+      for (const c of colours) {
+        g.fillStyle = c;
+        g.fillRect(0, 0, 1, 1);
+      }
+      const d = g.getImageData(0, 0, 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    const background = (el) => {
+      const layers = [];
+      for (let node = el; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        const own = [];
+        if (style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent') own.push(style.backgroundColor);
+        for (const wash of style.boxShadow.matchAll(/((?:rgba?|color|oklch|hsla?)\([^)]*\)) 0px 0px 0px (\d+(?:\.\d+)?)px inset/g)) {
+          if (Number(wash[2]) >= 50) own.push(wash[1]);
+        }
+        layers.unshift(...own);
+      }
+      return layers;
+    };
+    const channel = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = ([r, g2, b]) => 0.2126 * channel(r) + 0.7152 * channel(g2) + 0.0722 * channel(b);
+    const ratio = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const opacityOf = (el) => {
+      let value = 1;
+      for (let node = el; node; node = node.parentElement) value *= Number(getComputedStyle(node).opacity);
+      return value;
+    };
+    const read = (holder) => {
+      const s = getComputedStyle(holder);
+      const under = background(holder);
+      if (holder instanceof SVGElement) {
+        const halo = s.paintOrder.startsWith('stroke') && s.stroke !== 'none' ? [s.stroke] : [];
+        const fill = flatten([...under, ...halo]);
+        const ink = flatten([...under, ...halo, s.fill]);
+        return { ratio: ratio(ink, fill), color: ink.join(','), fill: fill.join(',') };
+      }
+      const fill = flatten(under);
+      const ink = flatten([...under, s.color]);
+      return { ratio: ratio(ink, fill), color: ink.join(','), fill: fill.join(',') };
+    };
+    const patterns = [];
+    const low = [];
+    let texts = 0;
+    let faded = 0;
+    for (const pattern of document.querySelectorAll('.g-patterns [data-g-pattern]')) {
+      const name = pattern.dataset.gPattern;
+      const walker = document.createTreeWalker(pattern, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const words = node.textContent.trim();
+        const holder = node.parentElement;
+        if (!words || !holder || holder.closest('style')) continue;
+        const rect = holder.getBoundingClientRect();
+        if (!holder.getClientRects().length || rect.width <= 1 || rect.height <= 1 || getComputedStyle(holder).visibility === 'hidden') continue;
+        if (opacityOf(holder) < 1) { faded++; continue; }
+        texts++;
+        const seen = read(holder);
+        if (seen.ratio < 4.5) low.push({ ...seen, pattern: name, text: words.slice(0, 40) });
+      }
+      patterns.push(name);
+    }
+    const resolve = (el, value) => {
+      const probe = document.createElement('i');
+      probe.style.backgroundColor = value;
+      el.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    };
+    const helpers = [];
+    for (const surface of document.querySelectorAll('.g-patterns [data-g-surface]')) {
+      const kind = surface.dataset.gSurface;
+      const token = resolve(surface, `var(--im-${kind})`);
+      for (const name of helperClasses) {
+        const el = surface.querySelector(`.${name}`);
+        helpers.push({ name, surface: kind, found: Boolean(el), onToken: getComputedStyle(surface).backgroundColor === token, ...(el ? read(el) : { ratio: 0 }) });
+      }
+    }
+    return { patterns, low, helpers, texts, faded };
+  }, HELPERS);
+
+// Every text of the page patterns reads at 4.5:1, and each text helper on the ground and on a sheet.
+function checkPatterns({ patterns, low, helpers, texts, faded }, where) {
+  assert.ok(patterns.length >= 30 && texts > 300, where(`the page patterns are measured (${patterns.length} patterns, ${texts} texts)`));
+  assert.ok(faded < 10, where(`only the dimmed pane of the tiling workspace is faded, not ${faded} texts`));
+  const unreadable = low
+    .map((text) => `${text.pattern}: "${text.text}" is ${text.ratio.toFixed(2)}:1 (${text.color} on ${text.fill})`);
+  assert.deepEqual(unreadable, [], where('text of the page patterns under 4.5:1'));
+  assert.deepEqual(helpers.filter((h) => !h.found || !h.onToken).map((h) => `${h.name} on the ${h.surface}`), [], where('each text helper is drawn on the ground and on a sheet'));
+  assert.equal(helpers.length, HELPERS.length * 2, where('the helpers are measured on two surfaces'));
+  const faint = helpers.filter((h) => h.ratio < 4.5).map((h) => `${h.name} on the ${h.surface}: ${h.ratio.toFixed(2)}:1 (${h.color} on ${h.fill})`);
+  assert.deepEqual(faint, [], where('a text helper under 4.5:1'));
+}
+
 // What the eye tells one state of a control from another by: the fill, the text, the edge and the wash.
 const picture = (cell) => [cell.fill, cell.textColor, cell.borderColor, cell.boxShadow, cell.fontWeight].join('|');
 
@@ -465,12 +582,14 @@ export default async (page) => {
       // Text is readable: disabled text at 4.5:1 with a dashed edge and no opacity, and every text of every cell and of the
       // fill specimen at 4.5:1 on the colour under it. The accent is the app's, so every app is measured, not Xiox alone.
       checkReadable(rows, where);
+      checkPatterns(await measurePatterns(page), where);
       for (const [kind, count] of [['row', 4], ['table-row', 4], ['buttons', 3]]) {
         assert.equal(rows.filter((r) => r.control === `fill-${kind}`).length, count, where(`the fill specimen has ${count} ${kind} states`));
       }
       for (const app of APPS.filter((name) => name !== 'xiox')) {
         await show(page, { app, look, theme, glass: false, width: 1160 });
         checkReadable(await measureAll(page), (message) => where(`${app}: ${message}`));
+        checkPatterns(await measurePatterns(page), (message) => where(`${app}: ${message}`));
       }
       // The letter of the mark at the top left is the initial on the app's accent, at 4.5:1 or more, in every app.
       for (const app of APPS) {
