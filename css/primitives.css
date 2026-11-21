@@ -39,10 +39,14 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
 /* The brand gives way before the window buttons do: at the width of a 500px window at 200% zoom the name is cut with an
    ellipsis, then goes. */
 .im-brand { display: flex; flex: 0 1 auto; align-items: center; gap: var(--im-s-2); min-inline-size: 0; white-space: nowrap; }
+/* The mark is the initial of the product's name, in capitals, in the square of the app's accent. The letter's box is
+   trimmed to its capitals (from the top of a capital to the baseline) and that band is centred in the square, so the
+   letter's ink sits in its middle whatever the font's ascent and descent: centring the font's box instead puts the
+   letter low in Segoe UI and high in Bahnschrift. */
 .im-mark {
-  display: grid;
+  display: block;
   flex: none;
-  place-items: center;
+  align-content: center;
   inline-size: 22px;
   block-size: 22px;
   background: var(--im-accent);
@@ -50,16 +54,25 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
   border-radius: var(--im-r-control);
   /* ONI cuts two corners of the square, as it cuts its buttons; Smooth's cut is 0 and this is the whole square */
   clip-path: polygon(var(--im-cut-sm) 0, 100% 0, 100% calc(100% - var(--im-cut-sm)), calc(100% - var(--im-cut-sm)) 100%, 0 100%, 0 var(--im-cut-sm));
+  font: 700 var(--im-fs-body)/1 var(--im-font-head);
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: center;
+  text-box: trim-both cap alphabetic;
 }
-.im-mark svg { inline-size: 14px; block-size: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+/* The name's box is trimmed to its capitals too, with room above and below for accents and descenders: the brand
+   centres the two boxes, so the square is level with the capitals of the name in both looks (ONI's larger, spaced
+   name sat a pixel above the square's middle). */
 .im-wordmark {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-block: var(--im-s-2);
   font: 600 15px/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-text-hi);
+  text-box: trim-both cap alphabetic;
 }
 .im-titlebar .im-tabs { align-self: stretch; align-items: center; }
 .im-titlebar .im-tab { block-size: 100%; border-radius: 0; }

@@ -87,7 +87,7 @@ sidebar sets `data-im-sidebar="off"` and writes none.
 <div class="im-shell" data-im-sidebar="on">
   <a class="im-shell-skip-link" href="#main">Skip to content</a>
   <header class="im-titlebar" data-tauri-drag-region>
-    <div class="im-brand" data-tauri-drag-region><span class="im-mark" data-tauri-drag-region><svg viewBox="0 0 24 24" aria-hidden="true" data-tauri-drag-region>…</svg></span><span class="im-wordmark" data-tauri-drag-region>Name</span></div>
+    <div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>N</span><span class="im-wordmark" data-tauri-drag-region>Name</span></div>
     <button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="sidebar">…</button>
     <nav class="im-tabs" role="tablist" aria-label="Views">
       <button type="button" role="tab" class="im-tab" aria-selected="true">First view</button>
@@ -139,6 +139,10 @@ goes and comes back is the same element again, in its place. The content region 
 
 - `im-shell` fills its parent (`block-size: 100%`) and measures its own width, so the breakpoints follow the window.
   Put it directly in `<body>`, or in an element that fills the window.
+- The brand is the mark and the name: `im-mark` holds one letter, the initial of the product's name in capitals, on the
+  app's accent, and `im-wordmark` the name. No drawing and no logo: the app's logo is what Windows shows (the icons of
+  its executables). `titlebarHtml({ brand: { name } })` writes the two; `imago-check` reports a brand that is not
+  this markup (rule `brand-mark`).
 - `im-content` has no style of its own. It is the hook the `F6` key looks for, so every window that has a content
   region carries it.
 - Every sidebar row carries an `im-rail-item`: it is all the row shows in the rail. It is the row's own icon, as in the
@@ -147,8 +151,8 @@ goes and comes back is the same element again, in its place. The content region 
   tooltip, and its text stays in the rail, hidden, as the accessible name.
 - Tauri starts a window drag only when the pressed element itself carries `data-tauri-drag-region`, and nothing in
   `css/` changes what a child does with the pointer. Put the attribute on each element that should drag: the title
-  bar, the spacer, and the brand with everything inside it (`im-brand`, `im-mark`, the `svg` and each of its shapes,
-  `im-wordmark`), as `markDragRegion` in `gallery/mount/desktop.ts` does with `.im-brand *`. Leave the buttons, the
+  bar, the spacer, and the brand with everything inside it (`im-brand`, `im-mark`, `im-wordmark`), as `titlebarHtml`
+  writes them and as `markDragRegion` in `gallery/mount/desktop.ts` does with `.im-brand *`. Leave the buttons, the
   tabs and the command field unmarked. The drag needs two permissions: see "The capabilities" in section 5. Whether
   the window drags on a real window is in [verification.md](verification.md).
 - The inspector is closed with `hidden`; the content then takes its room. `inspector(shell).open(content)` opens it.

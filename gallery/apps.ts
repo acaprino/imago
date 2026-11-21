@@ -23,10 +23,6 @@ const ICONS: Record<string, string> = {
   reload: '<path d="M19 12a7 7 0 1 1-2.05-4.95M19 5v4h-4"/>', term: '<rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M7.5 10l3 2.5-3 2.5M12.5 15.5h4"/>',
   play: '<path d="M8 5.5v13l10-6.5z"/>', chat: '<path d="M5 6h14v9H10l-4 3.5V15H5z"/>', send: '<path d="M4 12l16-7-6 16-2.5-6.5z"/>',
 };
-const MARKS: Record<AppId, string> = {
-  xiox: '<path d="M7 7l10 10M17 7L7 17"/>', shinatama: '<circle cx="12" cy="12" r="4.6"/>', mukade: '<path d="M4.5 14.5l3-4 3 4 3-4 3 4 3-4"/>',
-  muro: '<path d="M5 8h14M5 12h14M5 16h14M10 8v4M14 12v4"/>', daodan: '<path d="M6 18L18 6M11 6h7v7"/>',
-};
 
 // ---- markup helpers --------------------------------------------------------------------------------------------
 
@@ -208,7 +204,7 @@ export function shellMarkup(id: AppId): string {
   return `<div class="im-shell" data-im-sidebar="${a.side ? 'on' : 'off'}">
   <a class="im-shell-skip-link" href="#g-content">${a.strings.skip}</a>
   <header class="im-titlebar">
-    <div class="im-brand"><span class="im-mark"><svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[id]}</svg></span><span class="im-wordmark">${a.name}</span></div>
+    <div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>${a.name[0].toUpperCase()}</span><span class="im-wordmark" data-tauri-drag-region>${a.name}</span></div>
     ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('sidebar')}</button>` : ''}
     <nav class="im-tabs" role="tablist" aria-label="${a.strings.views}">${tabs}</nav>
     <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">${a.strings.views}${icon('chev')}</button>
