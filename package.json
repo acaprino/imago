@@ -17,6 +17,9 @@
     "./graph-layout": "./lib/graph-layout.js",
     "./react": "./react/index.js"
   },
+  "bin": {
+    "imago-check": "./scripts/check/cli.mjs"
+  },
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
     "tokens": "node scripts/build-tokens.mjs",
@@ -28,6 +31,7 @@
     "demo:build": "cd examples/demo/src-tauri && tauri build --debug --no-bundle --features custom-protocol",
     "demo:fetch": "node examples/demo/fetch.mjs",
     "capture": "node examples/demo/capture.mjs",
+    "check": "node scripts/check/cli.mjs --package",
     "verify": "npm run tokens -- --check && npm test && npm run build && npm run test:gallery && cargo test -p imago-shell",
     "prepare": "npm run build:package",
     "build:package": "tsc -p tsconfig.package.json",
@@ -60,7 +64,8 @@
     "docs",
     "tokens",
     "ts",
-    "react"
+    "react",
+    "scripts/check"
   ],
   "dependencies": {
     "d3-selection": "3.0.1",
