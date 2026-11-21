@@ -103,9 +103,21 @@ export function roving(container: HTMLElement, options: RovingOptions): () => vo
     }
   };
 
-  const observer = new MutationObserver(sync);
+  const observer = new MutationObserver(records => {
+    // A shortcut can select a tab while focus is elsewhere. Ordinary arrow navigation still moves
+    // the stop independently until a different item is selected.
+    for (const record of records) {
+      const row = record.target;
+      if (record.attributeName === 'aria-selected' && record.oldValue !== 'true' && row instanceof HTMLElement &&
+          row.matches(item) && row.getAttribute('aria-selected') === 'true') stop = row;
+    }
+    sync();
+  });
   // tabindex is left out of the filter: sync writes it, and must not trigger itself.
-  observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'aria-disabled', 'hidden', 'inert'] });
+  observer.observe(container, {
+    childList: true, subtree: true, attributeOldValue: true,
+    attributeFilter: ['disabled', 'aria-disabled', 'hidden', 'inert', 'aria-selected'],
+  });
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('focusin', onFocusIn);
   sync();

@@ -3,6 +3,7 @@
 // regions under the title bar are made inert, focus starts on Cancel and stays inside, and Escape cancels.
 
 import { inertShell, pushLayer, topLayer, trapTab } from './layers.ts';
+import { captureFocus, restoreFocus } from './dom-state.ts';
 
 export type ConfirmOptions = {
   title: string;
@@ -80,8 +81,10 @@ export function confirm(shell: HTMLElement, options: ConfirmOptions): Promise<bo
 }
 
 function mountDialog(shell: HTMLElement, root: HTMLElement, dialog: HTMLElement, dismiss: () => void, dispose = dismiss): () => void {
-  const active = shell.ownerDocument.activeElement;
-  const opener = active instanceof HTMLElement && active !== shell.ownerDocument.body ? active : null;
+  const doc = shell.ownerDocument;
+  const active = doc.activeElement;
+  const opener = active instanceof HTMLElement && active !== doc.body ? active : null;
+  const openerState = captureFocus(shell);
   root.addEventListener('keydown', event => trapTab(event, dialog));
   root.addEventListener('mousedown', event => {
     if (event.target === root) event.preventDefault();
@@ -90,10 +93,53 @@ function mountDialog(shell: HTMLElement, root: HTMLElement, dialog: HTMLElement,
   shell.append(root);
   const pop = pushLayer({ el: root, kind: 'dialog', close: dismiss, dispose }, opener);
   return () => {
+    const focused = doc.activeElement;
+    const stranded = !focused || focused === doc.body || root.contains(focused);
+    const wasTop = topLayer()?.el === root;
     release();
     pop();
     root.remove();
+    // The app may repaint the opener while this modal stays mounted. The layer stack
+    // restores a surviving node; its stable identity restores a replacement. A focus
+    // deliberately moved to the titlebar or another layer must remain there.
+    const now = doc.activeElement;
+    if (wasTop && stranded && (!now || now === doc.body || root.contains(now))) restoreFocus(shell, openerState);
   };
+}
+
+export interface ContentDialogOptions {
+  canDismiss?: () => boolean;
+  onClose?: () => void;
+}
+
+/** An app-owned form in the shared layer stack. Contents can change without
+ * remounting. Non-modal show() keeps the native window controls available. */
+export function openContentDialog(shell: HTMLElement, dialog: HTMLDialogElement, options: ContentDialogOptions = {}): { close(): void; dispose(): void } {
+  if (dialog.open) throw new Error('The dialog is already open');
+  const root = shell.ownerDocument.createElement('div');
+  root.className = 'im-scrim';
+  root.dataset.imLayer = 'dialog';
+  dialog.classList.add('im-float', 'im-dialog', 'im-content-dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.tabIndex = -1;
+  root.append(dialog);
+  let closed = false;
+  function dismiss(): void { if (options.canDismiss?.() !== false) close(); }
+  const unmount = mountDialog(shell, root, dialog, dismiss, close);
+  function nativeClose(): void { if (!dialog.open) close(); }
+  function close(): void {
+    if (closed) return;
+    closed = true;
+    dialog.removeEventListener('close', nativeClose);
+    dialog.removeAttribute('open');
+    unmount();
+    options.onClose?.();
+  }
+  dialog.addEventListener('close', nativeClose);
+  root.addEventListener('pointerdown', event => { if (event.target === root && topLayer()?.el === root) dismiss(); });
+  try { dialog.show(); } catch (error) { close(); throw error; }
+  (dialog.querySelector<HTMLElement>('[autofocus]:not(:disabled)') ?? dialog).focus();
+  return { close, dispose: close };
 }
 
 export interface FormDialog {

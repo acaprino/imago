@@ -143,13 +143,21 @@ export function inertShell(shell: Element): () => void {
 // ---------- helpers the surfaces share (they touch the DOM only when called) ----------
 
 const TABBABLE =
-  'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [contenteditable=""], [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+  'a[href], button, input, select, textarea, details > summary:first-of-type, [contenteditable=""], [contenteditable="true"], [tabindex]';
 
 /** The elements Tab visits inside a surface, in order. */
 export function tabbables(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(TABBABLE)).filter(
-    (el) => el.getClientRects().length > 0 && !el.closest('[inert]'),
-  );
+  return Array.from(root.querySelectorAll<HTMLElement>(TABBABLE)).filter(el => {
+    if (el.matches(':disabled, input[type="hidden"]') || (el.hasAttribute('tabindex') && el.tabIndex < 0)) return false;
+    if (el.closest('[inert]') || !el.getClientRects().length || getComputedStyle(el).visibility !== 'visible') return false;
+    // Only the first summary and its contents are reachable inside a closed disclosure.
+    let closed = el.parentElement?.closest('details:not([open])');
+    while (closed) {
+      if (!closed.querySelector(':scope > summary:first-of-type')?.contains(el)) return false;
+      closed = closed.parentElement?.closest('details:not([open])');
+    }
+    return true;
+  });
 }
 
 /** Keeps Tab and Shift+Tab inside `root`: from the last control to the first, and back. */
@@ -211,6 +219,7 @@ export function follow(place: () => void): () => void {
 
 type KeyLike = {
   key: string;
+  target?: EventTarget | null;
   repeat?: boolean;
   isComposing?: boolean;
   keyCode?: number;
@@ -242,6 +251,9 @@ export function attachLayers(shell: HTMLElement): () => void {
     if (event.key !== 'Escape' || event.repeat || event.isComposing || event.keyCode === 229) return;
     const top = topLayer();
     if (!top) return;
+    // The focused picker in this layer gets the first Escape to dismiss its own results.
+    const picker = (event.target as Element | null)?.closest?.('.im-search-picker');
+    if (picker && top.el.contains(picker) && picker.querySelector('input[role="combobox"][aria-expanded="true"]')) return;
     event.preventDefault?.();
     event.stopImmediatePropagation?.();
     top.close();

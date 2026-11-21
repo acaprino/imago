@@ -33,15 +33,24 @@ export function pathField(input: HTMLInputElement, options: {
     if (pending || input.disabled || input.readOnly) return;
     pending = true;
     button.setAttribute('aria-busy', 'true');
+    const original = input.value;
+    let edited = false;
+    const markEdited = () => { edited = true; };
+    input.addEventListener('input', markEdited);
+    input.addEventListener('change', markEdited);
+    const current = () => !edited && input.value === original && root.isConnected &&
+      root.contains(input) && !input.disabled && !input.readOnly;
     try {
       const path = await options.choose();
-      if (path !== null && !input.disabled && !input.readOnly) {
+      if (path !== null && current()) {
         input.value = path;
         for (const type of ['input', 'change']) input.dispatchEvent(new Event(type, { bubbles: true }));
       }
     } catch (error) {
-      options.onError(error);
+      if (current()) options.onError(error);
     } finally {
+      input.removeEventListener('input', markEdited);
+      input.removeEventListener('change', markEdited);
       pending = false;
       button.removeAttribute('aria-busy');
     }

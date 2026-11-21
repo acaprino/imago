@@ -33,7 +33,9 @@ export default async function files(page) {
   }
   assert.equal(await steps.locator('[data-im-step=done]').count(), 3);
   assert.equal(await steps.locator('[aria-current]').count(), 0);
+  assert.equal(await steps.getByRole('status').textContent(), 'All steps complete');
   await demo.getByRole('button', { name: 'Start again' }).click();
+  assert.equal(await steps.getByRole('status').textContent(), '');
   assert.equal(await steps.locator('[aria-current]').count(), 1);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   assert.equal(await demo.locator('.im-loader .im-spinner').evaluate(el => getComputedStyle(el).animationName), 'none');

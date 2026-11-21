@@ -110,3 +110,11 @@ export function notify(shell: HTMLElement, text: string, options: NoticeOptions 
   host.append(el);
   return entry.close;
 }
+
+/** Dispose every notice and its timer when an app unmounts. */
+export function clearNotices(shell:HTMLElement):void {
+ const host=shell.querySelector<HTMLElement>(':scope > [data-im-notices]');
+ if(!host)return;
+ for(const entry of [...(shown.get(host)??[])])entry.close();
+ shown.delete(host);host.remove();
+}

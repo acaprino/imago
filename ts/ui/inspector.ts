@@ -10,21 +10,30 @@ export type Inspector = {
   open(content: HTMLElement, opener?: HTMLElement): void;
   /** Hides the region. With a dirty guard it asks first and stays open when the answer is no. */
   close(): void;
+  /** Cover this view and keep its DOM, scroll position and dirty guard for the return. */
+  push(content: HTMLElement, opener?: HTMLElement): void;
   isOpen(): boolean;
   /** While the current content is dirty, closing it or replacing it calls `ask` once; `false` keeps it. The guard ends with the content. */
   guard(isDirty: () => boolean, ask: () => Promise<boolean>): void;
 };
 
 type Guard = { isDirty: () => boolean; ask: () => Promise<boolean> };
+const inspectors = new WeakMap<HTMLElement, Inspector>();
 
 export function inspector(shell: HTMLElement): Inspector {
   const found = shell.querySelector<HTMLElement>('.im-inspector');
   if (!found) throw new Error('inspector(): the shell has no .im-inspector region');
   const region: HTMLElement = found;
+  const existing = inspectors.get(region);
+  if (existing) return existing;
 
   let opener: HTMLElement | null = null;
   let guarded: Guard | null = null;
   let asking = false;
+  type Covered = { nodes: ChildNode[]; text: Map<Text, string>; opener: HTMLElement | null; guarded: Guard | null; scroll: number };
+  const parents: Covered[] = [];
+  const suspended = new Set<ChildNode>();
+  const currentNodes = () => Array.from(region.childNodes).filter(node => !suspended.has(node));
 
   const isOpen = (): boolean => !region.hidden;
   const isDirty = (): boolean => guarded?.isDirty() === true;
@@ -49,7 +58,8 @@ export function inspector(shell: HTMLElement): Inspector {
   function show(content: HTMLElement, from: HTMLElement | undefined): void {
     guarded = null;
     if (from) opener = from;
-    region.replaceChildren(content);
+    for (const node of currentNodes()) node.remove();
+    region.append(content);
     region.hidden = false;
     if (from) {
       if (!region.hasAttribute('tabindex')) region.tabIndex = -1;
@@ -65,8 +75,22 @@ export function inspector(shell: HTMLElement): Inspector {
     const back = opener;
     opener = null;
     guarded = null;
-    region.hidden = true;
-    if (stranded && back?.isConnected && !back.closest('[inert]')) back.focus();
+    const parent = parents.pop();
+    if (parent) {
+      for (const node of currentNodes()) node.remove();
+      for (const node of parent.nodes) {
+        suspended.delete(node);
+        if (node instanceof Element) node.removeAttribute('data-im-covered');
+        else if (node instanceof Text && parent.text.has(node)) node.data = parent.text.get(node)!;
+      }
+      opener = parent.opener;
+      guarded = parent.guarded;
+      region.scrollTop = parent.scroll;
+    } else region.hidden = true;
+    if (stranded) {
+      if (back?.isConnected && !back.closest('[inert], [hidden]')) back.focus();
+      else if (parent) (tabbables(region)[0] ?? region).focus();
+    }
   }
 
   region.addEventListener('keydown', (event) => {
@@ -76,7 +100,7 @@ export function inspector(shell: HTMLElement): Inspector {
   });
 
   function close(): void {
-    if (!isOpen()) return;
+    if (!isOpen() || asking) return;
     if (!isDirty()) {
       hide();
       return;
@@ -86,8 +110,26 @@ export function inspector(shell: HTMLElement): Inspector {
     });
   }
 
-  return {
+  const controller: Inspector = {
+    push(content, from) {
+      if (asking) return;
+      if (!isOpen()) { show(content, from); return; }
+      const doc = region.ownerDocument;
+      const focus = doc.activeElement;
+      const trigger = from ?? (focus instanceof HTMLElement && region.contains(focus) ? focus : undefined);
+      const nodes = currentNodes();
+      const text = new Map<Text, string>();
+      parents.push({ nodes, text, opener, guarded, scroll: region.scrollTop });
+      for (const node of nodes) {
+        suspended.add(node);
+        if (node instanceof Element) node.setAttribute('data-im-covered', '');
+        else if (node instanceof Text && node.data.trim()) { text.set(node, node.data); node.data = ''; }
+      }
+      opener = trigger ?? null;
+      show(content, trigger);
+    },
     open(content, from) {
+      if (asking) return;
       if (isOpen() && isDirty()) {
         void mayLeave().then((leave) => {
           if (leave) show(content, from);
@@ -102,4 +144,6 @@ export function inspector(shell: HTMLElement): Inspector {
       guarded = { isDirty: dirty, ask };
     },
   };
+  inspectors.set(region, controller);
+  return controller;
 }
