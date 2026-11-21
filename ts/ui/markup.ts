@@ -1,5 +1,8 @@
 import { iconMarkup, isIconName } from './icon.ts';
+import { panelStateHtml } from './panel-state.ts';
+import { chipToneAttribute, type ChipTone } from './tone.ts';
 export type { IconName } from './icon.ts';
+export type { ChipTone, Tone } from './tone.ts';
 
 // String rendering for apps that compose HTML before mounting it. Text and attribute values are
 // escaped here; the explicitly named HTML slots accept trusted component output, never user text.
@@ -23,10 +26,9 @@ export const spinnerHtml = '<i class="im-spinner" aria-hidden="true"></i>';
 export const avatarHtml = (text: string): string => `<span class="im-avatar" aria-hidden="true">${escapeHtml(text)}</span>`;
 export const initialsAvatarHtml = (name: string): string => avatarHtml(Array.from(name).slice(0, 2).join('').toUpperCase());
 
-export type ChipTone = '' | 'ok' | 'err' | 'warn' | 'accent' | 'good' | 'bad';
-export function chipHtml(label: string, tone: ChipTone | string = ''): string {
-  const resolved = tone === 'good' ? 'ok' : tone === 'bad' ? 'err' : tone;
-  return `<span class="im-chip" data-im-tone="${['ok', 'err', 'warn', 'accent'].includes(resolved) ? resolved : ''}">${escapeHtml(label)}</span>`;
+/** A chip without a tone (`''`) is the neutral chip. */
+export function chipHtml(label: string, tone: ChipTone = ''): string {
+  return `<span class="im-chip"${chipToneAttribute(tone)}>${escapeHtml(label)}</span>`;
 }
 
 export type MarkupAttributes = Readonly<Record<string, string>>;
@@ -47,7 +49,6 @@ function attributesHtml(attributes: MarkupAttributes | undefined, reserved: read
 export interface ButtonMarkupOptions {
   primary?: boolean;
   danger?: boolean;
-  accent?: boolean;
   sm?: boolean;
   busy?: boolean;
   icon?: string;
@@ -60,7 +61,7 @@ export interface ButtonMarkupOptions {
 /** An action button. `data-action` and optional `data-id` are interpreted by the consuming app. */
 export function buttonHtml(label: string, action: string, options: ButtonMarkupOptions = {}): string {
   const classes = ['im-btn', options.primary && 'im-btn--primary', options.danger && 'im-btn--danger',
-    options.accent && 'im-btn--accent', options.sm && 'im-btn--sm', options.cls].filter(Boolean).join(' ');
+    options.sm && 'im-btn--sm', options.cls].filter(Boolean).join(' ');
   const attrs = ['type="button"', `class="${escapeHtml(classes)}"`, `data-action="${escapeHtml(action)}"`,
     options.id !== undefined ? `data-id="${escapeHtml(options.id)}"` : '',
     ...attributesHtml(options.attrs, ['data-action', 'data-id']), options.disabled ? 'disabled' : ''];
@@ -83,19 +84,20 @@ export function pageHeadingHtml(title: string, description: string, actionsHtml 
   return `<header class="im-page-heading"><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div>${actionsHtml ? `<div class="im-action-row">${actionsHtml}</div>` : ''}</header>`;
 }
 
-/** The action slot accepts trusted component HTML. */
+/** The empty layer of `setPanelState`, its title in `strong` (none when empty). The action slot accepts trusted component HTML. */
 export function emptyStateHtml(title: string, description: string, actionHtml = ''): string {
-  return `<div class="im-panel im-surface im-empty" data-im-surface="sheet"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span>${actionHtml}</div>`;
+  return panelStateHtml({ kind: 'empty', title, text: description, actionHtml });
 }
 
+/** A switch that acts at once (never in a form with a Save button): a button with role="switch"; it draws its own thumb. */
 export function switchHtml(on: boolean, label: string, action: string, id = '', disabled = false): string {
-  return `<button type="button" class="im-switch" role="switch" aria-checked="${on}" aria-label="${escapeHtml(label)}" data-action="${escapeHtml(action)}" data-id="${escapeHtml(id)}"${disabled ? ' disabled' : ''}><span class="im-switch-knob"></span></button>`;
+  return `<button type="button" class="im-switch" role="switch" aria-checked="${on}" aria-label="${escapeHtml(label)}" data-action="${escapeHtml(action)}" data-id="${escapeHtml(id)}"${disabled ? ' disabled' : ''}></button>`;
 }
 
-/** Native radios preserve FormData, browser keyboard navigation and form reset behaviour. */
+/** A segmented control over native radios, drawn as one of buttons: FormData, the arrow keys and form reset stay the browser's. */
 export function segmentedHtml(name: string, value: string, options: readonly (readonly [string, string])[], label: string, config: { attrs?: MarkupAttributes } = {}): string {
   const attrs = attributesHtml(config.attrs).join(' ');
-  return `<div class="im-seg im-seg--native" role="radiogroup" aria-label="${escapeHtml(label)}">${options.map(([key, text]) => `<label><input type="radio" name="${escapeHtml(name)}" value="${escapeHtml(key)}"${key === value ? ' checked' : ''}${attrs ? ' ' + attrs : ''}><span>${escapeHtml(text)}</span></label>`).join('')}</div>`;
+  return `<div class="im-seg" role="radiogroup" aria-label="${escapeHtml(label)}">${options.map(([key, text]) => `<label><input type="radio" name="${escapeHtml(name)}" value="${escapeHtml(key)}"${key === value ? ' checked' : ''}${attrs ? ' ' + attrs : ''}><span>${escapeHtml(text)}</span></label>`).join('')}</div>`;
 }
 
 export interface TextFieldMarkupOptions {
@@ -113,17 +115,18 @@ export interface TextFieldMarkupOptions {
   attrs?: MarkupAttributes;
 }
 
-/** A labelled native input, hint and live validation slot. No `required` field is silently aria-only. */
+/** A labelled native input in its field box (`span.im-input`, the code font with `mono`), hint and live validation slot.
+ * No `required` field is silently aria-only. */
 export function textFieldHtml(label: string, name: string, value = '', options: TextFieldMarkupOptions = {}): string {
   const slot = options.error !== false;
   const key = options.id ?? encodeURIComponent(name);
   const hintId = `hint-${key}`, errorId = `err-${key}`;
   const described = [options.hint ? hintId : '', slot ? errorId : ''].filter(Boolean).join(' ');
   const attrs = [`name="${escapeHtml(name)}"`, `value="${escapeHtml(value)}"`, `type="${escapeHtml(options.type ?? 'text')}"`,
-    options.id ? `id="${escapeHtml(options.id)}"` : '', options.mono ? 'class="im-mono"' : '',
+    options.id ? `id="${escapeHtml(options.id)}"` : '',
     options.placeholder ? `placeholder="${escapeHtml(options.placeholder)}"` : '',
     options.required ? 'required aria-required="true"' : '', options.readonly ? 'readonly' : '',
     options.autofocus ? 'autofocus' : '', ...attributesHtml(options.attrs, options.id ? ['id', 'aria-describedby'] : ['aria-describedby']),
     described ? `aria-describedby="${escapeHtml(described)}"` : ''];
-  return `<label class="im-field"><span>${escapeHtml(label)}${options.optional ? '<em>optional</em>' : ''}</span><input ${attrs.filter(Boolean).join(' ')}>${options.hint ? `<small id="${escapeHtml(hintId)}">${escapeHtml(options.hint)}</small>` : ''}${slot ? `<small class="im-field-error" id="${escapeHtml(errorId)}" role="alert"></small>` : ''}</label>`;
+  return `<label class="im-field"><span class="im-field-label">${escapeHtml(label)}${options.optional ? '<em>optional</em>' : ''}</span><span class="im-input${options.mono ? ' im-input--code' : ''}"><input ${attrs.filter(Boolean).join(' ')}></span>${options.hint ? `<small class="im-field-hint" id="${escapeHtml(hintId)}">${escapeHtml(options.hint)}</small>` : ''}${slot ? `<small class="im-field-error" id="${escapeHtml(errorId)}" role="alert"></small>` : ''}</label>`;
 }

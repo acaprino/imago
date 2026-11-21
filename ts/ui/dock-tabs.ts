@@ -1,3 +1,5 @@
+import { claimKey } from './key-claim.ts';
+
 /** Placement instructions for the application's layout model. IDs are stable across DOM updates. */
 export type DockPlacement = 'center' | 'left' | 'right' | 'top' | 'bottom' | 'before' | 'after';
 export interface DockMove { tab: string; pane: string; placement: DockPlacement; relativeTo?: string }
@@ -151,21 +153,23 @@ export function dockTabs(host: HTMLElement, options: {
     } else {
       const tab = tabAt(event);
       if (gesture || !tab || event.key !== 'Enter' || !event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
-      if (event.repeat) { event.preventDefault(); event.stopPropagation(); return; }
+      if (event.repeat) { event.preventDefault(); claimKey(event); event.stopPropagation(); return; }
       gesture = { tab, id: tab.dataset.imDockTab!, x: 0, y: 0, started: true };
       const first = keyTargets()[0];
       if (!first) { end(); return; }
       highlight(first);
     }
     event.preventDefault();
+    claimKey(event); // move mode answered the key: no command bound to it also runs
     event.stopPropagation();
   }, { capture: true, signal });
   doc.addEventListener('keydown', event => {
     if (gesture?.pointer === undefined || event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
     end();
     event.preventDefault();
+    claimKey(event);
     event.stopPropagation();
-  }, { signal });
+  }, { capture: true, signal }); // before the registry: an Escape command of the app does not also run
   host.addEventListener('focusout', event => {
     if (gesture && gesture.pointer === undefined && !gesture.tab.contains(event.relatedTarget as Node | null)) end();
   }, { signal });

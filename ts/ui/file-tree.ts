@@ -1,4 +1,5 @@
 import { iconMarkup, type IconName } from './icon.ts';
+import { claimKey } from './key-claim.ts';
 
 /** Supply the files visible to the application. Imago never reads a filesystem. */
 export interface FileTreeEntry {
@@ -266,6 +267,7 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
       }
     }
     event.preventDefault();
+    claimKey(event); // the tree answered the key: no command bound to it also runs
     event.stopPropagation();
   }, { signal: lifetime.signal });
   /** Resolve an ancestor-to-leaf chain of IDs, including folders that have never been read. */

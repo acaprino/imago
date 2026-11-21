@@ -1,17 +1,9 @@
-.im-stack { display: flex; flex-direction: column; align-items: stretch; gap: var(--im-s-2); min-width: 0; }
 .im-inline-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--im-s-2); min-width: 0; }
 .im-viewport { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
 .im-scroll { min-height: 0; min-width: 0; overflow: auto; }
-.im-native-choice { accent-color: var(--im-accent); }
 .im-definition-list > dd, .im-paragraph, .im-status-text { margin: 0; }
 .im-highlight { background: var(--im-selected); color: var(--im-text); }
 .im-rule { width: 100%; height: 1px; margin: 0; border: 0; background: var(--im-line); }
-.im-desktop-frame { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
-.im-desktop-frame > .im-titlebar { flex: 0 0 var(--im-h-titlebar); }
-.im-desktop-frame > .im-body { display: block; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
-.im-desktop-frame .im-desktop-content { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: 100%; height: 100%; padding: 0; overflow: hidden; }
-.im-work-area { display: flex; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
-.im-workspace-area { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .im-viewport-footer { position: absolute; inset: auto 0 0; background: var(--im-sheet); padding: var(--im-s-2); }
 .im-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .im-shell.im-portrait-notice { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(70px, 27%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: center; gap: var(--im-s-1); padding: var(--im-s-2); background: transparent; }
@@ -23,3 +15,6 @@
 .im-notice-bubble p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 .im-notice-bubble [role=status] { color: var(--im-err); }
 :where([data-im-look]) [hidden] { display: none !important; }
+/* A panel over the whole of its positioned host (uiTraits 'overlay'), its parts in a column. */
+.im-overlay { position: absolute; inset: 0; z-index: 8; }
+.im-overlay:not([hidden]) { display: flex; flex-direction: column; }

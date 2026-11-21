@@ -22,7 +22,9 @@ test('tables expose a labelled scroll region and a complete empty row', () => {
   assert.match(result, /colspan="2".*&lt;none&gt;/);
 });
 test('summaries and running tasks retain status semantics', () => {
-  assert.match(summaryHtml({label:'State',title:'Ready',tone:'good',metadata:[{label:'Owner',value:'<Ada>'}]}), /data-im-tone="ok".*Owner <b>&lt;Ada&gt;<\/b>/);
+  assert.match(summaryHtml({label:'State',title:'Ready',tone:'ok',metadata:[{label:'Owner',value:'<Ada>'}]}), /^<section class="im-summary" data-im-tone="ok" aria-label="State">.*Owner <b>&lt;Ada&gt;<\/b>/);
+  assert.match(summaryHtml({label:'State',title:'Ready'}), /^<section class="im-summary" aria-label="State">/);
+  assert.match(actionChipHtml('Open', 'open', { tone: 'warn' }), /^<button type="button" class="im-chip" data-im-tone="warn" data-action="open">/);
   const task=taskCardHtml({id:'task-1',title:'Index',progressLabel:'Indexing',progressText:'Reading, 2 seconds',phase:'Reading'});
   assert.match(task,/aria-labelledby="task-1"/);
   assert.match(task,/role="progressbar" aria-label="Indexing" aria-valuetext="Reading, 2 seconds"/);

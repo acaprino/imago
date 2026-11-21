@@ -115,6 +115,57 @@ async function pathFieldTests(page) {
   });
 }
 
+async function pathFieldCommitTests(page) {
+  const results = await page.evaluate(async () => {
+    const { pathField } = await import('/test-controls/file-selector.js');
+    const input = document.createElement('input');
+    input.value = 'typed';
+    const requests = [];
+    const committed = [];
+    const changes = [];
+    const errors = [];
+    input.addEventListener('change', () => changes.push(input.value));
+    let failNext = false;
+    let settleCommit;
+    const field = pathField(input, {
+      buttonLabel: 'Open folder',
+      choose: () => new Promise(resolve => requests.push(resolve)),
+      onError: error => errors.push(error.message),
+      commit: path => {
+        if (failNext) { failNext = false; throw new Error('refused'); }
+        committed.push(path);
+        return new Promise(resolve => { settleCommit = resolve; });
+      },
+    });
+    document.body.append(field);
+    const button = field.querySelector('button');
+    button.click();
+    input.dispatchEvent(new Event('input')); // an edit does not drop a choice that is acted on
+    requests.at(-1)('first');
+    await Promise.resolve(); await Promise.resolve();
+    const busyDuringCommit = button.getAttribute('aria-busy');
+    button.click(); // ignored while the commit runs
+    const requestsWhileBusy = requests.length;
+    settleCommit();
+    await Promise.resolve(); await Promise.resolve();
+    failNext = true;
+    button.click();
+    requests.at(-1)('second');
+    await Promise.resolve(); await Promise.resolve();
+    button.click();
+    requests.at(-1)(null);
+    await Promise.resolve();
+    button.click();
+    field.remove();
+    requests.at(-1)('after removal');
+    await Promise.resolve(); await Promise.resolve();
+    return { committed, value: input.value, changes, errors, busyDuringCommit, requestsWhileBusy };
+  });
+  assert.deepEqual(results, {
+    committed: ['first'], value: 'typed', changes: [], errors: ['refused'], busyDuringCommit: 'true', requestsWhileBusy: 1,
+  });
+}
+
 async function largeTree(page) {
   const result = await page.evaluate(async () => {
     const { createFileTree } = await import('/test-controls/file-tree.js');
@@ -167,9 +218,11 @@ export default async function workspace(page) {
     await input.press('Shift+Enter');
     assert.equal(await demo.getByRole('button', { name: 'Show in sidebar · Mukade' }).getAttribute('aria-pressed'), 'true');
     const mark = demo.getByRole('option', { name: 'Mukade' }).locator('.im-picker-mark');
-    assert.equal(await mark.getAttribute('data-im-checked'), 'true');
+    // The mark is an im-check: its state is the check's aria-checked, and it is drawn as every checkbox is.
+    assert.equal(await mark.locator('.im-check').getAttribute('aria-checked'), 'true');
+    assert.equal(await mark.locator('.im-check').evaluate(el => getComputedStyle(el).backgroundColor), await mark.locator('.im-check').evaluate(el => getComputedStyle(el).borderTopColor), 'a checked mark is filled with its edge colour, the accent');
     await mark.click();
-    assert.equal(await mark.getAttribute('data-im-checked'), 'false');
+    assert.equal(await mark.locator('.im-check').getAttribute('aria-checked'), 'false');
     assert.ok(await input.evaluate(el => el === document.activeElement));
     await input.press('Enter');
     assert.equal(await demo.locator('output').textContent(), 'Opened Mukade');
@@ -220,6 +273,7 @@ export default async function workspace(page) {
   }
   await providerTests(page);
   await pathFieldTests(page);
+  await pathFieldCommitTests(page);
   await largeTree(page);
   const guarded = await page.evaluate(async () => {
     const api = window.__imagoSurfaces.inspector;

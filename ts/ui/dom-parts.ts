@@ -16,21 +16,70 @@ export function componentElement<T extends HTMLElement = HTMLElement>(componentH
 const parts = {
   stack: ['div', 'im-stack'], row: ['div', 'im-inline-row'], toolbar: ['div', 'im-content-toolbar'],
   actions: ['div', 'im-action-row'], panel: ['section', 'im-panel im-surface'], region: ['section', 'im-region'],
-  main: ['main', 'im-main'], aside: ['aside', 'im-aside'], header: ['header', 'im-section-heading'],
+  main: ['main', ''], aside: ['aside', 'im-aside'], header: ['header', 'im-section-heading'],
   footer: ['footer', 'im-footer'], form: ['form', 'im-form'], field: ['label', 'im-field'], label: ['label', 'im-label'],
   title: ['h1', 'im-title'], heading: ['h2', 'im-heading'], subheading: ['h3', 'im-heading'], minorHeading: ['h4', 'im-heading'],
   text: ['span', 'im-text'], strong: ['strong', 'im-strong'], hint: ['small', 'im-muted'], paragraph: ['p', 'im-paragraph'],
   status: ['p', 'im-status-text'], alert: ['p', 'im-field-error'], list: ['ul', 'im-stack-list'], item: ['li', 'im-list-item'],
   body: ['div', 'im-region'], scroll: ['div', 'im-scroll'], viewport: ['div', 'im-viewport'], separator: ['hr', 'im-rule'],
-  spacer: ['span', 'im-grow'], dialog: ['dialog', 'im-content-dialog im-native-controls'], details: ['details', 'im-disclosure'],
+  spacer: ['span', 'im-grow'], dialog: ['dialog', 'im-content-dialog'], details: ['details', 'im-disclosure'],
   summary: ['summary', 'im-disclosure-title'], fieldset: ['fieldset', 'im-fieldset'], legend: ['legend', 'im-legend'],
   code: ['code', 'im-mono'], pre: ['pre', 'im-code-view'], time: ['time', 'im-time'],
   descriptionList: ['dl', 'im-definition-list'], term: ['dt', 'im-term'], definition: ['dd', 'im-definition'],
   table: ['table', 'im-table'], tableHead: ['thead', ''], tableBody: ['tbody', ''], tableRow: ['tr', ''],
-  cell: ['td', ''], columnHeader: ['th', ''], progress: ['progress', 'im-progress'],
+  cell: ['td', ''], columnHeader: ['th', ''],
   nav: ['nav', 'im-navigation'], orderedList: ['ol', 'im-ordered-list'], mark: ['mark', 'im-highlight'],
   optionGroup: ['optgroup', ''], article: ['article', 'im-region'],
 } as const satisfies Record<string, readonly [keyof HTMLElementTagNameMap, string]>;
+
+/** What a part can also be: the layout, list and dialog roles that combine with any kind. The app names the role; the
+ * classes that draw it are Imago's, and each is one the canon keeps (the regions of the window are `shellFrameHtml`'s,
+ * and a side panel is the inspector). */
+const traits = {
+  stack: 'im-stack', row: 'im-inline-row', scroll: 'im-scroll', bounded: 'im-scroll--bounded', grow: 'im-grow',
+  spacer: 'im-spacer', truncate: 'im-truncate', wrap: 'im-wrap-text', muted: 'im-muted', visuallyHidden: 'im-visually-hidden',
+  chip: 'im-chip', list: 'im-list', formGrid: 'im-form-grid', section: 'im-section',
+  choiceList: 'im-choice-list', choiceRow: 'im-choice-row', summaryList: 'im-summary-list', conversation: 'im-scroll-log',
+  renderView: 'im-render-view', viewportFooter: 'im-viewport-footer',
+  // A panel over the whole of its positioned host, its parts in a column (the archived lines over a live terminal).
+  overlay: 'im-overlay',
+  fileDialog: 'im-file-dialog', toolbar: 'im-content-toolbar',
+  noticeHost: 'im-notices', notice: 'im-float im-notice',
+  statusText: 'im-status-text', fieldError: 'im-field-error', actions: 'im-action-row',
+  // The parts of a graph editor's workspace (graphEditorWorkspace): its shelf of sources, popups, cards and choices.
+  editorShelf: 'im-editor-shelf', editorSource: 'im-editor-source', editorGhost: 'im-editor-ghost',
+  editorPopup: 'im-editor-popup', editorItems: 'im-editor-items', editorPreset: 'im-editor-preset',
+  editorInlineForm: 'im-editor-inline-form', editorIssues: 'im-editor-issues', editorEmpty: 'im-editor-empty',
+  editorSummary: 'im-editor-summary', editorCaption: 'im-editor-caption', editorDescription: 'im-editor-description',
+  editorNodeTitle: 'im-editor-node-title', editorNodeFoot: 'im-editor-node-foot', editorDot: 'im-editor-dot',
+  editorOptions: 'im-editor-options', editorChoice: 'im-editor-choice', editorSample: 'im-editor-sample',
+  // The fields of a visual document editor (documentPane('form')): a heading (with data-im-level), code, kept source.
+  documentHeading: 'im-document-heading', documentCode: 'im-document-code', documentKept: 'im-document-kept',
+} as const satisfies Record<string, string>;
+
+/** Every role and the classes that draw it, for a check that each is in Imago's stylesheets. */
+export const UI_TRAITS: Readonly<Record<UiTrait, string>> = Object.freeze({ ...traits });
+export type UiTrait = keyof typeof traits;
+/** Gives `node` these roles (`uiTraits(uiPart('orderedList'), 'scroll', 'bounded')`) and returns it. */
+export function uiTraits<T extends Element>(node: T, ...names: readonly UiTrait[]): T {
+  for (const name of names) node.classList.add(...traits[name].split(' '));
+  return node;
+}
+
+const tones = { ok: 'im-text-ok', warn: 'im-text-warn', err: 'im-text-err' } as const;
+export type UiTone = keyof typeof tones;
+/** The text of `node` in a semantic tone, or in its own colour again with `null`. Say the state in words too. */
+export function uiTone<T extends Element>(node: T, tone: UiTone | null): T {
+  for (const [name, className] of Object.entries(tones)) node.classList.toggle(className, name === tone);
+  return node;
+}
+
+const emphases = { primary: 'im-btn--primary', danger: 'im-btn--danger' } as const;
+/** A button that becomes the primary action, or the armed destructive one, and back to plain with `null`. */
+export function uiEmphasis(button: HTMLButtonElement, emphasis: keyof typeof emphases | null): HTMLButtonElement {
+  for (const [name, className] of Object.entries(emphases)) button.classList.toggle(className, name === emphasis);
+  return button;
+}
 
 export type UiPart = keyof typeof parts;
 export function uiPart<K extends UiPart>(kind: K, text?: string, className?: string): HTMLElementTagNameMap[(typeof parts)[K][0]] {
@@ -51,10 +100,13 @@ export function uiButton(label: string, options: ButtonMarkupOptions & { title?:
   return button;
 }
 
+/** A native input with the class of its drawing on it: `im-check` on a checkbox, `im-radio` on a radio, and on any other
+ * type `im-input`, the field's box, drawn on the input itself. A field with an icon or a key cap has the box round the input
+ * instead (`textFieldHtml`, or a part given the class `im-input`). */
 export function uiInput(type = 'text'): HTMLInputElement {
   const input = document.createElement('input');
   input.type = type;
-  input.className = type === 'checkbox' ? 'im-native-check' : type === 'radio' ? 'im-native-radio' : 'im-native-input';
+  input.className = type === 'checkbox' ? 'im-check' : type === 'radio' ? 'im-radio' : 'im-input';
   return input;
 }
 
@@ -65,16 +117,18 @@ export function uiOption(value: string, label: string): HTMLOptionElement {
   return option;
 }
 
+/** A native select with the drawing of the select button, `select.im-select`, as `selectHtml` writes it. */
 export function uiSelect(options: readonly (readonly [string, string])[] = [], value?: string): HTMLSelectElement {
   const select = document.createElement('select');
-  select.className = 'im-native-select';
+  select.className = 'im-select';
   for (const [key, label] of options) select.append(uiOption(key, label));
   if (value !== undefined) select.value = value;
   return select;
 }
 
+/** A native text area with the drawing of a field, `textarea.im-textarea`. */
 export function uiTextarea(): HTMLTextAreaElement {
   const control = document.createElement('textarea');
-  control.className = 'im-native-textarea';
+  control.className = 'im-textarea';
   return control;
 }

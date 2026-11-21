@@ -1,6 +1,8 @@
 // A confirm dialog: a decision about the whole window. It never uses the native modal, which would make
 // the HTML title bar inert too and leave a borderless window nobody can move or close. Instead the
 // regions under the title bar are made inert, focus starts on Cancel and stays inside, and Escape cancels.
+// Every dialog here (`confirm`, `openFormDialog`, `openContentDialog`) is one drawing, centred in the window. A panel
+// for the selected object is not a dialog: it is the inspector (`inspector(shell)`), which is not modal.
 
 import { inertShell, pushLayer, topLayer, trapTab } from './layers.ts';
 import { captureFocus, restoreFocus } from './dom-state.ts';
@@ -138,7 +140,14 @@ export function openContentDialog(shell: HTMLElement, dialog: HTMLDialogElement,
   dialog.addEventListener('close', nativeClose);
   root.addEventListener('pointerdown', event => { if (event.target === root && topLayer()?.el === root) dismiss(); });
   try { dialog.show(); } catch (error) { close(); throw error; }
-  (dialog.querySelector<HTMLElement>('[autofocus]:not(:disabled)') ?? dialog).focus();
+  const wanted = dialog.querySelector<HTMLElement>('[autofocus]:not(:disabled)');
+  if (wanted) wanted.focus();
+  else {
+    // show() focused the first control, which scrolled it into view (a Close button under a long text is at the end):
+    // the focus goes to the dialog, and a dialog without a control that asked for the focus opens at its top.
+    dialog.focus({ preventScroll: true });
+    root.scrollTop = dialog.scrollTop = 0;
+  }
   return { close, dispose: close };
 }
 

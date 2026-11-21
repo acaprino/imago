@@ -1,5 +1,7 @@
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, zoomTransform } from 'd3-zoom';
+import { isTextTarget } from './ui/commands.ts';
+import { claimKey } from './ui/key-claim.ts';
 
 export interface GraphPoint { x: number; y: number }
 export interface GraphBox extends GraphPoint { width: number; height: number }
@@ -174,7 +176,7 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       y: c.y + (frame.top + frame.bottom - box.top - box.bottom) / 2 });
   });
   pane.addEventListener('keydown', event => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.altKey || event.ctrlKey || event.metaKey || isTextTarget(event.target)) return; // a field in a node keeps its keys
     const current = (event.target as HTMLElement).closest<HTMLElement>('[data-im-node]')?.dataset.imNode;
     const ids = [...entries.keys()];
     let next: string | undefined;
@@ -197,6 +199,7 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       default: return;
     }
     event.preventDefault();
+    claimKey(event); // the graph answered the key: no command bound to it also runs
     if (next !== undefined) entries.get(next)?.focus({ preventScroll: true });
   });
 

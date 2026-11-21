@@ -3,6 +3,7 @@
 // palette, Escape closes it. Like the dialog it is modal: the regions under the title bar are inert.
 
 import type { Command, Registry } from './commands.ts';
+import { claimKey } from './key-claim.ts';
 import { nextIndex } from './keys.ts';
 import { closeLayers, hasDialog, inertShell, pushLayer, type Layer } from './layers.ts';
 import { keyCaps } from './menu.ts';
@@ -163,19 +164,23 @@ export function openPalette(shell: HTMLElement, registry: Registry, options: Pal
     highlighted = 0;
     redraw();
   });
+  // The palette answers these keys: it claims them, so no command bound to them also runs.
   input.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
+      claimKey(event);
       const next = nextIndex(highlighted, shown.length, event.key, 'vertical');
       if (next !== -1) highlighted = next;
       mark();
     } else if (event.key === 'Enter') {
       if (event.isComposing || event.keyCode === 229) return; // Enter belongs to the IME while it composes
       event.preventDefault();
+      claimKey(event);
       const command = shown[highlighted];
       if (command) run(command);
     } else if (event.key === 'Tab') {
       event.preventDefault(); // focus stays in the field; the list is reached with the arrows
+      claimKey(event);
     }
   });
   list.addEventListener('mousedown', (event) => event.preventDefault()); // keep focus in the field

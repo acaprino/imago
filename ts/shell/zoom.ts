@@ -9,20 +9,15 @@ import type { KeyLike } from './desktop-guard.ts';
 const MIN_TENTHS = 5;
 const MAX_TENTHS = 20;
 
-/** A zoom level the app offers: 0.5 to 2, rounded to a tenth. Anything that is not a number is 100 %. */
-export function clampZoom(value: number, levels?: readonly number[]): number {
-  if (levels) return levels.find(level => Math.abs(level - value) < 0.001) ?? 1;
+/** A zoom level: 0.5 to 2, rounded to the nearest tenth (half up: 1.75 is 1.8). Anything that is not a number is 100 %. */
+export function clampZoom(value: number): number {
   if (Number.isNaN(value)) return 1;
   return Math.min(MAX_TENTHS, Math.max(MIN_TENTHS, Math.round(value * 10))) / 10;
 }
 
-/** The level after one step from `current` (which need not be one the app offers): 1 in, -1 out, 0 back to 100 %. */
-export function stepZoom(current: number, direction: 1 | -1 | 0, levels?: readonly number[]): number {
+/** The level after one step of 10 % from `current` (rounded first if it is not a multiple of 10): 1 in, -1 out, 0 back to 100 %. */
+export function stepZoom(current: number, direction: 1 | -1 | 0): number {
   if (direction === 0) return 1;
-  if (levels) {
-    if (direction === 1) return levels.find(level => level > current + 0.001) ?? levels.at(-1) ?? 1;
-    return [...levels].reverse().find(level => level < current - 0.001) ?? levels[0] ?? 1;
-  }
   return clampZoom(clampZoom(current) + direction / 10);
 }
 
@@ -61,8 +56,6 @@ export type ZoomOptions = {
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
   /** Default `imago.zoom`; an app gives its own (`xiox.zoom`) to keep the level it already saved. */
   storageKey?: string;
-  /** Optional ascending zoom factors including 1. Unknown saved or requested factors reset to 1. */
-  levels?: readonly number[];
   /** Default true. Set false for hosts whose native window already starts at 100%. */
   applyDefaultOnStart?: boolean;
   /** Called with the level every time it changes (a notice, the settings control), not for the first one. */
@@ -73,11 +66,11 @@ const defaultStorage = (): Pick<Storage, 'getItem' | 'setItem'> | undefined => {
   try { return globalThis.localStorage; } catch { return undefined; }
 };
 
-/** The saved level: nothing, or something that is not a number, is 100 %. */
-function savedLevel(storage: ZoomOptions['storage'], key: string, levels?: readonly number[]): number {
+/** The saved level, rounded to a tenth and kept from 50 to 200 %: nothing, or something that is not a number, is 100 %. */
+function savedLevel(storage: ZoomOptions['storage'], key: string): number {
   try {
     const raw = storage?.getItem(key) ?? null;
-    return clampZoom(raw === null || raw.trim() === '' ? Number.NaN : Number(raw), levels);
+    return clampZoom(raw === null || raw.trim() === '' ? Number.NaN : Number(raw));
   } catch {
     return 1;
   }
@@ -99,11 +92,8 @@ export interface ZoomController {
 export function createZoomController(options: ZoomOptions): ZoomController {
   const key = options.storageKey ?? 'imago.zoom';
   const storage = options.storage ?? defaultStorage();
-  const levels = options.levels && [...options.levels];
-  if (levels && (!levels.includes(1) || levels.some((n, i) => !Number.isFinite(n) || n <= 0 || (i > 0 && n <= levels[i - 1]))))
-    throw new RangeError('Zoom levels must be positive, ascending and include 1.');
 
-  let level = savedLevel(storage, key, levels);
+  let level = savedLevel(storage, key);
   let confirmed = 1;
   let confirmedRequest = -1;
   let revision = 0;
@@ -133,7 +123,7 @@ export function createZoomController(options: ZoomOptions): ZoomController {
   const ready = level !== 1 || options.applyDefaultOnStart !== false
     ? apply(level, 0, false).then(() => {}) : Promise.resolve();
   const set = (value: number): Promise<boolean> => {
-    level = clampZoom(value, levels);
+    level = clampZoom(value);
     return apply(level, ++revision, true);
   };
   function handleKey(event: KeyboardEvent): Promise<boolean> | null {
@@ -142,7 +132,7 @@ export function createZoomController(options: ZoomOptions): ZoomController {
     event.preventDefault();
     event.stopPropagation();
     if (event.repeat && direction === 0) return null;
-    const next = stepZoom(level, direction, levels);
+    const next = stepZoom(level, direction);
     return next === level ? Promise.resolve(true) : set(next);
   }
   return { ready, current: () => level, set, handleKey };
@@ -158,7 +148,7 @@ export function mountZoom(doc: Document, options: ZoomOptions): () => void {
     event.preventDefault();
     travel += wheelPixels(event.deltaY, event.deltaMode, controller.current());
     if (Math.abs(travel) < WHEEL_NOTCH) return;
-    const next = stepZoom(controller.current(), travel < 0 ? 1 : -1, options.levels);
+    const next = stepZoom(controller.current(), travel < 0 ? 1 : -1);
     travel = 0;
     if (next !== controller.current()) void controller.set(next);
   };

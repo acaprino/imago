@@ -13,7 +13,7 @@
 
 .im-shell {
   color: var(--im-text);
-  font: 400 13px/1.45 var(--im-font-text);
+  font: 400 var(--im-fs-body)/1.45 var(--im-font-text);
   text-align: left;
   -webkit-font-smoothing: antialiased;
   /* Chrome text is not selectable and nothing is a link: the window behaves like an app, not a page. */
@@ -34,6 +34,10 @@
 :where(.im-shell) button { margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: inherit; cursor: default; }
 :where(.im-shell) :is(input, textarea, select) { color: inherit; font: inherit; }
 :where(.im-shell) :is(a, label, summary) { cursor: default; }
+/* A summary is a target: its line (19px) is under the 24 a pointer target is at least; a disclosure's own padding is more. */
+:where(.im-shell) summary { padding-block: var(--im-s-1); }
+/* Its ring is inside, as a disclosure's own is (css/workspace.css): the line of the last one in a panel is at the panel's edge. */
+:where([data-im-look]) summary:focus-visible { outline-offset: -2px; }
 :where(.im-shell) :is(h1, h2, h3, h4) { margin: 0; }
 
 /* The focus ring: 2px, in the accent text colour, 2px off, only from the keyboard. It is an outline so forced colours
@@ -42,6 +46,10 @@
   outline: 2px solid var(--im-accent-text);
   outline-offset: 2px;
 }
+
+/* An element that carries a look and no app needs a hue of its own, or its accent and every fill drawn from it are empty (the
+   app blocks of css/tokens.css set the hue on an element with an app, which this leaves alone). */
+:where([data-im-look]:not([data-im-app])) { --im-hue: 250; }
 
 /* Icons are 16px line drawings that take the colour of their text. */
 .im-icon {
@@ -68,7 +76,9 @@
 
 /* With reduced motion every state changes at once. */
 @media (prefers-reduced-motion: reduce) {
-  [data-im-look] *,
+  /* Not an autofilled native select: its chevron is held by a transition that never ends (css/controls.css), and without
+     one Chromium's autofill takes the chevron away. */
+  [data-im-look] *:not(select.im-select:autofill),
   [data-im-look] *::before,
   [data-im-look] *::after {
     transition: none !important;

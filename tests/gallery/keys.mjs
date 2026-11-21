@@ -3,9 +3,18 @@
 // window.__imagoKeys on elements of their own.
 import assert from 'node:assert/strict';
 
-const SIDEBAR_ROWS = '.im-sidebar [role="listbox"] .im-row';
-const TABS = '.im-titlebar .im-tabs .im-tab';
-const TABLE_ROWS = '.im-content tbody tr';
+// The five fixtures and the words each gives mountApp as its labels.
+const EN = { commands: 'Commands', search: 'Search in this view', placeholder: 'Type a command', oni: 'ONI look', smooth: 'Smooth look', light: 'Light theme' };
+const APPS = [
+  { id: 'xiox', ...EN },
+  { id: 'mukade', ...EN },
+  { id: 'shinatama', ...EN },
+  { id: 'muro', ...EN },
+  { id: 'daodan', commands: 'Comandi', search: 'Cerca in questa vista', placeholder: 'Digita un comando', oni: 'Aspetto ONI', smooth: 'Aspetto Smooth', light: 'Tema chiaro' },
+];
+const SIDEBAR_ROWS = '#g-window .im-sidebar [role="listbox"] .im-row';
+const TABS = '#g-window .im-titlebar .im-tabs .im-tab';
+const TABLE_ROWS = '#g-window .im-content tbody tr';
 
 const press = (page, ...keys) => keys.reduce((done, key) => done.then(() => page.keyboard.press(key)), Promise.resolve());
 
@@ -124,12 +133,12 @@ async function liveShell(page) {
     await page.evaluate((value) => window.__imago.set({ app: 'xiox', look: value, theme: 'dark' }), look);
     await width(page, 1160);
     // The selected row, tab and table row are where the tab stop starts.
-    const starts = await page.evaluate(() =>
-      ['.im-sidebar [role="listbox"] .im-row', '.im-titlebar .im-tabs .im-tab', '.im-content tbody tr'].map((s) => {
+    const starts = await page.evaluate((selectors) =>
+      selectors.map((s) => {
         const items = [...document.querySelectorAll(s)];
         return [items.findIndex((el) => el.getAttribute('aria-selected') === 'true'), items.findIndex((el) => el.getAttribute('tabindex') === '0')];
       }),
-    );
+    [SIDEBAR_ROWS, TABS, TABLE_ROWS]);
     for (const [selected, stop] of starts) assert.equal(stop, selected, `${look}: the tab stop starts on the selected item`);
 
     await lists(page, { table: true });
@@ -410,10 +419,175 @@ async function scratch(page) {
   await page.evaluate(() => document.getElementById('scratch').remove());
 }
 
+// mountApp gives every app Ctrl+K and Ctrl+F, once: the gallery mounts each fixture with it, and draws the shell again
+// (so mounts again) every time the app changes. A mount that was not undone, or made twice, would count a press twice.
+async function standardCommands(page) {
+  const searches = () => page.evaluate(() => window.__imago.searches);
+  const palettes = () => page.evaluate(() => document.querySelectorAll('.im-palette').length);
+  const options = () => page.locator('.im-palette-list [role="option"]').evaluateAll((list) => list.map((o) => o.textContent.replace(/\s+/g, ' ').trim()));
+
+  // Xiox twice: coming back to an app that was already mounted and undone once.
+  for (const app of [...APPS, APPS[0]]) {
+    const where = (text) => `${app.id}: ${text}`;
+    await page.evaluate((id) => window.__imago.set({ app: id, look: 'smooth', theme: 'dark' }), app.id);
+    await width(page, 1160);
+    await page.evaluate(() => document.activeElement?.blur());
+
+    // Ctrl+F calls the app's search, once for a press.
+    const before = await searches();
+    await press(page, 'Control+f');
+    assert.equal(await searches(), before + 1, where('Ctrl+F calls search once'));
+
+    // Ctrl+K opens the palette, with the words given to mountApp. It lists the search command by its label and its keys,
+    // and not itself.
+    await press(page, 'Control+k');
+    assert.equal(await palettes(), 1, where('Ctrl+K opens the palette'));
+    assert.equal(await page.getAttribute('.im-palette-input', 'placeholder'), app.placeholder, where('the palette speaks the labels given to mountApp'));
+    const listed = await options();
+    assert.ok(listed.includes(`${app.search}CtrlF`), where(`the search command is listed with its keys (${listed.join(' | ')})`));
+    assert.ok(!listed.some((text) => text.startsWith(app.commands)), where('the palette does not list itself'));
+
+    // Under the palette the key belongs to the palette: the search is not called, and Escape closes it.
+    await press(page, 'Control+f');
+    assert.equal(await searches(), before + 1, where('Ctrl+F under the palette does not search'));
+    await press(page, 'Escape');
+    assert.equal(await palettes(), 0, where('Escape closes the palette'));
+    assert.equal(await page.evaluate(() => document.querySelector('.im-shell [inert]') === null), true, where('and releases the shell'));
+
+    // The palette runs it too: Enter on the search command is Ctrl+F.
+    await press(page, 'Control+k');
+    await page.fill('.im-palette-input', app.search);
+    await press(page, 'Enter');
+    assert.equal(await palettes(), 0, where('the palette closes before the command runs'));
+    assert.equal(await searches(), before + 2, where('the palette runs the search command'));
+  }
+
+  // Xiox's view has a field for it: the gallery's search moves focus there, from anywhere, a text field included.
+  await page.evaluate(() => window.__imago.set({ app: 'xiox', look: 'smooth', theme: 'dark' }));
+  await page.evaluate(() => document.activeElement?.blur());
+  await press(page, 'Control+f');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Search this view', 'Ctrl+F moves focus to the field of the view');
+  const inField = await searches();
+  await press(page, 'Control+f');
+  assert.equal(await searches(), inField + 1, 'Ctrl+F inside a text field still reaches the search');
+}
+
+// The look and the theme are five commands of the palette, the same in every app (mountApp registers them from the
+// fixture's `appearance`). The gallery keeps the choice, as an app does, and its own controls call the same `set`: a
+// choice made in the palette shows on the controls, and one made on the controls changes what the palette offers.
+async function appearance(page) {
+  const shown = () =>
+    page.evaluate(() => {
+      const pressed = (name) => document.querySelector(`[data-g-pick="${name}"] button[aria-pressed="true"]`)?.dataset.v ?? null;
+      const root = document.getElementById('g-window');
+      return { look: root.dataset.imLook, theme: root.dataset.imTheme, lookControl: pressed('look'), themeControl: pressed('theme') };
+    });
+  const options = () => page.locator('.im-palette-list [role="option"]').evaluateAll((list) => list.map((o) => o.textContent.replace(/\s+/g, ' ').trim()));
+  const offered = async (words) => {
+    await press(page, 'Control+k');
+    const listed = (await options()).filter((text) => words.includes(text));
+    await press(page, 'Escape');
+    return listed;
+  };
+  // Runs the command of that title from the palette, as a user does: open it, type the words, Enter.
+  const run = async (title) => {
+    await press(page, 'Control+k');
+    await page.fill('.im-palette-input', title);
+    assert.equal((await options())[0], title, `"${title}" is the first match of its own words`);
+    await press(page, 'Enter');
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.im-palette').length), 0, `${title}: the palette closes`);
+  };
+  const ALL = ['Smooth look', 'ONI look', 'Follow Windows', 'Light theme', 'Dark theme'];
+
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.evaluate(() => window.__imago.set({ app: 'xiox', look: 'smooth', theme: 'dark' }));
+  await width(page, 1160);
+  await page.evaluate(() => document.activeElement?.blur());
+  assert.deepEqual(await offered(ALL), ['ONI look', 'Follow Windows', 'Light theme'], 'the palette offers the choices that are not the current one');
+
+  await run('ONI look');
+  assert.deepEqual(await shown(), { look: 'oni', theme: 'dark', lookControl: 'oni', themeControl: 'dark' }, 'ONI look: on the root and on the gallery\'s control; the theme stays');
+  await run('Light theme');
+  assert.deepEqual(await shown(), { look: 'oni', theme: 'light', lookControl: 'oni', themeControl: 'light' }, 'Light theme: on the root and on the control; the look stays');
+  await run('Smooth look');
+  assert.deepEqual(await shown(), { look: 'smooth', theme: 'light', lookControl: 'smooth', themeControl: 'light' });
+  await run('Follow Windows');
+  assert.deepEqual(await shown(), { look: 'smooth', theme: 'dark', lookControl: 'smooth', themeControl: 'system' }, 'Follow Windows draws the theme Windows has, dark here');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.waitForFunction(() => document.getElementById('g-window').dataset.imTheme === 'light'); // and follows it when it changes
+  assert.deepEqual(await offered(ALL), ['ONI look', 'Light theme', 'Dark theme']);
+
+  // The gallery's own controls call the same set.
+  await page.click('[data-g-pick="look"] button[data-v="oni"]');
+  await page.click('[data-g-pick="theme"] button[data-v="dark"]');
+  assert.deepEqual(await shown(), { look: 'oni', theme: 'dark', lookControl: 'oni', themeControl: 'dark' });
+  assert.deepEqual(await offered(ALL), ['Smooth look', 'Follow Windows', 'Light theme'], 'after a choice on the controls the palette offers the others');
+
+  // Every fixture has the five, in its own words.
+  for (const app of APPS) {
+    await page.evaluate((id) => window.__imago.set({ app: id, look: 'smooth', theme: 'dark' }), app.id);
+    await run(app.oni);
+    assert.equal((await shown()).lookControl, 'oni', `${app.id}: "${app.oni}" picks ONI`);
+    await run(app.light);
+    assert.equal((await shown()).themeControl, 'light', `${app.id}: "${app.light}" picks the light theme`);
+    await run(app.smooth);
+    assert.deepEqual(await shown(), { look: 'smooth', theme: 'light', lookControl: 'smooth', themeControl: 'light' }, `${app.id}: "${app.smooth}" goes back`);
+  }
+
+  await page.emulateMedia({ colorScheme: null });
+  await page.evaluate(() => window.__imago.set({ app: 'xiox', look: 'smooth', theme: 'dark' }));
+}
+
+// One footer of the gallery, Shinatama's, is written by footerKeys from the registry: a command's keys and its title,
+// then a key that is not a command (F6 belongs to the regions, not to the registry).
+async function footer(page) {
+  await page.evaluate(() => window.__imago.set({ app: 'shinatama', look: 'smooth', theme: 'dark' }));
+  await width(page, 1160);
+  const command = await page.evaluate(() => {
+    const found = window.__imagoSurfaces.registry.get('action:primary');
+    return { keys: found?.keys, title: found?.title };
+  });
+  assert.deepEqual(command, { keys: 'Ctrl+Shift+T', title: 'New session' });
+  const items = await page.evaluate(() =>
+    [...document.querySelectorAll('.im-footer .im-footer-keys > span')].map((item) => ({
+      caps: [...item.querySelectorAll('kbd.im-key')].map((cap) => cap.textContent),
+      text: item.textContent,
+    })),
+  );
+  assert.deepEqual(items, [
+    { caps: ['Ctrl', '⇧', 'T'], text: 'Ctrl⇧TNew session' },
+    { caps: ['F6'], text: 'F6Next region' },
+  ], 'the footer lists the command as the registry has it, then F6');
+  await page.evaluate(() => window.__imago.set({ app: 'xiox' }));
+}
+
+// A key is answered once: an arrow that moves focus in a list belongs to the list, and a command of the app bound to
+// that arrow does not also run; with focus outside any list it runs.
+async function claimedArrows(page) {
+  await page.evaluate(() => window.__imago.set({ app: 'xiox', look: 'smooth', theme: 'dark' }));
+  await width(page, 1160);
+  await page.evaluate(() => {
+    window.__arrows = 0;
+    window.__unbindArrow = window.__imagoSurfaces.registry.register({ id: 'test:arrow', title: 'Next item', keys: 'ArrowDown', run: () => void window.__arrows++ });
+  });
+  await page.focus(`${SIDEBAR_ROWS}[tabindex="0"]`);
+  await press(page, 'Home', 'ArrowDown');
+  assert.equal(await activeIndex(page, SIDEBAR_ROWS), 1, 'the list moves');
+  assert.equal(await page.evaluate(() => window.__arrows), 0, 'the command bound to ArrowDown does not also run');
+  await page.evaluate(() => document.activeElement?.blur());
+  await press(page, 'ArrowDown');
+  assert.equal(await page.evaluate(() => window.__arrows), 1, 'outside a list the command runs');
+  await page.evaluate(() => window.__unbindArrow());
+}
+
 export default async function (page) {
   await liveShell(page);
+  await claimedArrows(page);
   await selecting(page);
   await otherApps(page);
   await scratch(page);
+  await standardCommands(page);
+  await appearance(page);
+  await footer(page);
 }
 

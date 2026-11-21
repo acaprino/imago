@@ -4,13 +4,15 @@
 //! One copy of what Shinatama and Xiox each had, for every app of the suite:
 //!
 //! - `theme`: the window theme (light, dark or the system's), kept in a file in the data folder so
-//!   the next start opens on the right acrylic, and [`glass_window_config`], the main window's
-//!   config with the glass material.
+//!   the next start opens on the right acrylic, the tint of the acrylic for Windows 10
+//!   ([`acrylic_tint`]), and [`glass_window_config`], the main window's config with the glass
+//!   material.
 //! - `frame`: Snap Layouts on the HTML maximize button, and the "Reload interface" item of the
 //!   window menu.
-//! - `guard`: a webview shows only the app's own pages, and the browser's own keys are off.
+//! - `guard`: a webview shows only the app's own pages, the browser's own keys are off, and the
+//!   context menu holds the editing commands only.
 //! - `recovery`: what failed in WebView2 and what to do about it; a page is reloaded at most
-//!   three times a minute.
+//!   three times a minute, and nothing is done once the application is closing.
 //! - `window_state`: where the window was, brought back inside the monitors there are now.
 //!
 //! The decisions (parsing, files, limits, geometry) are plain functions that need no window; the Win32
@@ -24,12 +26,15 @@ mod theme;
 mod window_state;
 
 pub use frame::{install_reload_menu, install_snap_layouts, SnapLayouts};
-pub use guard::{disable_browser_accelerators, guard_navigation, guard_navigation_with_scheme};
+pub use guard::{
+    disable_browser_accelerators, guard_navigation, guard_navigation_with_scheme, trim_context_menu,
+};
 pub use recovery::{
     recovery_action, watch_process_failures, ProcessFailure, Recovery, RecoveryAction,
 };
 pub use theme::{
-    apply_theme, glass_window_config, parse_theme, save_theme, saved_theme, WindowTheme,
+    acrylic_tint, apply_theme, drawn_by_page, glass_window_config, parse_look, parse_theme,
+    save_theme, saved_theme, Look, WindowTheme,
 };
 pub use window_state::{
     clamp_to_monitors, clamp_to_screens, load_state, save_state, state_to_save, Rect, Screen,

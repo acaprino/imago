@@ -17,6 +17,12 @@ export function pathField(input: HTMLInputElement, options: {
   buttonLabel: string;
   choose: () => Promise<string | null>;
   onError: (error: unknown) => void;
+  /**
+   * Acts on the chosen path at once (open that folder, add that root) instead of writing it into the field,
+   * which keeps what was typed. It runs while the button is still busy, and its failure goes to `onError`.
+   * The choice is dropped when the field was removed or disabled meanwhile; an edit does not drop it.
+   */
+  commit?: (path: string) => void | Promise<void>;
 }): HTMLElement {
   const doc = input.ownerDocument;
   const root = doc.createElement('div');
@@ -38,13 +44,17 @@ export function pathField(input: HTMLInputElement, options: {
     const markEdited = () => { edited = true; };
     input.addEventListener('input', markEdited);
     input.addEventListener('change', markEdited);
-    const current = () => !edited && input.value === original && root.isConnected &&
-      root.contains(input) && !input.disabled && !input.readOnly;
+    const live = () => root.isConnected && root.contains(input) && !input.disabled && !input.readOnly;
+    // A choice written into the field yields to an edit made meanwhile; one acted on does not touch the field.
+    const current = () => live() && (options.commit !== undefined || (!edited && input.value === original));
     try {
       const path = await options.choose();
       if (path !== null && current()) {
-        input.value = path;
-        for (const type of ['input', 'change']) input.dispatchEvent(new Event(type, { bubbles: true }));
+        if (options.commit) await options.commit(path);
+        else {
+          input.value = path;
+          for (const type of ['input', 'change']) input.dispatchEvent(new Event(type, { bubbles: true }));
+        }
       }
     } catch (error) {
       if (current()) options.onError(error);

@@ -1,3 +1,4 @@
+import { claimKey } from './key-claim.ts';
 import { splitter } from './splitter.ts';
 
 // Two behaviours of the sidebar that need a little script; the layout itself is CSS (css/primitives.css).
@@ -79,6 +80,7 @@ export function sidebarDrawer(shell: HTMLElement): () => void {
   const onKey = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229 || !isOpen()) return;
     event.preventDefault();
+    claimKey(event); // no command of the app runs on it, nor on its repeats while it is held
     close();
   };
   const onPress = (event: Event): void => {

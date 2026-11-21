@@ -1,20 +1,25 @@
 import { APPS, type AppId } from '../apps.ts';
 import {
-  attachLayers,
   confirm,
-  createRegistry,
   hasLayer,
   inspector,
   notify,
   clearNotices,
   openContentDialog,
+  openDialogDrawer,
   createContentDialog,
   runFormOperation,
   renderShellFrame,
+  roving,
+  shellFrameHtml,
+  sidebarHtml,
+  titlebarHtml,
+  pageContentHtml,
   openFormDialog,
   openMenu,
   openPalette,
   openSheet,
+  PALETTE_COMMAND,
   type MenuItem,
   type Registry,
 } from '../../ts/ui/index.ts';
@@ -25,6 +30,8 @@ interface MountContext {
   app: string;
   look: string;
   theme: string;
+  /** The registry of this shell: the app's commands go in it, and `mountApp` (gallery/main.ts) adds Ctrl+K and Ctrl+F. */
+  registry: Registry;
 }
 
 declare global {
@@ -32,9 +39,16 @@ declare global {
     /** The surfaces and the registry of the live shell, for the gallery's test to drive them directly. */
     __imagoSurfaces?: {
       openContentDialog: typeof openContentDialog;
+      openDialogDrawer: typeof openDialogDrawer;
       createContentDialog: typeof createContentDialog;
       runFormOperation: typeof runFormOperation;
       renderShellFrame: typeof renderShellFrame;
+      roving: typeof roving;
+      /** The frame's string renderers, for the tests that build a frame beside the gallery's window. */
+      shellFrameHtml: typeof shellFrameHtml;
+      sidebarHtml: typeof sidebarHtml;
+      titlebarHtml: typeof titlebarHtml;
+      pageContentHtml: typeof pageContentHtml;
       clearNotices: typeof clearNotices;
       openFormDialog: typeof openFormDialog;
       openMenu: typeof openMenu;
@@ -48,9 +62,9 @@ declare global {
   }
 }
 
-type Words = { placeholder: string; empty: string; ran: string; cancelled: string; undone: string };
-const EN: Words = { placeholder: 'Type a command', empty: 'No command matches', ran: 'Ran', cancelled: 'Cancelled', undone: 'Undone' };
-const IT: Words = { placeholder: 'Digita un comando', empty: 'Nessun comando corrisponde', ran: 'Eseguito', cancelled: 'Annullato', undone: 'Ripristinato' };
+type Words = { ran: string; cancelled: string; undone: string };
+const EN: Words = { ran: 'Ran', cancelled: 'Cancelled', undone: 'Undone' };
+const IT: Words = { ran: 'Eseguito', cancelled: 'Annullato', undone: 'Ripristinato' };
 
 // The destructive action of each app, as the preview words it.
 type Destroy = { title: string; body: string; verb: string; done: string };
@@ -78,10 +92,10 @@ function bindable(display: string | undefined): string | undefined {
   return /^(↵|enter|space)$/i.test(last) ? undefined : parts.join('+');
 }
 
-// Wires every surface on the live shell: the palette on Ctrl+K and on the title bar's command button, the
+// Wires every surface on the live shell: the palette on the title bar's command button (the command is `mountApp`'s), the
 // Views menu, a destructive action with its dialog, an undoable one with its notice. `data-act` is what the
 // shell markup carries (`pal`, `kill`, `undo`); `data-im-act` names the same hooks for any markup that uses them.
-export default function mount({ shell, app }: MountContext): () => void {
+export default function mount({ shell, app, registry }: MountContext): () => void {
   const id = app as AppId;
   const words = id === 'daodan' ? IT : EN;
   const data = APPS[id];
@@ -90,7 +104,6 @@ export default function mount({ shell, app }: MountContext): () => void {
   const selectTab = (index: number): void => tabs.forEach((tab, at) => tab.setAttribute('aria-selected', String(at === index)));
   const busy = (): boolean => hasLayer('dialog') || hasLayer('palette') || hasLayer('menu') || hasLayer('sheet');
 
-  const registry = createRegistry();
   const ran = (title: string): void => void notify(shell, `${words.ran}: ${title}`);
   data.tabs.forEach((tab, index) => {
     const title = `${data.strings.views}: ${tab}`;
@@ -100,8 +113,12 @@ export default function mount({ shell, app }: MountContext): () => void {
     // A command never runs under an open surface: the key belongs to the surface.
     registry.register({ id: `action:${name}`, title: action.text, keys: bindable(action.keys), run: () => { if (!busy()) ran(action.text); } });
   }
-  const openCommandPalette = (): void => void openPalette(shell, registry, { placeholder: words.placeholder, empty: words.empty });
-  registry.register({ id: 'palette', title: data.strings.commands, keys: 'Ctrl+K', when: () => !hasLayer('palette'), run: openCommandPalette });
+  // The title bar's command button runs the palette command `mountApp` registered, as Ctrl+K does: the same palette,
+  // with the words given to `mountApp` only.
+  const openCommandPalette = (): void => {
+    const command = registry.get(PALETTE_COMMAND);
+    if (command && command.when?.() !== false) void command.run();
+  };
 
   const viewsMenu = (anchor: HTMLElement): void => {
     openMenu(anchor, data.tabs.map((tab, index): MenuItem => ({ label: tab, run: () => selectTab(index) })));
@@ -142,15 +159,10 @@ export default function mount({ shell, app }: MountContext): () => void {
   };
   shell.addEventListener('click', onClick);
 
-  const detachLayers = attachLayers(shell);
-  const detachKeys = registry.attach(document);
-
-  window.__imagoSurfaces = { openContentDialog, createContentDialog, runFormOperation, renderShellFrame, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
+  window.__imagoSurfaces = { openContentDialog, openDialogDrawer, createContentDialog, runFormOperation, renderShellFrame, roving, shellFrameHtml, sidebarHtml, titlebarHtml, pageContentHtml, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
 
   return () => {
     shell.removeEventListener('click', onClick);
-    detachKeys();
-    detachLayers();
     clearNotices(shell);
     delete window.__imagoSurfaces;
   };

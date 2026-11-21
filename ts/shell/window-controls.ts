@@ -83,7 +83,15 @@ export type WindowControlsOptions = {
    * Without it the failure is swallowed, never left as an unhandled rejection; an app passes one that shows it.
    */
   onError?: (action: 'minimize' | 'maximize' | 'close', error: unknown) => void;
+  /**
+   * The words `onMaximized` writes on the maximize button: its name (`aria-label`) and its tooltip (`title`) when the
+   * window is restored (`maximize`, `maximizeTitle`) and when it is maximized (`restore`, `restoreTitle`). An app in
+   * another language gives its own; a word it leaves out is the English one.
+   */
+  labels?: { maximize?: string; restore?: string; maximizeTitle?: string; restoreTitle?: string };
 };
+
+const LABELS = { maximize: 'Maximize window', restore: 'Restore window', maximizeTitle: 'Maximize', restoreTitle: 'Restore' };
 
 /** Wires the title bar's buttons to the window. Returns the function that lets go of all of it. */
 export function mountWindowControls(titlebar: HTMLElement, api: WindowApi, options: WindowControlsOptions = {}): () => void {
@@ -111,9 +119,14 @@ export function mountWindowControls(titlebar: HTMLElement, api: WindowApi, optio
       if (state === 'none') maximize.removeAttribute('data-im-os'); else maximize.setAttribute('data-im-os', state);
     }));
     if (api.onMaximized) {
+      const given = options.labels ?? {};
+      const labels = {
+        maximize: given.maximize ?? LABELS.maximize, restore: given.restore ?? LABELS.restore,
+        maximizeTitle: given.maximizeTitle ?? LABELS.maximizeTitle, restoreTitle: given.restoreTitle ?? LABELS.restoreTitle,
+      };
       cleanups.push(api.onMaximized((maximized) => {
-        maximize.setAttribute('aria-label', maximized ? 'Restore window' : 'Maximize window');
-        maximize.title = maximized ? 'Restore' : 'Maximize';
+        maximize.setAttribute('aria-label', maximized ? labels.restore : labels.maximize);
+        maximize.title = maximized ? labels.restoreTitle : labels.maximizeTitle;
         maximize.setAttribute('data-im-maximized', String(maximized));
       }));
     }

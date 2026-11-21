@@ -1,3 +1,4 @@
+import { claimKey } from './key-claim.ts';
 import { escapeHtml } from './markup.ts';
 import { checkboxOptionHtml, type CheckboxMarkupOptions } from './form-markup.ts';
 import { stepProgressHtml } from './progress.ts';
@@ -48,10 +49,13 @@ export interface StepNavigationOptions {
   tabIdPrefix: string;
   panelId: string;
 }
-/** Interactive steps are tabs; a progress-only list is stepProgressHtml. */
+/**
+ * Interactive steps are tabs: the im-steps list of stepList, each item holding its tab, the selected one drawn as the
+ * current step. A progress-only list is stepProgressHtml.
+ */
 export function stepNavigationHtml(steps: readonly NavigationStep[], selected: string, options: StepNavigationOptions): string {
   const current = steps.find(step => step.id === selected && !step.disabled)?.id ?? steps.find(step => !step.disabled)?.id;
-  return `<div class="im-step-nav" role="tablist" aria-label="${escapeHtml(options.label)}">${steps.map((step, index) => `<button type="button" role="tab" id="${escapeHtml(options.tabIdPrefix + step.id)}" aria-selected="${current === step.id}" aria-controls="${escapeHtml(options.panelId)}" tabindex="${current === step.id ? 0 : -1}" ${current === step.id ? 'aria-current="step" ' : ''}data-action="${escapeHtml(options.action)}" data-id="${escapeHtml(step.id)}"${step.disabled ? ' disabled' : ''}><span class="im-step-index" aria-hidden="true">${index + 1}</span><span class="im-step-text"><strong>${escapeHtml(step.label)}</strong>${step.detail === undefined ? '' : `<small>${escapeHtml(step.detail)}</small>`}</span></button>`).join('')}</div>`;
+  return `<ol class="im-steps" role="tablist" aria-label="${escapeHtml(options.label)}">${steps.map((step, index) => `<li role="presentation"><button type="button" role="tab" id="${escapeHtml(options.tabIdPrefix + step.id)}" aria-selected="${current === step.id}" aria-controls="${escapeHtml(options.panelId)}" tabindex="${current === step.id ? 0 : -1}" ${current === step.id ? 'aria-current="step" ' : ''}data-action="${escapeHtml(options.action)}" data-id="${escapeHtml(step.id)}"${step.disabled ? ' disabled' : ''}><span class="im-step-index" aria-hidden="true">${index + 1}</span><span class="im-step-text">${escapeHtml(step.label)}${step.detail === undefined ? '' : `<small class="im-step-sub">${escapeHtml(step.detail)}</small>`}</span></button></li>`).join('')}</ol>`;
 }
 
 export function stepPanelHtml(contentHtml: string, id: string, labelledBy: string): string {
@@ -71,12 +75,14 @@ export function stepNavigationKey<T extends string>(event: KeyboardEvent, option
   const element = event.target;
   if (!(element instanceof Element)) return false;
   const tab = element.closest<HTMLButtonElement>('button[role="tab"]');
-  if (!tab || tab.disabled || tab.dataset.action !== options.action || !tab.parentElement) return false;
-  const buttons = [...tab.parentElement.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].filter(button => !button.disabled && button.dataset.action === options.action);
+  const list = tab?.closest('[role="tablist"]');
+  if (!tab || !list || tab.disabled || tab.dataset.action !== options.action) return false;
+  const buttons = [...list.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].filter(button => !button.disabled && button.dataset.action === options.action);
   const ids = options.ids.filter(id => buttons.some(button => button.dataset.id === id));
   const next = nextStepId(ids, tab.dataset.id as T, event.key);
   if (next === null) return false;
   event.preventDefault();
+  claimKey(event); // the steps answered the key: no command bound to it also runs
   buttons.find(button => button.dataset.id === next)?.focus();
   options.onSelect(next);
   return true;

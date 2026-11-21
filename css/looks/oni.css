@@ -55,11 +55,17 @@
 /* the ring is inside the cut corners */
 [data-im-look="oni"] .im-btn:is(:focus-visible, [data-im-force="focus"]) { outline-offset: -5px; }
 
+/* Inside the button the ring stands on the button's own fill, so it takes the colour that is read on that fill: the shared ring
+   (the accent text) is the primary button's fill itself, and a hair from the confirm button's in the light theme. */
+[data-im-look="oni"] .im-btn--primary:is(:focus-visible, [data-im-force="focus"]) { outline-color: var(--im-accent-on); }
+[data-im-look="oni"] .im-btn--confirm-danger:is(:focus-visible, [data-im-force="focus"]) { outline-color: var(--im-danger-on); }
+
 /* ---------- tabs: a boxed tab, no underline ---------- */
 
 [data-im-look="oni"] .im-tab::after { display: none; }
 
-[data-im-look="oni"] .im-tab[aria-selected="true"] {
+/* Selected, whatever attribute says it, as css/controls.css draws it. */
+[data-im-look="oni"] .im-tab:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) {
   color: var(--im-accent-hi);
   background: var(--im-selected);
   border-color: var(--im-line-strong);
@@ -67,28 +73,28 @@
 
 /* ---------- rows and trees: accent titles, a drawn edge for the selected one ---------- */
 
-[data-im-look="oni"] .im-row { padding-inline: 16px; }
+[data-im-look="oni"] .im-row { padding-inline: var(--im-s-4); }
 
 [data-im-look="oni"] .im-row-title,
 [data-im-look="oni"] .im-tree-label { color: var(--im-accent-text); }
 
-[data-im-look="oni"] .im-row[aria-selected="true"],
-[data-im-look="oni"] .im-tree-item[aria-selected="true"] { box-shadow: inset 0 0 0 1px var(--im-line-strong); }
+[data-im-look="oni"] .im-row:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]),
+[data-im-look="oni"] .im-tree-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { box-shadow: inset 0 0 0 1px var(--im-line-strong); }
 
-[data-im-look="oni"] .im-row[aria-selected="true"] .im-row-title,
-[data-im-look="oni"] .im-tree-item[aria-selected="true"] > .im-tree-label { color: var(--im-accent-hi); }
+[data-im-look="oni"] .im-row:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) .im-row-title,
+[data-im-look="oni"] .im-tree-item:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) > .im-tree-label { color: var(--im-accent-hi); }
 
 /* ---------- chips and counts: outlined, not filled ---------- */
 
 /* Outlined, on the sheet's colour: the fill of a row under the chip (hover, pressed, selected) must not dim its text. */
-[data-im-look="oni"] .im-chip[data-im-tone] {
+[data-im-look="oni"] .im-chip:is([data-im-tone], [data-im-cat]) {
   background: var(--im-sheet);
   border: 1px solid currentColor;
 }
 
-[data-im-look="oni"] .im-chip[data-im-tone]::before { display: none; }
+[data-im-look="oni"] .im-chip:is([data-im-tone], [data-im-cat])::before { display: none; }
 
-[data-im-look="oni"] .im-chip:not([data-im-tone]) { border: 1px solid var(--im-line-soft); }
+[data-im-look="oni"] .im-chip:not([data-im-tone], [data-im-cat]) { border: 1px solid var(--im-line-soft); }
 
 [data-im-look="oni"] .im-count { border: 1px solid var(--im-line-soft); }
 
@@ -105,10 +111,10 @@
 
 [data-im-look="oni"] .im-steps > li { border-color: var(--im-line); }
 
-[data-im-look="oni"] .im-steps > li[aria-current="step"] { border-color: var(--im-line-strong); }
+[data-im-look="oni"] .im-steps > li:is([aria-current="step"], :has(> button[aria-selected="true"])) { border-color: var(--im-line-strong); }
 
 /* ---------- forced colours: the fills of a selected tab vanish, so ONI keeps the line that Smooth draws ---------- */
 
 @media (forced-colors: active) {
-  [data-im-look="oni"] .im-tab[aria-selected="true"]::after { display: block; }
+  [data-im-look="oni"] .im-tab:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"])::after { display: block; }
 }

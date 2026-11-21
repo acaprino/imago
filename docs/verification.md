@@ -4,6 +4,15 @@ This file lists what Imago's demo app (`examples/demo`) showed on a real Windows
 run. A statement in [desktop-shell.md](desktop-shell.md), [design-file.md](design-file.md) or
 [using-imago.md](using-imago.md) about the window on screen holds only as far as this file says.
 
+## What this file does not cover
+
+Everything above describes the build of commit `85b7472` (2026-11-20). The canon that followed (the one frame and its
+regions, the mark and the icons, the five appearance commands, `mountApp`, the title bar at 340 and 450, the rail, the
+drawer, the sidebar fold) has not been photographed on a real window: its measures and its contrast are checked by the
+gallery and its tests in a browser, which cannot judge the glass. Until the capture is run again on a build of the
+canon, every claim in [design-file.md](design-file.md) about how these look on screen holds as far as the gallery shows
+it, and no further.
+
 ## The machine and the program
 
 - Windows 11 Home 10.0.26200, one display of 1920x1200 at 100% scale, transparency effects on, apps in the light
@@ -85,6 +94,14 @@ Smooth dark title bar at 28,31,40 over a dark window then, the same over a brigh
 - The WebView2 failure watcher and what follows a failure: the reload of a renderer that stopped, the rebuild of the
   windows after the browser process died, the question after three reloads in a minute.
 - The "Reload interface" item of the window menu.
+- The context menu trimmed to the editing commands (`trim_context_menu`). The photographed build predates it, and no
+  step of the capture opens a context menu.
+- The tint of the acrylic on Windows 10 (`acrylic_tint`, set by `apply_theme`). No machine of the suite runs Windows
+  10, and on Windows 11 22H2 and later the tint does not show. That setting the effect again changes nothing on
+  Windows 11 is read from the code (Tauri and window-vibrancy 0.8.1 set the same backdrop again), not seen on a real
+  window.
+- The failures WebView2 reports while the application closes, ignored (`Recovery::close`). Nothing here closed the
+  demo and watched what the failure watcher reported.
 - The place of the window (`load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens`). The
   crate gives the pieces and an app wires them; the demo app wires none of them, so nothing here saved, read or
   brought back the place of a real window. Only the crate's own tests (run by CI) cover the arithmetic and the file.

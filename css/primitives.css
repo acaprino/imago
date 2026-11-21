@@ -5,6 +5,13 @@
    They are written as ranges, so no fractional width falls between two blocks. */
 
 /* ---------- the shell ---------- */
+/* A shell fills the window wherever the app mounts it: directly in the page's body, or in a root of the app's own (the
+   <div id="app"> React renders into) that carries im-root, as every element between the body and the shell does. The
+   page then takes the window's height and has no margin of its own. A page that only shows a shell among other things
+   (the gallery) keeps its own height. */
+html:has(> body > :is(.im-shell, .im-root)),
+body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
+.im-root { block-size: 100%; }
 .im-shell {
   --im-pane-pad: var(--im-s-4);
   --im-rail-icon: 20px;
@@ -36,6 +43,7 @@
 /* The brand gives way before the window buttons do: at the width of a 500px window at 200% zoom the name is cut with an
    ellipsis, then goes. */
 .im-brand { display: flex; flex: 0 1 auto; align-items: center; gap: var(--im-s-2); min-inline-size: 0; white-space: nowrap; }
+/* The mark is the initial of the product's name, in capitals, in the square of the app's accent. */
 .im-mark {
   display: grid;
   flex: none;
@@ -47,20 +55,44 @@
   border-radius: var(--im-r-control);
   /* ONI cuts two corners of the square, as it cuts its buttons; Smooth's cut is 0 and this is the whole square */
   clip-path: polygon(var(--im-cut-sm) 0, 100% 0, 100% calc(100% - var(--im-cut-sm)), calc(100% - var(--im-cut-sm)) 100%, 0 100%, 0 var(--im-cut-sm));
+  font: 700 var(--im-fs-body)/1 var(--im-font-head);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.im-mark svg { inline-size: 14px; block-size: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+/* The grid centres the letter's line, and Bahnschrift's capitals sit at the top of it, 1.6px above the square's
+   middle: ONI moves the line 2px down. (The @supports block below centres the capitals themselves, and takes this off.) */
+[data-im-look="oni"] .im-mark { padding-block-start: var(--im-s-1); }
 .im-wordmark {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font: 600 15px/1 var(--im-font-head);
+  font: 600 var(--im-fs-title)/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-text-hi);
 }
+/* Where the engine can trim a box to its capitals (WebView2 from 133), the letter and the name are drawn by them: the
+   letter's box is the band from the top of a capital to the baseline, centred in the square, so its ink sits in the
+   middle whatever the font's ascent and descent (centring the font's box, as the grid above does, puts the letter a
+   little low in Segoe UI and high in Bahnschrift); the name's box is that band too, with room above and below for
+   accents and descenders, and the brand centres the two boxes, so the square is level with the name's capitals in both
+   looks (ONI's larger, spaced name sat a pixel above the square's middle). Without it, the grid centres the letter. */
+@supports (text-box: trim-both cap alphabetic) {
+  .im-mark {
+    display: block;
+    align-content: center;
+    text-align: center;
+    text-box: trim-both cap alphabetic;
+  }
+  [data-im-look="oni"] .im-mark { padding-block-start: 0; }
+  .im-wordmark {
+    padding-block: var(--im-s-2);
+    text-box: trim-both cap alphabetic;
+  }
+}
 .im-titlebar .im-tabs { align-self: stretch; align-items: center; }
 .im-titlebar .im-tab { block-size: 100%; border-radius: 0; }
-.im-titlebar .im-tab:hover { background: none; }
+.im-titlebar .im-tab:hover:not(:active, [data-im-force="press"]) { background: none; }
 .im-titlebar .im-views-menu,
 .im-titlebar .im-sidebar-toggle { display: none; }
 .im-titlebar-command {
@@ -69,12 +101,20 @@
   align-items: center;
   gap: var(--im-s-2);
   block-size: var(--im-h-control-sm);
-  padding: 0 6px 0 var(--im-s-2);
+  padding: 0 var(--im-s-1) 0 var(--im-s-2);
   border: 1px solid var(--im-line);
   border-radius: var(--im-r-control);
   color: var(--im-muted);
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   white-space: nowrap;
+}
+/* The command is 22px high in ONI and the target at least 24: the 1px above and below, in the title bar's room, is the button's too. */
+.im-titlebar-command { position: relative; }
+.im-titlebar-command::before {
+  content: "";
+  position: absolute;
+  inset-block: min(0px, calc((100% - 24px) / 2));
+  inset-inline: 0;
 }
 .im-titlebar-command b { font-weight: 500; }
 .im-titlebar-command:hover { background: var(--im-hover); color: var(--im-text); }
@@ -103,13 +143,19 @@
 }
 .im-shell[data-im-sidebar="off"] .im-body { grid-template-columns: minmax(0, 1fr); }
 
+/* The work area: status row, columns, action bar, footer. Each has its own row, so a region an app leaves out leaves no
+   gap and the columns take its room. */
 .im-work {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto var(--im-h-footer);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   min-inline-size: 0;
   min-block-size: 0;
 }
+.im-work > .im-status { grid-row: 1; }
+.im-work > .im-columns { grid-row: 2; }
+.im-work > .im-actions { grid-row: 3; }
+.im-work > .im-footer { grid-row: 4; block-size: var(--im-h-footer); }
 .im-status {
   display: flex;
   align-items: center;
@@ -129,6 +175,10 @@
   grid-template-columns: minmax(0, 1fr) var(--im-w-inspector);
   min-block-size: 0;
 }
+/* The content region takes focus from the skip link (tabindex -1) without a ring round the whole region. */
+.im-columns > main[tabindex="-1"]:focus { outline: 0; }
+/* data-im-inspector="wide" on the shell: the inspector is --im-w-inspector-wide, 360, the top of the range the design allows. */
+.im-shell[data-im-inspector="wide"] { --im-w-inspector: var(--im-w-inspector-wide); }
 .im-actions {
   display: flex;
   align-items: center;
@@ -146,12 +196,12 @@
   overflow: hidden;
   border-top: 1px solid var(--im-line-soft);
   color: var(--im-muted);
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   white-space: nowrap;
 }
 .im-footer-text { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
 .im-footer-keys { display: flex; flex: none; gap: var(--im-s-3); }
-.im-footer-keys > span { display: inline-flex; align-items: center; gap: 6px; }
+.im-footer-keys > span { display: inline-flex; align-items: center; gap: var(--im-s-1); }
 
 /* ---------- the panel: header, tools, body, foot ---------- */
 .im-panel {
@@ -171,20 +221,25 @@
   padding-inline: var(--im-pane-pad);
 }
 .im-panel-title {
-  font: var(--im-head-w) 14px/1.15 var(--im-font-head);
+  font: var(--im-head-w) var(--im-fs-title)/1.15 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-head-c);
   white-space: nowrap;
 }
-.im-panel-sub { min-inline-size: 0; overflow: hidden; color: var(--im-muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.im-panel-sub { min-inline-size: 0; overflow: hidden; color: var(--im-muted); font-size: var(--im-fs-meta); text-overflow: ellipsis; white-space: nowrap; }
 .im-panel-tools { display: flex; flex: none; align-items: center; gap: var(--im-s-2); min-inline-size: 0; padding: 0 var(--im-pane-pad) var(--im-s-3); }
 .im-panel-tools > * { min-inline-size: 0; }
 .im-panel-tools > .im-note { flex: 1 1 auto; }
-.im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
+.im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line-strong) transparent; }
 .im-panel-foot { display: flex; flex: none; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3) var(--im-pane-pad); border-top: 1px solid var(--im-line-soft); }
-/* A row's icon for the rail is shown only in the rail (see the 850 breakpoint). */
-.im-row > .im-rail-item { display: none; }
+/* The inspector's content is a panel. Its header, body and foot are the inspector's own children (a fragment opened in
+   it), or the children of the one element it shows (a form): that element is then laid out as the panel is, so the body
+   scrolls between the header and the foot. */
+.im-inspector > :has(> .im-panel-body) { display: flex; flex: 1 1 auto; flex-direction: column; min-block-size: 0; }
+/* A row's icon for the rail is shown only in the rail (see the 850 breakpoint). A row whose control is a check has the
+   check as its rail item: it is shown in the whole sidebar too, and ticked in the rail as there. */
+.im-row > .im-rail-item:not(.im-check) { display: none; }
 /* The button that folds the sidebar into the rail is shown from 850 up, where the rail is a choice and not a necessity. */
 .im-sidebar .im-sidebar-collapse { display: none; }
 .im-list { display: flex; flex-direction: column; gap: 1px; padding: 0 var(--im-list-pad) var(--im-s-2); }
@@ -193,10 +248,10 @@
 .im-spacer { flex: 1 1 auto; }
 .im-num { font-variant-numeric: tabular-nums; }
 /* A column of things, a wrapping row of things, two groups at the two ends of a row, and a region that scrolls. */
-.im-stack { display: flex; flex-direction: column; gap: var(--im-gap, var(--im-s-3)); min-inline-size: 0; }
+.im-stack { display: flex; flex-direction: column; align-items: stretch; gap: var(--im-gap, var(--im-s-2)); min-inline-size: 0; }
 .im-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--im-gap, var(--im-s-2)); min-inline-size: 0; }
 .im-split { display: flex; align-items: center; justify-content: space-between; gap: var(--im-gap, var(--im-s-3)); min-inline-size: 0; }
-.im-scroll { min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
+.im-scroll { min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line-strong) transparent; }
 
 /* A surface is one of four materials: the window's ground, a sheet, a dense one for terminals and tables, a floating one. */
 .im-surface { min-inline-size: 0; }
@@ -223,13 +278,13 @@
   --im-head-c: var(--im-text-2);
   --im-head-w: 700;
   --im-pane-clip: polygon(0 var(--im-cut-lg), var(--im-cut-lg) 0, calc(100% - var(--im-cut-lg)) 0, 100% var(--im-cut-lg), 100% calc(100% - var(--im-cut-lg)), calc(100% - var(--im-cut-lg)) 100%, var(--im-cut-lg) 100%, 0 calc(100% - var(--im-cut-lg)));
-  /* the ground carries the blue grid of ONI */
-  --im-grid: #2A4A8018;
+  /* the ground carries the blue grid of ONI; in the light theme it is ONI's line at 11% */
+  --im-grid: #2A4A8018; /* imago-check: allow literal-color — the grid of ONI's dark ground, #2A4A80 at 9%: a blue of the approved ONI that no token draws (the line, the button or the hover mixed with transparent land a level off, on the ground or under glass) */
   background-image: linear-gradient(90deg, var(--im-grid) 1px, transparent 1px), linear-gradient(0deg, var(--im-grid) 1px, transparent 1px);
   background-size: 22px 22px;
 }
-[data-im-look="oni"][data-im-theme="light"] .im-shell { --im-grid: #3F6FB51C; }
-[data-im-look="oni"] .im-wordmark { font: 700 20px/1 var(--im-font-display); letter-spacing: 0.12em; color: var(--im-accent-text); }
+[data-im-look="oni"][data-im-theme="light"] .im-shell { --im-grid: color-mix(in srgb, var(--im-line) 11%, transparent); }
+[data-im-look="oni"] .im-wordmark { font: 700 var(--im-fs-display)/1 var(--im-font-display); letter-spacing: 0.12em; color: var(--im-accent-text); }
 [data-im-look="oni"] .im-titlebar .im-tab { block-size: 26px; border: 1px solid transparent; color: var(--im-accent-text); }
 [data-im-look="oni"] .im-titlebar .im-tab::after { display: none; }
 [data-im-look="oni"] .im-titlebar .im-tab[aria-selected="true"] { background: var(--im-selected); border-color: var(--im-line-strong); color: var(--im-accent-hi); }
@@ -244,8 +299,17 @@
 [data-im-look="oni"] .im-surface[data-im-surface="float"] { border-width: 2px; }
 
 /* ---------- breakpoints, measured on the shell ---------- */
-/* Below 1000 the inspector covers the content's right edge as a drawer; from 1000 it is docked and pushes the content. */
+/* Below 1000 the inspector covers the content's right edge as a drawer; from 1000 it is docked and pushes the content.
+   A wide inspector (360) beside the 232 sidebar leaves the content its 420 only from 1012 (232 + 420 + 360), so such a
+   shell keeps the drawer up to there. Each of the two only sets --im-drawer on the work area; the drawer is written
+   once, in the style query that follows. */
 @container im-shell (width < 1000px) {
+  .im-work { --im-drawer: 1; }
+}
+@container im-shell (1000px <= width < 1012px) {
+  .im-shell[data-im-inspector="wide"]:not([data-im-sidebar="off"]) .im-work { --im-drawer: 1; }
+}
+@container style(--im-drawer: 1) {
   .im-columns { grid-template-columns: minmax(0, 1fr); }
   .im-columns > .im-inspector {
     position: absolute;
@@ -256,6 +320,7 @@
     background: var(--im-float);
     box-shadow: -18px 0 40px var(--im-shadow);
   }
+  .im-shell[data-im-inspector="wide"] .im-columns > .im-inspector { inline-size: min(var(--im-w-inspector), 88%); }
 }
 
 /* The rail: the sidebar is 56px wide and a row shows one icon (its initials in the small avatar when the app gave it no
@@ -279,8 +344,44 @@
   .im-sidebar .im-panel-tools,
   .im-sidebar .im-panel-foot { display: none; }
   .im-sidebar .im-row > :not(.im-rail-item, .im-row-text) { display: none; }
-  .im-sidebar .im-row > .im-rail-item { display: grid; }
-  .im-sidebar .im-row > .im-rail-item:not(.im-avatar) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
+  .im-sidebar .im-row > .im-rail-item:not(.im-check) { display: grid; }
+  .im-sidebar .im-row > .im-rail-item:not(.im-avatar, .im-check) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
+  /* What is under a rail item: the row's fill (none at rest, hovered, selected, pressed, as css/controls.css draws it)
+     over the sidebar's ground. A mark on the item, the ring of the selection or the badge, is set off from the item's
+     fill (a category, the accent of a ticked check) by a ring of it, so it never stands on that fill alone. */
+  .im-sidebar .im-row { --im-rail-ground: var(--im-ground); --im-rail-fill: transparent; }
+  [data-im-look="oni"] .im-sidebar .im-row { --im-rail-ground: var(--im-sheet); }
+  .im-sidebar .im-row:where(:not([aria-disabled="true"])):where(:hover, [data-im-force="hover"]) { --im-rail-fill: var(--im-hover); }
+  .im-sidebar .im-row:where([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"]) { --im-rail-fill: var(--im-selected); }
+  .im-sidebar .im-row:where(:not([aria-disabled="true"])):where(:active, [data-im-force="press"]) { --im-rail-fill: var(--im-press); }
+  /* A row's badge is a dot on the corner of its rail item, 3px out, not at the end of the row; a press on it is the
+     item's. --im-rail-half is half the item's box: an icon's, an avatar's (26), a check's (16). */
+  .im-sidebar .im-row[data-im-badge] { --im-rail-half: calc(var(--im-rail-icon) / 2); }
+  .im-sidebar .im-row[data-im-badge]:has(> .im-avatar.im-rail-item) { --im-rail-half: 13px; }
+  .im-sidebar .im-row[data-im-badge]:has(> .im-check.im-rail-item) { --im-rail-half: 8px; }
+  .im-sidebar .im-row[data-im-badge]::after {
+    position: absolute;
+    inset-block-start: calc(50% - var(--im-rail-half) - 3px);
+    inset-inline-start: calc(50% + var(--im-rail-half) - 5px);
+    pointer-events: none;
+    box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground);
+  }
+  /* In the rail a category is the rail item's own fill: the row's start mark is not drawn there, where it would cover the
+     ring round a selected item (forced colours, which draw no category, keep that place for their selection bar). */
+  @media (forced-colors: none) {
+    .im-sidebar .im-row[data-im-cat]::before { content: none; }
+  }
+  /* A check is all a row with a check shows in the rail: its target is 24 by 24, centred on its 16px box whatever the
+     width of its edge (an inset would be counted from inside the edge). */
+  .im-sidebar .im-row > .im-check.im-rail-item::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    inline-size: 24px;
+    block-size: 24px;
+    translate: -50% -50%;
+  }
   .im-sidebar .im-row > .im-row-text {
     position: absolute;
     inline-size: 1px;
@@ -289,11 +390,16 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
-  /* the selection is a heavier line, or a ringed avatar, as well as a fill */
+  /* Every row of the rail is as tall as a two-line row: it shows one item whatever its lines, and the ring round a selected
+     item stays a pixel or more inside the row's focus ring. */
+  .im-sidebar .im-row { position: relative; justify-content: center; min-block-size: var(--im-h-row-2); padding-inline: 0; }
+  /* the selection is a heavier line, or a ring round an avatar or a check, apart from it by a gap of what is under the
+     row, as well as a fill */
   .im-sidebar .im-row[aria-selected="true"] > .im-rail-item .im-icon { stroke-width: 2.4; }
-  .im-sidebar .im-row[aria-selected="true"] > .im-avatar.im-rail-item { border-color: var(--im-accent-text); font-weight: 700; }
-  .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
+  .im-sidebar .im-row:is([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"]) > :is(.im-avatar, .im-check).im-rail-item {
+    box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground), 0 0 0 4px var(--im-accent-text);
+  }
+  .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); } /* imago-check: allow literal-space — the rail's geometry, not a space: 6px each side of the 56px rail leave rows 44 wide, as wide as a two-line row is tall in Smooth */
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
 }
 
@@ -309,7 +415,7 @@
   .im-status > .im-status-end { display: none; }
   .im-titlebar .im-views-menu { display: inline-flex; }
   .im-titlebar .im-sidebar-toggle { display: inline-grid; }
-  .im-titlebar-command { padding: 0 6px; border-color: transparent; }
+  .im-titlebar-command { padding: 0 var(--im-s-1); border-color: transparent; }
   [data-im-look="smooth"] .im-work,
   [data-im-look="smooth"] .im-shell[data-im-sidebar="off"] .im-work { margin-inline-start: 0; border-left: 0; border-radius: 0; }
   .im-shell[data-im-sidebar-open="true"] .im-sidebar {

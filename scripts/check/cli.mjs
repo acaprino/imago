@@ -1,0 +1,535 @@
+#!/usr/bin/env node
+// imago-check [--root <dir>] [--package]
+//
+// Checks an app against the rules of docs/design-file.md that a program can judge, or, with --package, the package's
+// own css/. This file is the command: its arguments, the files it reads, what it prints and its exit code (1 on any
+// finding, 0 on none, 2 on a bad argument, on an app where it reads no source file, or on an error of the system, which
+// is one line). It says how many files of each kind it read. A file or a folder that cannot be read (a link to nothing)
+// is skipped with a note. The rules are in rules.mjs.
+//
+// In an app it reads "imago" from the app's package.json:
+//   { "src": ["apps/desktop/src"], "tests": ["apps/desktop/tests"], "cargo": "apps/desktop/src-tauri/Cargo.toml",
+//     "agents": ["AGENTS.md", "CLAUDE.md"], "entry": "apps/desktop/src/main.ts", "app": "muro",
+//     "package": "apps/desktop/node_modules/@acaprino/imago",
+//     "icons": { "src-tauri/icons/icon.ico": "icon.ico", "src-tauri/icons/128x128@2x.png": "256x256.png" } }
+// `src` defaults to ["src"] and `agents` to those two files; `tests` lists folders that only removed-name and
+// unknown-name read. Without `cargo`, `entry` or `icons` their rules are skipped, and the program says so. `app` is
+// the id of the app, one of the folders of the package's icons/, and `icons` maps a file of the app to the file of
+// icons/<app>/ in the package that it must equal; `icons` needs `app`. `package` is where the package is installed
+// (default node_modules/@acaprino/imago, beside package.json or beside the package.json that depends on it).
+
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { brandMark } from './brand.mjs';
+import { packageNames } from './names.mjs';
+import * as rules from './rules.mjs';
+import { importsOf, parseSource, SCRIPT_EXTENSIONS, SOURCE_EXTENSIONS } from './source.mjs';
+
+/**
+ * @typedef {import('./rules.mjs').Finding} Finding
+ * @typedef {import('./rules.mjs').Exception} Exception
+ * @typedef {import('./source.mjs').Source} Source
+ * @typedef {{ css: number, script: number, html: number }} Read
+ *   How many files of each kind the check read.
+ * @typedef {{ findings: Finding[], accepted: Exception[], notes: string[], read: Read }} Result
+ * @typedef {{ root: string, notes: string[], skip: string | null }} Reading
+ *   What a walk of the app needs: its root, the notes of what it skipped, and the installed package, never read as
+ *   the app's own source.
+ */
+
+/** A bad argument, or an app the program cannot read: exit 2. */
+export class UsageError extends Error {}
+
+export const USAGE = `Usage: imago-check [--root <dir>] [--package]
+
+  Checks an app against the design rules of @acaprino/imago (docs/design-file.md), reading the "imago" block of its
+  package.json: { "src": [...], "tests": [...], "cargo": "...", "agents": [...], "entry": "...", "app": "...",
+  "package": "...", "icons": { ... } }.
+  --package       check the package's own css/ instead
+  --root <dir>    the folder to check (default: the current folder)
+
+  Prints file:line  rule  message for each finding, and how many files it read. Exit 1 on a finding, 0 on
+  none, 2 on a bad argument, on an app where it reads no source file, or on an error of the system.
+  An exception is a comment on the line or the line above: imago-check: allow <rule> — <reason>`;
+
+/** Where an app has the package installed, from the folder of its package.json. */
+const INSTALLED = 'node_modules/@acaprino/imago';
+const SKIP = new Set(['node_modules', '.git', 'dist', 'target']);
+
+const read = (/** @type {string} */ path) => readFileSync(path, 'utf8');
+/** What is at `path`, following links: null when nothing is, or when it cannot be known. */
+const kindAt = (/** @type {string} */ path) => {
+  try {
+    const stat = statSync(path, { throwIfNoEntry: false });
+    return stat ? (stat.isDirectory() ? 'folder' : stat.isFile() ? 'file' : 'other') : null;
+  } catch {
+    return null;
+  }
+};
+const isFile = (/** @type {string} */ path) => kindAt(path) === 'file';
+const isFolder = (/** @type {string} */ path) => kindAt(path) === 'folder';
+const fromRoot = (/** @type {string} */ root, /** @type {string} */ path) => relative(root, path).replaceAll('\\', '/');
+const samePath = (/** @type {string} */ a, /** @type {string} */ b) => relative(a, b) === '';
+/** Why a file system call failed, in a few words. */
+const failure = (/** @type {unknown} */ error) => /** @type {NodeJS.ErrnoException} */ (error)?.code ?? String(/** @type {Error} */ (error)?.message ?? error);
+
+// ---------- arguments ----------
+
+/**
+ * @param {string[]} argv
+ * @returns {{ root: string | null, packageMode: boolean, help: boolean }}
+ */
+export function parseArguments(argv) {
+  let root = null;
+  let packageMode = false;
+  let help = false;
+  for (let k = 0; k < argv.length; k++) {
+    const arg = argv[k];
+    if (arg === '--package') packageMode = true;
+    else if (arg === '--help' || arg === '-h') help = true;
+    else if (arg === '--root' || arg.startsWith('--root=')) {
+      const value = arg === '--root' ? argv[++k] : arg.slice('--root='.length);
+      if (!value || value.startsWith('--')) throw new UsageError('--root needs a folder');
+      root = value;
+    } else throw new UsageError(`unknown argument ${arg}`);
+  }
+  return { root, packageMode, help };
+}
+
+// ---------- files ----------
+
+/** A note for an entry the program skipped because the system could not stat or read it. */
+const skipped = (/** @type {Reading} */ reading, /** @type {string} */ path, /** @type {unknown} */ error) =>
+  reading.notes.push(`skipped ${fromRoot(reading.root, path) || '.'}: it cannot be read (${failure(error)}), as a link to nothing`);
+
+/**
+ * Every source file under `path` (or `path` itself), skipping node_modules, .git, dist, target and the installed
+ * package. An entry whose stat or read fails is skipped with a note.
+ * @param {Reading} reading @param {string} path @param {string[]} endings
+ */
+function sourcesUnder(reading, path, endings) {
+  if (isFile(path)) return [path];
+  /** @type {string[]} */
+  const found = [];
+  const walk = (/** @type {string} */ dir) => {
+    let names;
+    try {
+      names = readdirSync(dir).sort();
+    } catch (error) {
+      skipped(reading, dir, error);
+      return;
+    }
+    for (const name of names) {
+      if (SKIP.has(name)) continue;
+      const child = join(dir, name);
+      let stat;
+      try {
+        stat = statSync(child);
+      } catch (error) {
+        skipped(reading, child, error);
+        continue;
+      }
+      if (stat.isDirectory()) {
+        if (!reading.skip || !samePath(child, reading.skip)) walk(child);
+      } else if (endings.some((ending) => name.toLowerCase().endsWith(ending)) && !name.endsWith('.d.ts')) found.push(child);
+    }
+  };
+  walk(path);
+  return found;
+}
+
+/**
+ * A file read as a source, or null, with a note, when it cannot be read.
+ * @param {Reading} reading @param {string} path
+ * @returns {Source | null}
+ */
+function sourceAt(reading, path) {
+  let text;
+  try {
+    text = read(path);
+  } catch (error) {
+    skipped(reading, path, error);
+    return null;
+  }
+  return parseSource(fromRoot(reading.root, path), text);
+}
+
+/**
+ * The sources under the paths of a list of the "imago" block, each once.
+ * @param {Reading} reading @param {string[]} paths @param {string} key the key of the list, for the message
+ * @returns {Source[]}
+ */
+function sourcesOf(reading, paths, key) {
+  /** @type {Source[]} */
+  const sources = [];
+  for (const entry of paths) {
+    const path = resolve(reading.root, entry);
+    if (!kindAt(path)) throw new UsageError(`"imago.${key}" names ${entry}, which does not exist`);
+    for (const file of sourcesUnder(reading, path, SOURCE_EXTENSIONS)) {
+      const source = sourceAt(reading, file);
+      if (source && !sources.some((other) => other.file === source.file)) sources.push(source);
+    }
+  }
+  return sources;
+}
+
+/**
+ * The "imago" block of the app's package.json, with its defaults.
+ * @param {unknown} block
+ * @returns {{ src: string[], tests: string[], agents: string[], cargo: string | null, entry: string | null, app: string | null, package: string | null, icons: Record<string, string> | null }}
+ */
+export function readConfig(block) {
+  const value = block ?? {};
+  if (typeof value !== 'object' || Array.isArray(value)) throw new UsageError('"imago" in package.json is not an object');
+  const text = (/** @type {unknown} */ item) => typeof item === 'string' && item !== '';
+  /** @type {Record<string, { is: (entry: any) => boolean, must: string }>} */
+  const keys = {
+    src: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths' },
+    tests: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths: the folders of the app\'s tests, which only removed-name and unknown-name read' },
+    agents: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths' },
+    cargo: { is: text, must: 'a path' },
+    entry: { is: text, must: 'a path' },
+    app: { is: text, must: 'the id of the app' },
+    package: { is: text, must: 'the path of the folder where @acaprino/imago is installed' },
+    icons: {
+      is: (entry) => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry) && Object.keys(entry).length > 0 && Object.values(entry).every(text),
+      must: 'a map from the path of a file in the app to its file name in icons/<app>/ of the package',
+    },
+  };
+  for (const [key, entry] of Object.entries(value)) {
+    if (!Object.hasOwn(keys, key)) throw new UsageError(`"imago.${key}" in package.json is not a key the check reads (${Object.keys(keys).join(', ')})`);
+    if (!keys[key].is(entry)) throw new UsageError(`"imago.${key}" in package.json must be ${keys[key].must}`);
+  }
+  const config = /** @type {Record<string, any>} */ (value);
+  if (config.icons && !config.app) throw new UsageError('"imago.icons" in package.json needs "imago.app", the id of the app: shinatama, xiox, mukade, muro or daodan');
+  return {
+    src: config.src ?? ['src'], tests: config.tests ?? [], agents: config.agents ?? ['AGENTS.md', 'CLAUDE.md'], cargo: config.cargo ?? null,
+    entry: config.entry ?? null, app: config.app ?? null, package: config.package ?? null, icons: config.icons ?? null,
+  };
+}
+
+/** The folders from `path` up to `root`, both included. */
+function upTo(/** @type {string} */ root, /** @type {string} */ path) {
+  const folders = [];
+  let dir = isFolder(path) ? path : dirname(path);
+  for (;;) {
+    folders.push(dir);
+    if (dir === root || dirname(dir) === dir || !dir.startsWith(root)) break;
+    dir = dirname(dir);
+  }
+  return folders;
+}
+
+/**
+ * The package.json that depends on @acaprino/imago: the root's, or the nearest one above a folder of `src`.
+ * @param {string} root @param {string[]} src
+ */
+function npmManifest(root, src) {
+  const candidates = [join(root, 'package.json'), ...src.flatMap((entry) => upTo(root, resolve(root, entry)).map((dir) => join(dir, 'package.json')))];
+  for (const path of candidates) {
+    try {
+      if (isFile(path) && rules.npmPin(read(path), fromRoot(root, path))) return path;
+    } catch {
+      // A package.json that is not JSON does not pin anything; the root's was read before.
+    }
+  }
+  return join(root, 'package.json');
+}
+
+/**
+ * The entry and every file it imports or re-exports by a relative path (scripts only, not node_modules), and for each
+ * file the file of the app each of its relative specifiers is.
+ * @param {Reading} reading @param {string} entry
+ * @returns {{ sources: Source[], links: Map<string, Map<string, string>> }}
+ */
+function importGraph(reading, entry) {
+  /** @type {Map<string, Source>} */
+  const seen = new Map();
+  /** @type {Map<string, Map<string, string>>} */
+  const links = new Map();
+  const queue = [entry];
+  while (queue.length) {
+    const path = /** @type {string} */ (queue.shift());
+    if (seen.has(path)) continue;
+    const source = sourceAt(reading, path);
+    if (!source) continue;
+    seen.set(path, source);
+    /** @type {Map<string, string>} */
+    const targets = new Map();
+    links.set(source.file, targets);
+    for (const spec of importsOf(source)) {
+      if (!spec.startsWith('.')) continue;
+      const base = resolve(dirname(path), spec);
+      const candidates = [
+        base, base.replace(/\.(m?)js$/, '.$1ts'), base.replace(/\.jsx?$/, '.tsx'),
+        ...SCRIPT_EXTENSIONS.map((ending) => base + ending), ...SCRIPT_EXTENSIONS.map((ending) => join(base, `index${ending}`)),
+      ];
+      const target = candidates.find((candidate) => isFile(candidate) && SCRIPT_EXTENSIONS.some((ending) => candidate.endsWith(ending)));
+      if (target && !target.split(/[\\/]/).includes('node_modules')) {
+        targets.set(spec, fromRoot(reading.root, target));
+        queue.push(target);
+      }
+    }
+  }
+  return { sources: [...seen.values()], links };
+}
+
+/**
+ * Where the package is installed: the folder "imago.package" names, or node_modules/@acaprino/imago beside the
+ * root's package.json or beside the package.json that depends on it.
+ * @param {string} root @param {string} npmPath @param {string | null} named
+ */
+function installedPackage(root, npmPath, named) {
+  if (named) {
+    const path = resolve(root, named);
+    if (!isFile(join(path, 'package.json'))) throw new UsageError(`"imago.package" names ${named}, and @acaprino/imago is not installed there (no package.json): run npm install, or correct the path`);
+    return path;
+  }
+  const installed = [root, dirname(npmPath)].map((dir) => join(dir, INSTALLED)).find((dir) => isFile(join(dir, 'package.json')));
+  if (!installed) throw new UsageError(`@acaprino/imago is not installed in ${join(root, INSTALLED)}: run npm install before the check, or say where it is with "imago.package"`);
+  return installed;
+}
+
+/**
+ * The id of the app is one of the folders of the installed package's icons/, exactly: not `..`, not another case.
+ * @param {string} installed @param {string} app
+ */
+function checkAppId(installed, app) {
+  const all = join(installed, 'icons');
+  let known = [];
+  try {
+    known = readdirSync(all).filter((name) => isFolder(join(all, name))).sort();
+  } catch {
+    // No icons/ in the installed package: no id is known.
+  }
+  if (!known.includes(app)) throw new UsageError(`"imago.app" is ${app}, and the installed @acaprino/imago has no icons/${app}/: it is one of ${known.length ? known.join(', ') : 'none (the installed package has no icons/)'}`);
+}
+
+// ---------- the check ----------
+
+/**
+ * Runs the check on `root` and returns what it found; it prints nothing.
+ * @param {{ root: string, packageMode: boolean }} options
+ * @returns {Result}
+ */
+export function check({ root, packageMode }) {
+  /** @type {Finding[]} */
+  const findings = [];
+  /** @type {Exception[]} */
+  const exceptions = [];
+  /** @type {string[]} */
+  const notes = [];
+  const sources = packageMode ? checkPackage(root, findings, exceptions, notes) : checkApp(root, findings, exceptions, notes);
+  /** @type {Read} */
+  const read = { css: 0, script: 0, html: 0 };
+  for (const source of sources) read[source.kind]++;
+  const applied = rules.applyExceptions(findings, exceptions);
+  const order = (/** @type {{ file: string, line: number, rule: string }} */ a, /** @type {{ file: string, line: number, rule: string }} */ b) =>
+    (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line || (a.rule < b.rule ? -1 : a.rule > b.rule ? 1 : 0));
+  const unique = new Map(applied.findings.map((each) => [`${each.file}:${each.line} ${each.rule} ${each.message}`, each]));
+  return {
+    findings: [...unique.values()].sort(order).map(({ file, line, rule, message }) => ({ file, line, rule, message })),
+    accepted: applied.accepted.sort(order),
+    notes,
+    read,
+  };
+}
+
+/**
+ * The package's own css/: every rule but the app's, and css/tokens.css apart from the literal rules (it is where the
+ * literals are named). Returns the files it read.
+ * @param {string} root @param {Finding[]} findings @param {Exception[]} exceptions @param {string[]} notes
+ * @returns {Source[]}
+ */
+function checkPackage(root, findings, exceptions, notes) {
+  const css = join(root, 'css');
+  if (!isFolder(css)) throw new UsageError(`${root} has no css/ folder: --package checks the package's own css/`);
+  /** @type {Reading} */
+  const reading = { root, notes, skip: null };
+  /** @type {Source[]} */
+  const sources = [];
+  for (const path of sourcesUnder(reading, css, ['.css'])) {
+    const source = sourceAt(reading, path);
+    if (!source) continue;
+    sources.push(source);
+    for (const rule of [rules.classPrefix, rules.cursorPointer, rules.disabledOpacity, rules.mediaWidth]) findings.push(...rule(source));
+    if (source.file !== 'css/tokens.css') for (const rule of [rules.literalColor, rules.literalFontSize, rules.literalSpace]) findings.push(...rule(source));
+    exceptions.push(...rules.exceptionsIn(source));
+  }
+  return sources;
+}
+
+/**
+ * An app: its sources and its tests, its pins, the files of its agents, its entry and its icons. Returns the files of
+ * `src` and `tests` it read; reading none is a bad configuration, not a pass.
+ * @param {string} root @param {Finding[]} findings @param {Exception[]} exceptions @param {string[]} notes
+ * @returns {Source[]}
+ */
+function checkApp(root, findings, exceptions, notes) {
+  const manifestPath = join(root, 'package.json');
+  if (!isFile(manifestPath)) throw new UsageError(`${root} has no package.json: run imago-check in the root of the app, or with --package in the package`);
+  /** @type {Record<string, unknown>} */
+  let manifest;
+  try {
+    manifest = JSON.parse(read(manifestPath));
+  } catch (error) {
+    throw new UsageError(`package.json cannot be read: ${/** @type {Error} */ (error).message}`);
+  }
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw new UsageError('package.json is not an object');
+  const config = readConfig(manifest.imago);
+  const npmPath = npmManifest(root, config.src);
+
+  const installed = installedPackage(root, npmPath, config.package);
+  const packagePath = fromRoot(root, installed);
+  if (config.app) checkAppId(installed, config.app);
+  const defined = packageNames(installed, notes);
+
+  /** @type {Reading} */
+  const reading = { root, notes, skip: installed };
+  const sources = sourcesOf(reading, config.src, 'src');
+  const tests = sourcesOf(reading, config.tests, 'tests').filter((source) => !sources.some((other) => other.file === source.file));
+  if (!sources.length && !tests.length) {
+    const folders = [...config.src, ...config.tests];
+    throw new UsageError(`read no source file (${SOURCE_EXTENSIONS.join(', ')}) in ${folders.length ? folders.join(', ') : 'no folder: "imago.src" is empty'}: point "imago.src" at the app's sources`);
+  }
+  const properties = rules.customProperties(sources);
+  for (const source of sources) {
+    for (const rule of [rules.imSelector, rules.cursorPointer, rules.disabledOpacity, rules.mediaWidth, rules.showModal, rules.ownKeydown, rules.literalCase, rules.unknownValue]) {
+      findings.push(...rule(source));
+    }
+    for (const rule of [rules.literalColor, rules.literalFontSize, rules.literalSpace]) findings.push(...rule(source, properties));
+    findings.push(...brandMark(source));
+  }
+  notes.push(...rules.propertyNotes(properties));
+  for (const source of [...sources, ...tests]) {
+    findings.push(...rules.unknownName(source, defined), ...rules.removedName(source));
+    exceptions.push(...rules.exceptionsIn(source));
+  }
+
+  if (config.cargo) {
+    const cargoPath = resolve(root, config.cargo);
+    if (!isFile(cargoPath)) throw new UsageError(`"imago.cargo" names ${config.cargo}, which does not exist`);
+    const workspacePath = upTo(root, cargoPath).map((dir) => join(dir, 'Cargo.toml')).find((path) => isFile(path) && /^\s*\[workspace\]\s*$/m.test(read(path)));
+    const lockDir = workspacePath ? dirname(workspacePath) : dirname(cargoPath);
+    const npmLock = [root, dirname(npmPath)].map((dir) => join(dir, 'package-lock.json')).find(isFile);
+    const pins = rules.pinMismatch({
+      npm: { file: fromRoot(root, npmPath), text: read(npmPath) },
+      cargo: { file: fromRoot(root, cargoPath), text: read(cargoPath) },
+      workspace: workspacePath ? { file: fromRoot(root, workspacePath), text: read(workspacePath) } : null,
+      npmLock: npmLock ? read(npmLock) : null,
+      cargoLock: isFile(join(lockDir, 'Cargo.lock')) ? read(join(lockDir, 'Cargo.lock')) : null,
+    });
+    findings.push(...pins.findings);
+    notes.push(...pins.notes);
+  } else {
+    notes.push('pin-mismatch: skipped, no "cargo" in the "imago" block of package.json');
+  }
+
+  findings.push(...rules.agentRules(config.agents.map((file) => {
+    const path = resolve(root, file);
+    return { file: fromRoot(root, path), text: isFile(path) ? read(path) : null };
+  }), {
+    designFile: `${packagePath}/docs/design-file.md`,
+    resolves: (file, written) => [dirname(resolve(root, file)), root].some((dir) => isFile(resolve(dir, written))),
+  }));
+
+  if (config.entry) {
+    const entryPath = resolve(root, config.entry);
+    if (!isFile(entryPath)) throw new UsageError(`"imago.entry" names ${config.entry}, which does not exist`);
+    const graph = importGraph(reading, entryPath);
+    findings.push(...rules.mountApp(graph.sources, graph.links));
+  } else {
+    notes.push('mount-app: skipped, no "entry" in the "imago" block of package.json');
+  }
+
+  if (config.icons && config.app) {
+    findings.push(...rules.appIcon(config.app, iconFiles(root, installed, config.app, config.icons), packagePath));
+  } else {
+    notes.push('app-icon: skipped, no "icons" in the "imago" block of package.json');
+  }
+  return [...sources, ...tests];
+}
+
+/**
+ * The icon files the app lists, each with the package's own file beside it for the rule to compare.
+ * @param {string} root @param {string} installed the installed package @param {string} app an id checkAppId accepted @param {Record<string, string>} icons
+ */
+function iconFiles(root, installed, app, icons) {
+  const folder = join(installed, 'icons', app);
+  return Object.entries(icons).map(([path, name]) => {
+    if (/[\\/]/.test(name) || name === '..') throw new UsageError(`"imago.icons" gives ${name} for ${path}: it must be a file name in icons/${app}/ of the package, not a path`);
+    const packaged = join(folder, name);
+    if (!isFile(packaged)) throw new UsageError(`"imago.icons" names ${name} for ${path}, and icons/${app}/ of the installed @acaprino/imago has no such file`);
+    const own = resolve(root, path);
+    return { file: fromRoot(root, own), name, have: isFile(own) ? readFileSync(own) : null, want: readFileSync(packaged) };
+  });
+}
+
+// ---------- output ----------
+
+/**
+ * What the program prints: the findings, then the exceptions it accepted, the notes and a summary, which says how many
+ * files of each kind the check read.
+ * @param {Result} result
+ */
+export function format({ findings, accepted, notes, read }) {
+  /** @type {string[][]} */
+  const sections = [];
+  if (findings.length) sections.push(findings.map((each) => `${each.file}:${each.line}  ${each.rule}  ${each.message}`));
+  if (accepted.length) sections.push([`Exceptions accepted (${accepted.length}):`, ...accepted.map((each) => `${each.file}:${each.line}  ${each.rule}  ${each.reason}`)]);
+  if (notes.length) sections.push(notes);
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const each of findings) counts.set(each.rule, (counts.get(each.rule) ?? 0) + 1);
+  const byRule = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([rule, count]) => `${rule} ${count}`).join(', ');
+  const plural = (/** @type {number} */ count, /** @type {string} */ word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const total = findings.length ? `${plural(findings.length, 'finding')} (${byRule})` : 'no findings';
+  const kinds = Object.entries(read).filter(([, count]) => count > 0).map(([kind, count]) => `${count} ${kind}`).join(', ');
+  const files = `${plural(Object.values(read).reduce((sum, count) => sum + count, 0), 'file')}${kinds ? ` (${kinds})` : ''}`;
+  sections.push([`imago-check: ${total} in ${files}${accepted.length ? `, ${plural(accepted.length, 'exception')} accepted` : ''}.`]);
+  return `${sections.map((lines) => lines.join('\n')).join('\n\n')}\n`;
+}
+
+/**
+ * The command: returns its exit code.
+ * @param {string[]} argv
+ * @param {{ cwd?: string, out?: (text: string) => void, err?: (text: string) => void }} [io]
+ */
+export function main(argv, io = {}) {
+  const out = io.out ?? ((text) => process.stdout.write(text));
+  const err = io.err ?? ((text) => process.stderr.write(text));
+  try {
+    const args = parseArguments(argv);
+    if (args.help) {
+      out(`${USAGE}\n`);
+      return 0;
+    }
+    const root = resolve(io.cwd ?? process.cwd(), args.root ?? '.');
+    if (!isFolder(root)) throw new UsageError(`${args.root} is not a folder`);
+    const result = check({ root, packageMode: args.packageMode });
+    out(format(result));
+    return result.findings.length ? 1 : 0;
+  } catch (error) {
+    if (error instanceof UsageError) {
+      err(`imago-check: ${error.message}\n\n${USAGE}\n`);
+      return 2;
+    }
+    // An error of the system (a write that fails, a file that vanished while read): one line, never a stack, and
+    // never exit 1, which says the app has findings.
+    const message = String(/** @type {Error} */ (error)?.message ?? error).split(/\r?\n/)[0];
+    err(`imago-check: ${message}\n`);
+    return 2;
+  }
+}
+
+/** Whether this file is the program node runs (through npm's bin link too), and not a module a test imports. */
+function invoked() {
+  try {
+    return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (invoked()) process.exitCode = main(process.argv.slice(2));

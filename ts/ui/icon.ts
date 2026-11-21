@@ -29,6 +29,7 @@ const shapes = {
   folder: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
   spark: '<path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5L9 9M15 15l2.5 2.5M17.5 6.5L15 9M9 15l-2.5 2.5"/>',
   back: '<path d="M15 6l-6 6 6 6"/>',
+  sidebar: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M9.5 5v14"/>',
 } as const;
 
 // Keep the original string-composition names as aliases of the shared symbol set.

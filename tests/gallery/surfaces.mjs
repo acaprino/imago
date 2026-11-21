@@ -209,6 +209,35 @@ async function menus(page, look, theme) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Every dialog is one drawing, in the middle of the layer under the title bar. The only side panel is the inspector.
+async function assertCentred(page, selector, text) {
+  const offset = await page.evaluate((s) => {
+    const el = document.querySelector(s);
+    const d = el.getBoundingClientRect(), z = el.closest('.im-scrim').getBoundingClientRect();
+    return [(d.left + d.right - z.left - z.right) / 2, (d.top + d.bottom - z.top - z.bottom) / 2];
+  }, selector);
+  assert.ok(offset.every((n) => Math.abs(n) <= 1.5), `${text} is off the middle of its layer by ${offset.map(Math.round)}`);
+}
+
+// A form dialog, wide or not, with a short body or a long one, is centred and stays inside its layer.
+async function formDialogPlacement(page, look, theme) {
+  const where = (text) => `${look} ${theme}: ${text}`;
+  await show(page, { app: 'xiox', look, theme, width: 1160 });
+  for (const [name, wide, lines] of [['short', false, 1], ['wide', true, 3], ['long', false, 200]]) {
+    await page.evaluate(([name, wide, lines]) => {
+      const form = window.__imagoSurfaces.openFormDialog(document.querySelector('.im-shell'), { title: `Form ${name}`, closeLabel: 'Close', wide });
+      for (let i = 0; i < lines; i++) form.body.append(Object.assign(document.createElement('p'), { textContent: `Line ${i}` }));
+      window.__placed = form;
+    }, [name, wide, lines]);
+    assert.equal(await page.getByRole('dialog', { name: `Form ${name}` }).count(), 1, where(`the ${name} form is open`));
+    await assertCentred(page, '.im-form-dialog', where(`the ${name} form dialog`));
+    assert.equal(await page.evaluate(() => /drawer/.test(document.querySelector('.im-form-dialog').className)), false, where('a form dialog is not a drawer'));
+    assert.ok((await box(page, '.im-form-dialog')).height <= (await box(page, '.im-scrim')).height, where(`the ${name} form stays inside its layer`));
+    await page.evaluate(() => window.__placed.close());
+    assert.equal(await count(page, '.im-scrim'), 0, where(`the ${name} form is gone`));
+  }
+}
+
 async function dialogs(page, look, theme) {
   const where = (text) => `${look} ${theme}: ${text}`;
   await show(page, { app: 'xiox', look, theme, width: 1160 });
@@ -244,6 +273,7 @@ async function dialogs(page, look, theme) {
   const scrim = await box(page, '.im-scrim');
   const titlebar = await box(page, '.im-titlebar');
   assert.ok(Math.abs(scrim.top - titlebar.bottom) <= 0.5, where('the layer starts under the title bar'));
+  await assertCentred(page, '.im-dialog', where('the confirm dialog'));
 
   // The buttons: the verb given, the filled danger class on the confirming one, Cancel first.
   const buttons = await dialog.locator('button').evaluateAll((list) => list.map((b) => ({ text: b.textContent.trim(), cls: b.className })));
@@ -485,6 +515,39 @@ async function inspectors(page, look, theme) {
   assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), false, where('Escape closes the inspector'));
   assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, where('and returns focus'));
 
+  // A key is answered once: with a command of the app bound to Escape, the Escape that closes the inspector does not
+  // also run it; the next Escape, pressed where focus went back, does.
+  await build();
+  await page.evaluate((s) => {
+    window.__escapes = 0;
+    window.__unbindEscape = window.__imagoSurfaces.registry.register({ id: 'test:escape', title: 'Clear the selection', keys: 'Escape', run: () => void window.__escapes++ });
+    window.__imagoSurfaces.inspector.open(window.__inspectorContent, document.querySelector(s));
+  }, opener);
+  assert.equal((await active(page)).id, 'name', where('focus is in the inspector'));
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), false, where('one Escape closes the inspector'));
+  assert.equal(await page.evaluate(() => window.__escapes), 0, where('and does not run the command bound to Escape'));
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => window.__escapes), 1, where('a second Escape runs it'));
+
+  // A held Escape too: the press closes the inspector, and its repeats, which reach the opener once focus is back
+  // there, run no command until the key goes up.
+  await build();
+  await page.evaluate((s) => {
+    window.__escapes = 0;
+    window.__imagoSurfaces.inspector.open(window.__inspectorContent, document.querySelector(s));
+  }, opener);
+  await page.keyboard.down('Escape');
+  await page.keyboard.down('Escape'); // a repeat: Playwright marks every down after the first as one
+  await page.keyboard.down('Escape');
+  assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), false, where('a held Escape closes the inspector'));
+  assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, where('focus is back on the opener'));
+  assert.equal(await page.evaluate(() => window.__escapes), 0, where('its repeats run no command'));
+  await page.keyboard.up('Escape');
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => window.__escapes), 1, where('after the keyup a new Escape runs it'));
+  await page.evaluate(() => window.__unbindEscape());
+
   await build();
   await page.evaluate((s) => {
     window.__asked = 0;
@@ -546,7 +609,7 @@ async function palettes(page, look, theme) {
   await show(page, { app: 'xiox', look, theme, width: 1160 });
   const opener = '.im-actions .im-btn:not(.im-btn--primary)';
   const commands = await page.evaluate(() => window.__imagoSurfaces.registry.list().map((c) => c.title));
-  assert.deepEqual(commands.slice(0, 4), ['Views: Cleanup', 'Views: Registry', 'Views: Services & RAM', 'Views: Developers'], where('one Views command per title-bar tab'));
+  assert.deepEqual(commands.slice(0, 3), ['Views: Cleanup', 'Views: Registry', 'Views: Developers'], where('one Views command per title-bar tab: the three Xiox has'));
   assert.ok(commands.includes('Clean 8 items') && commands.includes('Analyze'), where('the primary and secondary actions are commands'));
 
   // Ctrl+K opens it, over the title bar's layer, with focus in the field; it lists the registry.
@@ -603,7 +666,7 @@ async function palettes(page, look, theme) {
   await page.fill('.im-palette-input', 'reg');
   await press(page, 'Enter');
   assert.equal(await count(page, '.im-palette'), 0, where('Enter closes the palette'));
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,true,false,false', where('Enter ran the first match: the Registry view'));
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,true,false', where('Enter ran the first match: the Registry view'));
   assert.equal(await page.evaluate(() => document.querySelector('.im-notice')?.textContent ?? ''), 'Ran: Views: Registry', where('and the command said so'));
   assert.equal(await count(page, '[inert]'), 0, where('the page is released'));
   assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, where('focus is back where it was'));
@@ -618,12 +681,23 @@ async function palettes(page, look, theme) {
   assert.equal(await count(page, '.im-palette'), 0, where('a press on the page behind closes it'));
   assert.equal(await count(page, '[inert]'), 0, where('and releases the page'));
 
-  // A click runs a command too; the title bar's own command button opens the palette.
+  // A click runs a command too; the title bar's own command button runs the palette command that mountApp registered,
+  // the same one Ctrl+K runs (so the palette has the words given to mountApp, and no second copy of them).
+  await page.evaluate(() => {
+    const palette = window.__imagoSurfaces.registry.get('imago.palette');
+    const run = palette.run;
+    window.__paletteRuns = 0;
+    palette.run = () => {
+      window.__paletteRuns++;
+      return run();
+    };
+  });
   await page.click('.im-titlebar-command');
   assert.equal(await count(page, '.im-palette'), 1, where('the title bar button opens the palette'));
+  assert.equal(await page.evaluate(() => window.__paletteRuns), 1, where('through the registered command'));
   await page.locator('.im-palette-list [role="option"]', { hasText: 'Developers' }).click();
   assert.equal(await count(page, '.im-palette'), 0, where('a click on a command closes the palette'));
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,false,false,true', where('and runs it'));
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,false,true', where('and runs it'));
 
   // A menu or a sheet open under Ctrl+K is closed, not left behind.
   await anchor(page);
@@ -700,8 +774,8 @@ async function everyApp(page) {
   });
   await page.click('#menu-hook');
   assert.equal(await count(page, '.im-shell .im-menu'), 1, 'the menu hook opens the sample menu');
-  assert.equal(await page.locator('.im-shell .im-menu-item[data-im-tone="danger"]').count(), 1, 'its danger item is marked');
-  await page.click('.im-shell .im-menu-item[data-im-tone="danger"]');
+  assert.equal(await page.locator('.im-shell .im-menu-item[data-im-tone="err"]').count(), 1, 'its danger item is marked with the err tone');
+  await page.click('.im-shell .im-menu-item[data-im-tone="err"]');
   assert.equal(await count(page, '.im-shell .im-menu'), 0, 'running the item closes the menu');
   assert.equal(await count(page, '.im-dialog'), 1, 'and the dialog opens');
   assert.equal((await active(page)).text, 'Cancel', 'with focus on Cancel');
@@ -1255,13 +1329,152 @@ async function formDialogs(page) {
   await press(page, 'Escape');
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Drawers: app-owned forms beside the panels. The panels stay live, Escape closes the top drawer, the control that
+// opened one closes it, and a drawer opened from inside another covers it until it closes.
+async function drawers(page, look, theme) {
+  const where = (text) => `${look} ${theme}: ${text}`;
+  await show(page, { app: 'xiox', look, theme, width: 1160 });
+  await anchor(page, { id: 'anchor', left: 260, top: 120, text: 'Library' });
+  await page.evaluate(() => {
+    const shell = document.querySelector('.im-shell');
+    const make = (id, title) => {
+      document.getElementById(id)?.remove();
+      const dialog = document.createElement('dialog');
+      dialog.id = id;
+      dialog.setAttribute('aria-label', title);
+      dialog.innerHTML = `<form class="im-form"><label class="im-field"><span class="im-field-label">${title} filter</span><input id="${id}-field" class="im-native-input"></label><button type="button" class="im-btn" data-more>More</button><button type="button" class="im-btn" data-child>Details</button><button type="button" class="im-btn" data-cancel>Cancel</button></form>`;
+      dialog.querySelector('[data-cancel]').addEventListener('click', () => dialog.close());
+      dialog.addEventListener('cancel', (event) => { if (window.__refuse) event.preventDefault(); });
+      shell.append(dialog);
+      return dialog;
+    };
+    const library = make('drawer-library', 'Library');
+    const details = make('drawer-details', 'Details');
+    const settings = make('drawer-settings', 'Settings');
+    window.__refuse = false;
+    window.__openDrawer = (dialog) => window.__imagoSurfaces.openDialogDrawer(dialog, {
+      acceptsEscape: (target) => !(target instanceof Element && target.closest('[data-keeps-escape]')),
+    });
+    document.getElementById('anchor').addEventListener('click', () => window.__openDrawer(library));
+    library.querySelector('[data-child]').addEventListener('click', () => window.__openDrawer(details));
+    library.querySelector('[data-more]').addEventListener('click', (event) => window.__imagoSurfaces.openMenu(event.currentTarget, [{ label: 'Export', run() {} }]));
+    window.__settings = settings;
+  });
+  const shown = (id) => page.evaluate((id) => { const el = document.getElementById(id); return Boolean(el?.open && el.getClientRects().length); }, id);
+  // One panel at the right edge at a time: the sample's docked inspector makes way for the drawer.
+  await page.evaluate(() => window.__imagoSurfaces.inspector.close());
+
+  // It opens at the window's edge under the title bar, takes focus, and leaves the panels live.
+  await page.click('#anchor');
+  assert.equal(await shown('drawer-library'), true, where('the control opens the drawer'));
+  const drawer = await box(page, '#drawer-library');
+  const shellBox = await box(page, '.im-shell');
+  assert.ok(Math.abs(drawer.right - shellBox.right) <= 1, where(`the drawer is at the right edge (${drawer.right} vs ${shellBox.right})`));
+  assert.ok(Math.abs(drawer.top - (await box(page, '.im-titlebar')).bottom) <= 1, where('under the title bar'));
+  assert.equal(await page.evaluate(() => document.getElementById('drawer-library').contains(document.activeElement)), true, where('focus is in the drawer'));
+  assert.equal(await count(page, '[inert]'), 0, where('a drawer makes nothing inert'));
+  // Beside the panels: from 900px the content gives the drawer its width, and takes it back when it closes.
+  const beside = await box(page, '.im-content');
+  assert.ok(beside.right <= drawer.left + 1, where(`the content ends where the drawer starts (${beside.right} vs ${drawer.left})`));
+
+  await page.fill('.im-content input', 'beside');
+  assert.equal(await page.inputValue('.im-content input'), 'beside', where('the panels beside it take input'));
+  assert.equal(await shown('drawer-library'), true, where('and a press in them leaves it open'));
+
+  // Escape closes it from the panels too, and focus stays where the user went on working; from inside the drawer,
+  // focus goes back to its control. The control toggles it.
+  await press(page, 'Escape');
+  assert.equal(await shown('drawer-library'), false, where('Escape in the panels closes the drawer'));
+  assert.ok((await box(page, '.im-content')).right > beside.right + 100, where('the content takes its width back'));
+  assert.equal(await page.evaluate(() => document.querySelector('.im-shell').hasAttribute('data-im-drawer-open')), false, where('and the shell has no drawer open'));
+  assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('.im-content input')), true, where('and focus stays in the field'));
+  await page.click('#anchor');
+  await page.focus('#drawer-library-field');
+  await press(page, 'Escape');
+  assert.equal((await active(page)).id, 'anchor', where('from inside the drawer, focus is back on its control'));
+  await page.click('#anchor');
+  await page.click('#anchor');
+  await page.waitForTimeout(50);
+  assert.equal(await shown('drawer-library'), false, where('its control closes it and does not open it again'));
+  await page.click('#anchor');
+  await page.focus('#anchor');
+  await press(page, 'Enter');
+  assert.equal(await shown('drawer-library'), false, where('and so does Enter on the control, with focus beside the open drawer'));
+
+  // From inside, a drawer covers the one it came from; Escape uncovers it.
+  await page.click('#anchor');
+  await page.click('#drawer-library [data-child]');
+  assert.equal(await shown('drawer-details'), true, where('a drawer opens from inside another'));
+  assert.equal(await shown('drawer-library'), false, where('and covers it'));
+  assert.equal(await inertAt(page, '#drawer-library'), true, where('the covered drawer cannot be reached'));
+  await press(page, 'Escape');
+  assert.equal(await shown('drawer-details'), false, where('Escape closes the top drawer'));
+  assert.equal(await shown('drawer-library'), true, where('and the covered one is back'));
+  assert.equal(await inertAt(page, '#drawer-library'), false, where('live again'));
+  assert.equal((await active(page)).text, 'Details', where('focus is back on the control inside it'));
+
+  // From outside, a drawer replaces the open ones.
+  await page.click('#drawer-library [data-child]');
+  await page.evaluate(() => { document.querySelector('.im-content input').focus(); window.__openDrawer(window.__settings); });
+  assert.equal(await shown('drawer-settings'), true, where('a drawer opened from outside'));
+  assert.equal(await page.evaluate(() => ['drawer-library', 'drawer-details'].some((id) => document.getElementById(id).open)), false, where('replaces every open drawer'));
+  await press(page, 'Escape');
+
+  // A drawer that refuses its cancel stays; a field that keeps Escape keeps it.
+  await page.click('#anchor');
+  await page.evaluate(() => (window.__refuse = true));
+  await press(page, 'Escape');
+  assert.equal(await shown('drawer-library'), true, where('a refused cancel keeps the drawer'));
+  await page.evaluate(() => (window.__refuse = false));
+  await page.evaluate(() => document.querySelector('.im-content input').setAttribute('data-keeps-escape', ''));
+  await page.focus('.im-content input');
+  await press(page, 'Escape');
+  assert.equal(await shown('drawer-library'), true, where('Escape in a field that keeps it leaves the drawer'));
+  await page.evaluate(() => document.querySelector('.im-content input').removeAttribute('data-keeps-escape'));
+
+  // A menu over the drawer closes first; a dialog over it makes it inert and closes first.
+  await page.click('#drawer-library [data-more]');
+  assert.equal(await count(page, '.im-shell .im-menu'), 1, where('a menu opens from inside the drawer'));
+  await press(page, 'Escape');
+  assert.equal(await count(page, '.im-shell .im-menu'), 0, where('the first Escape closes the menu'));
+  assert.equal(await shown('drawer-library'), true, where('and the drawer stays'));
+  await page.evaluate(() => void window.__imagoSurfaces.confirm(document.querySelector('.im-shell'), { title: 'Sure?', body: 'Really.', confirm: 'Yes', cancel: 'No' }));
+  assert.equal(await inertAt(page, '#drawer-library'), true, where('a dialog makes the drawer inert'));
+  assert.equal(await page.evaluate(() => window.__openDrawer(window.__settings)), false, where('and no drawer opens under it'));
+  await press(page, 'Escape');
+  assert.equal(await count(page, '.im-dialog[role="alertdialog"]'), 0, where('Escape closes the dialog first'));
+  assert.equal(await inertAt(page, '#drawer-library'), false, where('the drawer is live again'));
+  await press(page, 'Escape');
+  assert.equal(await shown('drawer-library'), false, where('the next Escape closes the drawer'));
+  assert.equal(await count(page, '[inert], [data-im-covered], [data-im-layer="drawer"]'), 0, where('nothing is left behind'));
+
+  // Narrower than 900px the drawer overlaps the panels instead (the redraw removes this test's own drawers after).
+  await page.evaluate(() => window.__imago.set({ width: 860 }));
+  await page.evaluate(() => {
+    const dialog = document.createElement('dialog');
+    dialog.id = 'drawer-narrow';
+    dialog.innerHTML = '<p>Narrow</p>';
+    document.querySelector('.im-shell').append(dialog);
+    window.__imagoSurfaces.openDialogDrawer(dialog);
+  });
+  const narrow = await box(page, '.im-content');
+  const narrowDrawer = await box(page, '#drawer-narrow');
+  assert.ok(narrow.right > narrowDrawer.left + 50, where(`at 860 the drawer overlaps the content (${narrow.right} vs ${narrowDrawer.left})`));
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => document.querySelector('.im-shell').hasAttribute('data-im-drawer-open')), false, where('closed'));
+  await fresh(page); // the sample shell again, its inspector open
+}
+
 export default async (page, url) => {
   await formDialogs(page);
   for (const look of LOOKS) {
     for (const theme of THEMES) {
       await menus(page, look, theme);
       await dialogs(page, look, theme);
+      await formDialogPlacement(page, look, theme);
       await sheets(page, look, theme);
+      await drawers(page, look, theme);
       await inspectors(page, look, theme);
       await palettes(page, look, theme);
     }

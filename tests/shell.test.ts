@@ -137,11 +137,53 @@ test('applyLook calls setWindowTheme once for two identical calls, and again whe
   assert.deepEqual(sent, ['light']);
   applyLook(root, { ...state, theme: 'dark' }, deps);
   assert.deepEqual(sent, ['light', 'dark']);
-  // ONI with the Windows theme asks for dark too: the window is already dark, nothing to send.
+  // ONI with the Windows theme asks for dark too, but the look changed: the window is told, for its tint.
   applyLook(root, { ...state, look: 'oni', theme: 'system' }, deps);
-  assert.deepEqual(sent, ['light', 'dark']);
+  assert.deepEqual(sent, ['light', 'dark', 'dark']);
+  applyLook(root, { ...state, look: 'oni', theme: 'dark' }, deps);
+  assert.deepEqual(sent, ['light', 'dark', 'dark'], 'the same word, look and drawn theme: nothing to send');
   applyLook(root, { ...state, look: 'smooth', theme: 'system' }, deps);
-  assert.deepEqual(sent, ['light', 'dark', 'system']);
+  assert.deepEqual(sent, ['light', 'dark', 'dark', 'system']);
+});
+
+test('applyLook tells the window the look and the theme the page draws with the window theme', () => {
+  const root = fakeRoot();
+  const sent: unknown[] = [];
+  const setWindowTheme = (theme: string, detail: unknown): void => { sent.push([theme, detail]); };
+  applyLook(root, { app: 'xiox', look: 'oni', theme: 'light', glass: true }, { systemIsDark: () => true, setWindowTheme });
+  applyLook(root, { app: 'xiox', look: 'smooth', theme: 'system', glass: true }, { systemIsDark: () => false, setWindowTheme });
+  assert.deepEqual(sent, [
+    ['light', { look: 'oni', resolved: 'light' }],
+    ['system', { look: 'smooth', resolved: 'light' }],
+  ]);
+});
+
+test('applyLook tells the window again when only the look changes', () => {
+  const root = fakeRoot();
+  const sent: unknown[] = [];
+  const deps = { systemIsDark: () => true, setWindowTheme: (theme: string, detail: unknown) => { sent.push([theme, detail]); } };
+  applyLook(root, { app: 'muro', look: 'smooth', theme: 'dark', glass: true }, deps);
+  applyLook(root, { app: 'muro', look: 'oni', theme: 'dark', glass: true }, deps);
+  assert.deepEqual(sent, [
+    ['dark', { look: 'smooth', resolved: 'dark' }],
+    ['dark', { look: 'oni', resolved: 'dark' }],
+  ]);
+});
+
+test('applyLook tells the window again when Windows changes its colours under the Windows theme', () => {
+  const root = fakeRoot();
+  const sent: unknown[] = [];
+  let dark = true;
+  const deps = { systemIsDark: () => dark, setWindowTheme: (theme: string, detail: unknown) => { sent.push([theme, detail]); } };
+  const state = { app: 'mukade', look: 'smooth', theme: 'system', glass: true } as const;
+  applyLook(root, state, deps);
+  applyLook(root, state, deps);
+  dark = false;
+  applyLook(root, state, deps);
+  assert.deepEqual(sent, [
+    ['system', { look: 'smooth', resolved: 'dark' }],
+    ['system', { look: 'smooth', resolved: 'light' }],
+  ], 'the same word, and the theme the page draws changed: the tint follows it');
 });
 
 test('applyLook keeps what it sent per root', () => {
@@ -190,6 +232,16 @@ test('clampZoom keeps 50 to 200 percent, in steps of 10', () => {
   assert.equal(clampZoom(Number.NEGATIVE_INFINITY), 0.5);
 });
 
+test('clampZoom rounds a level that is not a multiple of 10 to the nearest one, half up, and takes no list of levels', () => {
+  assert.equal(clampZoom(0.67), 0.7);
+  assert.equal(clampZoom(0.75), 0.8);
+  assert.equal(clampZoom(1.25), 1.3);
+  assert.equal(clampZoom(1.75), 1.8);
+  assert.equal(clampZoom(1.95), 2);
+  assert.equal(clampZoom(0.45), 0.5);
+  assert.equal(clampZoom.length, 1, "the second parameter, the app's own steps, is gone");
+});
+
 test('stepZoom steps by 10 percent, stops at the ends and resets on 0', () => {
   assert.equal(stepZoom(2, 1), 2);
   assert.equal(stepZoom(0.5, -1), 0.5);
@@ -201,6 +253,14 @@ test('stepZoom steps by 10 percent, stops at the ends and resets on 0', () => {
   assert.equal(level, 2, 'ten steps up are exactly 200 percent, with no float residue');
   for (let i = 0; i < 15; i++) level = stepZoom(level, -1);
   assert.equal(level, 0.5);
+});
+
+test('stepZoom steps from a level that is not a multiple of 10 by first rounding it, and takes no list of levels', () => {
+  assert.equal(stepZoom(0.67, 1), 0.8);
+  assert.equal(stepZoom(0.67, -1), 0.6);
+  assert.equal(stepZoom(1.75, 1), 1.9);
+  assert.equal(stepZoom(1.25, 0), 1);
+  assert.equal(stepZoom.length, 2, "the third parameter, the app's own steps, is gone");
 });
 
 test('zoomDirection reads Ctrl+= Ctrl++ Ctrl+- Ctrl+0 by key or by physical key', () => {
@@ -330,6 +390,16 @@ test('mountZoom: Ctrl+wheel zooms one step per notch, small deltas add up, a pla
   doc.fire('wheel', { ctrlKey: true, deltaY: 30, deltaMode: 0 });
   await settle();
   assert.deepEqual(applied, [1, 1.1, 1], 'two small deltas make one step down');
+});
+
+test('mountZoom: the wheel and the keys step by 10 whatever steps an older app still passes', async () => {
+  const doc = stubDoc();
+  const applied: number[] = [];
+  mountZoom(doc, { apply: (level) => { applied.push(level); }, storage: memoryStorage(), levels: [0.67, 0.75, 1, 1.25, 1.75] } as Parameters<typeof mountZoom>[1]);
+  doc.fire('wheel', { ctrlKey: true, deltaY: -100, deltaMode: 0 });
+  doc.fire('keydown', ctrl('=', 'Equal'));
+  await settle();
+  assert.deepEqual(applied, [1, 1.1, 1.2]);
 });
 
 test('mountZoom stops answering after it is unmounted', () => {
@@ -524,6 +594,24 @@ test('the maximize button says what it will do', () => {
   assert.equal(t.buttons.maximize.getAttribute('aria-label'), 'Maximize window');
   assert.equal(t.buttons.maximize.title, 'Maximize');
   assert.equal(t.buttons.maximize.getAttribute('data-im-maximized'), 'false');
+});
+
+test("the maximize button says it in the app's words when the app gives them", () => {
+  const t = setup();
+  const labels = { maximize: 'Ingrandisci la finestra', restore: 'Ripristina la finestra', maximizeTitle: 'Ingrandisci', restoreTitle: 'Ripristina' };
+  mountWindowControls(t.titlebar, t.api, { labels });
+  t.maximized(true);
+  assert.equal(t.buttons.maximize.getAttribute('aria-label'), 'Ripristina la finestra');
+  assert.equal(t.buttons.maximize.title, 'Ripristina');
+  t.maximized(false);
+  assert.equal(t.buttons.maximize.getAttribute('aria-label'), 'Ingrandisci la finestra');
+  assert.equal(t.buttons.maximize.title, 'Ingrandisci');
+  // A word the app leaves out is the English one.
+  const u = setup();
+  mountWindowControls(u.titlebar, u.api, { labels: { restore: 'Ripristina la finestra' } });
+  u.maximized(true);
+  assert.equal(u.buttons.maximize.getAttribute('aria-label'), 'Ripristina la finestra');
+  assert.equal(u.buttons.maximize.title, 'Restore');
 });
 
 /** What escapes while `run` and the turns after it go by: unhandled rejections and errors thrown out of listeners. */
@@ -764,5 +852,8 @@ test('the shell entry point exports every public name', () => {
     'mountWindowControls', 'guardDesktop',
   ]) {
     assert.equal(typeof (shell as Record<string, unknown>)[name], 'function', name);
+  }
+  for (const name of ['applyShinatamaPalette', 'SHINATAMA_PALETTES']) {
+    assert.ok(!(name in shell), `${name} is Shinatama's, from the tag v0.1.4: the package does not export it`);
   }
 });

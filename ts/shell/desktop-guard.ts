@@ -57,7 +57,7 @@ function elementOf(event: Event): Element | null {
  * - The mouse's fourth and fifth buttons (Back and Forward to the engine) do nothing.
  * - An image or a link is not dragged out of the window, unless the app made it `draggable="true"`.
  */
-export function guardDesktop(doc: Document, options: { allowReloadIn?: string; keyPhase?: 'capture' | 'bubble' } = {}): () => void {
+export function guardDesktop(doc: Document, options: { allowReloadIn?: string } = {}): () => void {
   const own = options.allowReloadIn;
   const ownInput = own ? `${FIELD}, ${own}` : FIELD;
 
@@ -83,14 +83,13 @@ export function guardDesktop(doc: Document, options: { allowReloadIn?: string; k
     if (target?.closest(DRAGGABLE_BY_ENGINE) && !target.closest('[draggable="true"]')) event.preventDefault();
   };
 
-  // In bubble mode app shortcuts registered first can handle the key before its browser default is cancelled.
-  const capture = options.keyPhase !== 'bubble';
-  doc.addEventListener('keydown', onKeyDown, { capture });
+  // The capture phase: the key is refused before any handler of the app sees it, and the registry still runs its command.
+  doc.addEventListener('keydown', onKeyDown, { capture: true });
   doc.addEventListener('contextmenu', onContextMenu);
   doc.addEventListener('mouseup', onMouseUp);
   doc.addEventListener('dragstart', onDragStart);
   return () => {
-    doc.removeEventListener('keydown', onKeyDown, { capture });
+    doc.removeEventListener('keydown', onKeyDown, { capture: true });
     doc.removeEventListener('contextmenu', onContextMenu);
     doc.removeEventListener('mouseup', onMouseUp);
     doc.removeEventListener('dragstart', onDragStart);
