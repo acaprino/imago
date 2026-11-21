@@ -53,8 +53,10 @@ class `css/` defines is shown there. The gallery forces a pseudo-state on a cell
 
 ## Names
 
-Every class of the package starts with `im-`, every custom property with `--im-`, every attribute with `data-im-`. An
-app's own classes and custom properties carry the app's own prefix (`mk-`, `--mk-`), never `im-`. A name the package
+Every class of the package starts with `im-`, every custom property with `--im-`, every attribute it reads or styles
+with `data-im-`. The `data-action`, `data-id`, `data-close` and `data-setting` that the string renderers write from
+their arguments are the app's own, for its handlers ([html-composition.md](html-composition.md)). An app's own classes
+and custom properties carry the app's own prefix (`mk-`, `--mk-`), never `im-`. A name the package
 removed is removed, not kept as an alias: the table "Moving from 0.1.4" in [using-imago.md](using-imago.md#11-moving-from-014)
 says what replaces each.
 
