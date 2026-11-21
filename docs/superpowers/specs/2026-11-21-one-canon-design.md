@@ -112,8 +112,9 @@ different in each. Nothing checks an app against the rules.
 
 The audit of 2026-11-21 found five different things at the left of the title bar: the gallery's square with a drawn
 symbol, Muro's PNG logo with no name, Mukade's own drawing with no square, Shinatama's name alone, Xiox's own amber
-square, Daodan's square with the text "d.". The owner asked for one treatment and took the agent's advice
-(2026-11-21, "cosa consigli?"):
+square, Daodan's square with the text "d.". The owner asked for one treatment. What follows is the agent's advice
+(2026-11-21); the owner has not chosen yet between it, Daodan's lowercase letter with a dot, and Shinatama's name
+alone. Task 13 of the plan waits for that choice:
 
 - The mark is `im-mark`: the 22px square in the app's accent (rounded in Smooth, cut in ONI) holding **one letter**,
   the initial of the product's name in capitals, in the head font, weight 700, in `--im-accent-on`. No drawn symbol,
