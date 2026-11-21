@@ -15,7 +15,7 @@ const MANIFEST_IDS: Record<string, string[]> = {
   button: ['button-primary', 'button-secondary', 'button-ghost', 'button-danger', 'button-confirm-danger', 'icon-button'],
   'key cap': ['key'],
   count: ['count'],
-  field: ['field', 'textarea'],
+  field: ['field', 'field-bare', 'textarea'],
   search: ['search'],
   select: ['select', 'select-native'],
   checkbox: ['checkbox', 'checkbox-native'],
@@ -110,7 +110,7 @@ test('the states a control can only have once it is interactive are listed where
 // A control drawn on a native element and on an ARIA element is drawn once: the matrix shows both, in the same states, and
 // tests/gallery/controls.mjs measures that each native cell is drawn as its twin's.
 test('each native control has the states of the control it is drawn as', () => {
-  assert.deepEqual(Object.keys(NATIVE_TWINS).sort(), ['checkbox-native', 'radio-native', 'segmented-native', 'select-native', 'switch-native', 'textarea']);
+  assert.deepEqual(Object.keys(NATIVE_TWINS).sort(), ['checkbox-native', 'field-bare', 'radio-native', 'segmented-native', 'select-native', 'switch-native', 'textarea']);
   for (const [native, twin] of Object.entries(NATIVE_TWINS)) {
     assert.ok(byId.has(native) && byId.has(twin), `${native} and ${twin} are both in the manifest`);
     assert.deepEqual(byId.get(native)?.states, byId.get(twin)?.states, `${native} has the states of ${twin}`);

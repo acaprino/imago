@@ -1,4 +1,4 @@
-import { buttonHtml, type ButtonMarkupOptions, type TextFieldMarkupOptions } from './markup.ts';
+import { buttonHtml, type ButtonMarkupOptions } from './markup.ts';
 
 /** Mount a single trusted Imago renderer result. User and service text belongs in the renderer's text arguments. */
 export function componentElement<T extends HTMLElement = HTMLElement>(componentHtml: string): T {
@@ -51,24 +51,14 @@ export function uiButton(label: string, options: ButtonMarkupOptions & { title?:
   return button;
 }
 
-/** The types of input that are a field: drawn in the box of a field, `span.im-input > input`. */
-export type UiFieldType = NonNullable<TextFieldMarkupOptions['type']>;
-
-/** A native checkbox or radio with the drawing of every checkbox and radio: `input.im-check`, `input.im-radio`. */
-export function uiInput(type: 'checkbox' | 'radio'): HTMLInputElement;
-/** A native input in its field box, `span.im-input > input`, as `inputHtml` writes it: append `element`, use `input`. */
-export function uiInput(type?: UiFieldType): { element: HTMLSpanElement; input: HTMLInputElement };
-export function uiInput(type: 'checkbox' | 'radio' | UiFieldType = 'text'): HTMLInputElement | { element: HTMLSpanElement; input: HTMLInputElement } {
+/** A native input with the class of its drawing on it: `im-check` on a checkbox, `im-radio` on a radio, and on any other
+ * type `im-input`, the field's box, drawn on the input itself. A field with an icon or a key cap has the box round the input
+ * instead (`textFieldHtml`, or a part given the class `im-input`). */
+export function uiInput(type = 'text'): HTMLInputElement {
   const input = document.createElement('input');
   input.type = type;
-  if (type === 'checkbox' || type === 'radio') {
-    input.className = type === 'checkbox' ? 'im-check' : 'im-radio';
-    return input;
-  }
-  const element = document.createElement('span');
-  element.className = 'im-input';
-  element.append(input);
-  return { element, input };
+  input.className = type === 'checkbox' ? 'im-check' : type === 'radio' ? 'im-radio' : 'im-input';
+  return input;
 }
 
 export function uiOption(value: string, label: string): HTMLOptionElement {

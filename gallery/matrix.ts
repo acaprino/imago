@@ -27,6 +27,7 @@ const LABELS: Record<string, string> = {
   'button-confirm-danger': 'Confirming danger button',
   'icon-button': 'Icon button',
   field: 'Field',
+  'field-bare': 'Field, the class on the input',
   textarea: 'Text area',
   search: 'Search',
   select: 'Select',
@@ -113,6 +114,19 @@ function field(state: State): string {
   const value = state === 'invalid' ? 'C:/Users/you/.claud' : 'C:/Users/you/.claude';
   const message = state === 'invalid' ? `<span class="im-field-error" id="${error}">Error: this folder does not exist.</span>` : '';
   return `<div class="im-field"><label class="im-field-label" for="${input}">Folder</label><span class="im-input im-input--code"${force(state)}><input id="${input}" type="text" value="${value}" tabindex="-1"${attrs}></span>${message}</div>`;
+}
+
+// The same field with im-input on the input itself, as uiInput() writes it: no box round it, the same drawing and states.
+function bareField(state: State): string {
+  const input = uid('field-bare', state, 'input');
+  const error = uid('field-bare', state, 'error');
+  const attrs =
+    (state === 'disabled' ? ' disabled' : '') +
+    (state === 'readonly' ? ' readonly' : '') +
+    (state === 'invalid' ? ` aria-invalid="true" aria-describedby="${error}"` : '');
+  const value = state === 'invalid' ? 'C:/Users/you/.claud' : 'C:/Users/you/.claude';
+  const message = state === 'invalid' ? `<span class="im-field-error" id="${error}">Error: this folder does not exist.</span>` : '';
+  return `<div class="im-field"><label class="im-field-label" for="${input}">Folder</label><input class="im-input im-input--code" id="${input}" type="text" value="${value}" tabindex="-1"${force(state)}${attrs}>${message}</div>`;
 }
 
 // The field's drawing on a text area: the same states, on the element itself.
@@ -267,6 +281,7 @@ export function cellMarkup(control: string, state: State): string {
   switch (control) {
     case 'icon-button': return iconButton(state);
     case 'field': return field(state);
+    case 'field-bare': return bareField(state);
     case 'textarea': return textarea(state);
     case 'search': return search(state);
     case 'select': return select(state);

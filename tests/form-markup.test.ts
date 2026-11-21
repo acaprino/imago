@@ -82,14 +82,12 @@ test('the DOM builders write the same classes as the renderers', () => {
   const global = globalThis as { document?: Document };
   global.document = fakeDocument;
   try {
-    assert.equal(uiInput('checkbox').className, 'im-check');
-    assert.equal(uiInput('radio').className, 'im-radio');
-    const field = uiInput('email');
-    const box = field.element as unknown as FakeElement;
-    assert.deepEqual([box.tagName, box.className, box.children.length], ['span', 'im-input', 1]);
-    assert.equal(box.children[0], field.input as unknown as FakeElement);
-    assert.deepEqual([field.input.type, field.input.className], ['email', '']);
-    assert.equal(uiInput().input.type, 'text');
+    // Every input is returned itself, with the class of its drawing on it: the field's box goes on a text input too.
+    const input = (control: HTMLInputElement) => { const el = control as unknown as FakeElement; return [el.tagName, el.type, el.className]; };
+    assert.deepEqual(input(uiInput()), ['input', 'text', 'im-input']);
+    assert.deepEqual(input(uiInput('email')), ['input', 'email', 'im-input']);
+    assert.deepEqual(input(uiInput('checkbox')), ['input', 'checkbox', 'im-check']);
+    assert.deepEqual(input(uiInput('radio')), ['input', 'radio', 'im-radio']);
     assert.equal(uiSelect([['a', 'A']], 'a').className, 'im-select');
     assert.equal(uiTextarea().className, 'im-textarea');
     assert.equal(uiPart('dialog').className, 'im-content-dialog');
@@ -122,7 +120,7 @@ test('one drawing for each control: no rule or renderer is left for the second d
     assert.doesNotMatch(SOURCE, new RegExp(name + '(?![\\w-])'), `ts/ still writes ${name}`);
   }
   assert.doesNotMatch(CSS, /accent-color/, 'a native check or radio is drawn by im-check and im-radio, not by the browser in the accent');
-  assert.doesNotMatch(CSS, /(?:input|textarea)\.im-input|\.im-input:is\(input/, 'im-input is the box round an input, not a class of the input');
+  assert.doesNotMatch(CSS, /textarea\.im-input|\.im-input:is\(input, textarea\)/, 'a text area is im-textarea, and the bare input is drawn by the rules of im-input');
   assert.doesNotMatch(CSS, /\.im-picker-mark[^{]*::before|data-im-checked/, 'the mark of a picker row is an im-check');
   assert.doesNotMatch(SOURCE, /data-im-checked|imChecked/, 'the mark of a picker row says its state with aria-checked on its im-check');
   assert.doesNotMatch(CSS, /\.im-choice-row\[aria-selected/, 'a choice row is selected as every im-btn is');

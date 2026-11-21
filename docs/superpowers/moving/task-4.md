@@ -6,8 +6,8 @@ item is drawn the same whatever attribute says it. Rows to fold into the table "
 
 | Old name | New name, or what to do instead |
 |---|---|
-| `im-native-controls` | Remove it. Each native control carries the class of its drawing: `span.im-input > input`, `select.im-select`, `textarea.im-textarea`, `input.im-check`, `input.im-radio`, `input.im-switch` with `role="switch"`, `im-seg` over radios. A native control without a class keeps the browser's drawing. `uiPart('dialog')` and `graphInspector` no longer add it |
-| `im-native-input` | `<span class="im-input"><input></span>` |
+| `im-native-controls` | Remove it. Each native control carries the class of its drawing: `input.im-input` or `span.im-input > input`, `select.im-select`, `textarea.im-textarea`, `input.im-check`, `input.im-radio`, `input.im-switch` with `role="switch"`, `im-seg` over radios. A native control without a class keeps the browser's drawing. `uiPart('dialog')` and `graphInspector` no longer add it |
+| `im-native-input` | `im-input` on the `input` itself, or `<span class="im-input"><input></span>` when the field holds an icon or a key cap |
 | `im-native-select` | `im-select` on the `select` |
 | `im-native-textarea` | `im-textarea` on the `textarea` |
 | `im-native-check` | `im-check` on the `input type="checkbox"` |
@@ -17,9 +17,8 @@ item is drawn the same whatever attribute says it. Rows to fold into the table "
 | `im-seg--choice` | `im-seg` alone; `segmentedControl` writes it, with the text of each choice in a `span` after its radio |
 | `im-switch-knob` | Nothing: `im-switch` draws its thumb itself; `switchHtml` writes an empty button |
 | `textarea.im-input` | `textarea.im-textarea` |
-| `input.im-input`, the class on the input itself | `<span class="im-input"><input></span>`: the box is round the input |
 | `textFieldHtml(…, { mono: true })` writing `class="im-mono"` on the input | It writes `<span class="im-input im-input--code">` round the input |
-| `uiInput()` and `uiInput(type)` of a text type returning the input | They return `{ element, input }`: append `element` (the `span.im-input`), read and write `input`. `uiInput('checkbox')` and `uiInput('radio')` return the input, `input.im-check` and `input.im-radio` |
+| `uiInput()` writing `im-native-input`, `im-native-check` or `im-native-radio` | `uiInput()` still returns the input, now with `im-input` on a text type (the field's box drawn on the input itself), `im-check` on a checkbox and `im-radio` on a radio. A field with an icon or a key cap is written with the box round the input (`textFieldHtml`, or a `uiPart` given the class `im-input`) |
 | `uiSelect()` writing `im-native-select`, `uiTextarea()` writing `im-native-textarea` | They write `im-select` and `im-textarea` |
 | `selectHtml` writing a bare `select` | It writes `select.im-select`; a `class` in `attrs` is added after it |
 | `checkboxOptionHtml` and `choiceRowsHtml` writing a bare checkbox | They write `input.im-check` |

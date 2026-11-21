@@ -28,7 +28,8 @@ const TARGET = {
   tree: '.im-tree-item',
   'table-row': 'tbody tr',
   'menu-item': '.im-menu-item',
-  // The native twins: the same class on the native element (a segment is the label over its radio).
+  // The native twins: the same class on the native element (a segment is the label over its radio, the bare field the input).
+  'field-bare': '.im-input',
   'checkbox-native': '.im-check',
   'radio-native': '.im-radio',
   'switch-native': '.im-switch',
@@ -52,7 +53,7 @@ const TEXT = {
 };
 const BUTTONS = ['button-primary', 'button-secondary', 'button-ghost', 'button-danger', 'button-confirm-danger'];
 // Controls with a box one control high: their height is --im-h-control in every state.
-const CONTROL_HEIGHT = [...BUTTONS, 'icon-button', 'field', 'search', 'select', 'select-native', 'tab', 'segmented', 'segmented-native', 'row'];
+const CONTROL_HEIGHT = [...BUTTONS, 'icon-button', 'field', 'field-bare', 'search', 'select', 'select-native', 'tab', 'segmented', 'segmented-native', 'row'];
 // css/surfaces.css draws the menu item: its edge is not ours to assert.
 const NO_EDGE = ['menu-item'];
 
@@ -61,7 +62,7 @@ const NO_EDGE = ['menu-item'];
 // segmented control 2 inside (its container clips); an ONI chamfered button 5 inside (a clip-path cuts an outer ring).
 const RING_OFFSET = (() => {
   const alone = { 'icon-button': 2, select: 2, checkbox: 2, radio: 2, switch: 2, 'select-native': 2, 'checkbox-native': 2, 'radio-native': 2, 'switch-native': 2 };
-  const field = { field: 1, search: 1, textarea: 1 };
+  const field = { field: 1, 'field-bare': 1, search: 1, textarea: 1 };
   const item = { tab: -2, segmented: -2, 'segmented-native': -2, row: -2, tree: -2, 'table-row': -2, 'menu-item': -2 };
   const buttons = (offset) => Object.fromEntries(BUTTONS.map((id) => [id, offset]));
   return { smooth: { ...buttons(2), ...alone, ...field, ...item }, oni: { ...buttons(-5), ...alone, ...field, ...item } };
@@ -610,7 +611,7 @@ export default async (page) => {
       [control, state, inner],
     );
   const LIVE = [['button-secondary', '.im-btn', true], ['button-primary', '.im-btn', true], ['icon-button', '.im-icon-btn', true], ['row', '.im-row', false], ['tab', '.im-tab', false],
-    ['checkbox-native', '.im-check', false], ['select-native', '.im-select', false], ['segmented-native', '.im-seg > label:first-child', false], ['textarea', '.im-textarea', false]];
+    ['field-bare', '.im-input', false], ['checkbox-native', '.im-check', false], ['select-native', '.im-select', false], ['segmented-native', '.im-seg > label:first-child', false], ['textarea', '.im-textarea', false]];
   for (const [control, inner, hasPress] of LIVE) {
     await page.locator(`[data-control="${control}"][data-state="rest"] ${inner}`).hover();
     await page.waitForTimeout(300);

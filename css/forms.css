@@ -1,5 +1,5 @@
 /* The layout of a form. Its controls are drawn by css/controls.css, the same on native elements and on ARIA ones: a native
-   control carries the class of its drawing (im-input round an input, im-select, im-textarea, im-check, im-radio, im-switch,
+   control carries the class of its drawing (im-input on or round an input, im-select, im-textarea, im-check, im-radio, im-switch,
    im-seg over radios), and keeps browser validation, FormData and its keys. */
 .im-form { display: flex; flex-direction: column; gap: var(--im-s-3); min-height: 0; margin: 0; padding: var(--im-s-5); overflow: auto; }
 .im-form-head { display: flex; align-items: flex-start; gap: var(--im-s-2); }

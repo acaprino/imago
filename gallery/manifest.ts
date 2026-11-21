@@ -16,9 +16,11 @@ const PICK: State[] = ['rest', 'hover', 'focus', 'selected', 'disabled'];
 const FIELD: State[] = ['rest', 'hover', 'focus', 'disabled', 'invalid', 'readonly'];
 const SELECT: State[] = ['rest', 'hover', 'focus', 'disabled'];
 
-/** The controls drawn on a native element (an input, a select, a text area, radios under labels), each with the control it
- * is drawn as: one drawing serves both markups, and tests/gallery/controls.mjs measures that the two cells of a state match. */
+/** The controls drawn on a native element (an input with no box round it, a checkbox, a select, a text area, radios under
+ * labels), each with the control it is drawn as: one drawing serves both markups, and tests/gallery/controls.mjs measures
+ * that the two cells of a state match. */
 export const NATIVE_TWINS: Record<string, string> = {
+  'field-bare': 'field',
   'checkbox-native': 'checkbox',
   'radio-native': 'radio',
   'switch-native': 'switch',
@@ -36,6 +38,7 @@ export const CONTROLS: Control[] = [
   { id: 'button-confirm-danger', states: PUSH },
   { id: 'icon-button', states: ['rest', 'hover', 'press', 'focus', 'disabled'] },
   { id: 'field', states: FIELD },
+  { id: 'field-bare', states: FIELD },
   { id: 'textarea', states: FIELD },
   { id: 'search', states: ['rest', 'hover', 'focus', 'disabled'] },
   { id: 'select', states: SELECT },

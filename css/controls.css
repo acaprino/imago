@@ -18,7 +18,8 @@
    Markup the rules expect:
      button    <button class="im-btn im-btn--primary"> [<svg class="im-icon"> | <span class="im-spinner">] <span>Label</span> [<kbd class="im-key">]
      field     <div class="im-field"><label class="im-field-label">..</label><span class="im-input"><input aria-invalid aria-describedby></span>
-               <span class="im-field-hint">..</span><span class="im-field-error" id>Error: ..</span></div>
+               <span class="im-field-hint">..</span><span class="im-field-error" id>Error: ..</span></div>;
+               the box may be the input itself, <input class="im-input">, when it holds no icon and no key cap
      text area <textarea class="im-textarea" aria-invalid aria-describedby>, in an im-field as the input's box is
      select    <button class="im-select" aria-haspopup="listbox"><span>Value</span><svg class="im-icon"></button>, or <select class="im-select">
      option    <span class="im-option"><span class="im-check" role="checkbox" aria-checked tabindex></span>Label</span>,
@@ -367,7 +368,8 @@
   color: var(--im-err);
 }
 
-/* The box of a field: round an input (im-input), on a text area, and on a select (a button or a native select). */
+/* The box of a field: im-input round an input (the form that also holds an icon and a key cap) or on the input itself, and on
+   a text area and a select (a button or a native select). Each state below names both forms of im-input. */
 .im-input,
 .im-textarea,
 .im-select {
@@ -411,7 +413,15 @@
   user-select: text;
 }
 
+/* On the input itself the box is the input: its text is content, as the text of an input in the box is. */
+input.im-input {
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .im-input > input::placeholder,
+input.im-input::placeholder,
 .im-textarea::placeholder { color: var(--im-muted); }
 
 .im-input > .im-icon,
@@ -456,7 +466,9 @@ select.im-select {
   border-color: var(--im-text-2);
 }
 
-.im-input:is(:focus-within, [data-im-force="focus"]),
+/* The box round an input while the input has focus, the input itself on :focus-visible (a text input shows it for the
+   pointer too), a text area on focus: the edge turns to the accent and the ring is 1px outside. */
+.im-input:is(:focus-within, :focus-visible, [data-im-force="focus"]),
 .im-textarea:is(:focus, [data-im-force="focus"]) {
   border-color: var(--im-accent-text);
   outline: 2px solid var(--im-accent-text);
@@ -467,6 +479,7 @@ select.im-select {
 .im-select:is(:focus-visible, [data-im-force="focus"]) { border-color: var(--im-accent-text); }
 
 .im-input:has(> input[aria-invalid="true"]),
+input.im-input[aria-invalid="true"],
 .im-textarea[aria-invalid="true"],
 .im-select[aria-invalid="true"] {
   border-color: var(--im-err);
@@ -474,6 +487,7 @@ select.im-select {
 
 /* Read-only: no fill, no frame, the text still selectable, no caret. */
 .im-input:has(> input[readonly]),
+input.im-input[readonly],
 .im-textarea[readonly] {
   padding-inline: 0;
   background: transparent;
@@ -481,10 +495,12 @@ select.im-select {
 }
 
 .im-input > input[readonly],
+input.im-input[readonly],
 .im-textarea[readonly] { caret-color: transparent; }
 
 /* The fill goes, the chevron of a native select stays, and the fading the browser gives a disabled select is taken back. */
 .im-input:has(> input:disabled),
+input.im-input:disabled,
 .im-textarea:disabled,
 .im-select:is(:disabled, [aria-disabled="true"]) {
   color: var(--im-muted);
@@ -1233,6 +1249,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 
   .im-btn:is(:disabled, [aria-disabled="true"]),
   .im-input:has(> input:disabled),
+  input.im-input:disabled,
   .im-textarea:disabled,
   .im-select:is(:disabled, [aria-disabled="true"]),
   .im-icon-btn:is(:disabled, [aria-disabled="true"]),
@@ -1310,6 +1327,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   .im-switch:is([aria-checked="true"], :checked)::after { background: HighlightText; }
 
   .im-input:has(> input[aria-invalid="true"]),
+  input.im-input[aria-invalid="true"],
   .im-textarea[aria-invalid="true"],
   .im-select[aria-invalid="true"] { border-color: Mark; }
 
