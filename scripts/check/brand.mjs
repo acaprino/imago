@@ -123,7 +123,7 @@ function problemsOf(brand) {
     if (text.includes(DYNAMIC)) continue;
     const letter = text.trim().normalize('NFC');
     if (!letter) problems.add('an empty im-mark');
-    else if (!/^\p{L}$/u.test(letter) || letter !== letter.toLocaleUpperCase()) problems.add(`"${letter}" in im-mark`);
+    else if (!/^\p{L}$/u.test(letter) || letter !== letter.toUpperCase()) problems.add(`"${letter}" in im-mark`);
   }
   return [...problems];
 }
@@ -150,24 +150,85 @@ function markupOf(source) {
 function brandImageOption(source) {
   /** @type {Finding[]} */
   const findings = [];
-  for (const chunk of source.kind === 'script' ? source.code : source.code.slice(1)) {
+  // The code of a page's scripts follows the page's own text (code[0]), and their strings come first in `strings`,
+  // script after script.
+  const chunks = source.kind === 'script' ? source.code : source.code.slice(1);
+  let first = 0;
+  for (const chunk of chunks) {
     const code = chunk.text;
+    const starts = stringStarts(code);
+    const strings = source.strings.slice(first, first + starts.length);
+    first += starts.length;
     for (const call of code.matchAll(/(?<![\w$])titlebarHtml\s*\(/g)) {
       const start = (call.index ?? 0) + call[0].length;
       const args = code.slice(start, closing(code, start - 1, '(', ')'));
       for (const brand of args.matchAll(/(?<![\w$])brand\s*:\s*\{/g)) {
         const open = (brand.index ?? 0) + brand[0].length - 1;
-        const body = args.slice(open, closing(args, open, '{', '}'));
-        const image = /(?<![\w$.])image\s*(?=[:,}])/.exec(body);
-        if (!image) continue;
+        // The object with its closing brace: a shorthand key is followed by a comma or by that brace.
+        const body = args.slice(open, closing(args, open, '{', '}') + 1);
+        // A key is after the opening brace or a comma; a value named image (`name: image`) is not one.
+        const keys = [...body.matchAll(/(?<=[{,]\s*)image\s*(?=[:,}])/g)].map((match) => match.index ?? 0);
+        // A quoted key: its text is blanked in the code, and read back from the string the lexer kept.
+        for (const quoted of body.matchAll(/(?<=[{,]\s*)(["'])\s*\1\s*:/g)) {
+          const at = quoted.index ?? 0;
+          if (strings[starts.indexOf(start + open + at)]?.text === 'image') keys.push(at);
+        }
+        if (!keys.length) continue;
         findings.push({
-          file: source.file, line: lineAt(code, start + open + image.index, chunk.line), rule: RULE,
+          file: source.file, line: lineAt(code, start + open + Math.min(...keys), chunk.line), rule: RULE,
           message: "brand.image is removed: the title bar shows the initial of brand.name in capitals and the name, not a picture; the app's logo stays what Windows shows (the icons of its executables)",
         });
       }
     }
   }
   return findings;
+}
+
+/**
+ * Where the strings of a chunk of lexed code open, in the order source.mjs read them: a quote or a backtick left in
+ * the code always opens or closes a string, since everything between is blanked, and the strings of a ${} come after
+ * the template literal that holds them.
+ * @param {string} code
+ * @returns {number[]}
+ */
+function stringStarts(code) {
+  /** @type {number[]} */
+  const starts = [];
+  /** Code from `at`; inside a ${}, up to its closing brace (the index after it is returned). */
+  const walk = (/** @type {number} */ at, /** @type {boolean} */ inExpression) => {
+    let depth = 0;
+    let k = at;
+    while (k < code.length) {
+      const c = code[k];
+      if (c === '"' || c === "'") {
+        starts.push(k);
+        let end = k + 1;
+        while (end < code.length && code[end] !== c && code[end] !== '\n') end++;
+        k = code[end] === c ? end + 1 : end;
+        continue;
+      }
+      if (c === '`') {
+        starts.push(k);
+        k = template(k + 1);
+        continue;
+      }
+      if (inExpression && c === '{') depth++;
+      else if (inExpression && c === '}') {
+        if (depth === 0) return k + 1;
+        depth--;
+      }
+      k++;
+    }
+    return k;
+  };
+  /** A template literal from after its backtick; returns the index after its closing one. */
+  const template = (/** @type {number} */ at) => {
+    let k = at;
+    while (k < code.length && code[k] !== '`') k = code[k] === '$' && code[k + 1] === '{' ? walk(k + 2, true) : k + 1;
+    return k + 1;
+  };
+  walk(0, false);
+  return starts;
 }
 
 /** The index of the bracket that closes the one at `open`, or the end of the text. */

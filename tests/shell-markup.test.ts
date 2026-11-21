@@ -3,7 +3,7 @@ import test from 'node:test';
 import { APP_IDS, APPS, shellMarkup } from '../gallery/apps.ts';
 import { cellMarkup } from '../gallery/matrix.ts';
 import { iconHtml } from '../ts/ui/markup.ts';
-import { noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
+import { brandInitial, noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
 import { renderShellFrame } from '../ts/ui/shell-frame.ts';
 
 test('tabs expose one initial keyboard stop and announced counts without repeating their visual badge', () => {
@@ -502,6 +502,28 @@ test('titlebarHtml writes the brand: the initial of the name in capitals in im-m
   assert.equal(brandOf('élan'), BRAND('É', 'élan'), 'an accented letter keeps its accent');
   assert.equal(brandOf('élan'), BRAND('É', 'élan'), 'a letter with a combining accent is one letter');
   assert.equal(brandOf('<daodan>'), BRAND('D', '&lt;daodan&gt;'), 'the name is escaped');
+});
+
+test('the initial does not change with the locale of the machine: i is I under a Turkish default too', () => {
+  const original = String.prototype.toLocaleUpperCase;
+  // A machine whose default locale is Turkish: toLocaleUpperCase() with no locale makes i a dotted İ.
+  String.prototype.toLocaleUpperCase = function (this: string, locales?: string | string[]): string {
+    return original.call(this, locales ?? 'tr');
+  };
+  try {
+    assert.equal('i'.toLocaleUpperCase(), 'İ', 'the stub stands for a Turkish default');
+    assert.equal(brandOf('istanbul'), BRAND('I', 'istanbul'));
+    assert.equal(brandInitial('istanbul'), 'I');
+  } finally {
+    String.prototype.toLocaleUpperCase = original;
+  }
+});
+
+test('brandInitial is the letter titlebarHtml writes in the mark, and the gallery takes it from there', () => {
+  for (const name of ['muro', '  xiox ', '🦊 fox', 'élan', 'Daodan']) {
+    assert.ok(brandOf(name).includes(`data-tauri-drag-region>${brandInitial(name)}</span>`), name);
+  }
+  assert.equal(brandInitial('🦊 42'), '');
 });
 
 test('a name with no letter writes no mark, and the brand never holds an image', () => {

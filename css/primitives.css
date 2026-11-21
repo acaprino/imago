@@ -39,14 +39,11 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
 /* The brand gives way before the window buttons do: at the width of a 500px window at 200% zoom the name is cut with an
    ellipsis, then goes. */
 .im-brand { display: flex; flex: 0 1 auto; align-items: center; gap: var(--im-s-2); min-inline-size: 0; white-space: nowrap; }
-/* The mark is the initial of the product's name, in capitals, in the square of the app's accent. The letter's box is
-   trimmed to its capitals (from the top of a capital to the baseline) and that band is centred in the square, so the
-   letter's ink sits in its middle whatever the font's ascent and descent: centring the font's box instead puts the
-   letter low in Segoe UI and high in Bahnschrift. */
+/* The mark is the initial of the product's name, in capitals, in the square of the app's accent. */
 .im-mark {
-  display: block;
+  display: grid;
   flex: none;
-  align-content: center;
+  place-items: center;
   inline-size: 22px;
   block-size: 22px;
   background: var(--im-accent);
@@ -57,22 +54,37 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
   font: 700 var(--im-fs-body)/1 var(--im-font-head);
   letter-spacing: 0;
   text-transform: none;
-  text-align: center;
-  text-box: trim-both cap alphabetic;
 }
-/* The name's box is trimmed to its capitals too, with room above and below for accents and descenders: the brand
-   centres the two boxes, so the square is level with the capitals of the name in both looks (ONI's larger, spaced
-   name sat a pixel above the square's middle). */
+/* The grid centres the letter's line, and Bahnschrift's capitals sit at the top of it, 1.6px above the square's
+   middle: ONI moves the line 2px down. (The @supports block below centres the capitals themselves, and takes this off.) */
+[data-im-look="oni"] .im-mark { padding-block-start: var(--im-s-1); }
 .im-wordmark {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-block: var(--im-s-2);
   font: 600 15px/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-text-hi);
-  text-box: trim-both cap alphabetic;
+}
+/* Where the engine can trim a box to its capitals (WebView2 from 133), the letter and the name are drawn by them: the
+   letter's box is the band from the top of a capital to the baseline, centred in the square, so its ink sits in the
+   middle whatever the font's ascent and descent (centring the font's box, as the grid above does, puts the letter a
+   little low in Segoe UI and high in Bahnschrift); the name's box is that band too, with room above and below for
+   accents and descenders, and the brand centres the two boxes, so the square is level with the name's capitals in both
+   looks (ONI's larger, spaced name sat a pixel above the square's middle). Without it, the grid centres the letter. */
+@supports (text-box: trim-both cap alphabetic) {
+  .im-mark {
+    display: block;
+    align-content: center;
+    text-align: center;
+    text-box: trim-both cap alphabetic;
+  }
+  [data-im-look="oni"] .im-mark { padding-block-start: 0; }
+  .im-wordmark {
+    padding-block: var(--im-s-2);
+    text-box: trim-both cap alphabetic;
+  }
 }
 .im-titlebar .im-tabs { align-self: stretch; align-items: center; }
 .im-titlebar .im-tab { block-size: 100%; border-radius: 0; }

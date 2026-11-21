@@ -43,15 +43,19 @@ export interface TitlebarOptions {
   commands?: { label: string; action: string; shortcut?: string };
   windowControls?: boolean | WindowButtonLabels;
 }
-/** The initial of a name: its first letter, in capitals, or '' when the name has no letter (an emoji is not one). */
-function initialOf(name: string): string {
+/**
+ * The initial the mark at the top left shows for a product's name: its first letter, in capitals, or '' when the name
+ * has no letter (an emoji is not one). `titlebarHtml` writes it in `im-mark`.
+ */
+export function brandInitial(name: string): string {
   const letter = Array.from(name.trim().normalize('NFC')).find(character => /\p{L}/u.test(character));
-  return letter ? Array.from(letter.toLocaleUpperCase())[0] : '';
+  // toUpperCase, not toLocaleUpperCase: the letter must not change with the machine (a Turkish default makes i a İ).
+  return letter ? Array.from(letter.toUpperCase())[0] : '';
 }
 
 export function titlebarHtml(options: TitlebarOptions): string {
   const { brand, sidebarToggle, views, commands } = options;
-  const initial = initialOf(brand.name);
+  const initial = brandInitial(brand.name);
   const markHtml = initial ? `<span class="im-mark" aria-hidden="true" data-tauri-drag-region>${escapeHtml(initial)}</span>` : '';
   const brandHtml = `${markHtml}<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
   const toggleHtml = sidebarToggle ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${escapeHtml(sidebarToggle.label)}" title="${escapeHtml(sidebarToggle.label)}" aria-expanded="false" aria-controls="${escapeHtml(sidebarToggle.controls)}">${iconHtml('sidebar')}</button>` : '';

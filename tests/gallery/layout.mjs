@@ -851,6 +851,44 @@ export default async (page, url) => {
         }
       }
     }
+
+    // An engine without text-box (WebView2 before 133) skips the @supports block that draws the mark and the name by
+    // their capitals. Taken out of the page, the base rules still centre the letter in the square, within a pixel and a
+    // half, in both looks.
+    const removed = await sharp.evaluate(() => {
+      let count = 0;
+      const walk = (list, owner) => {
+        for (let k = list.length - 1; k >= 0; k--) {
+          const rule = list[k];
+          if (rule instanceof CSSSupportsRule && rule.conditionText.includes('text-box')) {
+            owner.deleteRule(k);
+            count++;
+          } else if (rule.cssRules) walk(rule.cssRules, rule);
+        }
+      };
+      for (const sheet of document.styleSheets) walk(sheet.cssRules, sheet);
+      return count;
+    });
+    assert.ok(removed >= 1, `the mark and the name are drawn by their capitals inside @supports (text-box: …): ${removed} such block found`);
+    for (const look of LOOKS) {
+      for (const theme of THEMES) {
+        for (const app of APPS) {
+          await show(sharp, { app, look, theme, glass: false, width: 1160 });
+          const base = await sharp.evaluate(() => {
+            const style = (selector) => getComputedStyle(document.querySelector(`#g-window .im-titlebar ${selector}`));
+            return { mark: style('.im-mark').textBoxTrim, word: style('.im-wordmark').textBoxTrim, display: style('.im-mark').display, padding: style('.im-wordmark').paddingTop };
+          });
+          const label = (text) => `without text-box, ${look} ${theme} ${app}: ${text}`;
+          assert.deepEqual(base, { mark: 'none', word: 'none', display: 'grid', padding: '0px' }, label('the base rules draw the mark and the name'));
+          const g = await markGeometry(sharp);
+          const { letter } = await markInk(sharp, g, SCALE);
+          for (const axis of ['y', 'x']) {
+            const off = centre(letter)[axis] - centre(g.mark)[axis];            assert.ok(Math.abs(off) <= 1.5, label(`the letter's ink is ${off.toFixed(2)}px off the square's centre (${axis})`));
+          }
+          assert.ok(Math.abs(centre(g.mark).y - centre(g.bar).y) <= 1, label('the square is centred on the title bar'));
+        }
+      }
+    }
   } finally {
     await fine.close();
   }

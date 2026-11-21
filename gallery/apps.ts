@@ -1,7 +1,7 @@
 // The five apps' sample content, ported from docs/reference/toolkit-preview.html: the live shell of the gallery is
 // drawn from here. The markup uses the classes of css/primitives.css (regions) and css/controls.css (controls);
 // nothing in this file styles anything.
-import { noteHtml } from '../ts/ui/shell-markup.ts';
+import { brandInitial, noteHtml } from '../ts/ui/shell-markup.ts';
 
 export type AppId = 'xiox' | 'mukade' | 'shinatama' | 'muro' | 'daodan';
 type Tone = 'ok' | 'warn' | 'err' | 'info' | 'accent';
@@ -204,7 +204,7 @@ export function shellMarkup(id: AppId): string {
   return `<div class="im-shell" data-im-sidebar="${a.side ? 'on' : 'off'}">
   <a class="im-shell-skip-link" href="#g-content">${a.strings.skip}</a>
   <header class="im-titlebar">
-    <div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>${a.name[0].toUpperCase()}</span><span class="im-wordmark" data-tauri-drag-region>${a.name}</span></div>
+    <div class="im-brand" data-tauri-drag-region><span class="im-mark" aria-hidden="true" data-tauri-drag-region>${brandInitial(a.name)}</span><span class="im-wordmark" data-tauri-drag-region>${a.name}</span></div>
     ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('sidebar')}</button>` : ''}
     <nav class="im-tabs" role="tablist" aria-label="${a.strings.views}">${tabs}</nav>
     <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">${a.strings.views}${icon('chev')}</button>

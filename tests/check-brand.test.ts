@@ -30,6 +30,20 @@ describe('brand-mark', () => {
     assert.match(messages(ts, 'src/views.ts')[0], /brand\.image/);
   });
 
+  test('finds brand.image however the brand object writes it: shorthand, last, first, quoted, over lines', () => {
+    const call = (args: string): string => `import { titlebarHtml } from '@acaprino/imago/ui';\nexport const bar = titlebarHtml(${args});\n`;
+    const cases = [
+      '{ brand: { name, image } }', '{ brand: {name,image} }', '{ brand: { name: n, image } }', '{ windowControls: true, brand: { name, image } }',
+      '{ brand: { image, name } }', '{ brand: { name, image, } }', '{ brand: { name, image: x } }', "{ brand: { name, 'image': x } }",
+      '{ brand: { name: "Muro", "image": "/muro-logo.png" } }',
+    ];
+    for (const args of cases) assert.deepEqual(found(call(args), 'src/views.ts'), ['2 brand-mark'], args);
+    assert.deepEqual(found(call('{\n  windowControls: true,\n  brand: {\n    name,\n    image\n  }\n}'), 'src/views.ts'), ['6 brand-mark'], 'the shorthand over several lines');
+    assert.deepEqual(found(call('{\n  brand: {\n    name,\n    image,\n  },\n}'), 'src/views.ts'), ['5 brand-mark'], 'with a trailing comma over several lines');
+    assert.deepEqual(found(call('{ brand: { name: image } }'), 'src/views.ts'), [], 'a name held in a variable called image is not the key');
+    assert.deepEqual(found(call("{ brand: { name: 'image' } }"), 'src/views.ts'), [], 'nor is the name image');
+  });
+
   test('finds an <svg> in the brand, and an app\'s own class standing in for the mark', () => {
     const mukade = '<div class="im-brand" data-tauri-drag-region>\n  <svg class="brand-mark icon" aria-hidden="true"><use href="#i-mark"/></svg>\n  <span class="im-wordmark">Mukade</span>\n</div>\n';
     assert.deepEqual(found(mukade), ['1 brand-mark']);
@@ -71,6 +85,20 @@ describe('brand-mark', () => {
     assert.deepEqual(found("titlebarHtml({ brand: { name: 'Muro' }, statusHtml: image(state) });\n", 'src/views.ts'), [], 'an image elsewhere in the call');
     assert.deepEqual(found('<!-- <div class="im-brand"><img src="/old.png"></div> -->\n<p>Brand</p>\n'), [], 'a comment');
     assert.deepEqual(found('.mk-logo { color: var(--im-text); }\n', 'src/app.css'), [], 'a stylesheet');
+  });
+
+  test('judges the capital of the mark without the locale of the machine', () => {
+    const brand = written('Istanbul');
+    const original = String.prototype.toLocaleUpperCase;
+    String.prototype.toLocaleUpperCase = function (): string {
+      throw new Error('the rule read the locale of the machine');
+    };
+    try {
+      assert.deepEqual(found(brand), []);
+      assert.deepEqual(found('<div class="im-brand"><span class="im-mark">i</span><span class="im-wordmark">istanbul</span></div>'), ['1 brand-mark']);
+    } finally {
+      String.prototype.toLocaleUpperCase = original;
+    }
   });
 });
 
