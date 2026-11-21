@@ -1,5 +1,7 @@
 // The seven-region shell: its measures, its three breakpoints and its minimum width, in both looks and both themes.
 import assert from 'node:assert/strict';
+import { CONTROLS } from '../../gallery/manifest.ts';
+import { cellMarkup } from '../../gallery/matrix.ts';
 
 const LOOKS = ['smooth', 'oni'];
 const THEMES = ['dark', 'light'];
@@ -247,6 +249,88 @@ const buildFrame = (page, width, options = {}) => page.evaluate(({ width, option
   inspector.hidden = false;
 }, { width, options });
 
+// What a page holds that is content, not a control: a table of data, steps, a progress value, avatars, facts, a note. Every
+// other control of the manifest is chrome, in a page as everywhere: none of its text can be selected. A control added to
+// the manifest is chrome until it is named here.
+const PAGE_CONTENT = ['table-row', 'steps', 'progress', 'avatar', 'facts', 'note'];
+// Controls the matrix does not draw, which the rule names all the same.
+const MORE_CONTROLS = '<a class="im-btn" href="#">Open</a><div role="menu" aria-label="View"><div role="menuitemcheckbox" aria-checked="true">Wrap lines</div>'
+  + '<div role="menuitemradio" aria-checked="false">Left</div></div><div role="button">Act</div><div role="listbox" aria-label="Pick"><span role="option">One</span></div>'
+  + '<span role="checkbox" aria-checked="false">Pinned</span><span class="im-field-label">Label</span><summary>More</summary>';
+
+// Page content is content and its controls are chrome: every control of the manifest in a page cannot be selected, what is
+// content in it can, and a drag across two paragraphs with controls between them copies the paragraphs' words alone.
+async function pageControls(page, where) {
+  const cells = CONTROLS.map(({ id }) => `<div data-cell="${id}">${cellMarkup(id, 'rest')}</div>`).join('');
+  const between = '<button type="button" class="im-btn"><span>Copy</span></button><label class="im-option"><input type="checkbox" class="im-check">Keep</label>'
+    + '<a class="im-btn" href="#">Open</a><span class="im-chip">open</span><kbd class="im-key">Ctrl K</kbd><span class="im-count">3</span>';
+  try {
+    await page.evaluate(({ cells, between, more }) => {
+      document.getElementById('frame-host')?.remove();
+      const api = window.__imagoSurfaces;
+      const host = document.createElement('div');
+      host.id = 'frame-host';
+      for (const { name, value } of document.querySelector('#g-window').attributes) if (name.startsWith('data-im-')) host.setAttribute(name, value);
+      host.style.cssText = 'position:relative;width:1160px;height:640px';
+      const shell = document.createElement('div');
+      shell.className = 'im-shell';
+      host.append(shell);
+      document.querySelector('#g-sections').append(host);
+      api.renderShellFrame(shell, api.shellFrameHtml({
+        titlebarHtml: api.titlebarHtml({ brand: { name: 'Frame' } }), contentLabel: 'Page', skipLabel: 'Skip to content', inspectorLabel: 'Details',
+        contentHtml: api.pageContentHtml(`<p data-test="first">First paragraph</p>${between}<p data-test="second">Second paragraph</p><div data-test="more">${more}</div>${cells}`),
+      }));
+      host.scrollIntoView({ block: 'start' });
+    }, { cells, between, more: MORE_CONTROLS });
+    const read = await page.evaluate((content) => {
+      const page = document.querySelector('#frame-host .im-page-content');
+      const texts = (root) => {
+        const out = [];
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          if (!node.textContent.trim() || node.parentElement.closest('input, textarea')) continue;
+          out.push({ text: node.textContent.trim(), select: getComputedStyle(node.parentElement).userSelect });
+        }
+        return out;
+      };
+      return {
+        cells: [...page.querySelectorAll('[data-cell]')].map((cell) => ({ id: cell.dataset.cell, content: content.includes(cell.dataset.cell), texts: texts(cell) })),
+        more: texts(page.querySelector('[data-test="more"]')),
+        fields: [...page.querySelectorAll('input:not([type="checkbox"], [type="radio"]), textarea')].map((el) => getComputedStyle(el).userSelect),
+      };
+    }, PAGE_CONTENT);
+    for (const cell of read.cells) {
+      const wrong = cell.texts.filter((t) => t.select !== (cell.content ? 'text' : 'none'));
+      assert.deepEqual(wrong, [], where(`page content: the ${cell.id} control's text ${cell.content ? 'can' : 'cannot'} be selected`));
+    }
+    assert.ok(read.cells.filter((cell) => !cell.content).every((cell) => cell.texts.length || ['icon-button', 'search', 'field', 'field-bare', 'textarea'].includes(cell.id)), where('the controls have text to test'));
+    assert.deepEqual(read.more.filter((t) => t.select !== 'none'), [], where('page content: a link button, menu items of every kind, a role button, an option, a check, a field label and a summary cannot be selected'));
+    assert.ok(read.fields.length && read.fields.every((value) => value === 'text'), where('page content: a field\'s value can'));
+
+    // A drag from the first paragraph to the end of the second, over the controls between them.
+    const ends = await page.evaluate(() => {
+      const range = (selector, start) => {
+        const node = document.querySelector(`#frame-host [data-test="${selector}"]`).firstChild;
+        const r = document.createRange();
+        r.setStart(node, start ? 0 : node.length - 1);
+        r.setEnd(node, start ? 1 : node.length);
+        const box = r.getBoundingClientRect();
+        return { x: start ? box.left + 1 : box.right - 1, y: box.top + box.height / 2 };
+      };
+      getSelection().removeAllRanges();
+      return { from: range('first', true), to: range('second', false) };
+    });
+    await page.mouse.move(ends.from.x, ends.from.y);
+    await page.mouse.down();
+    await page.mouse.move(ends.to.x, ends.to.y, { steps: 8 });
+    await page.mouse.up();
+    const copied = await page.evaluate(() => getSelection().toString());
+    assert.match(copied, /^First paragraph\s+Second paragraph$/, where(`a drag across two paragraphs copies their words, not the controls between them (${JSON.stringify(copied)})`));
+  } finally {
+    await page.evaluate(() => { getSelection().removeAllRanges(); document.getElementById('frame-host')?.remove(); });
+  }
+}
+
 async function builtFrame(page, look) {
   const where = (text) => `${look}: the frame of shellFrameHtml ${text}`;
   try {
@@ -308,6 +392,7 @@ async function builtFrame(page, look) {
         assert.deepEqual(select, { heading: 'text', paragraph: 'text', code: 'text', item: 'text', button: 'none', label: 'none', tab: 'none', row: 'none', title: 'none', chrome: 'none' }, where('page content is selectable, its controls are not'));
       }
     }
+    await pageControls(page, where);
     // The wide inspector: 360, docked from 1012 beside the sidebar, from 1000 without one.
     await buildFrame(page, 1160, { wide: true });
     checkRegions(await regionBoxes(page, FRAME), 1160, where('wide at 1160'), { inspectorWidth: 360 });
@@ -361,7 +446,8 @@ async function checkRail(page, where, widths, label) {
     const title = ((await row.getAttribute('title')) ?? '').trim();
     assert.ok(title, where(`${label}: row ${i} has a title`));
     const name = /option "([^"]+)"/.exec(await row.ariaSnapshot())?.[1] ?? '';
-    assert.ok(name.startsWith(title) && name.length > title.length, where(`${label}: row ${i} is named by its text, not only by its title (${name})`));
+    const heading = ((await row.locator('.im-row-title').textContent()) ?? '').trim();
+    assert.ok(name.startsWith(heading) && name.length > title.length, where(`${label}: row ${i} is named by its text, not only by its title (${name})`));
     const item = row.locator('.im-rail-item');
     assert.equal(await item.count(), 1, where(`${label}: row ${i} has one rail item`));
     assert.equal(await item.isVisible(), true, where(`${label}: row ${i} shows its rail item`));
@@ -375,7 +461,7 @@ async function checkRail(page, where, widths, label) {
       const style = getComputedStyle(item);
       const svg = item.querySelector('svg');
       const kind = svg ? 'icon' : item.classList.contains('im-check') ? 'check' : 'avatar';
-      return { on: row.getAttribute('aria-selected') === 'true', kind, stroke: svg ? parseFloat(getComputedStyle(svg).strokeWidth) : 0, ring: kind === 'check' ? style.boxShadow : style.borderTopColor, box: item.getBoundingClientRect().width };
+      return { on: row.getAttribute('aria-selected') === 'true', kind, stroke: svg ? parseFloat(getComputedStyle(svg).strokeWidth) : 0, ring: style.boxShadow, box: item.getBoundingClientRect().width };
     }));
   for (const kind of ['icon', 'avatar', 'check']) {
     const on = looks.filter((l) => l.on && l.kind === kind);
@@ -415,7 +501,7 @@ async function checkRail(page, where, widths, label) {
 
 /** The checks that are the rail items of the sidebar's rows: how each is drawn, and whether a press at its centre reaches it. */
 const railChecks = (page) => page.evaluate(() => [...document.querySelectorAll('.im-sidebar [role="option"] > .im-check.im-rail-item')].map((check) => {
-  check.scrollIntoView({ block: 'nearest' });
+  check.scrollIntoView({ block: 'center' }); // clear of the gallery's sticky bar
   const s = getComputedStyle(check);
   const mark = getComputedStyle(check, '::after');
   const r = check.getBoundingClientRect();
@@ -441,6 +527,113 @@ async function checksInRail(page, where, at) {
   await page.locator('[data-test="tick"]').click();
   assert.equal(await page.locator('[data-test="tick"]').getAttribute('aria-checked'), 'true', where('a check in the rail is ticked by a press'));
   assert.notEqual(await page.locator('[data-test="tick"]').evaluate((el) => getComputedStyle(el, '::after').content), 'none', where('and shows its tick'));
+  // In the rail the check is all there is to aim at: a press 10px from its centre, in each direction, still ticks it (a
+  // target of 24 by 24), and its drawn box stays 16 by 16.
+  const target = page.locator('[data-test="tick"]');
+  await target.evaluate((el) => { window.__ticks = 0; el.addEventListener('click', (event) => { if (event.target === el) window.__ticks++; }); });
+  const centre = await target.evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width, height: r.height }; });
+  assert.deepEqual([centre.width, centre.height], [16, 16], where('the check is drawn 16 by 16 in the rail'));
+  for (const [dx, dy] of [[10, 0], [-10, 0], [0, 10], [0, -10]]) await page.mouse.click(centre.x + dx, centre.y + dy);
+  assert.equal(await page.evaluate(() => window.__ticks), 4, where('a press 10px from the check, in each direction, reaches it'));
+}
+
+// The marks a rail item carries that are not colour, the selection's ring (of an avatar, of a check) and the badge's
+// dot, are set apart from the item's fill (a category, the accent of a ticked check) by a gap in what is under the row:
+// the gap is the row's own ground at rest, hovered and selected, and each mark stands at 3:1 or more against it. Rows of
+// the eight categories, rest, hovered and selected, and selected checks, in the rail of the live sidebar.
+const railMarks = (page) => page.evaluate(() => {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 1;
+  const g = canvas.getContext('2d', { willReadFrequently: true });
+  const flatten = (colours) => {
+    g.clearRect(0, 0, 1, 1);
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, 1, 1);
+    for (const c of colours) {
+      g.fillStyle = c;
+      g.fillRect(0, 0, 1, 1);
+    }
+    return [...g.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+  };
+  const background = (el) => {
+    const layers = [];
+    for (let node = el; node; node = node.parentElement) {
+      const paint = getComputedStyle(node).backgroundColor;
+      if (paint !== 'rgba(0, 0, 0, 0)' && paint !== 'transparent') layers.unshift(paint);
+    }
+    return layers;
+  };
+  const channel = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const luminance = ([r, g2, b]) => 0.2126 * channel(r) + 0.7152 * channel(g2) + 0.0722 * channel(b);
+  const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2);
+  /** The layers of a box-shadow of rings, top first: [colour, spread]. */
+  const rings = (value) => [...value.matchAll(/((?:rgba?|oklch|oklab|color|hsla?|lab|lch)\([^)]*\)|transparent)\s+0px 0px 0px (\d+(?:\.\d+)?)px/g)].map((m) => ({ colour: m[1], spread: Number(m[2]) }));
+  const list = document.querySelector('.im-shell .im-sidebar .im-list');
+  const probes = [];
+  for (let n = 1; n <= 8; n++) {
+    for (const state of ['rest', 'hover', 'selected']) {
+      probes.push({ label: `category ${n} ${state}`, selected: state === 'selected', html: `<div class="im-row" role="option" aria-selected="${state === 'selected'}" data-im-cat="${n}" data-im-badge${state === 'hover' ? ' data-im-force="hover"' : ''} title="Thread ${n}, needs you"><span class="im-avatar im-rail-item" data-im-cat="${n}" aria-hidden="true">TH</span><span class="im-row-text"><span class="im-row-title">Thread ${n}</span></span></div>` });
+    }
+  }
+  for (const checked of ['true', 'mixed', 'false']) {
+    probes.push({ label: `a check ${checked}, selected`, selected: true, html: `<div class="im-row" role="option" aria-selected="true" title="Category"><span class="im-check im-rail-item" role="checkbox" aria-checked="${checked}" aria-label="Category"></span><span class="im-row-text"><span class="im-row-title">Category</span></span></div>` });
+  }
+  const failures = [];
+  let measured = 0;
+  for (const probe of probes) {
+    const holder = document.createElement('div');
+    holder.innerHTML = probe.html;
+    const row = holder.firstElementChild;
+    list.append(row);
+    const item = row.querySelector(':scope > .im-rail-item');
+    const under = flatten(background(row));
+    if (probe.selected) {
+      const layers = rings(getComputedStyle(item).boxShadow);
+      const gap = layers.length >= 3 ? flatten(layers.slice(0, -1).map((layer) => layer.colour).reverse()) : null;
+      const ring = layers.length >= 3 ? flatten([...background(row), layers.at(-1).colour]) : null;
+      if (!gap) failures.push(`${probe.label}: the ring has no gap (${getComputedStyle(item).boxShadow})`);
+      else {
+        if (!same(gap, under)) failures.push(`${probe.label}: the ring's gap is ${gap}, the row under it ${under}`);
+        if (ratio(ring, gap) < 3) failures.push(`${probe.label}: the ring is ${ratio(ring, gap).toFixed(2)}:1 against the gap beside it`);
+        measured++;
+      }
+    }
+    if (row.hasAttribute('data-im-badge')) {
+      const dot = getComputedStyle(row, '::after');
+      const layers = rings(dot.boxShadow);
+      const cut = layers.length >= 2 ? flatten(layers.map((layer) => layer.colour).reverse()) : null;
+      if (dot.content === 'none' || dot.display === 'none') failures.push(`${probe.label}: no badge in the rail`);
+      else if (!cut) failures.push(`${probe.label}: the badge has no cut-out (${dot.boxShadow})`);
+      else {
+        if (!same(cut, under)) failures.push(`${probe.label}: the badge's cut-out is ${cut}, the row under it ${under}`);
+        for (const tone of [null, 'ok', 'err', 'info']) {
+          if (tone) row.setAttribute('data-im-tone', tone);
+          const colour = flatten([getComputedStyle(row, '::after').backgroundColor]);
+          if (ratio(colour, cut) < 3) failures.push(`${probe.label}: the ${tone ?? 'warn'} badge is ${ratio(colour, cut).toFixed(2)}:1 against its cut-out`);
+          measured++;
+        }
+      }
+    }
+    row.remove();
+  }
+  return { failures, measured };
+});
+
+async function checkRailMarks(page, where, at) {
+  await at(840);
+  const root = page.locator('#g-window');
+  const app = await root.getAttribute('data-im-app');
+  try {
+    for (const accent of ['xiox', 'mukade', 'shinatama', 'muro', 'daodan']) {
+      await root.evaluate((el, value) => { el.dataset.imApp = value; }, accent);
+      const { failures, measured } = await railMarks(page);
+      assert.deepEqual(failures, [], where(`${accent}'s accent: a mark of the rail is lost in a fill`));
+      assert.ok(measured >= 24 * 3, where(`${accent}'s accent: the rail's marks are measured (${measured})`));
+    }
+  } finally {
+    await root.evaluate((el, value) => { el.dataset.imApp = value; }, app);
+  }
 }
 
 /** What a categorised row of the sidebar draws: the mark at its start, and its rail item's fill. */
@@ -482,11 +675,15 @@ const badge = (page) => page.evaluate(() => {
     return colour;
   };
   const end = getComputedStyle(row, '::after');
-  const corner = getComputedStyle(item, '::before');
+  // Where the dot is drawn when it is placed (in the rail): its box from the row's padding box, and the rail item's box.
+  const r = row.getBoundingClientRect();
+  const left = r.left + parseFloat(getComputedStyle(row).borderLeftWidth) + parseFloat(end.left);
+  const top = r.top + parseFloat(getComputedStyle(row).borderTopWidth) + parseFloat(end.top);
+  const i = item.getBoundingClientRect();
   return {
     warn: probe('var(--im-warn)'), err: probe('var(--im-err)'), meta: row.querySelector('.im-row-meta').getBoundingClientRect().right,
-    end: { content: end.content, display: end.display, width: end.width, height: end.height, color: end.backgroundColor },
-    corner: { content: corner.content, position: corner.position, width: corner.width, height: corner.height, color: corner.backgroundColor, top: parseFloat(corner.top), right: parseFloat(corner.right) },
+    end: { content: end.content, display: end.display, position: end.position, width: end.width, height: end.height, color: end.backgroundColor, pointer: end.pointerEvents },
+    corner: { right: left + parseFloat(end.width) - i.right, top: i.top - top },
   };
 });
 
@@ -519,9 +716,10 @@ async function categoryAndBadge(page, where, at) {
   assert.equal(await badged.count(), 1, where('one thread waits for the person'));
   const name = /option "([^"]+)"/.exec(await badged.ariaSnapshot())?.[1] ?? '';
   assert.match(name, /needs you/, where(`the badged row says what its badge says (${name})`));
+  // In the rail the title is all the row says to the eye: it carries the badge's word too.
+  assert.match((await badged.getAttribute('title')) ?? '', /needs you/, where("the badged row's title, the rail's tooltip, says what its badge says"));
   const wide = await badge(page);
-  assert.deepEqual([wide.end.content, wide.end.width, wide.end.height, wide.end.color], ['""', '8px', '8px', wide.warn], where('the badge is a warn dot at the end of the row'));
-  assert.equal(wide.corner.content, 'none', where('and not on the rail item, outside the rail'));
+  assert.deepEqual([wide.end.content, wide.end.position, wide.end.width, wide.end.height, wide.end.color], ['""', 'static', '8px', '8px', wide.warn], where('the badge is a warn dot at the end of the row'));
   const metaWithout = await badged.evaluate((row) => {
     row.removeAttribute('data-im-badge');
     const right = row.querySelector('.im-row-meta').getBoundingClientRect().right;
@@ -536,9 +734,9 @@ async function categoryAndBadge(page, where, at) {
   // In the rail: the badge is on the corner of the rail item, and the rail item takes the colour of its category.
   await at(840, 'shinatama');
   const rail = await badge(page);
-  assert.equal(rail.end.display === 'none' || rail.end.content === 'none', true, where('in the rail the badge is not at the end of the row'));
-  assert.deepEqual([rail.corner.content, rail.corner.position, rail.corner.width, rail.corner.height, rail.corner.color], ['""', 'absolute', '8px', '8px', rail.warn], where('in the rail the badge is a dot on the rail item'));
-  assert.ok(rail.corner.top <= 0 && rail.corner.right <= 0, where(`at its corner (${rail.corner.top}, ${rail.corner.right})`));
+  assert.deepEqual([rail.end.content, rail.end.position, rail.end.width, rail.end.height, rail.end.color], ['""', 'absolute', '8px', '8px', rail.warn], where('in the rail the badge is a dot on the rail item'));
+  assert.ok(Math.abs(rail.corner.right - 3) <= 1 && Math.abs(rail.corner.top - 3) <= 1, where(`at its corner, 3px out (${JSON.stringify(rail.corner)})`));
+  assert.equal(rail.end.pointer, 'none', where('a press on the dot reaches the rail item under it'));
   for (const row of await categories(page)) {
     assert.ok(row.item, where(`category ${row.n}: the rail item carries the category`));
     assert.deepEqual([row.item.background, row.item.color], [row.cat, row.on], where(`category ${row.n}: the rail item is filled with it, its text in --im-cat-on`));
@@ -667,6 +865,7 @@ export default async (page, url) => {
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 840'));
       await checksInRail(page, where, at);
       await categoryAndBadge(page, where, at);
+      await checkRailMarks(page, where, at);
 
       // 610: no sidebar, no tabs in the title bar, the Views menu instead (a menu button that is closed).
       await at(610);

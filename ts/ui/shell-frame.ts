@@ -94,10 +94,39 @@ const SCRIPTED: Record<string, readonly string[] | null> = {
   'im-window-buttons': null,
 };
 
+// The shells measured once, and those waiting for the frame that measures them.
+const measured = new WeakSet<Element>();
+const pending = new WeakSet<Element>();
+
+/**
+ * Says once on the console, with the fix, that a shell does not fill the window: once it is drawn, its height or its
+ * content region's is 0 while the window's is not. That is a shell in a parent of no height of its own (React's
+ * `<div id="app">` without `im-root`), and nothing else would say it. One measure per shell, a frame after the first
+ * call; a shell that is not on screen yet is measured at a later call. `renderShellFrame` and the React `Shell` call it.
+ */
+export function checkShellFill(shell: HTMLElement): void {
+  const win = shell.ownerDocument.defaultView;
+  if (measured.has(shell) || pending.has(shell) || !win?.requestAnimationFrame) return;
+  pending.add(shell);
+  win.requestAnimationFrame(() => {
+    pending.delete(shell);
+    if (!shell.isConnected || !shell.getClientRects().length || !win.innerHeight) return;
+    measured.add(shell);
+    const content = shell.querySelector('.im-content');
+    const height = shell.getBoundingClientRect().height;
+    const inside = content ? content.getBoundingClientRect().height : height;
+    if (height > 0 && inside > 0) return;
+    console.warn(`Imago: the shell is ${Math.round(height)}px tall and its content region ${Math.round(inside)}px, in a window `
+      + `${win.innerHeight}px tall: its parent does not fill the window. Put the shell directly in <body>, or give every element `
+      + 'between <body> and the shell the class im-root: <div id="app" class="im-root">.');
+  });
+}
+
 /**
  * Repaint shell content while preserving the regions that own modality, the inspector and every overlay host.
  * The complete next frame is validated before anything changes. Markup must come from trusted Imago composition
- * (`shellFrameHtml`), with external values escaped.
+ * (`shellFrameHtml`), with external values escaped. A shell that does not fill the window is said on the console
+ * (`checkShellFill`).
  */
 export function renderShellFrame(shell: HTMLElement, markup: string): void {
   const template = shell.ownerDocument.createElement('template');
@@ -106,6 +135,7 @@ export function renderShellFrame(shell: HTMLElement, markup: string): void {
   if (!complete(next)) throw new Error('An Imago frame needs ' + REGIONS);
   const mounted = regionsOf(shell);
   const sidebar = next.sidebar ? 'on' : 'off';
+  checkShellFill(shell);
   if (!mounted.titlebar && !mounted.body) {
     away.delete(shell);
     shell.setAttribute('data-im-sidebar', sidebar);

@@ -139,7 +139,9 @@ goes and comes back is the same element again, in its place. The content region 
 
 - `im-shell` fills its parent (`block-size: 100%`) and measures its own width, so the breakpoints follow the window.
   Put it directly in `<body>`, or in a root of the app's own that carries `im-root` (`<div id="app" class="im-root">`,
-  where React renders), as every element between the body and the shell does.
+  where React renders), as every element between the body and the shell does. In a wrapper without it the shell is as
+  tall as its title bar and its content region 0 pixels; `renderShellFrame` and the React `Shell` say so once on the
+  console (`checkShellFill`).
 - The brand is the mark and the name: `im-mark` holds one letter, the initial of the product's name in capitals, on the
   app's accent, and `im-wordmark` the name. No drawing and no logo: the app's logo is what Windows shows (the icons of
   its executables). `titlebarHtml({ brand: { name } })` writes the two; `imago-check` reports a brand that is not

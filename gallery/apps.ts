@@ -12,12 +12,7 @@ export const APP_HUES: Record<AppId, number> = { xiox: 75, shinatama: 355, mukad
 
 const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
-  min: '<path d="M5 12h14"/>', restore: '<path d="M8.5 8.5v-2h9v9h-2"/><rect x="6.5" y="8.5" width="9" height="9" rx="1.2"/>', max: '<rect x="5.5" y="5.5" width="13" height="13" rx="1.5"/>', list: '<path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/>', sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
-  folder: '<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/>',
-  window: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M4 9h16"/>',
-  globe: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.3 2.5 13.7 0 16M12 4c-2.5 2.3-2.5 13.7 0 16"/>',
-  code: '<path d="M8.5 8l-4 4 4 4M15.5 8l4 4-4 4"/>',
-  apps: '<rect x="4.5" y="4.5" width="6" height="6" rx="1"/><rect x="13.5" y="4.5" width="6" height="6" rx="1"/><rect x="4.5" y="13.5" width="6" height="6" rx="1"/><rect x="13.5" y="13.5" width="6" height="6" rx="1"/>',
+  min: '<path d="M5 12h14"/>', restore: '<path d="M8.5 8.5v-2h9v9h-2"/><rect x="6.5" y="8.5" width="9" height="9" rx="1.2"/>', max: '<rect x="5.5" y="5.5" width="13" height="13" rx="1.5"/>', list: '<path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/>',
   lock: '<rect x="5.5" y="11" width="13" height="8.5" rx="1.5"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11"/>',
   sidebar: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M9.5 5v14"/>',
   chev: '<path d="M7 10l5 5 5-5"/>',
@@ -48,14 +43,15 @@ const check = (state: 'on' | 'off' | 'part', label: string, extra = ''): string 
 const initials = (text: string): string => text.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 /**
  * A row of a list. Its rail item is its check when it has one (`ck`), else its icon, else its initials. `cat` is its
- * categorical colour (`data-im-cat`, on the row and on its rail item); `badge` marks a row that waits for the person
- * (`data-im-badge`, in the row's tone, warn by default), which its line says in words.
+ * categorical colour (`data-im-cat`, on the row and on its rail item); `badge` is the word of a row that waits for the
+ * person: the row has a badge (`data-im-badge`, in the row's tone, warn by default), and its line and its title, which is
+ * the rail's tooltip, say the word.
  */
-type Row = { t: string; s?: string; m?: string; sel?: boolean; ck?: 'on' | 'off' | 'part'; av?: string; icon?: string; dot?: Tone; chip?: [string, Tone?]; cat?: number; badge?: boolean };
+type Row = { t: string; s?: string; m?: string; sel?: boolean; ck?: 'on' | 'off' | 'part'; av?: string; icon?: string; dot?: Tone; chip?: [string, Tone?]; cat?: number; badge?: string };
 function row(r: Row): string {
   const cat = r.cat ? ` data-im-cat="${r.cat}"` : '';
   const rail = r.ck ? check(r.ck, r.t, ' im-rail-item') : r.icon ? `<span class="im-rail-item"${cat} aria-hidden="true">${icon(r.icon)}</span>` : `<span class="im-avatar im-rail-item"${cat} aria-hidden="true">${initials(r.t)}</span>`;
-  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.t}"${cat}${r.badge ? ' data-im-badge' : ''}>${rail}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
+  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.badge ? `${r.t} · ${r.badge}` : r.t}"${cat}${r.badge ? ' data-im-badge' : ''}>${rail}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
 }
 type HeaderOptions = { n?: number; sub?: string; right?: string };
 const header = (title: string, o: HeaderOptions = {}): string => `<header class="im-panel-header"><h4 class="im-panel-title">${title}</h4>${count(o.n)}${o.sub ? `<span class="im-panel-sub">${o.sub}</span>` : ''}${spacer}${o.right ?? ''}</header>`;
@@ -145,7 +141,7 @@ export const APPS: Record<AppId, App> = {
     status: ['Local runtime', 'ok', 'resources available', '4 terminals'],
     footer: 'Local runtime · 4 terminals · 268 MiB', keys: [], footerKeys: ['action:primary', { keys: 'F6', title: 'Next region' }],
     side: { title: 'Threads', n: 9, rows: [
-      { cat: 1, dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { cat: 2, badge: true, t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
+      { cat: 1, dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { cat: 2, badge: 'needs you', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
       { cat: 3, dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { cat: 4, t: 'Dunning emails', s: '1 session', m: '6m' },
       { cat: 5, t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { cat: 6, t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
     content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<div class="im-panel-body g-term-body"><pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md

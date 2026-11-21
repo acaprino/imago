@@ -338,19 +338,28 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   .im-sidebar .im-row > :not(.im-rail-item, .im-row-text) { display: none; }
   .im-sidebar .im-row > .im-rail-item:not(.im-check) { display: grid; }
   .im-sidebar .im-row > .im-rail-item:not(.im-avatar, .im-check) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
-  /* A row's badge is a dot on the corner of its rail item, not at the end of the row. */
-  .im-sidebar .im-row[data-im-badge]::after { display: none; }
-  .im-sidebar .im-row[data-im-badge] > .im-rail-item { position: relative; }
-  .im-sidebar .im-row[data-im-badge] > .im-rail-item::before {
-    content: "";
+  /* What is under a rail item: the row's fill (none at rest, hovered, selected, pressed, as css/controls.css draws it)
+     over the sidebar's ground. A mark on the item, the ring of the selection or the badge, is set off from the item's
+     fill (a category, the accent of a ticked check) by a ring of it, so it never stands on that fill alone. */
+  .im-sidebar .im-row { --im-rail-ground: var(--im-ground); --im-rail-fill: transparent; }
+  [data-im-look="oni"] .im-sidebar .im-row { --im-rail-ground: var(--im-sheet); }
+  .im-sidebar .im-row:where(:not([aria-disabled="true"])):where(:hover, [data-im-force="hover"]) { --im-rail-fill: var(--im-hover); }
+  .im-sidebar .im-row:where([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"]) { --im-rail-fill: var(--im-selected); }
+  .im-sidebar .im-row:where(:not([aria-disabled="true"])):where(:active, [data-im-force="press"]) { --im-rail-fill: var(--im-press); }
+  /* A row's badge is a dot on the corner of its rail item, 3px out, not at the end of the row; a press on it is the
+     item's. --im-rail-half is half the item's box: an icon's, an avatar's (26), a check's (16). */
+  .im-sidebar .im-row[data-im-badge] { --im-rail-half: calc(var(--im-rail-icon) / 2); }
+  .im-sidebar .im-row[data-im-badge]:has(> .im-avatar.im-rail-item) { --im-rail-half: 13px; }
+  .im-sidebar .im-row[data-im-badge]:has(> .im-check.im-rail-item) { --im-rail-half: 8px; }
+  .im-sidebar .im-row[data-im-badge]::after {
     position: absolute;
-    inset-block-start: -3px;
-    inset-inline-end: -3px;
-    inline-size: 8px;
-    block-size: 8px;
-    border-radius: 50%;
-    background: var(--im-badge);
+    inset-block-start: calc(50% - var(--im-rail-half) - 3px);
+    inset-inline-start: calc(50% + var(--im-rail-half) - 5px);
+    pointer-events: none;
+    box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground);
   }
+  /* A check is all a row with a check shows in the rail: its target is 24 by 24 round its 16px box. */
+  .im-sidebar .im-row > .im-check.im-rail-item::before { content: ""; position: absolute; inset: -4px; }
   .im-sidebar .im-row > .im-row-text {
     position: absolute;
     inline-size: 1px;
@@ -360,10 +369,12 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
     white-space: nowrap;
   }
   .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
-  /* the selection is a heavier line, a ringed avatar or a ringed check, as well as a fill */
+  /* the selection is a heavier line, or a ring round an avatar or a check, apart from it by a gap of what is under the
+     row, as well as a fill */
   .im-sidebar .im-row[aria-selected="true"] > .im-rail-item .im-icon { stroke-width: 2.4; }
-  .im-sidebar .im-row[aria-selected="true"] > .im-avatar.im-rail-item { border-color: var(--im-accent-text); font-weight: 700; }
-  .im-sidebar .im-row[aria-selected="true"] > .im-check.im-rail-item { box-shadow: 0 0 0 2px var(--im-accent-text); }
+  .im-sidebar .im-row:is([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"]) > :is(.im-avatar, .im-check).im-rail-item {
+    box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground), 0 0 0 4px var(--im-accent-text);
+  }
   .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
 }

@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { createElement as h, type ReactNode } from 'react';
+import { createElement as h, Fragment, Suspense, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { namesDefined, packageNames } from '../scripts/check/names.mjs';
 import { parseSource } from '../scripts/check/source.mjs';
@@ -102,6 +102,8 @@ describe('the types', () => {
   test("declare Workbench's status row, action bar, footer and ids, and ListAction's tooltip and rail item", () => {
     for (const name of ['status', 'actions', 'footer', 'rail']) assert.match(types, new RegExp(`\\b${name}\\?: ReactNode;`), name);
     for (const name of ['contentId', 'sidebarId', 'tooltip']) assert.match(types, new RegExp(`\\b${name}\\?: string;`), name);
+    const shell = /export function Shell\([^]*?\): ReactElement;/.exec(types)?.[0] ?? '';
+    assert.match(shell, /\bcontentId\?: string;/, 'Shell takes contentId');
   });
 
   test('say that the Shell is mounted in a root that carries im-root', () => {
@@ -142,6 +144,22 @@ describe('Shell', () => {
     assert.equal(only(custom, '.im-shell-skip-link').attrs.href, '#viewer');
     assert.equal(only(custom, '.im-content').attrs.id, 'viewer');
     assert.equal(only(shell({}), '.im-shell-skip-link').attrs.href, '#main');
+  });
+
+  test('takes contentId itself, for a Workbench it cannot see (in a fragment, a Suspense or a component of the app)', () => {
+    const Page = ({ children }: { children?: ReactNode }) => h(Workbench, { contentId: 'viewer', detailsLabel: 'Details', 'aria-label': 'Viewer' }, children);
+    for (const [name, wrap] of [
+      ['a fragment', (node: ReactNode) => h(Fragment, null, node)],
+      ['a Suspense', (node: ReactNode) => h(Suspense, null, node)],
+      ['a component', () => h(Page, null, h('p', null, 'Page'))],
+    ] as const) {
+      const inner = h(Workbench, { contentId: 'viewer', detailsLabel: 'Details', 'aria-label': 'Viewer' }, h('p', null, 'Page'));
+      const written = rootOf(render(h(Shell, { skipLabel: 'Skip to content', titlebar, contentId: 'viewer' }, wrap(inner))));
+      assert.equal(only(written, '.im-shell-skip-link').attrs.href, '#viewer', name);
+      assert.equal(only(written, '.im-content').attrs.id, 'viewer', name);
+    }
+    assert.equal('contentId' in rootOf(render(h(Shell, { skipLabel: 'Skip', contentId: 'viewer' }))).attrs, false, 'contentId is not written on the shell');
+    assert.equal(rootOf(render(h(Shell, { skipLabel: 'Skip', contentId: 'viewer' }))).attrs['contentid'], undefined);
   });
 
   test('has no skip link without a label for it, and keeps its class whatever className it is given', () => {

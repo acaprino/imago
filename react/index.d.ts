@@ -9,13 +9,19 @@ export function Disclosure(props: { label: ReactNode; children?: ReactNode }): R
 
 /**
  * The window: the `im-shell` root of docs/using-imago.md section 4. It writes the skip link to the content region of the
- * `Workbench` among its children (its `contentId`, `main` by default), then `titlebar`, then its children: put a
- * `Workbench` in it. Mount it in a root that carries `im-root` (`<div id="app" class="im-root">`, the element React
- * renders into): the shell then fills the window, as it does directly in the body; in a root without it, the content is
- * 0 pixels tall. The app, the look and the theme (`data-im-app`, `data-im-look`, `data-im-theme`) are written on the
- * root element by `applyLook`, not by the shell.
+ * `Workbench` (`contentId`), then `titlebar`, then its children: put a `Workbench` in it. Mount it in a root that carries
+ * `im-root` (`<div id="app" class="im-root">`, the element React renders into): the shell then fills the window, as it
+ * does directly in the body; in a root without it, the content is 0 pixels tall, and the console says so once. The app,
+ * the look and the theme (`data-im-app`, `data-im-look`, `data-im-theme`) are written on the root element by
+ * `applyLook`, not by the shell.
  */
 export function Shell(props: Props<'div'> & {
+  /**
+   * The id of the content region the skip link goes to: the `contentId` of the `Workbench`. Without it, the `contentId`
+   * of a `Workbench` that is a direct child of the shell, else `main`; a `Workbench` in a fragment, a `Suspense` or a
+   * component of the app is not seen, so give the id here when it is not `main`.
+   */
+  contentId?: string;
   titlebar?: ReactNode;
   /** Whether the `Workbench` has a sidebar: writes `data-im-sidebar="on"`, or `"off"` when it is not set. */
   sidebar?: boolean;

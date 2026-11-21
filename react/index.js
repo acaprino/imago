@@ -1,5 +1,6 @@
-import { Children, createElement as h, useEffect, useRef, useState } from 'react';
+import { Children, createElement as h, useCallback, useEffect, useRef, useState } from 'react';
 import { roving } from '../lib/ui/keys.js';
+import { checkShellFill } from '../lib/ui/shell-frame.js';
 
 export function TabList({ label, tabs, value, onSelect }) {
   const host = useRef(null);
@@ -27,15 +28,23 @@ const given = node => node != null && node !== false;
 /**
  * The window: the `im-shell` root of docs/using-imago.md section 4, with the skip link and the title bar before its
  * children. Put a `Workbench` in it, and mount it in a root that carries `im-root` (`<div id="app" class="im-root">`),
- * so it fills the window. `sidebar` says whether the `Workbench` has a sidebar (`data-im-sidebar`). The skip link goes to
- * the content region of the `Workbench` among its children (its `contentId`, `main` by default). The app, the look and
- * the theme are not the shell's: `applyLook` writes them on the root element.
+ * so it fills the window: mounted, a shell that does not is said on the console (`checkShellFill`). `sidebar` says
+ * whether the `Workbench` has a sidebar (`data-im-sidebar`). The skip link goes to `contentId`, the id of the
+ * `Workbench`'s content region; without it, to the `contentId` of a `Workbench` that is a direct child, else `main`. The
+ * app, the look and the theme are not the shell's: `applyLook` writes them on the root element.
  */
-export function Shell({ titlebar, children, sidebar, inspector, skipLabel, ...props }) {
+export function Shell({ titlebar, children, sidebar, inspector, skipLabel, contentId, ref, ...props }) {
   const workbench = Children.toArray(children).find(child => child?.type === Workbench);
-  const target = workbench?.props.contentId ?? 'main';
+  const target = contentId ?? workbench?.props.contentId ?? 'main';
+  // React 19 hands a function component its ref as a prop: the app's ref still gets the element.
+  const mount = useCallback(element => {
+    if (element) checkShellFill(element);
+    if (typeof ref === 'function') return ref(element);
+    if (ref) ref.current = element;
+    return undefined;
+  }, [ref]);
   return h('div', {
-    ...props, className: 'im-shell', 'data-im-sidebar': sidebar ? 'on' : 'off',
+    ...props, ref: mount, className: 'im-shell', 'data-im-sidebar': sidebar ? 'on' : 'off',
     'data-im-inspector': inspector === 'wide' ? 'wide' : undefined,
   }, skipLabel != null && h('a', { className: 'im-shell-skip-link', href: `#${target}` }, skipLabel), titlebar, children);
 }

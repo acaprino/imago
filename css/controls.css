@@ -1361,8 +1361,7 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   .im-avatar { border-color: ButtonText; }
 
   /* A badge keeps its tone, as a status dot does (css/base.css): the row's text says the same. */
-  .im-row[data-im-badge]::after,
-  .im-row[data-im-badge] > .im-rail-item::before { forced-color-adjust: none; }
+  .im-row[data-im-badge]::after { forced-color-adjust: none; }
 
   /* A pressed button: its fill and its bar vanish (a shadow), so its edge is the system's selection colour. */
   .im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { border-color: Highlight; }
