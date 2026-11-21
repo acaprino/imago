@@ -1,4 +1,4 @@
-import { createElement as h, useEffect, useRef, useState } from 'react';
+import { Children, createElement as h, useEffect, useRef, useState } from 'react';
 import { roving } from '../lib/ui/keys.js';
 
 export function TabList({ label, tabs, value, onSelect }) {
@@ -19,13 +19,37 @@ export function Disclosure({ label, children }) {
     h('summary', null, label), open && children);
 }
 
-export function Workbench({ navigation, children, details, ...props }) {
-  return h('main', { ...props, className: 'im-workbench' },
-    h('aside', { className: 'im-navigation-panel' }, navigation), children, details);
+/** Whether a React node draws nothing: null, undefined, a boolean, an empty string, or a list of those. */
+const isEmpty = node => Children.toArray(node).every(child => child === '');
+
+/**
+ * The window: the `im-shell` root of docs/using-imago.md section 4, with the skip link and the title bar before its
+ * children. Put a `Workbench` in it. `sidebar` says whether the `Workbench` has a sidebar (`data-im-sidebar`).
+ */
+export function Shell({ app, titlebar, children, sidebar, inspector, skipLabel, ...props }) {
+  return h('div', {
+    ...props, className: 'im-shell', 'data-im-app': app, 'data-im-sidebar': sidebar ? 'on' : 'off',
+    'data-im-inspector': inspector === 'wide' ? 'wide' : undefined,
+  }, skipLabel != null && h('a', { className: 'im-shell-skip-link', href: '#main' }, skipLabel), titlebar, children);
 }
 
-export function DetailPanel({ children, ...props }) {
-  return h('section', { ...props, className: 'im-detail-panel' }, children);
+/**
+ * The body of a `Shell`: the sidebar (when there are `navigation` rows), and the work area with the content region and
+ * the inspector. The inspector is always there, `hidden` while `details` is empty. The attributes of a `main` go on the
+ * content region. `wide` is ignored: the inspector's width is `inspector="wide"` on the `Shell`.
+ */
+export function Workbench({ navigation, navigationLabel, children, details, detailsLabel, wide, ...props }) {
+  const hasDetails = !isEmpty(details);
+  return h('div', { className: 'im-body' },
+    navigation != null && navigation !== false && h('section', { className: 'im-panel im-sidebar', id: 'sidebar', 'aria-label': navigationLabel },
+      h('header', { className: 'im-panel-header' },
+        h('h4', { className: 'im-panel-title' }, navigationLabel), h('span', { className: 'im-spacer' })),
+      h('div', { className: 'im-panel-body im-list', role: 'group', 'aria-label': navigationLabel }, navigation)),
+    h('div', { className: 'im-work' },
+      h('div', { className: 'im-columns' },
+        h('main', { 'aria-busy': false, ...props, id: 'main', className: 'im-panel im-content', tabIndex: -1 },
+          h('div', { className: 'im-panel-body' }, children)),
+        h('section', { className: 'im-panel im-inspector', 'aria-label': detailsLabel, hidden: !hasDetails }, hasDetails ? details : null))));
 }
 
 /** A native action button. Provide pressed for toggles or selectable rows. */
