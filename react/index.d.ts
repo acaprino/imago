@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, ReactElement, ReactNode, Ref } from 'react';
 
 type Props<T extends 'div' | 'main' | 'ol' | 'button'> = Omit<ComponentPropsWithoutRef<T>, 'className'>;
 export function TabList<T extends string>(props: {
@@ -13,7 +13,7 @@ export function Disclosure(props: { label: ReactNode; children?: ReactNode }): R
  * `im-root` (`<div id="app" class="im-root">`, the element React renders into): the shell then fills the window, as it
  * does directly in the body; in a root without it, the content is 0 pixels tall, and the console says so once. The app,
  * the look and the theme (`data-im-app`, `data-im-look`, `data-im-theme`) are written on the root element by
- * `applyLook`, not by the shell.
+ * `applyLook`, not by the shell. A `ref` gets the `im-shell` element, the one `mountApp` takes: it works in React 18 and 19.
  */
 export function Shell(props: Props<'div'> & {
   /**
@@ -23,8 +23,14 @@ export function Shell(props: Props<'div'> & {
    */
   contentId?: string;
   titlebar?: ReactNode;
-  /** Whether the `Workbench` has a sidebar: writes `data-im-sidebar="on"`, or `"off"` when it is not set. */
+  /**
+   * Whether the `Workbench` has a sidebar (`data-im-sidebar`). Without it, the shell reads the `navigation` of a `Workbench`
+   * that is a direct child: on when it has rows, as the `Workbench` draws the sidebar. Give it for a `Workbench` the shell
+   * cannot see (in a fragment, a `Suspense` or a component of the app), or to override what it sees.
+   */
   sidebar?: boolean;
+  /** The `im-shell` element, once mounted: what `mountApp(shell, registry, ...)` takes. */
+  ref?: Ref<HTMLDivElement>;
   /** `"wide"` makes the inspector `--im-w-inspector-wide` (360) wide instead of 300 (`data-im-inspector="wide"`). */
   inspector?: 'wide';
   /** The text of the skip link, in the app's words. */
@@ -62,8 +68,6 @@ export function Workbench(props: Omit<Props<'main'>, 'id' | 'tabIndex'> & Workbe
   contentId?: string;
   /** The id of the sidebar, which the title bar's sidebar button controls. Default `sidebar`. */
   sidebarId?: string;
-  /** @deprecated Ignored: a component cannot reach its shell. Write `inspector="wide"` on the `Shell`. */
-  wide?: boolean;
 }): ReactElement;
 
 /**

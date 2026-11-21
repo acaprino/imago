@@ -155,6 +155,11 @@ async function docking(page) {
       '<section data-im-pane="two" style="width:300px;height:90px">Destination</section></div></section>';
     window.moves = [];
     window.selections = [];
+    // The app's registry is attached first, as mountApp does: its Escape command sees the key before the dock tabs do.
+    window.escapes = 0;
+    const registry = ui.createRegistry();
+    registry.register({ id: 'clear', title: 'Clear', keys: 'Escape', run: () => { window.escapes++; } });
+    window.detachRegistry = registry.attach(document);
     for (const host of [root, root.querySelector('#inner')]) {
       ui.dockTabs(host, {
         canMove: request => request.pane === 'two' || request.pane === 'outer',
@@ -194,6 +199,18 @@ async function docking(page) {
   await page.mouse.move(dest.x + dest.width / 2, dest.y + dest.height / 2, { steps: 4 });
   await page.mouse.up();
   assert.deepEqual(await page.evaluate(() => moves.slice(1)), [{ host: 'inner', tab: 'a', pane: 'two', placement: 'center' }]);
+  // Escape cancels a pointer drag even when the app has a command on Escape: the registry runs in the bubble phase.
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(dest.x + dest.width / 2, dest.y + dest.height / 2, { steps: 4 });
+  assert.equal(await pane.getAttribute('data-im-dock-target'), 'center', 'the drag is over the pane');
+  await page.evaluate(() => document.activeElement.blur()); // the focus is off the dock tabs: the key reaches the document only
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('[data-im-dock-target]').count(), 0, 'Escape cancels the drag');
+  assert.equal(await page.evaluate(() => escapes), 0, 'and runs no command of the app');
+  await page.mouse.up();
+  assert.equal(await page.evaluate(() => moves.length), 2, 'a cancelled drag moves nothing');
+  await page.evaluate(() => window.detachRegistry());
   await page.getByText('Outer', { exact: true }).press('Shift+Enter');
   assert.equal(await page.locator('[data-im-dock-target]').count(), 0);
 

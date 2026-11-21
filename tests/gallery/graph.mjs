@@ -68,4 +68,17 @@ export default async function graph(page) {
   await page.evaluate(() => window.__imagoGraph.hidden(false));
   await layout();
   assert.equal((await viewport()).fitted, true);
+
+  // A field inside a node keeps its keys: + - = 0 and the arrows are typed, not the graph's zoom and move.
+  const before = await transform();
+  await pane.evaluate((el) => {
+    const input = document.createElement('input');
+    input.id = 'g-node-field';
+    el.querySelector('[data-im-node]').append(input);
+    input.focus();
+  });
+  await page.keyboard.type('a+-=0b');
+  assert.equal(await page.inputValue('#g-node-field'), 'a+-=0b', 'the keys of the graph are typed in a field of a node');
+  assert.equal(await transform(), before, 'and do not zoom or fit the graph');
+  await page.evaluate(() => document.getElementById('g-node-field').remove());
 }

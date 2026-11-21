@@ -61,7 +61,7 @@ test('the renderers write the class of the one drawing: input.im-check, span.im-
   assert.match(choiceRowsHtml([{ name: 'pick', checked: true, label: 'Item' }]), /<li><label class="im-option"><input type="checkbox" class="im-check" name="pick" checked>/);
   assert.match(selectHtml({ name: 'harness', value: 'a', options: [['a', 'A']] }), /^<select class="im-select" name="harness">/);
   assert.match(selectHtml({ name: 'harness', value: 'a', options: [['a', 'A']], attrs: { class: 'wide' } }), /^<select class="im-select wide" name="harness">/);
-  assert.match(selectFieldHtml('Device', 'device', [['a', 'A']], 'a'), /^<label class="im-field"><span>Device<\/span><select class="im-select" name="device">/);
+  assert.match(selectFieldHtml('Device', 'device', [['a', 'A']], 'a'), /^<label class="im-field"><span class="im-field-label">Device<\/span><select class="im-select" name="device">/);
   assert.match(inputHtml({ name: 'model', label: 'Model', value: 'x' }), /^<span class="im-input"><input name="model" aria-label="Model" value="x"><\/span>$/);
   assert.match(settingInputHtml({ name: 'model', label: 'Model', value: 'x' }), /^<span class="im-input"><input [^>]*data-setting="model"[^>]*><\/span>$/);
 });
@@ -118,7 +118,7 @@ const read = (dir: string): string => readdirSync(new URL(`../${dir}/`, import.m
 const CSS = read('css');
 const SOURCE = read('ts');
 
-// The second drawings of a control that 0.1.2 to 0.1.4 added (docs/superpowers/moving/task-4.md): one drawing is left.
+// The second drawings of a control that 0.1.2 to 0.1.4 added (the table "Moving from 0.1.4" in docs/using-imago.md): one drawing is left.
 const REMOVED = ['im-native-controls', 'im-native-input', 'im-native-select', 'im-native-textarea', 'im-native-check', 'im-native-radio',
   'im-native-choice', 'im-seg--native', 'im-seg--choice', 'im-switch-knob'];
 

@@ -62,7 +62,7 @@ test('the switch, the segmented control and the text field write the one drawing
     '<button type="button" class="im-switch" role="switch" aria-checked="true" aria-label="Sync" data-action="sync" data-id="p1"></button>');
   assert.match(segmentedHtml('view', 'b', [['a', 'Graph'], ['b', 'Lanes']], 'View'),
     /^<div class="im-seg" role="radiogroup" aria-label="View"><label><input type="radio" name="view" value="a"><span>Graph<\/span><\/label><label><input type="radio" name="view" value="b" checked><span>Lanes<\/span><\/label><\/div>$/);
-  assert.match(textFieldHtml('Name', 'name', 'x'), /^<label class="im-field"><span>Name<\/span><span class="im-input"><input name="name" value="x" type="text"[^>]*><\/span><small class="im-field-error"/);
+  assert.match(textFieldHtml('Name', 'name', 'x'), /^<label class="im-field"><span class="im-field-label">Name<\/span><span class="im-input"><input name="name" value="x" type="text"[^>]*><\/span><small class="im-field-error"/);
   const mono = textFieldHtml('Folder', 'folder', 'C:/', { mono: true });
   assert.match(mono, /<span class="im-input im-input--code"><input name="folder" value="C:\/" type="text"[^>]*><\/span>/);
   assert.doesNotMatch(mono, /<input[^>]*class=/, 'the input has no class of its own: its box draws it');

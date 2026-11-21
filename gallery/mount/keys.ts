@@ -28,8 +28,9 @@ export default function mount({ shell }: MountContext): () => void {
   const list = shell.querySelector<HTMLElement>('.im-sidebar [role="listbox"]');
   if (list) undo.push(roving(list, { item: '.im-row', orientation: 'vertical', onSelect: select }));
 
-  const tabs = shell.querySelector<HTMLElement>('.im-titlebar .im-tabs');
-  if (tabs) undo.push(roving(tabs, { item: '.im-tab', orientation: 'horizontal', onSelect: select }));
+  // Bound to the title bar, which a repaint (renderShellFrame) keeps, not to its `.im-tabs`, which it replaces.
+  const titlebar = shell.querySelector<HTMLElement>('.im-titlebar');
+  if (titlebar?.querySelector('.im-tabs')) undo.push(roving(titlebar, { item: '.im-tab', orientation: 'horizontal', onSelect: select }));
 
   const table = shell.querySelector<HTMLElement>('.im-content tbody');
   if (table) undo.push(roving(table, { item: 'tr', orientation: 'vertical', onSelect: select }));

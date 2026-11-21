@@ -487,13 +487,34 @@ test('Escape that closes a layer runs no command of the app: mountApp attaches t
   }
 });
 
+test('F6 moves focus between the regions, and runs no command of the app bound to it: mountApp attaches the regions before the registry', () => {
+  const doc = fakeDocument();
+  (doc as unknown as { activeElement: null }).activeElement = null;
+  let focused = 0;
+  // The content region as keys.ts looks at it: rendered, a tab stop, focusable.
+  const content = { getClientRects: () => [{}], matches: (selector: string) => selector === '[tabindex="0"]', closest: () => null, focus: () => void focused++, contains: () => false };
+  const registry = createRegistry();
+  let commands = 0;
+  registry.register(command('next', 'F6', { run: () => void commands++ }));
+  const globals = globalThis as unknown as { getComputedStyle?: unknown };
+  const before = globals.getComputedStyle;
+  globals.getComputedStyle = () => ({ visibility: 'visible' });
+  const undo = mountApp(asShell(fakeShell(doc, { '.im-content': content })), registry, { search: () => {} });
+  try {
+    assert.equal(keydown(doc, 'F6'), 1, 'the key is taken once');
+    assert.equal(focused, 1, 'by the regions');
+    assert.equal(commands, 0, 'and no command of the app runs');
+  } finally {
+    undo();
+    globals.getComputedStyle = before;
+  }
+});
+
 test('Ctrl+F searches in a desktop app: guardDesktop refuses the key to the browser and leaves it to the app, in any order', () => {
-  // The documented order is the guard first, in the capture phase; the other three are the ones an app may also write.
+  // The documented order is the guard first; the guard after mountApp is the one an app may also write.
   const orders: [string, (doc: Document, mount: () => void) => void][] = [
-    ['the guard first, capturing', (doc, mount) => { guardDesktop(doc); mount(); }],
-    ['the guard after mountApp, capturing', (doc, mount) => { mount(); guardDesktop(doc); }],
-    ['the guard first, bubbling', (doc, mount) => { guardDesktop(doc, { keyPhase: 'bubble' }); mount(); }],
-    ['the guard after mountApp, bubbling', (doc, mount) => { mount(); guardDesktop(doc, { keyPhase: 'bubble' }); }],
+    ['the guard first', (doc, mount) => { guardDesktop(doc); mount(); }],
+    ['the guard after mountApp', (doc, mount) => { mount(); guardDesktop(doc); }],
   ];
   for (const [order, wire] of orders) {
     const doc = fakeDocument();

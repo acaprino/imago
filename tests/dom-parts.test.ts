@@ -26,3 +26,9 @@ test('the roles are Imago classes and nothing else', () => {
     assert.match(classes, /^im-[a-z0-9-]+( im-[a-z0-9-]+)*$/, role);
   }
 });
+
+test('no part is a native progress: im-progress draws a div with role="progressbar" (setProgress), not a progress element', () => {
+  const source = readFileSync(fileURLToPath(new URL('../ts/ui/dom-parts.ts', import.meta.url)), 'utf8');
+  assert.doesNotMatch(source, /\['progress',/);
+  assert.doesNotMatch(source, /progress:/);
+});

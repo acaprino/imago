@@ -49,7 +49,6 @@ function attributesHtml(attributes: MarkupAttributes | undefined, reserved: read
 export interface ButtonMarkupOptions {
   primary?: boolean;
   danger?: boolean;
-  accent?: boolean;
   sm?: boolean;
   busy?: boolean;
   icon?: string;
@@ -62,7 +61,7 @@ export interface ButtonMarkupOptions {
 /** An action button. `data-action` and optional `data-id` are interpreted by the consuming app. */
 export function buttonHtml(label: string, action: string, options: ButtonMarkupOptions = {}): string {
   const classes = ['im-btn', options.primary && 'im-btn--primary', options.danger && 'im-btn--danger',
-    options.accent && 'im-btn--accent', options.sm && 'im-btn--sm', options.cls].filter(Boolean).join(' ');
+    options.sm && 'im-btn--sm', options.cls].filter(Boolean).join(' ');
   const attrs = ['type="button"', `class="${escapeHtml(classes)}"`, `data-action="${escapeHtml(action)}"`,
     options.id !== undefined ? `data-id="${escapeHtml(options.id)}"` : '',
     ...attributesHtml(options.attrs, ['data-action', 'data-id']), options.disabled ? 'disabled' : ''];
@@ -129,5 +128,5 @@ export function textFieldHtml(label: string, name: string, value = '', options: 
     options.required ? 'required aria-required="true"' : '', options.readonly ? 'readonly' : '',
     options.autofocus ? 'autofocus' : '', ...attributesHtml(options.attrs, options.id ? ['id', 'aria-describedby'] : ['aria-describedby']),
     described ? `aria-describedby="${escapeHtml(described)}"` : ''];
-  return `<label class="im-field"><span>${escapeHtml(label)}${options.optional ? '<em>optional</em>' : ''}</span><span class="im-input${options.mono ? ' im-input--code' : ''}"><input ${attrs.filter(Boolean).join(' ')}></span>${options.hint ? `<small id="${escapeHtml(hintId)}">${escapeHtml(options.hint)}</small>` : ''}${slot ? `<small class="im-field-error" id="${escapeHtml(errorId)}" role="alert"></small>` : ''}</label>`;
+  return `<label class="im-field"><span class="im-field-label">${escapeHtml(label)}${options.optional ? '<em>optional</em>' : ''}</span><span class="im-input${options.mono ? ' im-input--code' : ''}"><input ${attrs.filter(Boolean).join(' ')}></span>${options.hint ? `<small class="im-field-hint" id="${escapeHtml(hintId)}">${escapeHtml(options.hint)}</small>` : ''}${slot ? `<small class="im-field-error" id="${escapeHtml(errorId)}" role="alert"></small>` : ''}</label>`;
 }

@@ -57,6 +57,7 @@ export type Registry = {
    * palette is open (see `AttachOptions`). A key is answered once: a key a handler of the package claimed
    * (`claimKey`: Escape that closed a surface, the inspector or the sidebar drawer, an arrow that moved a list) runs no
    * command. A key that is only prevented still does: `guardDesktop` refuses Ctrl+F to the browser, not to the app.
+   * (The zoom keys are not like it: `mountZoom` stops them at the document before the registry.)
    * Returns detach.
    */
   attach(target: KeyEventTarget, options?: AttachOptions): () => void;

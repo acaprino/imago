@@ -61,7 +61,11 @@ function holdEscape(event: Dispatched): void {
   held.set(doc, release);
 }
 
-/** Claims a key a handler answers, beside its `preventDefault()`: no command of the registry runs on it. */
+/**
+ * Claims a key a handler answers, beside its `preventDefault()`: no command of the registry runs on it. It takes the
+ * browser's own event: from a React handler give `event.nativeEvent`, because the registry never sees a synthetic event,
+ * so a claim on one does nothing.
+ */
 export function claimKey(event: object): void {
   claimed.add(event);
   holdEscape(event as Dispatched);

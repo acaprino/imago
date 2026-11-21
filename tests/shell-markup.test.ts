@@ -217,6 +217,7 @@ class FakeElement extends FakeParent {
   getAttribute(name: string): string | null { return this.attrs.get(name) ?? null; }
   setAttribute(name: string, value: string): void { this.attrs.set(name, String(value)); }
   hasAttribute(name: string): boolean { return this.attrs.has(name); }
+  closest(): FakeElement | null { return null; } // no graph node round it: tests/gallery/frame-focus.mjs gives a real row back
   removeAttribute(name: string): void { this.attrs.delete(name); }
   get classList() {
     const names = (this.attrs.get('class') ?? '').split(/\s+/).filter(Boolean);
@@ -494,7 +495,8 @@ test('a repaint gives the focus back to the kept control or region that held it'
       renderShellFrame(shell as unknown as HTMLElement, frame('2'));
       assert.equal(fakeDocument.activeElement, element, `${name} still has the focus`);
     }
-    // What the markup replaced is new: the app gives the focus back to it (captureDomState, restoreDomState).
+    // What the markup replaced is new, and this row has no key, id, data-action, data-id or name to be found again by:
+    // the focus is not given back to it (a row that has one is, tests/gallery/frame-focus.mjs).
     const row = $(shell, 'im-row');
     row.focus();
     renderShellFrame(shell as unknown as HTMLElement, frame('3'));

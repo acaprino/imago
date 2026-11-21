@@ -10,8 +10,11 @@
 // sidebar `sidebarDrawer`, `sidebarCollapse` and `sidebarResize` were wired to, and the title bar's sidebar button and
 // window buttons are the ones `sidebarDrawer` and `mountWindowControls` hold: nothing is wired again. The sidebar's list
 // stays the same element in its place, with its scroll, and takes the new rows. A kept control or region that held the
-// focus holds it after the repaint; focus on something the markup replaced (a row, a field) is the app's to restore
-// (`captureDomState`, `restoreDomState`).
+// focus holds it after the repaint, and so does a control the markup replaced (a row, a field) when it can be found again:
+// by its `data-im-key` or `id`, or its `data-action`, `data-id` or `name` (`captureFocus`, `restoreFocus`: the caret of a
+// field too). A replaced control with none of those cannot be, and the focus falls to the page.
+
+import { captureFocus, restoreFocus } from './dom-state.ts';
 
 const REGIONS = 'a title bar, a body, a work area, columns, a content region with its panel body and an inspector';
 
@@ -150,6 +153,7 @@ export function renderShellFrame(shell: HTMLElement, markup: string): void {
   const doc = shell.ownerDocument;
   const focused = doc.activeElement;
   const held = focused && focused !== shell && shell.contains(focused) ? focused : null;
+  const snapshot = held ? captureFocus(shell) : null;
 
   /**
    * One region: the mounted element, or the one kept from when it went, takes what the incoming one gives (`update`)
@@ -247,7 +251,6 @@ export function renderShellFrame(shell: HTMLElement, markup: string): void {
   region('actions', mounted.actions, next.actions, (element) => mounted.columns.after(element));
   region('footer', mounted.footer, next.footer, (element) => (child(mounted.work, 'im-actions') ?? mounted.columns).after(element));
 
-  if (held && doc.activeElement !== held && shell.contains(held) && 'focus' in held) {
-    (held as HTMLElement).focus({ preventScroll: true });
-  }
+  if (held && !shell.contains(held)) restoreFocus(shell, snapshot);
+  else if (held && doc.activeElement !== held && 'focus' in held) (held as HTMLElement).focus({ preventScroll: true });
 }

@@ -10,6 +10,7 @@ import {
   createContentDialog,
   runFormOperation,
   renderShellFrame,
+  roving,
   shellFrameHtml,
   sidebarHtml,
   titlebarHtml,
@@ -42,6 +43,7 @@ declare global {
       createContentDialog: typeof createContentDialog;
       runFormOperation: typeof runFormOperation;
       renderShellFrame: typeof renderShellFrame;
+      roving: typeof roving;
       /** The frame's string renderers, for the tests that build a frame beside the gallery's window. */
       shellFrameHtml: typeof shellFrameHtml;
       sidebarHtml: typeof sidebarHtml;
@@ -157,7 +159,7 @@ export default function mount({ shell, app, registry }: MountContext): () => voi
   };
   shell.addEventListener('click', onClick);
 
-  window.__imagoSurfaces = { openContentDialog, openDialogDrawer, createContentDialog, runFormOperation, renderShellFrame, shellFrameHtml, sidebarHtml, titlebarHtml, pageContentHtml, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
+  window.__imagoSurfaces = { openContentDialog, openDialogDrawer, createContentDialog, runFormOperation, renderShellFrame, roving, shellFrameHtml, sidebarHtml, titlebarHtml, pageContentHtml, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
 
   return () => {
     shell.removeEventListener('click', onClick);

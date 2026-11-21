@@ -196,14 +196,16 @@ function mountError(error: unknown): Error {
 
 /**
  * The calls every app makes, in one: `attachLayers(shell)`, `sidebarDrawer(shell)` and `sidebarCollapse(shell,
- * options.sidebar)` when the shell has a sidebar (`.im-sidebar`, at the time of this call), `registry.attach` on the
- * shell's document, `regions(shell)`, `standardCommands`, and with `options.appearance` the five commands of the look
+ * options.sidebar)` when the shell has a sidebar (`.im-sidebar`, at the time of this call), `regions(shell)`,
+ * `registry.attach` on the shell's document, `standardCommands`, and with `options.appearance` the five commands of the look
  * and the theme. Register the app's own commands before or after: the registry keeps them in the order they come, and
  * the palette lists them so.
  *
  * A key is answered once. The layers and the sidebar drawer listen before the registry and claim the Escape that closes
  * one of them (so does the inspector, on its own region): it runs no command of the app, nor do its repeats while it is
- * held. A key that `guardDesktop` or the zoom keys only prevent still runs the app's command.
+ * held. So do the regions with F6, and Shift+F6, when they move focus. A key that `guardDesktop` only prevents still runs
+ * the app's command; the zoom keys are the zoom's (`mountZoom` stops them at the document), and no command of the app
+ * bound to them runs.
  *
  * Call it once for each shell: a second call on a shell that is still mounted throws. If a step throws (the app
  * already registered `Ctrl+K`, say), the steps before it are undone and the error is thrown, so the shell is free to be
@@ -225,8 +227,8 @@ export function mountApp(shell: HTMLElement, registry: Registry, options: AppOpt
       undo.push(sidebarDrawer(shell));
       undo.push(sidebarCollapse(shell, options.sidebar));
     }
-    undo.push(registry.attach(shell.ownerDocument));
     undo.push(regions(shell));
+    undo.push(registry.attach(shell.ownerDocument));
     undo.push(standardCommands(registry, shell, options));
     if (appearance) undo.push(appearanceCommands(registry, appearance));
   } catch (error) {

@@ -169,7 +169,7 @@ export function dockTabs(host: HTMLElement, options: {
     event.preventDefault();
     claimKey(event);
     event.stopPropagation();
-  }, { signal });
+  }, { capture: true, signal }); // before the registry: an Escape command of the app does not also run
   host.addEventListener('focusout', event => {
     if (gesture && gesture.pointer === undefined && !gesture.tab.contains(event.relatedTarget as Node | null)) end();
   }, { signal });

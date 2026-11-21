@@ -60,7 +60,7 @@ function pageHeadHtml(): string {
   // im-breadcrumb-space, im-record-heading, im-record-meta and the file list are Muro's (pages/projects.ts), written by hand.
   const crumb = `<div class="im-breadcrumb-space">${buttonHtml('Projects', 'g-back', { sm: true, icon: 'back' })}</div>`;
   const heading = pageHeadingHtml('Projects', 'A project turns plugins and skills into one plugin, harmonized for every harness.',
-    buttonHtml('Open project file…', 'g-open', { icon: 'folder' }) + buttonHtml('Rebuild all', 'g-rebuild', { accent: true, icon: 'reload' }));
+    buttonHtml('Open project file…', 'g-open', { icon: 'folder' }) + buttonHtml('Rebuild all', 'g-rebuild', { icon: 'reload' }));
   const record = `<div class="im-record-heading">${avatarHtml('MA')}<h1>Marionette</h1>${chipHtml('0.4.0')}${chipHtml('Up to date', 'ok')}</div>`
     + `<div class="im-record-meta"><code>${escapeHtml(PATH)}</code>${buttonHtml('Open folder', 'g-folder', { sm: true, icon: 'folder' })}`
     + '<span>Repository <code>github.com/acaprino/marionette</code> · main · by Alfio · created 3 Nov 2026</span>'

@@ -1,4 +1,4 @@
-import { Children, createElement as h, useCallback, useEffect, useRef, useState } from 'react';
+import { Children, createElement as h, forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { roving } from '../lib/ui/keys.js';
 import { checkShellFill } from '../lib/ui/shell-frame.js';
 
@@ -22,21 +22,23 @@ export function Disclosure({ label, children }) {
 
 /** Whether a React node draws nothing: null, undefined, a boolean, an empty string, or a list of those. */
 const isEmpty = node => Children.toArray(node).every(child => child === '');
-/** Whether a region is given: anything but null, undefined and false, as `navigation`. */
+/** Whether a region is given: anything but null, undefined and false. */
 const given = node => node != null && node !== false;
 
 /**
  * The window: the `im-shell` root of docs/using-imago.md section 4, with the skip link and the title bar before its
  * children. Put a `Workbench` in it, and mount it in a root that carries `im-root` (`<div id="app" class="im-root">`),
- * so it fills the window: mounted, a shell that does not is said on the console (`checkShellFill`). `sidebar` says
- * whether the `Workbench` has a sidebar (`data-im-sidebar`). The skip link goes to `contentId`, the id of the
- * `Workbench`'s content region; without it, to the `contentId` of a `Workbench` that is a direct child, else `main`. The
- * app, the look and the theme are not the shell's: `applyLook` writes them on the root element.
+ * so it fills the window: mounted, a shell that does not is said on the console (`checkShellFill`). The sidebar
+ * (`data-im-sidebar`) is on when a `Workbench` that is a direct child has `navigation` rows, as the `Workbench` draws it;
+ * `sidebar` says it for a `Workbench` the shell cannot see, and overrides what it sees. The skip link goes to
+ * `contentId`, the id of the `Workbench`'s content region; without it, to the `contentId` of a `Workbench` that is a
+ * direct child, else `main`. The app, the look and the theme are not the shell's: `applyLook` writes them on the root
+ * element. It takes a `ref` to the `im-shell` element, which `mountApp` needs, in React 18 and 19.
  */
-export function Shell({ titlebar, children, sidebar, inspector, skipLabel, contentId, ref, ...props }) {
+export const Shell = forwardRef(function Shell({ titlebar, children, sidebar, inspector, skipLabel, contentId, ...props }, ref) {
   const workbench = Children.toArray(children).find(child => child?.type === Workbench);
   const target = contentId ?? workbench?.props.contentId ?? 'main';
-  // React 19 hands a function component its ref as a prop: the app's ref still gets the element.
+  const hasSidebar = sidebar ?? !isEmpty(workbench?.props.navigation);
   const mount = useCallback(element => {
     if (element) checkShellFill(element);
     if (typeof ref === 'function') return ref(element);
@@ -44,10 +46,10 @@ export function Shell({ titlebar, children, sidebar, inspector, skipLabel, conte
     return undefined;
   }, [ref]);
   return h('div', {
-    ...props, ref: mount, className: 'im-shell', 'data-im-sidebar': sidebar ? 'on' : 'off',
+    ...props, ref: mount, className: 'im-shell', 'data-im-sidebar': hasSidebar ? 'on' : 'off',
     'data-im-inspector': inspector === 'wide' ? 'wide' : undefined,
   }, skipLabel != null && h('a', { className: 'im-shell-skip-link', href: `#${target}` }, skipLabel), titlebar, children);
-}
+});
 
 /**
  * The body of a `Shell`: the sidebar (when there are `navigation` rows), and the work area: the status row, the columns
@@ -58,7 +60,7 @@ export function Shell({ titlebar, children, sidebar, inspector, skipLabel, conte
 export function Workbench({ navigation, navigationLabel, children, details, detailsLabel, status, actions, footer, contentId = 'main', sidebarId = 'sidebar', wide, ...props }) {
   const hasDetails = !isEmpty(details);
   return h('div', { className: 'im-body' },
-    given(navigation) && h('section', { className: 'im-panel im-sidebar', id: sidebarId, 'aria-label': navigationLabel },
+    !isEmpty(navigation) && h('section', { className: 'im-panel im-sidebar', id: sidebarId, 'aria-label': navigationLabel },
       h('header', { className: 'im-panel-header' },
         h('h4', { className: 'im-panel-title' }, navigationLabel), h('span', { className: 'im-spacer' })),
       h('div', { className: 'im-panel-body im-list', role: 'group', 'aria-label': navigationLabel }, navigation)),
@@ -79,7 +81,7 @@ export function Workbench({ navigation, navigationLabel, children, details, deta
  */
 export function ListAction({ title, detail, icon, rail, tooltip, pressed, ...props }) {
   return h('button', { ...props, type: 'button', className: 'im-row im-row--detail', title: tooltip, 'aria-pressed': pressed },
-    given(rail) && h('span', { className: 'im-rail-item', 'aria-hidden': true }, rail),
+    !isEmpty(rail) && h('span', { className: 'im-rail-item', 'aria-hidden': true }, rail),
     icon, h('span', { className: 'im-row-text' },
       h('span', { className: 'im-row-title' }, title),
       detail != null && h('span', { className: 'im-row-sub' }, detail)));

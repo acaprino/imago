@@ -8,7 +8,7 @@ const css = (file: string) => readFileSync(new URL('../css/' + file, import.meta
 const ALL_CSS = readdirSync(new URL('../css/', import.meta.url), { recursive: true })
   .map(String).filter((file) => file.endsWith('.css')).map((file) => css(file.replaceAll('\\', '/'))).join('\n');
 
-// The frames that 0.1.2 to 0.1.4 added beside im-shell, and their parts: one frame is left (docs/superpowers/moving-from-0.1.4.md).
+// The frames that 0.1.2 to 0.1.4 added beside im-shell, and their parts: one frame is left (the table "Moving from 0.1.4" in docs/using-imago.md).
 const REMOVED = [
   'im-app-layout', 'im-main', 'im-desktop-frame', 'im-desktop-content', 'im-page', 'im-skip-link', 'im-page-frame', 'im-page-view',
   'im-workbench', 'im-work-column', 'im-work-area', 'im-workspace-area', 'im-navigation-panel', 'im-resizable-nav', 'im-nav-rail',
@@ -62,11 +62,11 @@ test('page content in the frame uses the shared helpers, and no removed class', 
   assert.match(css('content.css'), /\.im-page-content \{[^}]*padding: var\(--im-s-5\)/, 'page content has the padding the content region needs');
 });
 
-test('the shared entrypoint includes both layout APIs and the accent control once', () => {
+test('the shared entrypoint includes both layout APIs, and the canon has no accent button', () => {
   const imports = [...css('imago.css').matchAll(/@import "\.\/([^"]+)";/g)].map(match => match[1]);
   assert.equal(new Set(imports).size, imports.length);
   for (const name of ['controls.css', 'forms.css', 'content.css', 'inspection.css']) assert.ok(imports.includes(name), name);
   for (const name of imports) assert.ok(existsSync(new URL('../css/' + name, import.meta.url)), name);
-  assert.equal(css('controls.css').match(/\.im-btn--accent\s*\{/g)?.length, 1);
+  assert.doesNotMatch(css('controls.css'), /im-btn--accent/);
   assert.doesNotMatch(css('controls.css') + css('imago.css'), /^(<<<<<<<|=======|>>>>>>>)/m);
 });
