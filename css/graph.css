@@ -119,7 +119,8 @@
 }
 .im-editor-inspector > h3 { display: flex; align-items: center; justify-content: space-between; gap: var(--im-s-1); margin: 0 0 var(--im-s-2); }
 .im-editor-inspector :is(.im-input, .im-select, .im-textarea) { max-width: 100%; width: 100%; min-width: 0; }
-.im-editor-inspector .im-btn { min-width: 0; max-width: 100%; height: auto; white-space: normal; }
+.im-editor-inspector .im-btn { min-width: 0; max-width: 100%; height: auto; min-height: var(--im-h-control); white-space: normal; }
+.im-editor-inspector .im-btn--sm { min-height: var(--im-h-control-sm); }
 .im-editor-inspector .im-field { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); }
 .im-editor-inspector .im-btn[aria-pressed="true"] { border-color: var(--im-accent-text); }
 .im-editor-options { display: grid; grid-auto-columns: minmax(0,1fr); grid-auto-flow: column; }

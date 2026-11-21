@@ -72,28 +72,33 @@ export default async function (page) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('DOM.enable');
   await cdp.send('CSS.enable');
-  for (const look of LOOKS) {
-    for (const theme of THEMES) {
-      const where = (message) => `${look} ${theme}: ${message}`;
-      await page.evaluate((s) => window.__imago.set({ app: 'xiox', glass: false, width: 1160, ...s }), { look, theme });
-      // A redraw makes new nodes: the document is read again for their ids.
-      const { root } = await cdp.send('DOM.getDocument', { depth: -1 });
-      const results = {};
-      for (const control of Object.keys(FIELDS)) {
-        const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: selector(control) });
-        assert.ok(nodeId, where(`the matrix has a ${control} at rest`));
-        const before = await read(page, selector(control));
-        await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['autofill'] });
-        const after = await read(page, selector(control));
-        await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
-        results[control] = { before, after };
-        const said = (message) => where(`${control} autofilled: ${message}`);
-        assert.ok(!before.autofilled && after.autofilled, said('the protocol puts the field in the autofilled state'));
-        assert.notEqual(after.fill, before.fill, said("Chromium's autofill colour is drawn, as in a real autofill"));
-        assert.ok(after.ratio >= 4.5, said(`its text reads at ${after.ratio.toFixed(2)}:1 (${after.ink} on ${after.fill})`));
-        assert.deepEqual(after.edge, before.edge, said('the field keeps its edge'));
+  // With reduced motion every transition is switched off (css/base.css), and the chevron is held by one that never ends: it must stay.
+  for (const motion of ['no-preference', 'reduce']) {
+    await page.emulateMedia({ reducedMotion: motion });
+    for (const look of LOOKS) {
+      for (const theme of THEMES) {
+        const where = (message) => `${look} ${theme}${motion === 'reduce' ? ' (reduced motion)' : ''}: ${message}`;
+        await page.evaluate((s) => window.__imago.set({ app: 'xiox', glass: false, width: 1160, ...s }), { look, theme });
+        // A redraw makes new nodes: the document is read again for their ids.
+        const { root } = await cdp.send('DOM.getDocument', { depth: -1 });
+        const results = {};
+        for (const control of Object.keys(FIELDS)) {
+          const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: selector(control) });
+          assert.ok(nodeId, where(`the matrix has a ${control} at rest`));
+          const before = await read(page, selector(control));
+          await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['autofill'] });
+          const after = await read(page, selector(control));
+          await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
+          results[control] = { before, after };
+          const said = (message) => where(`${control} autofilled: ${message}`);
+          assert.ok(!before.autofilled && after.autofilled, said('the protocol puts the field in the autofilled state'));
+          assert.notEqual(after.fill, before.fill, said("Chromium's autofill colour is drawn, as in a real autofill"));
+          assert.ok(after.ratio >= 4.5, said(`its text reads at ${after.ratio.toFixed(2)}:1 (${after.ink} on ${after.fill})`));
+          assert.deepEqual(after.edge, before.edge, said('the field keeps its edge'));
+        }
+        autofilledSelectKeepsChevron(results, where);
       }
-      autofilledSelectKeepsChevron(results, where);
     }
   }
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
 }

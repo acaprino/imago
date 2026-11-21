@@ -1,4 +1,3 @@
-.im-stack { display: flex; flex-direction: column; align-items: stretch; gap: var(--im-s-2); min-width: 0; }
 .im-inline-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--im-s-2); min-width: 0; }
 .im-viewport { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
 .im-scroll { min-height: 0; min-width: 0; overflow: auto; }

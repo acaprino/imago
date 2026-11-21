@@ -3,10 +3,11 @@
 .im-pane { position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--im-line); background: var(--im-terminal); }
 .im-pane.im-focused { border-color: var(--im-accent-text); }
 .im-header { display: flex; flex: 0 0 30px; min-width: 0; align-items: stretch; background: var(--im-sheet); border-bottom: 1px solid var(--im-line); }
-.im-control { min-height: 28px; padding: 0 var(--im-s-2); font-size: var(--im-fs-meta); letter-spacing: .04em; flex: none; }
+.im-control { min-width: 24px; min-height: 28px; padding: 0 var(--im-s-2); font-size: var(--im-fs-meta); letter-spacing: .04em; flex: none; }
 .im-pane-focus { color: var(--im-muted); padding: 0 var(--im-s-2); border: 0; font: var(--im-fs-meta) var(--im-font-code); }
 .im-tile-tabs { display: flex; align-items: stretch; min-width: 0; flex: 1; overflow: auto; scrollbar-width: thin; }
 .im-tile-tab { display: block; min-width: 0; max-width: 190px; text-align: left; border-top: 0; border-bottom: 0; text-overflow: ellipsis; overflow: hidden; text-transform: none; font: var(--im-fs-meta) var(--im-font-code); }
+.im-tile-tab:not([aria-selected="true"]):hover { color: var(--im-text); background: var(--im-hover); }
 .im-tile-tab[aria-selected="true"] { color: var(--im-accent-text); background: var(--im-selected); box-shadow: inset 0 -2px var(--im-accent); }
 .im-tile-body { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 .im-placeholder { display: grid; align-content: center; justify-items: center; min-height: 100%; padding: var(--im-s-2); color: var(--im-muted); font: var(--im-fs-meta) var(--im-font-code); text-align: center; overflow-wrap: anywhere; }
@@ -46,8 +47,8 @@
 .im-pane:has(> .im-tile-body > .im-placeholder) { background: color-mix(in srgb, var(--im-terminal) 46%, transparent); }
 .im-placeholder { position: relative; isolation: isolate; gap: 2px; font-size: var(--im-fs-body); color: var(--im-text-2); }
 .im-tile-empty-start { margin-top: var(--im-s-4); min-height: 40px; padding: 0 var(--im-s-5); border-color: var(--im-accent); background: var(--im-accent); color: var(--im-accent-on); font: 600 var(--im-fs-body) var(--im-font-head); letter-spacing: .08em; clip-path: polygon(0 0, calc(100% - var(--im-cut-md)) 0, 100% var(--im-cut-md), 100% 100%, var(--im-cut-md) 100%, 0 calc(100% - var(--im-cut-md))); transition: background-color var(--im-t-fast) var(--im-ease), scale var(--im-t-fast) var(--im-ease); }
-.im-tile-empty-start:hover { border-color: var(--im-accent-text); background: var(--im-accent-text); }
-.im-tile-empty-start:active { scale: .96; }
+.im-tile-empty-start:hover { border-color: var(--im-accent-hover); background: var(--im-accent-hover); }
+.im-tile-empty-start:active { scale: .96; border-color: color-mix(in srgb, var(--im-accent) 78%, #000000); background: color-mix(in srgb, var(--im-accent) 78%, #000000); } /* imago-check: allow literal-color — the pressed primary button's fill (css/controls.css): the accent 22% darker, and no token is black */
 .im-tile-empty-start:focus-visible { outline-color: var(--im-accent-on); outline-offset: -4px; }
 .im-drop-preview { backdrop-filter: blur(3px); }
 
@@ -64,3 +65,15 @@
 .im-drop-marker { position: absolute; z-index: 6; width: 2px; pointer-events: none; background: var(--im-accent); box-shadow: 0 0 6px var(--im-accent); }
 @media (prefers-reduced-motion: reduce) { .im-drop-preview { transition: none; } }
 .im-host :is(.im-pane, .im-tile-body, .im-control, .im-tile-splitter, .im-drop-preview, .im-drop-marker, .im-drag-ghost, .im-parking)[hidden] { display: none; }
+
+/* The focus ring of the chrome is inside, as an item of a container that clips has it (css/controls.css): a tab and its close fill the
+   height of the strip, the controls and the splitters stand at the edge of the host, and both clip what is outside them. */
+.im-host :is(.im-control, .im-tile-tab, .im-tile-tab-close, .im-tile-splitter):focus-visible { outline-offset: -2px; }
+
+/* Forced colours replace the fills and drop the shadows that tell the active tab and the focused pane: a bar under the active tab's
+   wrap, a heavier active tab and the focused pane's edge in the highlight colour are left. */
+@media (forced-colors: active) {
+  .im-tile-tabwrap-active { border-bottom: 2px solid Highlight; }
+  .im-tile-tab[aria-selected="true"] { font-weight: 700; }
+  .im-pane.im-focused { border-color: Highlight; outline: 1px solid Highlight; outline-offset: -2px; }
+}

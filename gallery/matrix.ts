@@ -99,7 +99,7 @@ function button(control: string, state: State): string {
 }
 
 function iconButton(state: State): string {
-  const attrs = state === 'disabled' ? ` disabled title="${REASON}"` : '';
+  const attrs = (state === 'disabled' ? ` disabled title="${REASON}"` : '') + (state === 'selected' ? ' aria-pressed="true"' : '');
   return `<button type="button" class="im-icon-btn" aria-label="Settings" title="Settings" tabindex="-1"${force(state)}${attrs}>${icon('sliders')}</button>`;
 }
 

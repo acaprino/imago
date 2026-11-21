@@ -55,6 +55,11 @@
 /* the ring is inside the cut corners */
 [data-im-look="oni"] .im-btn:is(:focus-visible, [data-im-force="focus"]) { outline-offset: -5px; }
 
+/* Inside the button the ring stands on the button's own fill, so it takes the colour that is read on that fill: the shared ring
+   (the accent text) is the primary button's fill itself, and a hair from the confirm button's in the light theme. */
+[data-im-look="oni"] .im-btn--primary:is(:focus-visible, [data-im-force="focus"]) { outline-color: var(--im-accent-on); }
+[data-im-look="oni"] .im-btn--confirm-danger:is(:focus-visible, [data-im-force="focus"]) { outline-color: var(--im-danger-on); }
+
 /* ---------- tabs: a boxed tab, no underline ---------- */
 
 [data-im-look="oni"] .im-tab::after { display: none; }
