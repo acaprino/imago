@@ -136,7 +136,15 @@ function applyFrame(): void {
 
 /** Draws the shell again, then hands it to every mount module (the previous cleanups run first). */
 function redraw(): void {
-  for (const cleanup of cleanups.splice(0)) cleanup();
+  // A cleanup that throws (mountApp's undo rethrows the first failure of its steps) is reported, as a mount is: the
+  // others still run and the shell is drawn.
+  for (const cleanup of cleanups.splice(0)) {
+    try {
+      cleanup();
+    } catch (error) {
+      console.error(`gallery/main.ts: a cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   applyFrame();
   root.innerHTML = shellMarkup(state.app);
   sections.replaceChildren();

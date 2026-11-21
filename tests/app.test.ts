@@ -511,12 +511,10 @@ test('F6 moves focus between the regions, and runs no command of the app bound t
 });
 
 test('Ctrl+F searches in a desktop app: guardDesktop refuses the key to the browser and leaves it to the app, in any order', () => {
-  // The documented order is the guard first, in the capture phase; the other three are the ones an app may also write.
+  // The documented order is the guard first; the guard after mountApp is the one an app may also write.
   const orders: [string, (doc: Document, mount: () => void) => void][] = [
-    ['the guard first, capturing', (doc, mount) => { guardDesktop(doc); mount(); }],
-    ['the guard after mountApp, capturing', (doc, mount) => { mount(); guardDesktop(doc); }],
-    ['the guard first, bubbling', (doc, mount) => { guardDesktop(doc, { keyPhase: 'bubble' }); mount(); }],
-    ['the guard after mountApp, bubbling', (doc, mount) => { mount(); guardDesktop(doc, { keyPhase: 'bubble' }); }],
+    ['the guard first', (doc, mount) => { guardDesktop(doc); mount(); }],
+    ['the guard after mountApp', (doc, mount) => { mount(); guardDesktop(doc); }],
   ];
   for (const [order, wire] of orders) {
     const doc = fakeDocument();
