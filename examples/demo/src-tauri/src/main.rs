@@ -173,10 +173,13 @@ fn build_main(app: &AppHandle) -> tauri::Result<()> {
     )
     .build()?;
     // A window opened anew counts from nothing, also under a label used before (a count closed with its last window
-    // would never let it reload again); a window built again after a lost browser process keeps its count, and a real
-    // app's rebuild does not come through here.
-    if let Ok(mut recoveries) = app.state::<Failures>().recoveries.lock() {
-        recoveries.insert(window.label().to_owned(), Recovery::new());
+    // would never let it reload again); a window rebuilt after `RecoveryAction::Rebuild` (`rebuilding` is set) keeps
+    // its count, so three reloads a minute hold across a rebuild.
+    let failures = app.state::<Failures>();
+    if !failures.rebuilding.load(Ordering::SeqCst) {
+        if let Ok(mut recoveries) = failures.recoveries.lock() {
+            recoveries.insert(window.label().to_owned(), Recovery::new());
+        }
     }
     wire(app, &window)
 }
