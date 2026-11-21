@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { cellMarkup } from '../gallery/matrix.ts';
 import { iconHtml } from '../ts/ui/markup.ts';
 import { noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
 import { renderShellFrame } from '../ts/ui/shell-frame.ts';
@@ -439,16 +440,26 @@ test('window buttons provide the native selectors and both maximize/restore icon
   assert.match(titlebarHtml({ brand: { name: 'Example' }, windowControls: true }), /im-window-buttons/);
 });
 
-test('noteHtml writes an im-note with its message, and an im-note--block when it has more than a message', () => {
-  assert.equal(noteHtml({ message: 'Saved <all> & done', tone: 'ok' }), '<div class="im-note" data-im-tone="ok" role="status"><span>Saved &lt;all&gt; &amp; done</span></div>');
-  assert.equal(
-    noteHtml({ title: '<failure>', message: 'a & b', items: [{ label: '<item>', message: '"reason' }], actionsHtml: '<button>Retry</button>', tone: 'err' }),
-    '<div class="im-note im-note--block" data-im-tone="err" role="alert"><b>&lt;failure&gt;</b><p>a &amp; b</p><ul><li><b>&lt;item&gt;</b>: &quot;reason</li></ul><div class="im-action-row"><button>Retry</button></div></div>',
-  );
-  assert.equal(noteHtml({ title: 'Done', tone: 'info' }), '<div class="im-note im-note--block" data-im-tone="info" role="status"><b>Done</b></div>', 'a title is more than a message');
-  assert.equal(noteHtml({ message: 'Check', items: [{ label: 'a', message: 'b' }] }), '<div class="im-note im-note--block" role="status"><p>Check</p><ul><li><b>a</b>: b</li></ul></div>', 'a list is more than a message');
-  assert.equal(noteHtml({ message: 'Check', actionsHtml: '<button>Fix</button>' }), '<div class="im-note im-note--block" role="status"><p>Check</p><div class="im-action-row"><button>Fix</button></div></div>', 'an action is more than a message');
-  assert.equal(noteHtml({ message: 'Check', items: [] }), '<div class="im-note" role="status"><span>Check</span></div>', 'an empty list is no list');
+// The gallery's own note (gallery/matrix.ts, the `note` control): a title and a line beside an icon, the approved note. Less
+// its icon, and with the role noteHtml gives a warning, it is what noteHtml writes for a title and a line.
+const GALLERY_NOTE = cellMarkup('note', 'rest');
+const galleryNote = (role: string): string => GALLERY_NOTE.replace(/<svg class="im-icon"[^]*?<\/svg>/, '').replace('role="note"', `role="${role}"`);
+const openingTag = (html: string): string => html.slice(0, html.indexOf('>') + 1);
+
+test("noteHtml writes the gallery's compact note for a title and a line", () => {
+  assert.match(GALLERY_NOTE, /^<div class="im-note" data-im-tone="warn" role="note"><svg class="im-icon"[^]*<\/svg><div><b>3 changes ready to apply<\/b><span>Nothing changes until you apply.<\/span><\/div><\/div>$/, 'the gallery still draws the note this test reads');
+  assert.equal(noteHtml({ title: '3 changes ready to apply', message: 'Nothing changes until you apply.', tone: 'warn' }), galleryNote('alert'));
+  assert.equal(noteHtml({ message: 'Saved <all> & done', tone: 'ok' }), '<div class="im-note" data-im-tone="ok" role="status"><div><span>Saved &lt;all&gt; &amp; done</span></div></div>', 'a line alone');
+  assert.equal(noteHtml({ title: 'Done <now>', tone: 'info' }), '<div class="im-note" data-im-tone="info" role="status"><div><b>Done &lt;now&gt;</b></div></div>', 'a title alone');
+  assert.equal(noteHtml({ title: 'Check', message: 'x', items: [] }), '<div class="im-note" role="status"><div><b>Check</b><span>x</span></div></div>', 'an empty list is no list');
+});
+
+test("noteHtml writes the block note only with a list or actions: the gallery's note, its parts one under the other", () => {
+  const block = noteHtml({ title: '3 changes ready to apply', message: 'a & b', items: [{ label: '<item>', message: '"reason' }], actionsHtml: '<button>Apply</button>', tone: 'warn' });
+  assert.equal(block, '<div class="im-note im-note--block" data-im-tone="warn" role="alert"><b>3 changes ready to apply</b><p>a &amp; b</p><ul><li><b>&lt;item&gt;</b>: &quot;reason</li></ul><div class="im-action-row"><button>Apply</button></div></div>');
+  assert.equal(openingTag(block), openingTag(galleryNote('alert')).replace('class="im-note"', 'class="im-note im-note--block"'), "the block is the gallery's note, with im-note--block");
+  assert.equal(noteHtml({ message: 'Check', items: [{ label: 'a', message: 'b' }] }), '<div class="im-note im-note--block" role="status"><p>Check</p><ul><li><b>a</b>: b</li></ul></div>', 'a list makes a block');
+  assert.equal(noteHtml({ title: 'Check', actionsHtml: '<button>Fix</button>' }), '<div class="im-note im-note--block" role="status"><b>Check</b><div class="im-action-row"><button>Fix</button></div></div>', 'actions make a block');
 });
 
 test('a note is an alert for err and warn, and a status otherwise', () => {

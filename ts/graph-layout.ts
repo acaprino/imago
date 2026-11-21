@@ -68,7 +68,7 @@ export function groupedGraphScene(groups: readonly GraphColumnGroup[], items: re
   const edges: GraphEdge[] = [];
   for (const { group } of drawn) for (const id of new Set(group.children)) {
     const target = at.get(id);
-    if (target) edges.push({ source: group.id, target: id, tone: target.selected ? 'info' : undefined, dimmed: target.dimmed });
+    if (target) edges.push({ source: group.id, target: id, tone: target.selected ? 'accent' : undefined, dimmed: target.dimmed });
   }
   for (const edge of relations) {
     const a = at.get(edge.source), b = at.get(edge.target);

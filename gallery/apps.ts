@@ -3,7 +3,7 @@
 // nothing in this file styles anything.
 
 export type AppId = 'xiox' | 'mukade' | 'shinatama' | 'muro' | 'daodan';
-type Tone = 'ok' | 'warn' | 'err' | 'info';
+type Tone = 'ok' | 'warn' | 'err' | 'info' | 'accent';
 
 export const APP_IDS: AppId[] = ['xiox', 'mukade', 'shinatama', 'muro', 'daodan'];
 export const APP_HUES: Record<AppId, number> = { xiox: 75, shinatama: 355, mukade: 300, muro: 170, daodan: 235 };
@@ -124,7 +124,7 @@ export const APPS: Record<AppId, App> = {
         <article class="g-msg"><span class="im-avatar">CA</span><div class="g-msg-head"><b>claude-a</b><time>11:53</time></div><p class="im-content-text">Keep the review on the hop branch. Codex lists the Plan threads, OpenCode checks the child sessions.</p><div class="g-msg-foot">to everyone</div></article>
         <article class="g-msg" aria-selected="true"><span class="im-avatar">CA</span><div class="g-msg-head"><b>claude-a</b><time>11:55</time></div><p class="im-content-text">@codex-b list the Plan threads that still have no title.</p><div class="g-msg-foot">${chip('waiting', 'warn')}to codex-b</div></article>
       </div><div class="im-panel-foot"><label class="im-input" style="flex:1">${icon('chat')}<input type="text" placeholder="Write to everyone" aria-label="Message"></label>${button('Send', { keys: 'Ctrl ↵', icon: 'send' })}</div>`,
-    inspector: () => `${header('Members', { n: 4 })}<div class="im-panel-body"><div class="im-list">${row({ av: 'CA', t: 'claude-a', s: 'lead · 11:55', chip: ['lead', 'info'] })}${row({ av: 'CB', t: 'codex-b', s: 'worker · 11:41', chip: ['worker'] })}${row({ av: 'OC', t: 'opencode-c', s: 'peer · 12:02', chip: ['peer'] })}${row({ av: 'PD', t: 'pi-d', s: 'observer · 12:02', chip: ['observer'] })}</div></div><div class="im-panel-foot">${button('Close room', { danger: true, act: 'undo' })}</div>`,
+    inspector: () => `${header('Members', { n: 4 })}<div class="im-panel-body"><div class="im-list">${row({ av: 'CA', t: 'claude-a', s: 'lead · 11:55', chip: ['lead', 'accent'] })}${row({ av: 'CB', t: 'codex-b', s: 'worker · 11:41', chip: ['worker'] })}${row({ av: 'OC', t: 'opencode-c', s: 'peer · 12:02', chip: ['peer'] })}${row({ av: 'PD', t: 'pi-d', s: 'observer · 12:02', chip: ['observer'] })}</div></div><div class="im-panel-foot">${button('Close room', { danger: true, act: 'undo' })}</div>`,
     strings: EN,
   },
   shinatama: {
@@ -161,7 +161,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
     content: () => `${header('Sync', { sub: 'Rows are your plugins, columns are your harnesses.', right: segmented(['All', 'Needs action']) })}<div class="im-panel-tools"><div class="im-note" data-im-tone="warn">${icon('reload')}<div><b>3 changes ready to apply</b><span>1 install, 1 update, 1 removal. Nothing changes until you apply.</span></div></div></div><div class="im-panel-body">${table([{ t: 'Plugin' }, { t: 'Latest' }, { t: 'Claude Code' }, { t: 'Codex' }, { t: 'OpenCode' }], [
       { c: [two('Marionette', 'github.com/acaprino/marionette'), num('0.4.0'), chip('Update 0.3.0 → 0.4.0', 'warn'), num('0.4.0'), num('0.4.0')], sel: true },
       { c: [two('commit-helper', 'github.com/example/commit-helper'), num('2.1.0'), num('2.1.0'), num('2.1.0'), none] },
-      { c: [two('test-runner', 'github.com/example/test-runner'), num('1.0.4'), none, none, chip('Install 1.0.4', 'info')] },
+      { c: [two('test-runner', 'github.com/example/test-runner'), num('1.0.4'), none, none, chip('Install 1.0.4', 'accent')] },
       { c: [two('docs-writer', 'github.com/example/docs-writer'), num('1.2.0'), num('1.2.0'), none, num('1.2.0')] },
       { c: [two('old-snippets', 'Installed, not in your list'), num('0.2.0'), chip('Remove', 'err'), none, none] }])}</div>`,
     inspector: () => `${header('Claude Code', { right: iconButton('x', 'Close') })}<div class="im-panel-body"><div class="im-stack g-form">
@@ -179,7 +179,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
     side: { title: 'Progetti', n: 4, rows: [
       { av: 'DA', t: 'daodan', s: 'main · pubblica', m: '64%', sel: true }, { av: 'SH', t: 'shinatama', s: 'develop · privata', m: '100%' },
       { av: 'MU', t: 'mukade', s: 'develop · privata', m: '—' }, { av: 'XI', t: 'xiox', s: 'main · privata', m: '—' }] },
-    content: () => `${header('Pipeline di analisi', { sub: 'acaprino/daodan · main', right: chip('Demo', 'info') })}<div class="im-panel-body">${table([{ t: 'Fase' }, { t: 'Stato' }, { t: 'Passo', n: true }, { t: 'Durata', n: true }], [
+    content: () => `${header('Pipeline di analisi', { sub: 'acaprino/daodan · main', right: chip('Demo', 'accent') })}<div class="im-panel-body">${table([{ t: 'Fase' }, { t: 'Stato' }, { t: 'Passo', n: true }, { t: 'Durata', n: true }], [
       { c: [two('Scan', 'Inventario e pre-mappa'), chip('Completata', 'ok'), '1 / 4', '0:42'] },
       { c: [two('Analyze', 'Analyzer per tecnologia'), chip('In pausa', 'warn'), '2 / 4', '2:10'], sel: true },
       { c: [two('Dynamic', 'Osservazione dei test · esclusa dalla demo'), chip('Prevista'), '3 / 4', none] },

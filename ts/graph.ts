@@ -1,6 +1,5 @@
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, zoomTransform } from 'd3-zoom';
-import { isTone, type Tone } from './ui/tone.ts';
 
 export interface GraphPoint { x: number; y: number }
 export interface GraphBox extends GraphPoint { width: number; height: number }
@@ -30,7 +29,7 @@ export interface GraphEdge {
   dotted?: boolean;
   /** False for a symmetric relationship such as mutual exclusion. */
   directed?: boolean;
-  tone?: Tone;
+  tone?: 'accent' | 'warn' | 'err';
   dimmed?: boolean;
 }
 export interface GraphScene { nodes: readonly GraphNode[]; edges: readonly GraphEdge[]; groups?: readonly GraphGroup[] }
@@ -226,7 +225,7 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       const points = route(a, b, edge);
       const g = svg('g'), path = svg('path');
       g.setAttribute('class', 'im-graph-edge');
-      if (isTone(edge.tone)) g.dataset.imTone = edge.tone;
+      if (edge.tone) g.dataset.imTone = edge.tone;
       if (edge.dimmed) g.dataset.imDimmed = 'true';
       path.setAttribute('d', points.map((p, i) => { include(p.x, p.y); return (i ? 'L' : 'M') + p.x + ',' + p.y; }).join(' '));
       if (edge.directed !== false) path.setAttribute('marker-end', 'url(#' + marker.id + ')');

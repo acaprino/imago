@@ -192,7 +192,7 @@ function progress(state: State): string {
 }
 
 const chips = (): string =>
-  ['ok|open', 'warn|waiting', 'err|blocked', 'info|running', '|closed']
+  ['ok|open', 'warn|waiting', 'err|blocked', 'info|running', 'accent|demo', '|closed']
     .map((entry) => {
       const [tone, text] = entry.split('|');
       return `<span class="im-chip"${tone ? ` data-im-tone="${tone}"` : ''}>${text}</span>`;

@@ -95,6 +95,7 @@
 [data-im-tone="warn"] { --im-tone: var(--im-warn); }
 [data-im-tone="err"] { --im-tone: var(--im-err); }
 [data-im-tone="info"] { --im-tone: var(--im-info); }
+[data-im-tone="accent"] { --im-tone: var(--im-accent-text); }
 
 /* A chip never wraps and never shrinks. */
 .im-chip {
@@ -938,7 +939,7 @@
   color: var(--im-text-2);
 }
 
-/* A note with more than a message (noteHtml): its title, a paragraph, a list and its actions, one under the other. */
+/* A note with a list or actions (noteHtml): its title, a paragraph, the list and the actions, one under the other. */
 .im-note--block {
   display: grid;
   justify-items: start;

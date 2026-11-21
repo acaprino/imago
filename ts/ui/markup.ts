@@ -1,8 +1,8 @@
 import { iconMarkup, isIconName } from './icon.ts';
 import { panelStateHtml } from './panel-state.ts';
-import { toneAttribute, type Tone } from './tone.ts';
+import { chipToneAttribute, type ChipTone } from './tone.ts';
 export type { IconName } from './icon.ts';
-export type { Tone } from './tone.ts';
+export type { ChipTone, Tone } from './tone.ts';
 
 // String rendering for apps that compose HTML before mounting it. Text and attribute values are
 // escaped here; the explicitly named HTML slots accept trusted component output, never user text.
@@ -26,10 +26,9 @@ export const spinnerHtml = '<i class="im-spinner" aria-hidden="true"></i>';
 export const avatarHtml = (text: string): string => `<span class="im-avatar" aria-hidden="true">${escapeHtml(text)}</span>`;
 export const initialsAvatarHtml = (name: string): string => avatarHtml(Array.from(name).slice(0, 2).join('').toUpperCase());
 
-/** A chip's tone, or none (`''`): a chip without a tone is the neutral chip. */
-export type ChipTone = '' | Tone;
+/** A chip without a tone (`''`) is the neutral chip. */
 export function chipHtml(label: string, tone: ChipTone = ''): string {
-  return `<span class="im-chip"${toneAttribute(tone)}>${escapeHtml(label)}</span>`;
+  return `<span class="im-chip"${chipToneAttribute(tone)}>${escapeHtml(label)}</span>`;
 }
 
 export type MarkupAttributes = Readonly<Record<string, string>>;

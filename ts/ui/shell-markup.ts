@@ -1,5 +1,5 @@
 import { escapeHtml, iconHtml } from './markup.ts';
-import { toneAttribute, type Tone } from './tone.ts';
+import { chipToneAttribute, toneAttribute, type ChipTone, type Tone } from './tone.ts';
 
 /** String-rendered shell components. Text is escaped; named HTML slots contain trusted component output. */
 export interface NavigationTab {
@@ -53,10 +53,11 @@ export interface StatusButtonOptions {
   accessibleLabel: string;
   action: string;
   id?: string;
-  tone: Tone;
+  /** The tone of the dot: a status tone, the accent, or none (`''`). */
+  tone: ChipTone;
 }
 export function statusButtonHtml(options: StatusButtonOptions): string {
-  return `<button type="button" class="im-btn im-btn--ghost im-titlebar-status" data-action="${escapeHtml(options.action)}"${options.id === undefined ? '' : ` data-id="${escapeHtml(options.id)}"`} aria-label="${escapeHtml(options.accessibleLabel)}"><i class="im-dot"${toneAttribute(options.tone)} aria-hidden="true"></i><span>${escapeHtml(options.label)}</span></button>`;
+  return `<button type="button" class="im-btn im-btn--ghost im-titlebar-status" data-action="${escapeHtml(options.action)}"${options.id === undefined ? '' : ` data-id="${escapeHtml(options.id)}"`} aria-label="${escapeHtml(options.accessibleLabel)}"><i class="im-dot"${chipToneAttribute(options.tone)} aria-hidden="true"></i><span>${escapeHtml(options.label)}</span></button>`;
 }
 
 export interface NoteOptions {
@@ -65,18 +66,21 @@ export interface NoteOptions {
   items?: readonly { label: string; message: string }[];
   /** Trusted component markup: the note's buttons. */
   actionsHtml?: string;
+  /** A status tone: a note is a message, and the accent is not a status. */
   tone?: Tone;
 }
 /**
- * A message that stays in the page: an `im-note` with its message, or an `im-note--block` when it has more than a message
- * (a title, a list, actions), one under the other. An `err` or `warn` note is announced at once (`role="alert"`), any
- * other as a status. Text is escaped.
+ * A message that stays in the page. A title and a line make the compact `im-note` of the design (the title in `b`, the
+ * line in `span`); a list or actions make an `im-note--block`, its title, paragraph, list and actions one under the
+ * other. An `err` or `warn` note is announced at once (`role="alert"`), any other as a status. Text is escaped.
  */
 export function noteHtml(options: NoteOptions): string {
   const { title, message, items, actionsHtml } = options;
   const role = options.tone === 'err' || options.tone === 'warn' ? 'alert' : 'status';
   const open = (block: boolean): string => `<div class="im-note${block ? ' im-note--block' : ''}"${toneAttribute(options.tone)} role="${role}">`;
-  if (!title && !items?.length && !actionsHtml) return `${open(false)}${message ? `<span>${escapeHtml(message)}</span>` : ''}</div>`;
+  if (!items?.length && !actionsHtml) {
+    return `${open(false)}<div>${title ? `<b>${escapeHtml(title)}</b>` : ''}${message ? `<span>${escapeHtml(message)}</span>` : ''}</div></div>`;
+  }
   return open(true)
     + (title ? `<b>${escapeHtml(title)}</b>` : '')
     + (message ? `<p>${escapeHtml(message)}</p>` : '')

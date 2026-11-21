@@ -64,6 +64,7 @@
 .im-dot[data-im-tone="warn"] { background: var(--im-warn); }
 .im-dot[data-im-tone="err"] { background: var(--im-err); }
 .im-dot[data-im-tone="info"] { background: var(--im-info); }
+.im-dot[data-im-tone="accent"] { background: var(--im-accent-text); }
 
 /* With reduced motion every state changes at once. */
 @media (prefers-reduced-motion: reduce) {

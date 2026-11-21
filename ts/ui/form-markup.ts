@@ -1,4 +1,4 @@
-import { escapeHtml as esc, iconHtml, type ChipTone } from './markup.ts';
+import { escapeHtml as esc, iconHtml } from './markup.ts';
 import { isTone, type Tone } from './tone.ts';
 
 /** Markup fragments accept plain text except parameters explicitly named Html. */
@@ -61,7 +61,8 @@ export function settingsGroupHtml(contentHtml: string, options: { title?: string
   return `<section class="im-panel im-surface im-settings" data-im-surface="sheet">${options.title ? `<h2>${esc(options.title)}</h2>` : ''}${options.description ? `<p>${esc(options.description)}</p>` : ''}${contentHtml}</section>`;
 }
 
-export function statusTextHtml(text: string, tone: ChipTone = ''): string {
+/** A status text takes a status tone, or none (`''`); the accent is not a status. */
+export function statusTextHtml(text: string, tone: '' | Tone = ''): string {
   return isTone(tone) ? `<span class="im-text-${tone}">${esc(text)}</span>` : esc(text);
 }
 
