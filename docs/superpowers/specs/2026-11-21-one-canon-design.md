@@ -125,6 +125,25 @@ initial), and chose the capital initial on 2026-11-21 ("C. Quadrato + iniziale m
   not what the title bar shows.
 - `imago-check` reports a title bar whose brand is not that markup (rule `brand-mark`).
 
+### The icon of the executables
+
+The owner asked on 2026-11-21 that the icons of the executables follow the mark too, "sia cli sia ui": the program
+of the command line and the program of the window. The owner saw two fills at the real sizes of Windows (16 to 96
+pixels) on a dark and on a light taskbar, was advised the first, and answered "ok".
+
+- The icon is the mark: a square with rounded corners (6 of 22, as the mark in Smooth) holding the capital initial,
+  weight 700. The fill is the app's accent of the dark themes, `oklch(0.82 0.12 H)`, and the letter its ink,
+  `oklch(0.2 0.04 H)`, both as the sRGB values `css/tokens.css` already carries. One icon per app, the same for its
+  command-line program and its window program *(call)*, and the favicon of a page served in a browser.
+- Mukade and Muro both show M, and on a taskbar no name stands beside the icon: the hue alone tells them apart
+  (violet and mint). The owner was told and did not object *(call)*.
+- The icons are made in the package by one script for the five apps and committed, so that they are the same
+  construction; an app copies its own from the package, and `imago-check` reports an app whose icon files differ
+  (rule `app-icon`).
+- How each app embeds an icon in its command-line program is the app's own plan: Mukade and Xiox already compile a
+  resource file; for Shinatama, Muro and Daodan the plan first finds out how the program is built and says whether an
+  icon can be embedded.
+
 ### One control for one need
 
 | Need | Stays | Removed or merged |

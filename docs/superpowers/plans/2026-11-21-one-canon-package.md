@@ -285,6 +285,26 @@
 - [ ] **Step 4:** `npm test`, `npm run build`, `node tests/gallery/run.mjs` pass.
 - [ ] **Step 5:** Commit.
 
+### Task 14: The icons of the executables (independent; runs any time after Task 2 is merged)
+
+**Files:**
+- Create: `scripts/icons.mjs` (makes the icon set of each app), `icons/<app>/` for `shinatama`, `xiox`, `mukade`, `muro`, `daodan` (generated, committed), `docs/superpowers/moving/task-14.md`
+- Modify: `package.json` (`"icons": "node scripts/icons.mjs"`, `"files"` gains `"icons"`, export `"./icons/*": "./icons/*"`), `scripts/check/rules.mjs` and `scripts/check/cli.mjs` (rule `app-icon`), `docs/using-imago.md` (a short section: where the icons are, which file goes where in a Tauri app, in a resource file of a command-line program and as a favicon)
+- Test: `tests/icons.test.ts`, `tests/check.test.ts`
+
+**Interfaces:**
+- `npm run icons` writes, for each app, `icons/<app>/icon.svg` (the source: a 256 by 256 square, `rx` 70, the fill and the ink below, the letter as text), the PNGs `16`, `24`, `32`, `48`, `64`, `128`, `256`, `512` named `<n>x<n>.png`, `icon.png` (512), `icon.ico` (16, 24, 32, 48, 64 and 256, each entry a PNG), `favicon.ico` (16, 32, 48) and `favicon.svg`. `npm run icons -- --check` compares the SVGs and the list of files without drawing, and exits 1 on a difference.
+- Fill: the sRGB hex of the app's `--im-accent` in the dark theme; ink: the sRGB hex of its `--im-accent-on` in the dark theme; both read from `tokens/imago.tokens.json` through `scripts/color.mjs`, never typed. Letter: the capital initial of the app's name, `font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif`, weight 700, centred.
+- The PNGs are drawn from the SVG with Playwright (already a dev dependency), so the script runs on a Windows machine that has the fonts; the files are committed and no test draws them again.
+- The `.ico` container is written by the script itself (a header, one directory entry per size, the PNG bytes); no dependency.
+- `imago-check` rule `app-icon`, app mode: the `"imago"` block of the app's `package.json` gains `"icons": { "<path in the app>": "<file name in icons/<app>/>" }`; each listed file must equal, byte for byte, the package's file. Without the key the rule is skipped and the program says so.
+
+- [ ] **Step 1:** Tests: each app has the files above; every PNG's header gives its size; `icon.ico` holds the six sizes and `favicon.ico` the three; each SVG holds the right letter, the fill and the ink of that app's tokens; the contrast of the ink on the fill is 4.5:1 or more for the five; the check rule finds a changed file and passes an equal one.
+- [ ] **Step 2:** Run; they fail.
+- [ ] **Step 3:** Write the script, run it, commit what it wrote.
+- [ ] **Step 4:** `npm test`, `npm run build`, `node tests/gallery/run.mjs` pass.
+- [ ] **Step 5:** Commit.
+
 ### Task 12: CI and `develop`
 
 **Files:**
