@@ -8,6 +8,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { classesOf, parseCss } from '../scripts/check/css.mjs';
+import { packageNames } from '../scripts/check/names.mjs';
+import { ELSEWHERE, KEPT, REMOVED } from '../scripts/check/removed.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file: string): string => readFileSync(join(root, file), 'utf8');
@@ -33,9 +36,11 @@ const textOf = (files: string[]): string => files.map(read).join('\n');
 
 // The design file cannot be docs/DESIGN.md: on Windows (and with core.ignorecase) that is the same path as docs/design.md, the approved design.
 const DESIGN_FILE = 'docs/design-file.md';
-const OWN_DOCS = [DESIGN_FILE, 'docs/desktop-shell.md', 'docs/using-imago.md'];
-const ALL_DOCS = filesUnder('docs', ['.md']).filter((file) => file.split('/').length === 2); // docs/*.md, not docs/reference/
-const DOCS_WITH_NAMES = [...new Set([...OWN_DOCS, 'README.md'])];
+const USING = 'docs/using-imago.md';
+const OWN_DOCS = [DESIGN_FILE, 'docs/desktop-shell.md', USING];
+const ALL_DOCS = filesUnder('docs', ['.md']).filter((file) => file.split('/').length === 2); // docs/*.md, not docs/reference/ nor docs/superpowers/
+// Every document under docs/ and the README: each name any of them writes is read from the code.
+const DOCS_WITH_NAMES = [...new Set([...ALL_DOCS, 'README.md'])];
 
 /** The body of a document without its fenced code blocks, and the fenced blocks apart. */
 function split(text: string): { prose: string; fences: string[] } {
@@ -56,6 +61,80 @@ function split(text: string): { prose: string; fences: string[] } {
 
 /** The inline code spans of a document, fenced blocks left out. */
 const spansOf = (text: string): string[] => [...split(text).prose.matchAll(/`([^`\n]+)`/g)].map((match) => match[1]);
+
+const escapeRegExp = (text: string): string => text.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&');
+/** Whether `text` holds `name` whole: not as a part of a longer name (`im-page` is not in `im-page-content`). */
+const holds = (text: string, name: string): boolean => new RegExp(`(?<![\\w$-])${escapeRegExp(name)}(?![\\w$-])`).test(text);
+
+// ---------- the table "Moving from 0.1.4" ----------
+
+// The one table an app's migration reads: its first column, the old name, is what the code no longer has. It is a section
+// of using-imago.md, from its heading to the next heading of its level; tests/check.test.ts reads the same section.
+const MOVING_HEADING = /^## (?:\d+\. )?Moving from 0\.1\.4\s*$/;
+
+/** The lines of the section "Moving from 0.1.4" of a text, as the indices [first, end) of its lines; null when it has none. */
+function movingLines(lines: string[]): [number, number] | null {
+  const first = lines.findIndex((line) => MOVING_HEADING.test(line));
+  if (first === -1) return null;
+  const next = lines.findIndex((line, index) => index > first && /^## /.test(line));
+  return [first, next === -1 ? lines.length : next];
+}
+
+/** The first cell of a row of a markdown table, and the rest of the row. A `\|` inside a cell is not a border. */
+const cellsOf = (line: string): { first: string; rest: string } | null => {
+  const match = /^\|((?:\\\||[^|])*)\|(.*)$/.exec(line);
+  return match ? { first: match[1].trim(), rest: match[2] } : null;
+};
+
+/** The first cells of the rows of the table "Moving from 0.1.4" (its header and its rule left out). */
+function oldColumn(): string[] {
+  const lines = read(USING).split(/\r?\n/);
+  const range = movingLines(lines);
+  if (!range) return [];
+  return lines.slice(...range).map(cellsOf).filter((cells) => cells !== null)
+    .map((cells) => cells.first).filter((cell) => !/^-+$/.test(cell) && cell !== 'Old name');
+}
+
+/**
+ * A document as the name checks read it. In using-imago.md the first cell of each row of the table "Moving from 0.1.4"
+ * is left out: it names what the code no longer has, on purpose. What the row says to write instead is read as any text.
+ */
+function namesText(doc: string): string {
+  const text = read(doc);
+  if (doc !== USING) return text;
+  const lines = text.split(/\r?\n/);
+  const range = movingLines(lines);
+  if (!range) return text;
+  return lines.map((line, index) => {
+    const cells = index >= range[0] && index < range[1] ? cellsOf(line) : null;
+    return cells ? `| |${cells.rest}` : line;
+  }).join('\n');
+}
+
+// A name as the check reads one (tests/check.test.ts): a custom property, a data- attribute, a class (with or without the
+// im- prefix, a BEM modifier included), or an identifier.
+const NAME = /^(?:--[a-z0-9-]+|data-[a-z0-9-]+|[a-z][a-z0-9]*(?:-{1,2}[a-z0-9]+)+|[A-Za-z_$][\w$]*)$/;
+
+/**
+ * The names of the old column that no document may write elsewhere: those of a cell that holds names only (as
+ * tests/check.test.ts reads them), with every name scripts/check/removed.mjs reports (it holds every name of the table,
+ * and that test says so) and those another rule reports. A name a later row brought back (KEPT), and a custom property
+ * the package still has and only the app must not set (`when: 'set'`), are the package's.
+ */
+function oldNames(): Set<string> {
+  const names = new Set<string>();
+  for (const cell of oldColumn()) {
+    const bare = cell.replace(/\s+from\s+`@acaprino\/imago[^`]*`$/, '');
+    const spans = [...bare.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
+    const rest = bare.replace(/`[^`]+`/g, '').replace(/,|\band\b/g, '').trim();
+    if (spans.length && !rest && spans.every((span) => NAME.test(span))) for (const span of spans) names.add(span);
+  }
+  for (const entry of REMOVED as { old: string; when?: string }[]) if (!entry.when) names.add(entry.old);
+  for (const entry of ELSEWHERE as { old: string }[]) names.add(entry.old);
+  for (const entry of KEPT as { old: string }[]) names.delete(entry.old);
+  for (const entry of REMOVED as { old: string; when?: string }[]) if (entry.when) names.delete(entry.old);
+  return names;
+}
 
 // ---------- what the code is ----------
 
@@ -91,6 +170,15 @@ function exportsOf(file: string, seen: Set<string> = new Set()): Set<string> {
 const UI_EXPORTS = exportsOf('ts/ui/index.ts');
 const TAURI_EXPORTS = exportsOf('ts/tauri.ts');
 const SHELL_EXPORTS = exportsOf('ts/shell/index.ts');
+const GRAPH_EXPORTS = exportsOf('ts/graph.ts');
+const GRAPH_LAYOUT_EXPORTS = exportsOf('ts/graph-layout.ts');
+const REACT_EXPORTS = exportsOf('react/index.d.ts');
+/** What each entry point of package.json exports, by the specifier an app imports it with. */
+const ENTRY_EXPORTS = new Map([
+  ['@acaprino/imago/ui', UI_EXPORTS], ['@acaprino/imago/shell', SHELL_EXPORTS], ['@acaprino/imago/tauri', TAURI_EXPORTS],
+  ['@acaprino/imago/graph', GRAPH_EXPORTS], ['@acaprino/imago/graph-layout', GRAPH_LAYOUT_EXPORTS], ['@acaprino/imago/react', REACT_EXPORTS],
+]);
+const isExport = (name: string): boolean => [...ENTRY_EXPORTS.values()].some((names) => names.has(name));
 
 /** Rust names that are public items of the crate: types, functions and constants, and the variants of its enums. */
 const RUST_TEXT = textOf(RUST_FILES);
@@ -114,14 +202,29 @@ const TOKEN_NAMES = new Set([...TOKENS_CSS.matchAll(/^\s*(--im-[a-z0-9-]+)\s*:/g
 
 // Names that belong to someone else. Each entry is a name a document uses on purpose; nothing else goes here.
 const THEIRS_TS = new Set([
-  'getCurrentWebview', 'setZoom', 'setTheme', 'build', 'matchMedia', 'getBoundingClientRect', 'oklch', 'showModal',
+  'getCurrentWebview', 'setZoom', 'setTheme', 'build', 'matchMedia', 'getBoundingClientRect', 'oklch', 'rgb', 'showModal',
+  'preventDefault',
 ]);
+
+/** The ids of the rules of imago-check, as scripts/check/ names them: `im-selector` is a rule, not a class. */
+const RULE_IDS = new Set([...textOf(filesUnder('scripts/check', ['.mjs']))
+  .matchAll(/(?:finding\((?:[^()]|\([^()]*\))*?|perDeclaration\(\s*source,\s*|const (?:id|RULE) = )'([a-z]+(?:-[a-z]+)+)'/g)].map((match) => match[1]));
+
+/** The data-im- attributes the package reads or writes, `dataset.imMark` included, as imago-check reads them. */
+const PACKAGE_ATTRIBUTES = packageNames(root).attributes;
 const APP_OWNED_RUST = new Set(['set_window_theme', 'window_caption_maximize']); // the two commands an app registers (see desktop-shell.md)
 const THEIRS_RUST = new Set(['from_config']);
 const THEIRS_CAMEL = new Set(['WebView2', 'WebviewWindowBuilder', 'ExitRequested', 'SetWindowCompositionAttribute']);
 
-/** Methods and function-valued members the TypeScript sources declare (`register(`, `onOsHover(`, `open(`): a document may call them on the object it got. */
-const MEMBER_NAMES = new Set(TS_FILES.flatMap((file) => [...read(file).matchAll(/^\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\(/gm)].map((match) => match[1])));
+/**
+ * Methods and function-valued members the TypeScript sources declare (`register(`, `onOsHover(`, `open(`), and the
+ * functions declared inside a function, which it returns as the members of an object (`graphView`'s `viewport(`): a
+ * document may call them on the object it got.
+ */
+const MEMBER_NAMES = new Set(TS_FILES.flatMap((file) => [
+  ...[...read(file).matchAll(/^\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\??(?:\(|:\s*\()/gm)].map((match) => match[1]),
+  ...[...read(file).matchAll(/^\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*[<(]/gm)].map((match) => match[1]),
+]));
 
 // ---------- the tests ----------
 
@@ -141,7 +244,7 @@ describe('custom properties', () => {
 
   for (const doc of ALL_DOCS.filter((file) => existsSync(join(root, file)))) {
     test(`every --im-* name in ${doc} is declared in css/tokens.css`, () => {
-      const written = new Set([...read(doc).matchAll(/--im-[a-z0-9]+(?:-[a-z0-9]+)*/g)].map((match) => match[0]));
+      const written = new Set([...namesText(doc).matchAll(/--im-[a-z0-9]+(?:-[a-z0-9]+)*/g)].map((match) => match[0]));
       const missing = [...written].filter((name) => !TOKEN_NAMES.has(name));
       assert.deepEqual(missing, [], `${doc} names custom properties that css/tokens.css does not declare`);
     });
@@ -166,13 +269,13 @@ describe('classes and attributes', () => {
 
   for (const doc of DOCS_WITH_NAMES.filter((file) => existsSync(join(root, file)))) {
     test(`every im- class in ${doc} is a class in css/`, () => {
-      const missing = [...classesIn(read(doc))].filter((name) => !styled(name) && !hooked(name));
+      const missing = [...classesIn(namesText(doc))].filter((name) => !styled(name) && !hooked(name) && !RULE_IDS.has(name));
       assert.deepEqual(missing, [], `${doc} names classes that no file under css/ defines`);
     });
 
     test(`every data-im-* attribute in ${doc} is read or written by the code`, () => {
-      const written = new Set([...read(doc).matchAll(/data-im-[a-z0-9]+(?:-[a-z0-9]+)*/g)].map((match) => match[0]));
-      const missing = [...written].filter((name) => !SCRIPT_AND_STYLE.includes(name));
+      const written = new Set([...namesText(doc).matchAll(/data-im-[a-z0-9]+(?:-[a-z0-9]+)*/g)].map((match) => match[0]));
+      const missing = [...written].filter((name) => !SCRIPT_AND_STYLE.includes(name) && !PACKAGE_ATTRIBUTES.has(name));
       assert.deepEqual(missing, [], `${doc} names attributes that nothing under css/, ts/ or gallery/ uses`);
     });
   }
@@ -180,19 +283,20 @@ describe('classes and attributes', () => {
 
 describe('exports', () => {
   test('the index files export what the test looks for (the test would pass on empty sets otherwise)', () => {
-    for (const name of ['createRegistry', 'openMenu', 'confirm', 'notify', 'setPanelState']) assert.ok(UI_EXPORTS.has(name), `ts/ui/index.ts does not export ${name}`);
+    for (const name of ['createRegistry', 'openMenu', 'confirm', 'notify', 'setPanelState', 'mountApp']) assert.ok(UI_EXPORTS.has(name), `ts/ui/index.ts does not export ${name}`);
     for (const name of ['applyLook', 'mountWindowControls', 'mountZoom', 'guardDesktop']) assert.ok(SHELL_EXPORTS.has(name), `ts/shell/index.ts does not export ${name}`);
+    for (const name of ['graphView', 'graphEditor']) assert.ok(GRAPH_EXPORTS.has(name), `ts/graph.ts does not export ${name}`);
+    assert.ok(GRAPH_LAYOUT_EXPORTS.has('groupedGraphScene'), 'ts/graph-layout.ts does not export groupedGraphScene');
+    for (const name of ['Shell', 'Workbench']) assert.ok(REACT_EXPORTS.has(name), `react/index.d.ts does not export ${name}`);
   });
 
-  for (const doc of OWN_DOCS.filter((file) => existsSync(join(root, file)))) {
+  for (const doc of DOCS_WITH_NAMES.filter((file) => existsSync(join(root, file)))) {
     test(`every import from @acaprino/imago in ${doc} is a real export`, () => {
       const problems: string[] = [];
-      for (const block of split(read(doc)).fences) {
+      for (const block of split(namesText(doc)).fences) {
         for (const match of block.matchAll(/import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+'(@acaprino\/imago\/[^']+)'/g)) {
           const [, list, from] = match;
-          const available = new Map([
-            ['@acaprino/imago/ui', UI_EXPORTS], ['@acaprino/imago/shell', SHELL_EXPORTS], ['@acaprino/imago/tauri', TAURI_EXPORTS],
-          ]).get(from);
+          const available = ENTRY_EXPORTS.get(from);
           if (!available) {
             problems.push(`import from ${from}: unknown module`);
             continue;
@@ -209,7 +313,7 @@ describe('exports', () => {
 
     test(`every function written as name(...) in ${doc} is an export, a Rust name or someone else's`, () => {
       const problems: string[] = [];
-      for (const span of spansOf(read(doc))) {
+      for (const span of spansOf(namesText(doc))) {
         const call = /^([A-Za-z_$][\w$]*)\(/.exec(span);
         const method = /^([A-Z]\w*)::(\w+)/.exec(span);
         if (method) {
@@ -220,8 +324,8 @@ describe('exports', () => {
           const name = call[1];
           if (name.includes('_')) {
             if (!RUST_NAMES.has(name) && !APP_OWNED_RUST.has(name) && !THEIRS_RUST.has(name)) problems.push(`${span}: no pub ${name} in crates/imago-shell`);
-          } else if (!UI_EXPORTS.has(name) && !SHELL_EXPORTS.has(name) && !TAURI_EXPORTS.has(name) && !THEIRS_TS.has(name) && !MEMBER_NAMES.has(name)) {
-            problems.push(`${span}: ${name} is not exported by ts/ui or ts/shell`);
+          } else if (!isExport(name) && !THEIRS_TS.has(name) && !MEMBER_NAMES.has(name)) {
+            problems.push(`${span}: ${name} is not exported by an entry point of the package`);
           }
         }
       }
@@ -229,9 +333,9 @@ describe('exports', () => {
     });
 
     test(`every CamelCase name in backticks in ${doc} is in the code`, () => {
-      const problems = spansOf(read(doc))
+      const problems = spansOf(namesText(doc))
         .filter((span) => /^[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+$/.test(span))
-        .filter((span) => !new RegExp(`\\b${span}\\b`).test(CODE) && !THEIRS_CAMEL.has(span));
+        .filter((span) => !new RegExp(`\\b${span}\\b`).test(CODE) && !isExport(span) && !THEIRS_CAMEL.has(span));
       assert.deepEqual(problems, []);
     });
   }
@@ -265,10 +369,10 @@ describe('the package', () => {
     return undefined;
   }
 
-  for (const doc of [...OWN_DOCS, 'README.md'].filter((file) => existsSync(join(root, file)))) {
+  for (const doc of DOCS_WITH_NAMES.filter((file) => existsSync(join(root, file)))) {
     test(`every @acaprino/imago/... path in ${doc} resolves through "exports"`, () => {
       const problems: string[] = [];
-      for (const match of read(doc).matchAll(/(?<!node_modules\/)@acaprino\/imago\/([A-Za-z0-9_./-]+)/g)) {
+      for (const match of namesText(doc).matchAll(/(?<!node_modules\/)@acaprino\/imago\/([A-Za-z0-9_./-]+)/g)) {
         const sub = match[1].replace(/[.,;:]+$/, '');
         const target = resolveEntry(sub);
         if (!target || !existsSync(join(root, target))) problems.push(`@acaprino/imago/${sub} does not resolve (exports: ${target ?? 'no entry'})`);
@@ -277,7 +381,7 @@ describe('the package', () => {
     });
 
     test(`every node_modules/@acaprino/imago/... path in ${doc} is a file of this repository`, () => {
-      const problems = [...read(doc).matchAll(/node_modules\/@acaprino\/imago\/([A-Za-z0-9_./-]+)/g)]
+      const problems = [...namesText(doc).matchAll(/node_modules\/@acaprino\/imago\/([A-Za-z0-9_./-]+)/g)]
         .map((match) => match[1].replace(/[.,;:]+$/, ''))
         .filter((path) => !existsSync(join(root, path)));
       assert.deepEqual(problems, []);
@@ -457,8 +561,80 @@ describe('docs/design.md carries the corrections made after the build', () => {
 
 describe('the lists of other people\'s names at the top of this file', () => {
   test('every name in them is written in one of the documents, so no entry outlives its use', () => {
-    const written = textOf([...OWN_DOCS, 'README.md'].filter((file) => existsSync(join(root, file))));
+    const written = textOf(DOCS_WITH_NAMES.filter((file) => existsSync(join(root, file))));
     const stale = [...THEIRS_TS, ...APP_OWNED_RUST, ...THEIRS_RUST, ...THEIRS_CAMEL].filter((name) => !written.includes(name));
     assert.deepEqual(stale, [], 'delete these from the lists in tests/docs.test.ts');
+  });
+});
+
+describe('one canon', () => {
+  test('design-file.md links every other document under docs/', () => {
+    const prose = split(read(DESIGN_FILE)).prose;
+    const missing = ALL_DOCS.filter((doc) => doc !== DESIGN_FILE)
+      .filter((doc) => !new RegExp(`\\]\\(${escapeRegExp(doc.slice('docs/'.length))}(?:#[^)]*)?\\)`).test(prose));
+    assert.deepEqual(missing, [], `${DESIGN_FILE} does not link these documents`);
+  });
+
+  test('using-imago.md holds the table "Moving from 0.1.4", and its old column names what the code removed', () => {
+    assert.ok(oldColumn().length >= 100, `the table "Moving from 0.1.4" of ${USING} has ${oldColumn().length} rows`);
+    assert.ok(oldNames().size >= 60, `only ${oldNames().size} old names read from the table and scripts/check/removed.mjs`);
+  });
+
+  test('no document writes a name of the old column outside the table "Moving from 0.1.4"', () => {
+    const old = [...oldNames()];
+    const problems: string[] = [];
+    for (const doc of [...DOCS_WITH_NAMES, 'AGENTS.md'].filter((file) => existsSync(join(root, file)))) {
+      const text = namesText(doc);
+      for (const name of old) if (holds(text, name)) problems.push(`${doc}: ${name}`);
+    }
+    assert.deepEqual(problems, [], 'write what replaces each name (the table says it), or leave the name to the table');
+  });
+});
+
+describe('every name of the package is in a document', () => {
+  // What the documents say, the old column of the table left out: a name only that column writes is not documented.
+  const docsText = (): string => DOCS_WITH_NAMES.filter((file) => existsSync(join(root, file))).map(namesText).join('\n');
+  /** The code of the documents: their inline code spans and fenced blocks. An export is documented in code, not by a word of prose. */
+  const docsCode = (): string => DOCS_WITH_NAMES.filter((file) => existsSync(join(root, file))).map((doc) => {
+    const text = namesText(doc);
+    return [...spansOf(text), ...split(text).fences].join('\n');
+  }).join('\n');
+
+  test('every im- class that css/ styles', () => {
+    const classes = new Set<string>();
+    for (const file of CSS_FILES) {
+      for (const rule of parseCss(read(file)).rules) {
+        if (rule.keyframes) continue;
+        for (const name of classesOf(rule.selector)) if (name.startsWith('im-')) classes.add(name);
+      }
+    }
+    assert.ok(classes.size >= 150, `only ${classes.size} classes read from css/`);
+    const text = docsText();
+    assert.deepEqual([...classes].filter((name) => !holds(text, name)).sort(), [], 'these classes of css/ are in no document');
+  });
+
+  test('every data-im- attribute that css/ or ts/ reads or writes', () => {
+    assert.ok(PACKAGE_ATTRIBUTES.size >= 20, `only ${PACKAGE_ATTRIBUTES.size} attributes read from css/ and ts/`);
+    const text = docsText();
+    assert.deepEqual([...PACKAGE_ATTRIBUTES].filter((name) => !holds(text, name)).sort(), [], 'these attributes of the package are in no document');
+  });
+
+  test('every token of css/tokens.css', () => {
+    const text = docsText();
+    assert.deepEqual([...TOKEN_NAMES].filter((name) => !holds(text, name)).sort(), [], 'these tokens are in no document');
+  });
+
+  for (const [entry, names] of ENTRY_EXPORTS) {
+    test(`every export of ${entry}, written as code`, () => {
+      assert.ok(names.size > 0, `${entry} exports nothing the test can read`);
+      const code = docsCode();
+      assert.deepEqual([...names].filter((name) => !holds(code, name)).sort(), [], `these exports of ${entry} are in no code span or block of a document`);
+    });
+  }
+
+  test('every rule of imago-check, in the design file', () => {
+    assert.ok(RULE_IDS.size >= 19, `only ${RULE_IDS.size} rule ids read from scripts/check/: ${[...RULE_IDS].join(', ')}`);
+    const design = read(DESIGN_FILE);
+    assert.deepEqual([...RULE_IDS].filter((id) => !design.includes(`\`${id}\``)).sort(), [], `${DESIGN_FILE} does not name these rules of imago-check`);
   });
 });

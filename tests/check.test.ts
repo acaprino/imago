@@ -559,17 +559,26 @@ describe('removed-name', () => {
 });
 
 describe('removed.mjs', () => {
-  const tables = [join(root, 'docs', 'superpowers', 'moving-from-0.1.4.md'), ...readdirSync(join(root, 'docs', 'superpowers', 'moving')).filter((name) => name.endsWith('.md')).sort().map((name) => join(root, 'docs', 'superpowers', 'moving', name))];
+  // The table "Moving from 0.1.4" of docs/using-imago.md, the one table of what the canon removed: the lines of its
+  // section, from its heading to the next heading of its level (tests/docs.test.ts reads the same section).
+  const USING = join(root, 'docs', 'using-imago.md');
+  function movingSection(): string[] {
+    const lines = readFileSync(USING, 'utf8').split(/\r?\n/);
+    const first = lines.findIndex((line) => /^## (?:\d+\. )?Moving from 0\.1\.4\s*$/.test(line));
+    if (first === -1) return [];
+    const next = lines.findIndex((line, index) => index > first && /^## /.test(line));
+    return lines.slice(first, next === -1 ? lines.length : next);
+  }
   /** The kind of a name as the check reads it. */
   const kindOf = (name: string): string => (name.startsWith('--') ? 'property' : name.startsWith('data-') ? 'attribute' : /^[a-z][a-z0-9]*(?:-{1,2}[a-z0-9]+)+$/.test(name) ? 'class' : 'export');
   const NAME = /^(?:--[a-z0-9-]+|data-[a-z0-9-]+|[a-z][a-z0-9]*(?:-{1,2}[a-z0-9]+)+|[A-Za-z_$][\w$]*)$/;
 
-  /** The first cells of the tables: their names when the cell is only names, or the cell itself when it describes a change of behaviour. */
+  /** The first cells of the table: their names when the cell is only names, or the cell itself when it describes a change of behaviour. */
   function rows(): { names: string[][]; skipped: string[] } {
     const names: string[][] = [];
     const skipped: string[] = [];
-    for (const path of tables) {
-      for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    for (const path of [USING]) {
+      for (const line of movingSection()) {
         const cells = /^\|(.*?)\|(.*)\|\s*$/.exec(line);
         if (!cells || /^\s*-+\s*$/.test(cells[1]) || /^\s*Old name\s*$/.test(cells[1])) continue;
         const cell = cells[1].trim().replace(/\s+from\s+`@acaprino\/imago[^`]*`$/, '');
