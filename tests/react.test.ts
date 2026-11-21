@@ -105,9 +105,9 @@ describe('Shell', () => {
     assert.equal('data-im-inspector' in rootOf(render(h(Shell, null))).attrs, false);
   });
 
-  test('writes data-im-app for the app and nothing without it', () => {
-    assert.equal(rootOf(render(h(Shell, { app: 'daodan' }))).attrs['data-im-app'], 'daodan');
+  test('never writes data-im-app: applyLook writes the app, the look and the theme on the root element, even if a consumer passes app', () => {
     assert.equal('data-im-app' in rootOf(render(h(Shell, null))).attrs, false);
+    assert.equal('data-im-app' in rootOf(render(h(Shell, { app: 'daodan' }))).attrs, false);
   });
 
   test('has no skip link without a label for it, and keeps its class whatever className it is given', () => {
@@ -294,7 +294,7 @@ describe('every name the binding writes is the package\'s', () => {
   // The one class a script looks for and no stylesheet styles: the content region, which F6 goes to (see tests/docs.test.ts).
   const HOOKS = new Set(['im-content']);
 
-  const everything = render(h(Shell, { app: 'daodan', sidebar: true, inspector: 'wide', skipLabel: 'Skip to content', titlebar },
+  const everything = render(h(Shell, { sidebar: true, inspector: 'wide', skipLabel: 'Skip to content', titlebar },
     h(Workbench, { navigation: rows, navigationLabel: 'Threads', detailsLabel: 'Details', details: [
       h(Timeline, { key: 't', items: [{ id: 1, title: 'Opened', detail: 'Today' }] }),
       h(TabList, { key: 'l', label: 'Views', value: 'a', onSelect() {}, tabs: [{ value: 'a', id: 'a', panel: 'p', label: 'A' }] }),
@@ -322,7 +322,7 @@ describe('every name the binding writes is the package\'s', () => {
 
   test('every data-im- attribute it renders is read or written by the package', () => {
     const attributes = new Set(elementsOf(parse(everything)).flatMap((element) => Object.keys(element.attrs)).filter((name) => name.startsWith('data-im-')));
-    assert.deepEqual([...attributes].sort(), ['data-im-app', 'data-im-inspector', 'data-im-sidebar']);
+    assert.deepEqual([...attributes].sort(), ['data-im-inspector', 'data-im-sidebar']);
     assert.deepEqual([...attributes].filter((name) => !package_.attributes.has(name)), []);
   });
 });

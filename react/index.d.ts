@@ -1,5 +1,4 @@
 import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from 'react';
-import type { AppId } from '../lib/shell/index.js';
 
 type Props<T extends 'div' | 'main' | 'ol' | 'button'> = Omit<ComponentPropsWithoutRef<T>, 'className'>;
 export function TabList<T extends string>(props: {
@@ -10,14 +9,11 @@ export function Disclosure(props: { label: ReactNode; children?: ReactNode }): R
 
 /**
  * The window: the `im-shell` root of docs/using-imago.md section 4. It writes the skip link (when `skipLabel` is given,
- * to the content region of the `Workbench`), then `titlebar`, then its children: put a `Workbench` in it.
+ * to the content region of the `Workbench`), then `titlebar`, then its children: put a `Workbench` in it. The app, the
+ * look and the theme (`data-im-app`, `data-im-look`, `data-im-theme`) are written on the root element by `applyLook`,
+ * not by the shell.
  */
 export function Shell(props: Props<'div'> & {
-  /**
-   * The app (`data-im-app`). The accent takes its hue where `data-im-theme` is written, so use it when `applyLook` writes
-   * the look and the theme on this shell; leave it out when `applyLook` writes all three on an ancestor.
-   */
-  app?: AppId;
   titlebar?: ReactNode;
   /** Whether the `Workbench` has a sidebar: writes `data-im-sidebar="on"`, or `"off"` when it is not set. */
   sidebar?: boolean;

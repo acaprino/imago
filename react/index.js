@@ -24,11 +24,12 @@ const isEmpty = node => Children.toArray(node).every(child => child === '');
 
 /**
  * The window: the `im-shell` root of docs/using-imago.md section 4, with the skip link and the title bar before its
- * children. Put a `Workbench` in it. `sidebar` says whether the `Workbench` has a sidebar (`data-im-sidebar`).
+ * children. Put a `Workbench` in it. `sidebar` says whether the `Workbench` has a sidebar (`data-im-sidebar`). The app,
+ * the look and the theme are not the shell's: `applyLook` writes them on the root element.
  */
-export function Shell({ app, titlebar, children, sidebar, inspector, skipLabel, ...props }) {
+export function Shell({ titlebar, children, sidebar, inspector, skipLabel, ...props }) {
   return h('div', {
-    ...props, className: 'im-shell', 'data-im-app': app, 'data-im-sidebar': sidebar ? 'on' : 'off',
+    ...props, className: 'im-shell', 'data-im-sidebar': sidebar ? 'on' : 'off',
     'data-im-inspector': inspector === 'wide' ? 'wide' : undefined,
   }, skipLabel != null && h('a', { className: 'im-shell-skip-link', href: '#main' }, skipLabel), titlebar, children);
 }
