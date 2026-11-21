@@ -15,7 +15,7 @@ reasons, and its "Corrections after the build" section lists what changed when t
 | The same values as CSS custom properties `--im-*` | `css/tokens.css`, generated: change the JSON, run `npm run tokens` |
 | The window layout and its breakpoints | `css/primitives.css` |
 | The controls and their states | `css/controls.css`, and `css/looks/oni.css` for what ONI draws differently |
-| The floating surfaces (menu, sheet, dialog, notice, palette) | `css/surfaces.css` |
+| The floating surfaces (menu, sheet, drawer, dialog, notice, palette) | `css/surfaces.css` |
 | Behaviour: commands, keys, surfaces, panel states | `ts/ui/` (import `@acaprino/imago/ui`) |
 | The desktop window: look, theme, zoom, buttons, guard | `ts/shell/` (import `@acaprino/imago/shell`) and the crate `imago-shell` |
 | Every control in every state, both looks, both themes, each app's accent | the gallery: `npm run gallery` |
@@ -56,7 +56,7 @@ Two looks, each with a dark and a light theme, set by three attributes on the ro
 | `--im-ground` | The window's ground. Translucent under `im-glass` |
 | `--im-sheet` | A sheet on the ground: the work area, panels |
 | `--im-sheet-solid` | The sheet as an opaque colour, also under `im-glass`: for what rows scroll under, such as the sticky header of a table |
-| `--im-float` | A floating surface: menu, sheet, dialog, notice, palette |
+| `--im-float` | A floating surface: menu, sheet, drawer, dialog, notice, palette |
 | `--im-field` | The fill of a field |
 | `--im-button` | The fill of a neutral button |
 | `--im-terminal` | A dense surface for terminals and tables |

@@ -1,9 +1,9 @@
-// One stack for everything that floats over the window: menus, sheets, dialogs and the palette.
+// One stack for everything that floats over the window: menus, sheets, drawers, dialogs and the palette.
 // The stack decides what Escape closes (the top layer only), what a press outside closes (a menu
 // or a sheet) and where focus goes back to. Nothing touches the DOM when this module is imported,
 // so the stack logic also runs under plain Node.
 
-export type LayerKind = 'menu' | 'sheet' | 'dialog' | 'palette';
+export type LayerKind = 'menu' | 'sheet' | 'drawer' | 'dialog' | 'palette';
 
 export type Layer = {
   el: HTMLElement;
@@ -33,15 +33,23 @@ const isModal = (layer: Layer): boolean => layer.kind === 'dialog' || layer.kind
 
 // A layer under a modal one cannot be reached: it stays on screen but is inert until the modal closes.
 // A layer above the modal (a menu opened from inside a dialog) stays live.
+// A drawer under another drawer is covered: inert, and `data-im-covered` takes it off the screen until the
+// one over it closes. A menu or a sheet over a drawer leaves it live.
 // Notices keep showing under a modal layer but cannot be pressed: an Undo must not act over a pending confirm.
 function sync(): void {
   let modal = -1;
   stack.forEach((entry, index) => {
     if (isModal(entry.layer)) modal = index;
   });
-  stack.forEach((entry, index) => {
-    entry.layer.el.inert = index < modal;
-  });
+  let drawerAbove = false;
+  for (let index = stack.length - 1; index >= 0; index--) {
+    const { layer } = stack[index];
+    const covered = layer.kind === 'drawer' && drawerAbove;
+    layer.el.inert = index < modal || covered;
+    if (layer.kind !== 'drawer') continue;
+    layer.el.toggleAttribute?.('data-im-covered', covered);
+    drawerAbove = true;
+  }
   const hosts = layerDocument?.querySelectorAll?.<HTMLElement>('[data-im-notices]');
   hosts?.forEach((host) => {
     host.inert = modal >= 0;
@@ -82,6 +90,12 @@ export function pushLayer(layer: Layer, opener: HTMLElement | null): () => void 
 
 export function topLayer(): Layer | undefined {
   return stack.at(-1)?.layer;
+}
+
+/** The highest open layer of these kinds: the drawer or dialog a menu or a sheet may have been opened over. */
+export function topLayerOf(kinds: readonly LayerKind[]): Layer | undefined {
+  for (let index = stack.length - 1; index >= 0; index--) if (kinds.includes(stack[index].layer.kind)) return stack[index].layer;
+  return undefined;
 }
 
 export function hasDialog(): boolean {
@@ -242,7 +256,8 @@ type EventHost = {
 /**
  * Escape closes the top layer and nothing else: the press stops there, so no other handler also acts on it.
  * A press outside closes a menu or a sheet, and a press on the control that toggles it closes it and swallows
- * the click that follows, so the control does not open it again. The returned function detaches the listeners
+ * the click that follows, so the control does not open it again. A press outside a drawer leaves it open; its
+ * control closes it the same way. The returned function detaches the listeners
  * and closes every layer still open (the shell they belong to is going away).
  */
 export function attachLayers(shell: HTMLElement): () => void {
@@ -260,6 +275,19 @@ export function attachLayers(shell: HTMLElement): () => void {
     event.preventDefault?.();
     event.stopImmediatePropagation?.();
     top.close();
+  };
+
+  // A drawer stays while the panels beside it are used: a press there is not a dismissal. A click on the control
+  // that opened one, from the pointer or the keyboard (focus can be on it while the drawer is open), closes the
+  // drawer with the drawers over it, and the control does not act on that click.
+  const closeDrawerOf = (target: Node): boolean => {
+    for (let index = stack.length - 1; index >= 0; index--) {
+      const { layer, opener } = stack[index];
+      if (layer.kind !== 'drawer' || layer.toggles !== true || !opener?.contains(target) || layer.el.contains(target)) continue;
+      for (const above of stack.slice(index).reverse()) above.layer.close();
+      return true;
+    }
+    return false;
   };
 
   const onPointerDown = (event: PressLike): void => {
@@ -288,7 +316,7 @@ export function attachLayers(shell: HTMLElement): () => void {
   const onClick = (event: PressLike & { preventDefault(): void; stopImmediatePropagation(): void }): void => {
     const pressed = swallow;
     swallow = null;
-    if (pressed && isNode(event.target) && pressed.contains(event.target)) {
+    if ((pressed && isNode(event.target) && pressed.contains(event.target)) || (isNode(event.target) && closeDrawerOf(event.target))) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }

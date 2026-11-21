@@ -4,6 +4,7 @@ export * from './keys.ts';
 export * from './layers.ts';
 export * from './menu.ts';
 export * from './sheet.ts';
+export * from './drawer.ts';
 export * from './dialog.ts';
 export * from './notice.ts';
 export * from './inspector.ts';
