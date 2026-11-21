@@ -932,6 +932,12 @@ describe('large generated files', () => {
       namesUsed(source);
       rules.unknownValue(source);
     });
+    within('a page of 10000 comments and 10000 styles', () => {
+      const page = `<!doctype html>\n${Array.from({ length: 10000 }, (_, i) => `<!-- c${i} --><style>.mk-${i} { color: var(--im-text); }</style>\n`).join('')}`;
+      const source = parseSource('index.html', page);
+      assert.equal(source.comments.length, 10000);
+      assert.equal(source.sheets.flatMap((sheet: any) => sheet.rules).filter((rule: any) => !rule.inline).length, 10000, 'every style is read');
+    });
     within('one list of 16000 selectors', () => {
       parseSource('src/app.css', `${Array.from({ length: 16000 }, (_, i) => `.mk-${i}`).join(',\n')} { color: var(--im-text); }\n`);
     });

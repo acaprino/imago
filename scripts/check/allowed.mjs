@@ -1,13 +1,16 @@
 // The literal values that are not findings, each with the reason it is allowed. A value goes here only when it is not
 // a measure or a colour of the design: what is a measure or a colour is a token (css/tokens.css). A single place that
 // needs a literal takes an exception comment instead, `imago-check: allow <rule> — <reason>`, on its line or the line
-// above, and the program prints it. This is the one place for what the rules allow: rules.mjs keeps no list of its own.
+// above, and the program prints it. This is the place for the literal values the rules allow. The values that are no
+// literal measure by their kind are judged in rules.mjs: a percentage (a share of its box), a keyword (`auto`, `inherit`,
+// `initial`, `unset`: the space comes from elsewhere), a `var(…)` (a token) and a `calc(…)` built from tokens and the values above.
 
 /** @typedef {{ value: string, reason: string, properties?: string[] }} Allowed */
 
 /**
  * Lengths of padding, margin, gap and border-radius that are not steps of the space scale. A value is compared after
- * its number is read (`1.0px` is `1px`); a zero of any unit is no space at all.
+ * its number is read (`1.0px` is `1px`, and `-1px`, a hairline laid over a neighbour, is judged by its size); a zero of any
+ * unit is no space at all.
  * @type {Allowed[]}
  */
 export const SPACE = [
@@ -15,13 +18,6 @@ export const SPACE = [
   { value: '1px', reason: 'the hairline: the line between regions and the edge of a control are 1px' },
   { value: '2px', reason: 'the ring: the focus ring and the selection mark are 2px, and a gap of their width keeps them clear' },
 ];
-
-/** Kinds of space value that are never a literal measure, with the reason. */
-export const SPACE_KINDS = {
-  percentage: 'a share of the box it is in: it follows the box, it is not a step of the scale (50% makes a circle)',
-  keyword: '`auto`, `inherit`, `initial`, `unset` and the like take their space from elsewhere',
-  token: 'a `var(…)` is a token, and a `calc(…)` whose only lengths are tokens or the values above is built from them',
-};
 
 /**
  * Sizes of text that are not on the type scale and are still not a literal size. Lengths inside `var(--im-fs-…)`

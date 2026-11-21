@@ -118,7 +118,7 @@ const read = (dir: string): string => readdirSync(new URL(`../${dir}/`, import.m
 const CSS = read('css');
 const SOURCE = read('ts');
 
-// The second drawings of a control that 0.1.2 to 0.1.4 added (docs/superpowers/moving/task-4.md): one drawing is left.
+// The second drawings of a control that 0.1.2 to 0.1.4 added (docs/using-imago.md, section 11): one drawing is left.
 const REMOVED = ['im-native-controls', 'im-native-input', 'im-native-select', 'im-native-textarea', 'im-native-check', 'im-native-radio',
   'im-native-choice', 'im-seg--native', 'im-seg--choice', 'im-switch-knob'];
 

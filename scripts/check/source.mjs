@@ -556,8 +556,23 @@ function parseHtml(file, text) {
   const objects = [];
   let rest = text;
   const line = lineCounter(text, 1);
+  // The ranges of one pass, in order: they are blanked together when the pass is over, so that a page of thousands of
+  // comments or scripts is cut once and not once for each.
+  /** @type {[number, number][]} */
+  let ranges = [];
   const blankOut = (from, to) => {
-    rest = rest.slice(0, from) + rest.slice(from, to).replace(/[^\n]/g, ' ') + rest.slice(to);
+    ranges.push([from, to]);
+  };
+  const blankRanges = () => {
+    const parts = [];
+    let last = 0;
+    for (const [from, to] of ranges) {
+      parts.push(rest.slice(last, from), rest.slice(from, to).replace(/[^\n]/g, ' '));
+      last = to;
+    }
+    parts.push(rest.slice(last));
+    rest = parts.join('');
+    ranges = [];
   };
 
   for (const match of text.matchAll(/<!--([\s\S]*?)-->/g)) {
@@ -565,6 +580,7 @@ function parseHtml(file, text) {
     source.comments.push({ text: match[1], line: line(at) });
     blankOut(at, at + match[0].length);
   }
+  blankRanges();
   for (const match of rest.matchAll(/(<style\b[^>]*>)([\s\S]*?)<\/style\s*>/gi)) {
     const at = (match.index ?? 0) + match[1].length;
     const sheet = parseCss(match[2], line(at));
@@ -572,6 +588,7 @@ function parseHtml(file, text) {
     source.comments.push(...sheet.comments);
     blankOut(at, at + match[2].length);
   }
+  blankRanges();
   for (const match of rest.matchAll(/(<script\b[^>]*>)([\s\S]*?)<\/script\s*>/gi)) {
     const at = (match.index ?? 0) + match[1].length;
     const first = line(at);
@@ -584,6 +601,7 @@ function parseHtml(file, text) {
     objects.push(...styleObjects(lexed.code, lexed.strings, first), ...jsxColors(lexed.code, lexed.strings, first));
     blankOut(at, at + match[2].length);
   }
+  blankRanges();
   const scripts = inlineSheet(source.strings);
   scripts.rules.push(...objects);
   source.sheets.push(scripts);

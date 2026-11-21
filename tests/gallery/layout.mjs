@@ -91,7 +91,7 @@ async function markInk(page, geometry, scale) {
   }, { png: shot.toString('base64'), bar, mark, first, scale });
 }
 
-// The frames 0.1.2 to 0.1.4 added beside im-shell, and their parts (docs/superpowers/moving-from-0.1.4.md): none is drawn.
+// The frames 0.1.2 to 0.1.4 added beside im-shell, and their parts (docs/using-imago.md, section 11): none is drawn.
 const REMOVED = [
   'im-app-layout', 'im-main', 'im-desktop-frame', 'im-desktop-content', 'im-page', 'im-skip-link', 'im-page-frame', 'im-page-view',
   'im-workbench', 'im-work-column', 'im-work-area', 'im-workspace-area', 'im-navigation-panel', 'im-resizable-nav', 'im-nav-rail',
