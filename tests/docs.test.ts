@@ -212,6 +212,11 @@ const RULE_IDS = new Set([...textOf(filesUnder('scripts/check', ['.mjs']))
 
 /** The data-im- attributes the package reads or writes, `dataset.imMark` included, as imago-check reads them. */
 const PACKAGE_ATTRIBUTES = packageNames(root).attributes;
+/**
+ * The --im- custom properties the package declares or reads in css/ and writes from ts/ besides its tokens: one an app
+ * reads, as `--im-tile-tone`, which the tiling workspace sets on a tab, is named where the app reads it.
+ */
+const PACKAGE_PROPERTIES = packageNames(root).properties;
 const APP_OWNED_RUST = new Set(['set_window_theme', 'window_caption_maximize']); // the two commands an app registers (see desktop-shell.md)
 const THEIRS_RUST = new Set(['from_config']);
 const THEIRS_CAMEL = new Set(['WebView2', 'WebviewWindowBuilder', 'ExitRequested', 'SetWindowCompositionAttribute']);
@@ -243,10 +248,10 @@ describe('custom properties', () => {
   });
 
   for (const doc of ALL_DOCS.filter((file) => existsSync(join(root, file)))) {
-    test(`every --im-* name in ${doc} is declared in css/tokens.css`, () => {
+    test(`every --im-* name in ${doc} is a token of css/tokens.css, or a custom property the package sets`, () => {
       const written = new Set([...namesText(doc).matchAll(/--im-[a-z0-9]+(?:-[a-z0-9]+)*/g)].map((match) => match[0]));
-      const missing = [...written].filter((name) => !TOKEN_NAMES.has(name));
-      assert.deepEqual(missing, [], `${doc} names custom properties that css/tokens.css does not declare`);
+      const missing = [...written].filter((name) => !TOKEN_NAMES.has(name) && !PACKAGE_PROPERTIES.has(name));
+      assert.deepEqual(missing, [], `${doc} names custom properties that neither css/tokens.css nor the package declares`);
     });
   }
 });
@@ -254,7 +259,8 @@ describe('custom properties', () => {
 describe('classes and attributes', () => {
   // A class a script selects by but no stylesheet styles: the shell's content region, which regions() (F6) looks for.
   // Delete the entry the day a stylesheet defines the class, and the check on css/ is the strict one again.
-  const HOOK_CLASSES: Record<string, string> = { 'im-content': 'ts/ui/keys.ts' };
+  // The tiling workspace's chrome, which its pointer handlers look for (`closest('.im-chrome')`), is one too.
+  const HOOK_CLASSES: Record<string, string> = { 'im-content': 'ts/ui/keys.ts', 'im-chrome': 'ts/ui/tiling-workspace.ts' };
   const styled = (name: string): boolean => new RegExp(`\\.${name}(?![\\w-])`).test(ALL_CSS);
   const hooked = (name: string): boolean => name in HOOK_CLASSES && read(HOOK_CLASSES[name]).includes(`'.${name}'`);
 

@@ -686,6 +686,51 @@ breakpoints of what stays follow the shell (`@container im-shell` at 1000, 850 a
 | `.im-setting-row input` 260px wide | The field's box, `.im-setting-row .im-input`, is 260px: the box round the input as `settingInputHtml` writes it, or the input itself |
 | `.im-editor-inspector input, select, textarea` stretched to its width | Its fields are stretched (`im-input`, `im-select`, `im-textarea`); a checkbox and a radio keep their 16px |
 
+### The tiling workspace
+
+Every class of the package starts with `im-`, and the tiling workspace (`createTilingWorkspace`) wrote `wm-` classes.
+Each is now the `im-` class of the same name; where that name was already a class of the package, the name takes `tile`
+after the prefix, and so do the classes of the workspace's tabs, so that none of them reads as a part of the title bar's
+tabs. The ids the
+workspace makes for its tabs and panels are ids, not names an app writes: they are unchanged.
+
+| Old name | New name, or what to do instead |
+|---|---|
+| `wm-host` | `im-host` |
+| `wm-canvas` | `im-tile-canvas` (`im-canvas-panel` is the canvas of a page) |
+| `wm-pane` | `im-pane` |
+| `wm-focused` | `im-focused` |
+| `wm-header` | `im-header` |
+| `wm-chrome` | `im-chrome` |
+| `wm-control` | `im-control` |
+| `wm-pane-focus` | `im-pane-focus` |
+| `wm-pane-tools` | `im-pane-tools` |
+| `wm-tabs` | `im-tile-tabs` (`im-tabs` is the strip of tabs of the title bar and of a panel) |
+| `wm-tab` | `im-tile-tab` (`im-tab` is a tab of the title bar and of a panel) |
+| `wm-tabwrap` | `im-tile-tabwrap` |
+| `wm-tabwrap-active` | `im-tile-tabwrap-active` |
+| `wm-tab-close` | `im-tile-tab-close` |
+| `wm-tab-toned` | `im-tile-tab-toned` |
+| `wm-tab-dragging` | `im-tile-tab-dragging` |
+| `wm-tabs-filtered` | `im-tile-tabs-filtered` |
+| `wm-body` | `im-tile-body` (`im-body` is the shell's row of the sidebar and the work area) |
+| `wm-placeholder` | `im-placeholder` |
+| `wm-empty-start` | `im-tile-empty-start` (`im-empty` is the empty state of a panel) |
+| `wm-collapsed` | `im-collapsed` |
+| `wm-splitter` | `im-tile-splitter` (`im-splitter` is the handle of `splitView`) |
+| `wm-drop-preview` | `im-drop-preview` |
+| `wm-drop-label` | `im-drop-label` |
+| `wm-drop-marker` | `im-drop-marker` |
+| `wm-drag-ghost` | `im-drag-ghost` |
+| `wm-changing` | `im-changing` |
+| `wm-dragging` | `im-dragging` |
+| `wm-status` | `im-tile-status` (`im-status` is the shell's status row) |
+| `wm-add` | `im-add` |
+| `wm-filtered-out` | `im-filtered-out` |
+| `wm-parking` | `im-parking` |
+| `data-wm-key` | `data-im-tile-key`, on the workspace's controls, tabs and handles (`data-im-key` is the focus key of a repaint) |
+| `--tab-tone` | `--im-tile-tone`, which the workspace sets on a tab from `toneForView`; an app reads it, never sets it |
+
 ### Messages and states
 
 | Old name | New name, or what to do instead |
@@ -751,6 +796,9 @@ In TypeScript a tone outside its set is a type error; from plain JavaScript it i
 |---|---|
 | The app's own commands, controls or Settings view to pick the look (Smooth, ONI) and the theme (follow Windows, light, dark) | `mountApp(shell, registry, { …, appearance: { get, set, labels } })`. It registers five palette commands, alike in every app: `imago.look.smooth`, `imago.look.oni`, `imago.theme.system`, `imago.theme.light`, `imago.theme.dark`, in the group `Appearance`, titled `Smooth look`, `ONI look`, `Follow Windows`, `Light theme`, `Dark theme` (an app in another language passes `labels`). No key is bound. The command of the current choice is not offered, and does nothing when it is run anyway. The app keeps the choice where it keeps it today, gives it back in `get`, and in `set` stores it and calls `applyLook`; the package stores nothing. Remove the app's own commands with those ids, or `mountApp` throws |
 | `applyShinatamaPalette`, `SHINATAMA_PALETTES`, `ShinatamaPaletteTokens` from `@acaprino/imago/shell` | Removed from the package: the skins are Shinatama's, as overrides of tokens. Shinatama takes them from the tag `v0.1.4` (`git show v0.1.4:ts/shell/shinatama-palette.ts`, and `tests/shinatama-palette.test.ts` beside it) |
+| A size of text of the package off the scale | It is on the scale, a type token: 11.5px is 12; 12.5px is 13 for a label or body text and 12 for meta text; 13.5px and 15px are 14 (the wordmark among them); 17px, 20px (ONI's wordmark) and 1.65rem (a metric's value, which was 26.4px) are 18; .8rem (a caption) is 12. Nothing for an app to rename, but some text moves |
+| A space of the package that was not a step of 4, 8, 12, 16, 24 | The nearest step, the lower one between two (3px is 2, 6px is 4, 10px is 8, 14px is 12, 20px is 16, 36px is 24). The heights of the controls, rows, bars and headers, the radii and the colours do not change |
+| The hand cursor of a disclosure's summary | The arrow, as on every control |
 
 ### The mark and the icons
 

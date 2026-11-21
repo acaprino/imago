@@ -73,6 +73,20 @@ return from an event to its session.
 | `createTilingWorkspace(options)` | A workspace of panes with tabs, in splits the person resizes (`TilingWorkspaceOptions`): the app gives the layout (`TilingLayout` of `TilingView`s), its model (validation, a preview of each `TilingAction`, the rectangles of the panes, the neighbour of a pane), the element of each view keyed by its id (`bindings`), and `dispatch(action, expectedLayout)`, which applies an accepted action to its own layout. A view's element moves with its tab, and its resource is started and stopped by the app, not by whether it is shown. `placeWorkspaceBinding(parent, binding, visible)` puts a view's element in its pane |
 | `portraitNotice(options)` | A notice for a small window of its own (an attention window): a portrait, the name, a message and two actions, `im-portrait-notice` with `im-notice-figure` and `im-notice-bubble`. `{ label, name, dismiss, open }`. The app decides what it is about, whether the window is shown, and when the event is acknowledged |
 
+The tiling workspace writes its own markup in the app's host, which takes `im-host`: a canvas (`im-tile-canvas`) of
+panes (`im-pane`, `im-focused` when it has focus, `im-collapsed` when folded, `im-filtered-out` when a filter hides all its
+tabs), each with a header (`im-header`) holding its tabs (`im-tile-tabs`, and `im-tile-tabs-filtered`, the line that says a
+filter hides them all), each
+tab in its `im-tile-tabwrap` (`im-tile-tabwrap-active` for the active one) as an `im-tile-tab` with its close button
+`im-tile-tab-close` (`im-tile-tab-toned` when `toneForView` gives it a tone, read from `--im-tile-tone`;
+`im-tile-tab-dragging` while it is dragged), and its tools (`im-pane-tools`, a button `im-control`, the focus button
+`im-pane-focus`, the button that adds a tab `im-add`); then its body (`im-tile-body`), where a pane with nothing to show
+says so (`im-placeholder`) and offers a new tab (`im-tile-empty-start`). Between panes is a separator,
+`im-tile-splitter`. While a tab is dragged, `im-drop-preview`, `im-drop-label` and `im-drop-marker` show where it would
+land and `im-drag-ghost` follows the pointer; the host takes `im-dragging`, and `im-changing` while a drag or a resize
+runs. The views that are not shown wait in `im-parking`, and `im-tile-status` announces what changed. Its controls carry
+`data-im-tile-key`, their identity across a repaint. The app writes none of these classes and styles none.
+
 Dragging a tab to the centre of a pane joins its tabs; to an edge, it asks for a split; onto the first or second half of
 a tab, it asks to go before or after it. A focused tab enters move mode with Shift+Enter: the arrows visit the
 destinations, Enter commits and Escape cancels. The app applies each accepted move to its own layout and puts focus back
