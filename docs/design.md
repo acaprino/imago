@@ -32,7 +32,9 @@ document wins. So Imago 0.1 is extraction plus design work for the states the pa
 - No change to an app's features or content: terminals, graphs and tables stay the app's own. Where
   things sit and how they are operated does change: that is the work (inspector, command registry,
   palette, breakpoints).
-- No framework. The apps are Tauri 2, Vite and TypeScript without a UI framework, and stay so.
+- No framework. The apps are Tauri 2, Vite and TypeScript without a UI framework, and stay so. The one exception is
+  Daodan's viewer, which is written in React and is not rewritten: it takes the package's markup through a binding,
+  `@acaprino/imago/react`, whose components write the canonical classes and nothing of their own *(call)*.
 - Ethel and artcraft-web are not in this work *(call)*. Ethel has its own design folder and a web
   client; artcraft-web is a web product. They may take the tokens later.
 - No third look. The "Modules" look of the proposal is dropped *(call)*: its 10px gap around every
@@ -103,7 +105,12 @@ document wins. So Imago 0.1 is extraction plus design work for the states the pa
   becomes "one accent per app". The token export also writes the sRGB hex of each value.
 - **The accent goes on four things only**: the one primary action, the selection mark, the focus
   ring, and data. Not on bars, not on every button, not on navigation backgrounds. (ONI keeps the
-  accent as text on short labels, as today.)
+  accent as text on short labels, as today.) On data the accent is the tone `accent` of a chip, a dot or a summary, as
+  the approved preview draws it ("lead", "Demo"); it is not a status, and a note or a notice never takes it.
+- **Categorical colours** *(call)*: eight fixed hues (25, 75, 125, 170, 215, 255, 300, 345) at the accent's lightness
+  and strength in each theme, the same in every app, with one colour for the text on them. They tell one thing among
+  others of its kind (a thread, a project), always beside its name, never alone. A row that wants the person carries a
+  badge, a dot in its tone, and says the same in its words.
 - ONI dark's muted text is `#9CB8E2`, not the preview's `#8AA8D6`: the preview's reaches only 3.92:1 on a
   button, `#9CB8E2` reaches 4.70:1.
 - Status tones are `ok`, `warn`, `err`, `info`. A tone always comes with a word or an icon with a
@@ -114,7 +121,8 @@ document wins. So Imago 0.1 is extraction plus design work for the states the pa
 - **Local Windows fonts only** *(call)*: Segoe UI Variable Text for text, Bahnschrift for ONI and
   for display, Cascadia Mono for code, paths, IDs and key caps. The proposal's IBM Plex Sans is
   dropped: the apps work offline and download nothing.
-- Sizes: 12 meta, 13 body, 14 panel title, 18 dialog title. Nothing under 11.
+- Sizes: 12 meta, 13 body, 14 panel title, 18 dialog title. Nothing under 11. The five sizes (11, 12, 13, 14, 18) are
+  tokens *(call)*, and every size of text in the package and in an app is one of them.
 - Numbers use tabular figures and are right-aligned in columns. Sentence case in Smooth; capitals
   only in ONI, on titles, tabs and buttons.
 
@@ -141,7 +149,8 @@ and terminal grid take Shinatama's own fixed sizes, not the table above.
 
 ### Layout
 
-One grid for every window, with seven regions. An app switches on the regions it needs.
+One grid for every window, with seven regions. An app switches on the regions it needs. It is the only frame: there is
+no second layout for a page, a document or a workbench.
 
 ```text
 ┌ title bar: mark, name · view tabs · window buttons ┐
@@ -155,7 +164,7 @@ One grid for every window, with seven regions. An app switches on the regions it
 - **Sidebar**: the list of the app's objects (threads, rooms, categories, projects). Muro has none.
 - **Inspector**: the details or the form of the selected object. It replaces today's right drawers
   in Shinatama and Muro and Xiox's bottom detail box. It pushes the content; it never covers it at
-  1000px or more.
+  1000px or more. It is the only side panel, 300 wide, or 360 when the app asks for the wide one, the top of the range.
 - **Action bar**: at most one primary action per window, at the right, with its key on the button.
 - Breakpoints (Shinatama's own), as ranges of the window's own width: under 1000 the inspector covers the
   content as a drawer; from 620 to under 850 the sidebar is a 56px rail of icons, each with a tooltip and a
@@ -165,7 +174,9 @@ One grid for every window, with seven regions. An app switches on the regions it
 - Layout primitives: Shell, Panel (header, tools, body, foot), Stack, Cluster, Split, Scroll,
   Surface (ground, sheet, dense, floating).
 - The window names the product: mark and name at the left of the title bar, always. ONI shows the app's mark
-  in the title bar too; the preview hid it there.
+  in the title bar too; the preview hid it there. The mark is the initial of the product's name in capitals, in the
+  square of the app's accent: no drawn symbol and no logo (the owner's choice). The icon of the app's executables, its
+  window program and its command-line program alike, is the same mark, made by the package for the five apps.
 
 ### Surfaces: which one for what
 
@@ -175,6 +186,7 @@ One grid for every window, with seven regions. An app switches on the regions it
 | A short choice tied to one control or pane | Sheet | Docked to its control; one at a time |
 | Details or a form for the selected object | Inspector | Not modal; the rest of the window keeps working |
 | A decision about the whole window | Dialog | Everything under the title bar is inert; focus is contained; actions at the bottom right |
+| A form that must block the window while it saves | Dialog | Locked while it writes; never the inspector, which is not modal |
 | A short result | Notice | Bottom centre; never takes focus; an error stays until dismissed and says "Error" in words |
 
 No surface uses `showModal()` (it makes the HTML title bar inert). Nothing opens a second OS window
@@ -185,6 +197,10 @@ except what an app already has.
 Set: Button (primary, secondary, ghost, danger, icon), Key cap, Count; Field, Search, Select,
 Checkbox (on, part, off), Radio, Switch; Tabs, Segmented, Menu, Tooltip; Row, Table, Facts, Tree,
 Avatar; Status chip, Notice, Progress, Steps; Inspector, Sheet, Dialog.
+
+One control for one need: each is drawn once, and the drawing serves the ARIA element and the native one (a native
+input in a form keeps its own keys and validation) *(call)*. One message that stays in the page, one loading state,
+one empty state, one steps, one dialog. A selected item is drawn the same whatever attribute says it is selected.
 
 States, the same for every control:
 
@@ -233,7 +249,11 @@ an app may have its own where it needs them.
 - One command registry per app. Bindings, key caps on buttons, the footer's key list, menus and the
   palette all come from it.
 - `Ctrl+K` opens the command palette in every app; `Ctrl+F` is search inside the current view.
-  Mukade's search moves from `Ctrl+K` to `Ctrl+F` *(call)*.
+  Mukade's search moves from `Ctrl+K` to `Ctrl+F` *(call)*. The package registers both, with the same ids in every
+  app, in the one call every app makes for its shell, `mountApp` *(call)*: it also attaches the layers, the keys, the
+  regions and the sidebar, so no app forgets one.
+- A key is answered once: a handler that answers a key (Escape that closes a surface, an arrow that moves a list)
+  claims it, and no command also runs on it.
 - Tab moves between regions' controls; arrows move inside a list, a table, tabs or a menu (one tab
   stop each). `F6` moves between regions.
 - Enter runs the primary action of the focused surface. Escape closes the top surface only.
@@ -249,7 +269,10 @@ an app may have its own where it needs them.
 - A destructive action is never the primary action of the action bar without one of the two above.
 
 **Saving.** One model per surface: settings save themselves and show "Saved"; a form in the
-inspector has Cancel and Save, and leaving it with changes asks once.
+inspector has Cancel and Save, and leaving it with changes asks once. An app's settings are a Settings view, the last
+view tab of the title bar. The look and the theme are not in it: they are five commands of the palette, the same in
+every app (Smooth look, ONI look, Follow Windows, Light theme, Dark theme), which the package registers and the app
+stores.
 
 **Empty, loading, error.**
 - Empty: the panel keeps its header and frame, with one sentence and the first action where the data
@@ -277,6 +300,9 @@ and stays the reference.
 - Xiox has its own `native_frame.rs` and `window_state.rs`. Where the two differ, the builder reads
   both and the package keeps the behaviour that covers more cases. Saving and restoring the window's
   size and position is part of the shell *(call)*.
+- The crate also does the three things Xiox's own window code did (the owner's request): it trims the WebView2 context
+  menu to the editing commands, it tints the acrylic for the look and the theme the page draws (which shows on
+  Windows 10 only), and it ignores the failures WebView2 reports while the application closes.
 - Muro has native decorations today. It takes the HTML title bar from the shell *(call)*, because
   the view tabs live in the title bar in every app.
 
@@ -284,12 +310,15 @@ and stays the reference.
 
 ```text
 acaprino/imago
-├─ tokens/imago.tokens.json   single source (DTCG): look × theme, accent per app, measures
-├─ css/                      tokens.css (generated), base.css, primitives.css, controls.css, looks/oni.css
+├─ tokens/imago.tokens.json   single source (DTCG): look × theme, accent per app, measures, type, categories
+├─ css/                      tokens.css (generated), base.css, primitives.css, controls.css, the page patterns, looks/oni.css
 ├─ ts/shell/                 window-controls, zoom, desktop-guard, window-theme
-├─ ts/ui/                    commands, menu, inspector, sheet, dialog, notice, keys
+├─ ts/ui/                    commands, menu, inspector, sheet, dialog, notice, keys, mountApp, the renderers
+├─ react/                    the binding for Daodan's viewer
+├─ icons/                    the icons of the apps' executables
+├─ scripts/check/            imago-check
 ├─ crates/imago-shell/        Rust: acrylic, theme, Snap Layouts, guard, WebView2 recovery
-└─ docs/                     design-file.md, desktop-shell.md, using-imago.md, the gallery
+└─ docs/                     design-file.md (the canon) and the documents it links, the gallery
 ```
 
 Each app depends on a tag: `"@acaprino/imago": "github:acaprino/imago#v<x>"` and
@@ -297,19 +326,27 @@ Each app depends on a tag: `"@acaprino/imago": "github:acaprino/imago#v<x>"` and
 
 The gallery is a page in the package that shows every control in every state, in both looks and
 themes, for each app's accent. It is the acceptance surface: a control is done when its row in the
-gallery is complete and its contrast test passes.
+gallery is complete and its contrast test passes. Every class the package defines is shown there.
+
+A rule is checked by a program wherever a program can check it *(call)*: `imago-check`, a program of the package, runs
+in each app's CI and on the package's own stylesheets, and fails, with the file and the line, on what the design file
+forbids and a program can see (a class of the package restyled by an app, a literal colour or size, a hand cursor, an
+opacity on a disabled state, a breakpoint on the screen, a removed name, the missing agent lines, no call of
+`mountApp`). What only a person can judge (the words of a destructive button, one primary action) stays a rule of the
+design file and a line of the review.
 
 `docs/design-system/` in Shinatama moves to the package; Shinatama keeps a pointer.
 
 ### Order of work
 
 1. Imago 0.1: tokens, primitives, controls with all states, behaviour modules, shell, gallery;
-   extracted from Shinatama and Xiox.
-2. Xiox (already has both looks).
+   extracted from Shinatama and Xiox. Then the one canon: one frame, one control per need, the check.
+2. Muro and Shinatama, which already use the package and have the least distance to go *(call)*. Muro gains the
+   shell, the inspector and the 500px minimum (today 760); Shinatama is the largest, and its terminals and panes stay
+   its own.
 3. Mukade (its copy of the looks becomes an import).
-4. Muro (gains the shell, the inspector and the 500px minimum; today 760).
-5. Shinatama (the largest; terminals and panes stay its own).
-6. Daodan: CSS and controls for `viewer` only. Daodan has no Tauri app, and none is built here.
+4. Daodan: CSS and controls for `viewer` only, through the React binding. Daodan has no Tauri app, and none is built here.
+5. Xiox (it has both looks, and has not started).
 
 Each app's step has two parts, in this order: first the tokens, controls and shell with the app's
 layout unchanged; then the layout and behaviour (inspector, breakpoints, command registry, palette).
@@ -343,8 +380,11 @@ as `desktop-shell.md` section 1.5 describes.
 
 ## Corrections after the build
 
-Made on 2026-11-20, when the package was built. Each text above was changed in place; this list says what changed
-and why. Where [design-file.md](design-file.md) differs from this file, it wins.
+Made on 2026-11-20, when the package was built, and on 2026-11-21, when the audit of the five apps found that the
+package had grown a second way to do several things and the owner approved one canon
+([the decisions](superpowers/specs/2026-11-21-one-canon-design.md)). Each text above was changed in place; this list says
+what changed and why. Where [design-file.md](design-file.md) differs from this file, it wins. The names the canon removed,
+and what replaces each, are in the table "Moving from 0.1.4" of [using-imago.md](using-imago.md#11-moving-from-014).
 
 - **2026-11-20, focus ring.** The state table said "2px ring, 2px off". The ring is 2px wide everywhere, and its
   distance depends on what surrounds the control: 2px outside a control that stands alone, 1px outside a field (as in
@@ -371,3 +411,39 @@ and why. Where [design-file.md](design-file.md) differs from this file, it wins.
   without Ctrl or Alt is held back in a text field, except Escape and F1 to F24.
 - **2026-11-20, names.** The design file is `docs/design-file.md`, not `docs/DESIGN.md`: on Windows both names are one
   file. The proposal is `reference/proposal.html`; the link to it named a file that is not there.
+- **2026-11-21, one frame.** Versions 0.1.2 to 0.1.4 added three frames beside the shell, made for Muro, Shinatama and
+  Daodan, with their own sidebars, side panels and toolbars, and the design file did not name them. Muro followed them to
+  the letter and still broke the design. The seven regions are the only frame; the inspector is the only side panel, not
+  modal, and a form that must block the window while it saves is a dialog. Every breakpoint follows the shell, at 1000,
+  850 and 620.
+- **2026-11-21, one control for one need.** The package had two drawings of the checkbox and the radio (one on ARIA
+  elements, one with the browser's own), three of the segmented control, three messages, four loading states and three
+  empty ones. Each control is now drawn once, for the ARIA element and the native one alike; one message (the note), one
+  loading state (the panel's, or a line in the content, or a busy button), one empty state, one steps. A selected item is
+  drawn the same whatever attribute says it, where some rules gave colour alone.
+- **2026-11-21, the accent on data.** The first text of the audit took the tone `accent` for an intruder. It is not: the
+  approved preview has an accent chip, and the first gallery drew one. It stays, on a chip, a dot and a summary only, as
+  the mark of data; the status tones stay `ok`, `warn`, `err` and `info`.
+- **2026-11-21, the mark and the icons.** The five apps showed five different things at the top left. The owner chose,
+  from three treatments shown side by side, the capital initial in the accent's square, beside the name, with no drawing
+  and no logo. The icons of the executables are the same mark, made by the package, so that Windows shows what the title
+  bar shows.
+- **2026-11-21, the look, the theme and Settings.** The apps' plans picked the look and the theme in more than one way
+  (palette commands, a Settings view, a dialog). The package registers five commands of the palette, alike in every app, and the
+  app stores the choice; Settings are the last view tab, and they save themselves.
+- **2026-11-21, a key is answered once.** Escape that closed the inspector also ran the app's own Escape command. A
+  handler that answers a key claims it, and the registry runs no command on a claimed key; a key the desktop guard only
+  refuses to the browser still runs the app's command.
+- **2026-11-21, categorical colours and the badge.** The type scale and categorical colours had no tokens, so the apps
+  wrote literals. The five sizes of text are tokens, and eight categorical colours are added, always beside a name; a row
+  that wants the person carries a badge in its tone and says it in words.
+- **2026-11-21, React.** The design said no framework, and the package carried a React entry. It stays as the one
+  exception, a binding for Daodan's viewer, whose components write the canonical markup and nothing else.
+- **2026-11-21, the crate.** At the owner's request the crate does the three things Xiox's own window code did and it did
+  not: the trimmed context menu, the acrylic tinted for light and dark, the failures ignored while the application
+  closes. They are Rust, proved only by the run on GitHub; what has been seen on a real window is in
+  [verification.md](verification.md).
+- **2026-11-21, the check.** Nothing checked an app against the rules. `imago-check` does, in each app's CI and on the
+  package itself, and fails on every rule a program can judge; the rest is a list a person checks in review.
+- **2026-11-21, the order of the apps.** The apps move to the canon in the order of the least distance: Muro and
+  Shinatama, then Mukade, Daodan and Xiox.
