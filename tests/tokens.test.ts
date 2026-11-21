@@ -199,16 +199,22 @@ for (const look of looks) {
   }
 }
 
-// The custom properties of the stylesheet, by rule. Rules are written one selector per line, one declaration per line.
+// The custom properties of the stylesheet, by selector, over every rule that has it at the left margin (the accent and the
+// categorical colours of a theme are two rules under the same selector). Rules are written one selector per line, one
+// declaration per line; the rules inside @supports are indented and so are not found here.
 function declarations(sheet: string, selector: string): Map<string, string> {
   const start = `\n${selector} {\n`;
-  const from = ('\n' + sheet).indexOf(start);
-  assert.notEqual(from, -1, `css/tokens.css has no rule "${selector}"`);
-  const body = ('\n' + sheet).slice(from + start.length).split('\n}')[0];
+  const text = '\n' + sheet;
   const found = new Map<string, string>();
-  for (const line of body.split('\n')) {
-    const match = /^\s+(--im-[a-z0-9-]+): (.+);$/.exec(line);
-    if (match) found.set(match[1], match[2]);
+  let from = text.indexOf(start);
+  assert.notEqual(from, -1, `css/tokens.css has no rule "${selector}"`);
+  while (from !== -1) {
+    const body = text.slice(from + start.length).split('\n}')[0];
+    for (const line of body.split('\n')) {
+      const match = /^\s+(--im-[a-z0-9-]+): (.+);$/.exec(line);
+      if (match) found.set(match[1], match[2]);
+    }
+    from = text.indexOf(start, from + start.length);
   }
   return found;
 }
@@ -316,6 +322,104 @@ test('the accent tokens are computed from --im-hue per theme, with a hex fallbac
   }
 });
 
+// Eight categorical colours (a chart series, a tag, a group), the same in every app: the lightness and the strength of
+// the accent of the theme, and a fixed hue each. One text colour, `cat-on`, is read on any of them.
+const catHues = [25, 75, 125, 170, 215, 255, 300, 345];
+const catNames = catHues.map((_, i) => `cat-${i + 1}`);
+const catL = { dark: 0.82, light: 0.47 };
+const catC = { dark: 0.12, light: 0.13 };
+const hueOfHex = (hex: string): number => {
+  const [, a, b] = hexToOklab(hex);
+  return ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
+};
+
+test('the categorical colours of a theme have the accent\'s lightness and strength and the eight hues', () => {
+  for (const theme of themes) {
+    const accent = at(`accent.${theme}.accent`).$value.components;
+    assert.deepEqual([accent[0], accent[1]], [catL[theme as 'dark' | 'light'], catC[theme as 'dark' | 'light']], `the accent of ${theme} is the formula of this test`);
+    catNames.forEach((name, i) => {
+      const token = at(`category.${theme}.${name}`);
+      assert.equal(token.$type, 'color', `${theme} ${name}`);
+      assert.deepEqual(token.$value, { colorSpace: 'oklch', components: [accent[0], accent[1], catHues[i]] }, `${theme} ${name}`);
+    });
+    assert.deepEqual(Object.keys(at(`category.${theme}`)).filter((key) => !key.startsWith('$')), [...catNames, 'cat-on'], `${theme}: the tokens of the group`);
+  }
+});
+
+test('the stylesheet gives every theme the eight categorical colours as oklch, with a hex fallback and the same hue in every app', () => {
+  const sheet = css();
+  const fallback = sheet.slice(sheet.indexOf('@supports not (color: oklch('));
+  for (const theme of themes) {
+    const found = declarations(sheet, `[data-im-theme="${theme}"]`);
+    const rule = fallback.slice(fallback.indexOf(`\n  [data-im-theme="${theme}"] {\n`));
+    assert.ok(rule.includes(`[data-im-theme="${theme}"] {\n`), `${theme}: the @supports block has a rule for the theme`);
+    const own = rule.slice(0, rule.indexOf('\n  }'));
+    catNames.forEach((name, i) => {
+      const [l, c] = [catL[theme as 'dark' | 'light'], catC[theme as 'dark' | 'light']];
+      assert.equal(found.get(`--im-${name}`), `oklch(${l} ${c} ${catHues[i]})`, `${theme} ${name}`);
+      assert.ok(own.includes(`--im-${name}: ${oklchToHex(l, c, catHues[i])};`), `${theme} ${name}: hex fallback`);
+    });
+    assert.ok(found.has('--im-cat-on'), `${theme} has --im-cat-on`);
+    for (const [property, value] of found) if (property.startsWith('--im-cat')) assert.doesNotMatch(value, /var\(/, `${property} does not follow the hue of the app`);
+  }
+  assert.equal(declarations(sheet, '[data-im-theme="light"]').get('--im-cat-on'), '#FFFFFF');
+  assert.match(declarations(sheet, '[data-im-theme="dark"]').get('--im-cat-on') ?? '', /^oklch\(0\.\d+ [0-9.]+ [0-9.]+\)$/);
+});
+
+test('cat-on is white on light and a dark ink on dark, and reads at 4.5:1 on every categorical colour', () => {
+  assert.equal(hexOf('category.light.cat-on'), '#FFFFFF');
+  assert.ok(hexToOklab(hexOf('category.dark.cat-on'))[0] < 0.3, 'the ink of dark is dark');
+  const failures: string[] = [];
+  for (const theme of themes) {
+    const on = hexOf(`category.${theme}.cat-on`);
+    for (const name of catNames) {
+      const fill = hexOf(`category.${theme}.${name}`);
+      const ratio = contrast(on, fill);
+      if (ratio < 4.5) failures.push(`${theme}: ${on} on ${name} ${fill} is ${ratio.toFixed(2)}`);
+    }
+  }
+  assert.deepEqual(failures, []);
+});
+
+for (const look of looks) {
+  for (const theme of themes) {
+    test(`each categorical colour is also text of 4.5:1 on the sheet: ${look} ${theme}`, () => {
+      const sheet = lookColor(look, theme, 'sheet-solid');
+      const failures: string[] = [];
+      for (const name of catNames) {
+        const text = hexOf(`category.${theme}.${name}`);
+        const ratio = contrast(text, sheet);
+        if (ratio < 4.5) failures.push(`${name} ${text} on ${sheet} is ${ratio.toFixed(2)}`);
+      }
+      assert.deepEqual(failures, []);
+    });
+  }
+}
+
+// Where sRGB cannot hold the lightness and the strength of the accent at a hue, the hex fallback (and an sRGB screen) clips.
+// Every categorical colour still has to look like its hue, like its neighbours' lightness, and not grey.
+test('clipped into sRGB, the categorical colours keep their lightness, their hue, their strength and stay apart', () => {
+  const failures: string[] = [];
+  for (const theme of themes) {
+    const [l, c] = [catL[theme as 'dark' | 'light'], catC[theme as 'dark' | 'light']];
+    const hexes = catNames.map((name) => hexOf(`category.${theme}.${name}`));
+    hexes.forEach((hex, i) => {
+      const [lightness, a, b] = hexToOklab(hex);
+      const strength = Math.hypot(a, b);
+      const shift = Math.abs(((hueOfHex(hex) - catHues[i] + 540) % 360) - 180);
+      if (Math.abs(lightness - l) > 0.025) failures.push(`${theme} ${catNames[i]} ${hex}: lightness ${lightness.toFixed(3)} is not ${l}`);
+      if (strength < 0.09) failures.push(`${theme} ${catNames[i]} ${hex}: strength ${strength.toFixed(3)} of ${c} is nearly grey`);
+      if (shift > 12) failures.push(`${theme} ${catNames[i]} ${hex}: hue ${hueOfHex(hex).toFixed(1)} moved ${shift.toFixed(1)} from ${catHues[i]}`);
+    });
+    const wheel = hexes.map(hueOfHex).sort((x, y) => x - y);
+    wheel.forEach((hue, i) => {
+      const gap = (wheel[(i + 1) % wheel.length] - hue + 360) % 360;
+      if (gap < 28) failures.push(`${theme}: two hues of the eight are ${gap.toFixed(1)} degrees apart`);
+    });
+  }
+  assert.deepEqual(failures, []);
+});
+
 // The measures of the Global Constraints, in px.
 const measures: Record<string, Record<string, number>> = {
   smooth: {
@@ -349,6 +453,16 @@ test('the measures equal the Global Constraints table, per look', () => {
       assert.deepEqual(at(`measure.${look}.${name}`).$value, { value: px, unit: 'px' }, `${look} ${name}`);
       assert.equal(found.get(`--im-${name}`), `${px}px`, `${look} ${name}`);
     }
+  }
+});
+
+test('the size of text has five tokens, the same in both looks', () => {
+  const sizes: Record<string, number> = { 'fs-micro': 11, 'fs-meta': 12, 'fs-body': 13, 'fs-title': 14, 'fs-display': 18 };
+  const everyLook = declarations(css(), '[data-im-look]');
+  for (const [name, px] of Object.entries(sizes)) {
+    assert.deepEqual(at(`shared.${name}`).$value, { value: px, unit: 'px' }, name);
+    assert.equal(everyLook.get(`--im-${name}`), `${px}px`, name);
+    for (const look of looks) assert.equal(declarations(css(), `[data-im-look="${look}"]`).has(`--im-${name}`), false, `${look} does not set ${name} itself`);
   }
 });
 
