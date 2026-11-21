@@ -1,8 +1,6 @@
 import { APPS, type AppId } from '../apps.ts';
 import {
-  attachLayers,
   confirm,
-  createRegistry,
   hasLayer,
   inspector,
   notify,
@@ -29,6 +27,8 @@ interface MountContext {
   app: string;
   look: string;
   theme: string;
+  /** The registry of this shell: the app's commands go in it, and `mountApp` (gallery/main.ts) adds Ctrl+K and Ctrl+F. */
+  registry: Registry;
 }
 
 declare global {
@@ -57,9 +57,9 @@ declare global {
   }
 }
 
-type Words = { placeholder: string; empty: string; ran: string; cancelled: string; undone: string };
-const EN: Words = { placeholder: 'Type a command', empty: 'No command matches', ran: 'Ran', cancelled: 'Cancelled', undone: 'Undone' };
-const IT: Words = { placeholder: 'Digita un comando', empty: 'Nessun comando corrisponde', ran: 'Eseguito', cancelled: 'Annullato', undone: 'Ripristinato' };
+type Words = { ran: string; cancelled: string; undone: string };
+const EN: Words = { ran: 'Ran', cancelled: 'Cancelled', undone: 'Undone' };
+const IT: Words = { ran: 'Eseguito', cancelled: 'Annullato', undone: 'Ripristinato' };
 
 // The destructive action of each app, as the preview words it.
 type Destroy = { title: string; body: string; verb: string; done: string };
@@ -87,10 +87,10 @@ function bindable(display: string | undefined): string | undefined {
   return /^(↵|enter|space)$/i.test(last) ? undefined : parts.join('+');
 }
 
-// Wires every surface on the live shell: the palette on Ctrl+K and on the title bar's command button, the
+// Wires every surface on the live shell: the palette on the title bar's command button (Ctrl+K is `mountApp`'s), the
 // Views menu, a destructive action with its dialog, an undoable one with its notice. `data-act` is what the
 // shell markup carries (`pal`, `kill`, `undo`); `data-im-act` names the same hooks for any markup that uses them.
-export default function mount({ shell, app }: MountContext): () => void {
+export default function mount({ shell, app, registry }: MountContext): () => void {
   const id = app as AppId;
   const words = id === 'daodan' ? IT : EN;
   const data = APPS[id];
@@ -99,7 +99,6 @@ export default function mount({ shell, app }: MountContext): () => void {
   const selectTab = (index: number): void => tabs.forEach((tab, at) => tab.setAttribute('aria-selected', String(at === index)));
   const busy = (): boolean => hasLayer('dialog') || hasLayer('palette') || hasLayer('menu') || hasLayer('sheet');
 
-  const registry = createRegistry();
   const ran = (title: string): void => void notify(shell, `${words.ran}: ${title}`);
   data.tabs.forEach((tab, index) => {
     const title = `${data.strings.views}: ${tab}`;
@@ -109,8 +108,7 @@ export default function mount({ shell, app }: MountContext): () => void {
     // A command never runs under an open surface: the key belongs to the surface.
     registry.register({ id: `action:${name}`, title: action.text, keys: bindable(action.keys), run: () => { if (!busy()) ran(action.text); } });
   }
-  const openCommandPalette = (): void => void openPalette(shell, registry, { placeholder: words.placeholder, empty: words.empty });
-  registry.register({ id: 'palette', title: data.strings.commands, keys: 'Ctrl+K', when: () => !hasLayer('palette'), run: openCommandPalette });
+  const openCommandPalette = (): void => void openPalette(shell, registry, { placeholder: data.strings.palettePlaceholder, empty: data.strings.paletteEmpty });
 
   const viewsMenu = (anchor: HTMLElement): void => {
     openMenu(anchor, data.tabs.map((tab, index): MenuItem => ({ label: tab, run: () => selectTab(index) })));
@@ -151,15 +149,10 @@ export default function mount({ shell, app }: MountContext): () => void {
   };
   shell.addEventListener('click', onClick);
 
-  const detachLayers = attachLayers(shell);
-  const detachKeys = registry.attach(document);
-
   window.__imagoSurfaces = { openContentDialog, createContentDialog, runFormOperation, renderShellFrame, shellFrameHtml, sidebarHtml, titlebarHtml, pageContentHtml, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
 
   return () => {
     shell.removeEventListener('click', onClick);
-    detachKeys();
-    detachLayers();
     clearNotices(shell);
     delete window.__imagoSurfaces;
   };

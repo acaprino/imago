@@ -1,5 +1,6 @@
 // Panel states: a panel that is empty, loading or failed keeps its header and frame.
 // This module touches no DOM at import time; only setPanelState needs a document.
+import { escapeHtml } from './markup.ts';
 
 export const LOADING_DELAY_MS = 300;
 
@@ -33,8 +34,14 @@ export function showAfter(delayMs: number, show: () => void, timers: Timers = re
 export type PanelState =
   | { kind: 'ready' }
   | { kind: 'loading'; rows: number }
-  | { kind: 'empty'; text: string; action?: { label: string; keys?: string; run: () => void } }
+  | { kind: 'empty'; title?: string; text: string; action?: { label: string; keys?: string; run: () => void } }
   | { kind: 'error'; text: string; retry: { label: string; run: () => void }; errorWord?: string };
+
+/** A state as `panelStateHtml` writes it: the action and the Retry are trusted button markup the app wires itself. */
+export type PanelStateMarkup =
+  | { kind: 'loading'; rows: number }
+  | { kind: 'empty'; title?: string; text: string; actionHtml?: string }
+  | { kind: 'error'; text: string; retryHtml: string; errorWord?: string };
 
 const LAYER = 'data-im-state-layer';
 const HIDDEN_BY_STATE = 'data-im-state-hidden';
@@ -45,6 +52,14 @@ const BAR_WIDTHS: ReadonlyArray<readonly [number, number]> = [
   [48, 55],
   [70, 34],
 ];
+
+// The inline sizes of a skeleton row, as the style attribute both renderers write: a browser keeps an attribute as it is
+// given, so the layer setPanelState builds and the one panelStateHtml writes are the same markup.
+const AVATAR_STYLE = 'width: 26px; height: 26px; flex: none;';
+const LINES_STYLE = 'gap: var(--im-s-2);';
+const barStyle = (width: number, sub: boolean): string => `width: ${width}%;${sub ? ' height: 8px;' : ''}`;
+const rowCount = (rows: number): number => (Number.isFinite(rows) ? Math.max(0, Math.floor(rows)) : 0);
+const barWidths = (index: number): readonly [number, number] => BAR_WIDTHS[index % BAR_WIDTHS.length];
 
 function make<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
@@ -67,26 +82,21 @@ function actionButton(doc: Document, label: string, keys: string | undefined, ru
   return button;
 }
 
+function styled<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, className: string, style: string): HTMLElementTagNameMap[K] {
+  const node = make(doc, tag, className);
+  node.setAttribute('style', style);
+  return node;
+}
+
 function skeletonRows(doc: Document, rows: number): HTMLElement {
   const layer = make(doc, 'div');
   layer.setAttribute('aria-hidden', 'true');
-  const count = Number.isFinite(rows) ? Math.max(0, Math.floor(rows)) : 0;
-  for (let index = 0; index < count; index++) {
-    const [first, second] = BAR_WIDTHS[index % BAR_WIDTHS.length];
+  for (let index = 0; index < rowCount(rows); index++) {
+    const [first, second] = barWidths(index);
     const row = make(doc, 'div', 'im-row');
-    const avatar = make(doc, 'span', 'im-skeleton');
-    avatar.style.width = '26px';
-    avatar.style.height = '26px';
-    avatar.style.flex = 'none';
-    const lines = make(doc, 'span', 'im-row-text');
-    lines.style.gap = 'var(--im-s-2)';
-    const title = make(doc, 'span', 'im-skeleton');
-    title.style.width = `${first}%`;
-    const subtitle = make(doc, 'span', 'im-skeleton');
-    subtitle.style.width = `${second}%`;
-    subtitle.style.height = '8px';
-    lines.append(title, subtitle);
-    row.append(avatar, lines);
+    const lines = styled(doc, 'span', 'im-row-text', LINES_STYLE);
+    lines.append(styled(doc, 'span', 'im-skeleton', barStyle(first, false)), styled(doc, 'span', 'im-skeleton', barStyle(second, true)));
+    row.append(styled(doc, 'span', 'im-skeleton', AVATAR_STYLE), lines);
     layer.append(row);
   }
   return layer;
@@ -98,6 +108,7 @@ function buildLayer(doc: Document, state: Exclude<PanelState, { kind: 'ready' }>
       return skeletonRows(doc, state.rows);
     case 'empty': {
       const layer = make(doc, 'div', 'im-empty');
+      if (state.title) layer.append(make(doc, 'strong', undefined, state.title));
       layer.append(make(doc, 'span', undefined, state.text));
       if (state.action) layer.append(actionButton(doc, state.action.label, state.action.keys, state.action.run));
       return layer;
@@ -112,6 +123,31 @@ function buildLayer(doc: Document, state: Exclude<PanelState, { kind: 'ready' }>
       );
       return layer;
     }
+  }
+}
+
+/**
+ * The layer `setPanelState` builds, as a string, for an app that paints a panel body from strings: a panel whose body
+ * is this string is the panel `setPanelState` fills, less the listeners, which the app wires on its own buttons
+ * (`actionHtml`, `retryHtml`, trusted markup). The string is the whole body while the panel is in that state, and the app
+ * sets `aria-busy="true"` on a loading panel itself. `setPanelState` finds a layer written this way, and replaces or
+ * removes it as its own. Text is escaped.
+ */
+export function panelStateHtml(state: PanelStateMarkup): string {
+  switch (state.kind) {
+    case 'loading': {
+      let rows = '';
+      for (let index = 0; index < rowCount(state.rows); index++) {
+        const [first, second] = barWidths(index);
+        rows += `<div class="im-row"><span class="im-skeleton" style="${AVATAR_STYLE}"></span><span class="im-row-text" style="${LINES_STYLE}">`
+          + `<span class="im-skeleton" style="${barStyle(first, false)}"></span><span class="im-skeleton" style="${barStyle(second, true)}"></span></span></div>`;
+      }
+      return `<div aria-hidden="true" ${LAYER}="loading">${rows}</div>`;
+    }
+    case 'empty':
+      return `<div class="im-empty" ${LAYER}="empty">${state.title ? `<strong>${escapeHtml(state.title)}</strong>` : ''}<span>${escapeHtml(state.text)}</span>${state.actionHtml ?? ''}</div>`;
+    case 'error':
+      return `<div class="im-failure" role="alert" ${LAYER}="error"><b>${escapeHtml(state.errorWord || 'Error')}</b><span>${escapeHtml(state.text)}</span>${state.retryHtml}</div>`;
   }
 }
 

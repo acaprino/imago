@@ -5,6 +5,7 @@
 // native element has a row of its own under its ARIA twin (gallery/manifest.ts, NATIVE_TWINS). The markup follows the
 // contract at the top of css/controls.css, and tests/gallery/controls.mjs measures it.
 
+import { noteHtml } from '../ts/ui/shell-markup.ts';
 import { CONTROLS, type State } from './manifest.ts';
 
 const COLUMNS: { state: State; label: string }[] = [
@@ -273,7 +274,7 @@ const facts = (): string =>
   `<dl class="im-facts" style="padding:0"><dt>Harness</dt><dd>Claude Code</dd><dt>Folder</dt><dd class="im-facts-code">C:\\work\\acme</dd></dl>`;
 
 const note = (): string =>
-  `<div class="im-note" data-im-tone="warn" role="note">${icon('warn')}<div><b>3 changes ready to apply</b><span>Nothing changes until you apply.</span></div></div>`;
+  noteHtml({ icon: 'warning', title: '3 changes ready to apply', message: 'Nothing changes until you apply.', tone: 'warn' });
 
 /** The markup of one control in one state: what goes inside its cell. */
 export function cellMarkup(control: string, state: State): string {

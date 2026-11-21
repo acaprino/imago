@@ -53,6 +53,10 @@ const INSTALLED = {
   'node_modules/@acaprino/imago/package.json': '{ "name": "@acaprino/imago", "version": "0.1.4" }\n',
   'node_modules/@acaprino/imago/css/imago.css': '.im-btn { color: var(--im-text); }\n.im-btn--primary { color: var(--im-accent-on); }\n[data-im-tone="ok"] { color: var(--im-ok); }\n',
   'node_modules/@acaprino/imago/ts/ui/keys.ts': "export const find = (el: Element) => el.querySelector('.im-content');\nexport const mark = (el: HTMLElement) => { el.dataset.imLayer = 'x'; };\n",
+  // The icon files of the app "shinatama" (the bytes do not matter: the rule compares them as they are).
+  'node_modules/@acaprino/imago/icons/shinatama/icon.ico': 'ICO-OF-SHINATAMA',
+  'node_modules/@acaprino/imago/icons/shinatama/256x256.png': 'PNG-256-OF-SHINATAMA',
+  'node_modules/@acaprino/imago/icons/xiox/icon.ico': 'ICO-OF-XIOX',
 };
 
 const AGENTS = {
@@ -65,11 +69,16 @@ const manifest = (imago: object, spec = 'github:acaprino/imago#v0.1.4'): string 
 
 const cargo = (pin: string): string => `[package]\nname = "app"\n\n[dependencies]\ntauri = "2.12"\nimago-shell = { git = "https://github.com/acaprino/imago", ${pin} }\n`;
 
+/** The "icons" of the "imago" block: where a file sits in the app, and its name in icons/<app>/ of the package. */
+const ICONS = { 'src-tauri/icons/icon.ico': 'icon.ico', 'src-tauri/icons/128x128@2x.png': '256x256.png' };
+
 /** An app that keeps every rule: the check has nothing to say about it. */
 const cleanApp = (): Record<string, string> => ({
   ...INSTALLED,
   ...AGENTS,
-  'package.json': manifest({ src: ['src'], cargo: 'src-tauri/Cargo.toml', entry: 'src/main.ts' }),
+  'package.json': manifest({ src: ['src'], cargo: 'src-tauri/Cargo.toml', entry: 'src/main.ts', app: 'shinatama', icons: ICONS }),
+  'src-tauri/icons/icon.ico': 'ICO-OF-SHINATAMA',
+  'src-tauri/icons/128x128@2x.png': 'PNG-256-OF-SHINATAMA',
   'src-tauri/Cargo.toml': cargo('tag = "v0.1.4"'),
   'src/main.ts': "import { boot } from './boot.js';\nboot();\n",
   'src/boot.ts': "import { mountApp } from '@acaprino/imago/ui';\nexport function boot(): void {\n  const shell = document.querySelector('.im-content');\n  shell?.classList.add('im-btn', 'im-btn--primary');\n  mountApp(shell, registry, { search() {} });\n}\n",
@@ -383,6 +392,43 @@ describe('mount-app', () => {
   });
 });
 
+describe('app-icon', () => {
+  // A PNG starts with bytes that a text reading would change: a line ending is a byte of the file.
+  const packaged = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
+  const entry = (have: Buffer | null) => ({ file: 'src-tauri/icons/icon.ico', name: 'icon.ico', have, want: packaged });
+  const lines = (...items: ReturnType<typeof entry>[]) => rules.appIcon('muro', items).map((f: Finding) => `${f.file}:${f.line} ${f.rule}`);
+
+  test('a file that is the package\'s file, byte for byte, passes', () => {
+    assert.deepEqual(lines(entry(Buffer.from(packaged))), []);
+  });
+
+  test('a changed byte is a finding on the app\'s file, and the message names the package\'s file', () => {
+    const changed = Buffer.from(packaged);
+    changed[9] = 0x02;
+    assert.deepEqual(lines(entry(changed)), ['src-tauri/icons/icon.ico:1 app-icon']);
+    const [finding] = rules.appIcon('muro', [entry(changed)]);
+    assert.ok(finding.message.includes('node_modules/@acaprino/imago/icons/muro/icon.ico'), finding.message);
+  });
+
+  test('a line ending is a byte: a file with CRLF where the package has LF, or a file one byte longer, is a finding', () => {
+    assert.deepEqual(lines(entry(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]))), ['src-tauri/icons/icon.ico:1 app-icon']);
+    assert.deepEqual(lines(entry(Buffer.concat([packaged, Buffer.from([0x00])]))), ['src-tauri/icons/icon.ico:1 app-icon']);
+    assert.deepEqual(lines(entry(packaged.subarray(0, 9))), ['src-tauri/icons/icon.ico:1 app-icon']);
+  });
+
+  test('a file the app does not have is a finding that says where to copy it from', () => {
+    const [finding] = rules.appIcon('muro', [entry(null)]);
+    assert.equal(finding.file, 'src-tauri/icons/icon.ico');
+    assert.match(finding.message, /does not exist/);
+    assert.ok(finding.message.includes('node_modules/@acaprino/imago/icons/muro/icon.ico'), finding.message);
+  });
+
+  test('every listed file is judged, in the order given', () => {
+    const other = { file: 'assets/a.ico', name: 'favicon.ico', have: Buffer.from('x'), want: Buffer.from('y') };
+    assert.deepEqual(lines(entry(Buffer.from(packaged)), other, entry(null)), ['assets/a.ico:1 app-icon', 'src-tauri/icons/icon.ico:1 app-icon']);
+  });
+});
+
 describe('exceptions', () => {
   const allowed = (css: string) => {
     const source = parseSource('src/app.css', css);
@@ -455,9 +501,10 @@ describe('imago-check on an app', () => {
     files['package.json'] = manifest({});
     const { findings, notes } = check({ root: folder(files), packageMode: false });
     assert.deepEqual(findings, []);
-    assert.equal(notes.length, 2);
+    assert.equal(notes.length, 3);
     assert.ok(notes.some((note: string) => /pin-mismatch/.test(note) && /skipped/.test(note)));
     assert.ok(notes.some((note: string) => /mount-app/.test(note) && /skipped/.test(note)));
+    assert.ok(notes.some((note: string) => /app-icon/.test(note) && /skipped/.test(note) && /"icons"/.test(note)));
   });
 
   test('a Cargo.toml that takes imago-shell from the workspace is compared with the root Cargo.toml', () => {
@@ -479,6 +526,41 @@ describe('imago-check on an app', () => {
     files['src/view.ts'] = "export const html = '<div class=\"im-content im-workbench\"></div>';\n";
     assert.deepEqual(check({ root: folder(files), packageMode: false }).findings.map((f: Finding) => `${f.file}:${f.line} ${f.rule}`), ['src/view.ts:1 unknown-name']);
   });
+
+  test('an icon file that is not the package\'s is a finding on the app\'s file; the ones that are equal are not', () => {
+    const files = cleanApp();
+    files['src-tauri/icons/icon.ico'] = 'ICO-OF-XIOX';
+    const { findings, notes } = check({ root: folder(files), packageMode: false });
+    assert.deepEqual(findings.map((f: Finding) => `${f.file}:${f.line} ${f.rule}`), ['src-tauri/icons/icon.ico:1 app-icon']);
+    assert.deepEqual(notes, []);
+  });
+
+  test('an icon file the app does not have is a finding on the path the app listed', () => {
+    const files = cleanApp();
+    delete files['src-tauri/icons/128x128@2x.png'];
+    assert.deepEqual(check({ root: folder(files), packageMode: false }).findings.map((f: Finding) => `${f.file}:${f.line} ${f.rule}`), ['src-tauri/icons/128x128@2x.png:1 app-icon']);
+  });
+
+  test('"app" says whose icons they are: another app\'s file is another file', () => {
+    const files = cleanApp();
+    files['package.json'] = manifest({ src: ['src'], cargo: 'src-tauri/Cargo.toml', entry: 'src/main.ts', app: 'xiox', icons: { 'src-tauri/icons/icon.ico': 'icon.ico' } });
+    files['src-tauri/icons/icon.ico'] = 'ICO-OF-XIOX';
+    assert.deepEqual(check({ root: folder(files), packageMode: false }).findings, []);
+  });
+
+  test('"icons" without "app", an app the package has no icons for, a file name it does not have, or a path in the name all stop the program', () => {
+    const attempt = (block: object) => {
+      const files = cleanApp();
+      files['package.json'] = manifest({ src: ['src'], ...block });
+      return () => check({ root: folder(files), packageMode: false });
+    };
+    assert.throws(attempt({ icons: ICONS }), /"imago\.icons".*"imago\.app"/);
+    assert.throws(attempt({ app: 'ethel', icons: ICONS }), /ethel.*shinatama, xiox/);
+    assert.throws(attempt({ app: '../icons/xiox', icons: ICONS }), /"imago\.app"/);
+    assert.throws(attempt({ app: 'xiox', icons: { 'a.png': 'ghost.png' } }), /ghost\.png.*xiox/);
+    assert.throws(attempt({ app: 'xiox', icons: { 'a.ico': '../shinatama/icon.ico' } }), /a file name/);
+    assert.doesNotThrow(attempt({ app: 'xiox', icons: { 'a.ico': 'icon.ico' } }));
+  });
 });
 
 describe('imago-check, the command', () => {
@@ -493,6 +575,17 @@ describe('imago-check, the command', () => {
     const files = cleanApp();
     files['package.json'] = manifest({ sources: ['src'] });
     assert.equal(runCli(['--root', folder(files)]).status, 2);
+  });
+
+  test('an "app" that is not a name, or "icons" that is not a map from paths to file names, exits 2', () => {
+    const blocks = [{ app: 3 }, { app: '' }, { app: 'xiox', icons: ['icon.ico'] }, { app: 'xiox', icons: {} }, { app: 'xiox', icons: { 'a.ico': 3 } }, { app: 'xiox', icons: { 'a.ico': '' } }];
+    for (const block of blocks) {
+      const files = cleanApp();
+      files['package.json'] = manifest(block);
+      const result = runCli(['--root', folder(files)]);
+      assert.equal(result.status, 2, `${JSON.stringify(block)}: ${result.stdout}${result.stderr}`);
+      assert.match(result.stderr, /"imago\.(app|icons)"/);
+    }
   });
 
   test('a clean app exits 0, an app with findings exits 1 and prints file:line  rule  message', () => {

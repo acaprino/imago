@@ -1,4 +1,5 @@
 import { escapeHtml as esc, iconHtml } from './markup.ts';
+import { isTone, type Tone } from './tone.ts';
 
 /** Markup fragments accept plain text except parameters explicitly named Html. */
 export type SelectOption = readonly [value: string | number, label: string];
@@ -63,12 +64,13 @@ export function settingsGroupHtml(contentHtml: string, options: { title?: string
   return `<section class="im-panel im-surface im-settings" data-im-surface="sheet">${options.title ? `<h2>${esc(options.title)}</h2>` : ''}${options.description ? `<p>${esc(options.description)}</p>` : ''}${contentHtml}</section>`;
 }
 
-export function statusTextHtml(text: string, tone: '' | 'ok' | 'warn' | 'err' = ''): string {
-  return ['ok', 'warn', 'err'].includes(tone) ? `<span class="im-text-${tone}">${esc(text)}</span>` : esc(text);
+/** A status text takes a status tone, or none (`''`); the accent is not a status. */
+export function statusTextHtml(text: string, tone: '' | Tone = ''): string {
+  return isTone(tone) ? `<span class="im-text-${tone}">${esc(text)}</span>` : esc(text);
 }
 
-export function settingsMessageHtml(message: string, details: readonly string[] = [], options: { icon?: string; tone?: 'ok' | 'warn' | 'err' } = {}): string {
-  const tone = options.tone && ['ok', 'warn', 'err'].includes(options.tone) ? `im-text-${options.tone}` : '';
+export function settingsMessageHtml(message: string, details: readonly string[] = [], options: { icon?: string; tone?: Tone } = {}): string {
+  const tone = isTone(options.tone) ? `im-text-${options.tone}` : '';
   return `<div class="im-setting-row" role="status"><div><span>${options.icon ? `<span class="${tone}">${iconHtml(options.icon)}</span> ` : ''}${esc(message)}</span>${details.map(detail => `<small class="im-wrap-text">${esc(detail)}</small>`).join('')}</div></div>`;
 }
 

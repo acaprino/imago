@@ -9,15 +9,3 @@
 .im-field em { font-style: normal; font-weight: 400; color: var(--im-muted); margin-inline-start: var(--im-s-1); }
 .im-field-error:empty { display: none; }
 .im-option > span:last-child { min-width: 0; }
-.im-step-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--im-s-2); }
-.im-step-nav > button { min-width: 0; display: flex; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3); color: var(--im-text-2); border: 1px solid var(--im-line); border-radius: var(--im-r-control); }
-.im-step-nav > button:hover { background: var(--im-hover); }
-.im-step-nav > button[aria-selected="true"] { color: var(--im-text); border-color: var(--im-accent-text); box-shadow: inset 0 -2px var(--im-accent-text); }
-.im-step-nav .im-step-index { flex: none; }
-.im-step-nav .im-step-text { min-width: 0; display: grid; }
-@media (forced-colors: active) {
-  .im-step-nav > button[aria-selected="true"] { border-color: Highlight; }
-}
-
-.im-empty { display:grid; justify-items:center; gap:var(--im-s-2); padding:var(--im-s-5); text-align:center; color:var(--im-muted); }
-.im-empty > strong { color:var(--im-text); font:600 15px/1.45 var(--im-font-head); }

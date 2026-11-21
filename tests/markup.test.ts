@@ -112,6 +112,7 @@ test('shared layouts accept explicitly trusted component slots while escaping th
   assert.ok(heading.includes(action));
   assert.ok(heading.includes('Title &lt;'));
   assert.ok(emptyStateHtml('Empty', 'Add an item', action).includes(action));
-  assert.match(chipHtml('Ready', 'good'), /data-im-tone="ok"/);
-  assert.match(chipHtml('Unknown', 'custom'), /data-im-tone=""/);
+  assert.equal(emptyStateHtml('Empty <', 'Add an item &', action), `<div class="im-empty" data-im-state-layer="empty"><strong>Empty &lt;</strong><span>Add an item &amp;</span>${action}</div>`);
+  assert.equal(chipHtml('Ready', 'ok'), '<span class="im-chip" data-im-tone="ok">Ready</span>');
+  assert.equal(chipHtml('Unknown', 'custom' as never), '<span class="im-chip">Unknown</span>');
 });

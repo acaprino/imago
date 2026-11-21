@@ -8,18 +8,10 @@ declare global {
 }
 window.__imagoSidebar = { sidebarDrawer, sidebarCollapse };
 
-// The choice to fold the sidebar into its rail outlives a redraw of the gallery, as an app would store it.
-let collapsed = false;
 let width: number | undefined;
 
-// Below 620 the sidebar opens from the title-bar button; from 850 up the button in its header folds it into the rail.
+// The drawer below 620 and the fold from 850 up are not wired here: `mountApp` (gallery/main.ts) does it, and keeps the
+// choice to fold across a redraw. What is left is the splitter that sets the width of the docked sidebar.
 export default function mount({ shell }: { shell: HTMLElement }): () => void {
-  const stopDrawer = sidebarDrawer(shell);
-  const stopCollapse = sidebarCollapse(shell, { collapsed, onChange: (value) => (collapsed = value) });
-  const stopResize = sidebarResize(shell, { label: 'Sidebar width', width, onChange: value => { width = value; } });
-  return () => {
-    stopResize();
-    stopDrawer();
-    stopCollapse();
-  };
+  return sidebarResize(shell, { label: 'Sidebar width', width, onChange: value => { width = value; } });
 }

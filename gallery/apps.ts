@@ -1,6 +1,7 @@
 // The five apps' sample content, ported from docs/reference/toolkit-preview.html: the live shell of the gallery is
 // drawn from here. The markup uses the classes of css/primitives.css (regions) and css/controls.css (controls);
 // nothing in this file styles anything.
+import { noteHtml } from '../ts/ui/shell-markup.ts';
 
 export type AppId = 'xiox' | 'mukade' | 'shinatama' | 'muro' | 'daodan';
 type Tone = 'ok' | 'warn' | 'err' | 'info' | 'accent';
@@ -68,7 +69,12 @@ function table(cols: Column[], rows: TableRow[]): string {
 
 // ---- the five apps ---------------------------------------------------------------------------------------------
 
-type Strings = { cancel: string; undo: string; commands: string; views: string; collapse: string; expand: string };
+type Strings = {
+  cancel: string; undo: string; commands: string; views: string; collapse: string; expand: string;
+  /** The words `mountApp` takes as its labels: the search command, and the palette's field and empty list. */
+  search: string; palettePlaceholder: string; paletteEmpty: string;
+  skip: string;
+};
 type App = {
   name: string; tabs: string[]; on?: number;
   primary: { text: string; keys?: string; icon?: string; act?: string };
@@ -79,7 +85,11 @@ type App = {
   strings: Strings;
 };
 
-const EN: Strings = { cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views', collapse: 'Collapse sidebar', expand: 'Expand sidebar' };
+const EN: Strings = {
+  cancel: 'Cancel', undo: 'Undo', commands: 'Commands', views: 'Views', collapse: 'Collapse sidebar', expand: 'Expand sidebar',
+  search: 'Search in this view', palettePlaceholder: 'Type a command', paletteEmpty: 'No command matches',
+  skip: 'Skip to content',
+};
 
 export const APPS: Record<AppId, App> = {
   xiox: {
@@ -127,7 +137,7 @@ export const APPS: Record<AppId, App> = {
       { dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
       { dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { t: 'Dunning emails', s: '1 session', m: '6m' },
       { t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
-    content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
+    content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<div class="im-panel-body g-term-body"><pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
 
 I will hand the tasks to implementer, and keep reviewer for the diff:
   1. exponential backoff in retry.ts
@@ -139,7 +149,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
 <span class="g-t-ok">+</span> Task 2  jitter and cap            <span class="g-t-ok">green</span>
 <span class="g-t-w">*</span> Task 3  idempotency key           <span class="g-t-w">running</span>
 
-<span class="g-t-m">[reviewer]</span> 2 findings, 0 blocking.</pre>`,
+<span class="g-t-m">[reviewer]</span> 2 findings, 0 blocking.</pre></div>`,
     inspector: () => `${header('Session', { right: chip('Running', 'ok') })}<div class="im-panel-body">${facts([['Harness', 'Claude Code'], ['Project', 'billing-service'], ['Branch', 'feature/retry-backoff'], ['Memory', '67 MiB'], ['Size', '120 × 32'], ['Folder', 'C:\\work\\acme\\billing-service', true]])}</div><div class="im-panel-foot">${button('End session', { danger: true, act: 'kill' })}</div>`,
     strings: EN,
   },
@@ -149,7 +159,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
     status: ['3 changes ready', 'warn', 'Last check today 08:07 · next check today 09:07', '4 harnesses'],
     footer: 'Last sync yesterday 07:07 · 5 plugins in your list', keys: [['↵', 'apply'], ['r', 'check now']],
     side: null,
-    content: () => `${header('Sync', { sub: 'Rows are your plugins, columns are your harnesses.', right: segmented(['All', 'Needs action']) })}<div class="im-panel-tools"><div class="im-note" data-im-tone="warn">${icon('reload')}<div><b>3 changes ready to apply</b><span>1 install, 1 update, 1 removal. Nothing changes until you apply.</span></div></div></div><div class="im-panel-body">${table([{ t: 'Plugin' }, { t: 'Latest' }, { t: 'Claude Code' }, { t: 'Codex' }, { t: 'OpenCode' }], [
+    content: () => `${header('Sync', { sub: 'Rows are your plugins, columns are your harnesses.', right: segmented(['All', 'Needs action']) })}<div class="im-panel-tools">${noteHtml({ icon: 'reload', title: '3 changes ready to apply', message: '1 install, 1 update, 1 removal. Nothing changes until you apply.', tone: 'warn' })}</div><div class="im-panel-body">${table([{ t: 'Plugin' }, { t: 'Latest' }, { t: 'Claude Code' }, { t: 'Codex' }, { t: 'OpenCode' }], [
       { c: [two('Marionette', 'github.com/acaprino/marionette'), num('0.4.0'), chip('Update 0.3.0 → 0.4.0', 'warn'), num('0.4.0'), num('0.4.0')], sel: true },
       { c: [two('commit-helper', 'github.com/example/commit-helper'), num('2.1.0'), num('2.1.0'), num('2.1.0'), none] },
       { c: [two('test-runner', 'github.com/example/test-runner'), num('1.0.4'), none, none, chip('Install 1.0.4', 'accent')] },
@@ -176,7 +186,11 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
       { c: [two('Dynamic', 'Osservazione dei test · esclusa dalla demo'), chip('Prevista'), '3 / 4', none] },
       { c: [two('Union', 'Collegamento dei grafi'), chip('In attesa'), '4 / 4', none] }])}</div>`,
     inspector: () => `${header('Grafo', { n: 18 })}<div class="im-panel-body">${facts([['Nodi', '10 / 18'], ['Relazioni', '23 / 43'], ['Inventario', '5e49ee96e', true], ['Snapshot', '42a63a9ac071', true]])}</div><div class="im-panel-foot">${button('Elimina analisi', { danger: true, act: 'kill' })}</div>`,
-    strings: { cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale' },
+    strings: {
+      cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale',
+      search: 'Cerca in questa vista', palettePlaceholder: 'Digita un comando', paletteEmpty: 'Nessun comando corrisponde',
+      skip: 'Vai al contenuto',
+    },
   },
 };
 
@@ -192,9 +206,10 @@ export function shellMarkup(id: AppId): string {
     : '';
   const keys = a.keys.map(([k, label]) => `<span>${key(k)}${label}</span>`).join('');
   return `<div class="im-shell" data-im-sidebar="${a.side ? 'on' : 'off'}">
+  <a class="im-shell-skip-link" href="#g-content">${a.strings.skip}</a>
   <header class="im-titlebar">
     <div class="im-brand"><span class="im-mark"><svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[id]}</svg></span><span class="im-wordmark">${a.name}</span></div>
-    ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('list')}</button>` : ''}
+    ${a.side ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${a.side.title}" title="${a.side.title}" aria-expanded="false" aria-controls="g-sidebar">${icon('sidebar')}</button>` : ''}
     <nav class="im-tabs" role="tablist" aria-label="${a.strings.views}">${tabs}</nav>
     <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">${a.strings.views}${icon('chev')}</button>
     ${spacer}

@@ -30,7 +30,9 @@ In the package:
   `im-sectioned-drawer`, `im-padded-drawer`).
 - Rules of the design file that the package's own CSS breaks: disabled by opacity, selection by colour alone
   (`aria-pressed`, `aria-current`), a hand cursor, breakpoints on the viewport (`@media (max-width…)`), sizes of text
-  outside the scale (22, 15, 1.65rem), literal spacing, a literal colour, the tones `accent` and `danger`.
+  outside the scale (22, 15, 1.65rem), literal spacing, a literal colour, the tones `danger`, `good` and `bad`.
+  (Corrected on 2026-11-21: the first text of this audit also named `accent`. That was wrong: the approved preview
+  has an accent chip, and the CSS of v0.1.1 already drew `data-im-tone="accent"`. It stays.)
 - `ts/shell/shinatama-palette.ts` in the package, although the design file says the skins stay in Shinatama.
 - A React entry, although the design says no framework.
 - Documents the design file does not name, whose names no test checks, and patterns the gallery does not show.
@@ -108,6 +110,42 @@ different in each. Nothing checks an app against the rules.
   nothing else (`Workbench` renders the shell's sidebar, content and inspector). It is the one exception to "no
   framework", written in `design.md`.
 
+### The mark at the top left
+
+The audit of 2026-11-21 found five different things at the left of the title bar: the gallery's square with a drawn
+symbol, Muro's PNG logo with no name, Mukade's own drawing with no square, Shinatama's name alone, Xiox's own amber
+square, Daodan's square with the text "d.". The owner asked for one treatment, saw three of them side by side for
+the five apps in both looks and themes (Shinatama's name alone, Daodan's lowercase letter with a dot, a capital
+initial), and chose the capital initial on 2026-11-21 ("C. Quadrato + iniziale maiuscola"):
+
+- The mark is `im-mark`: the 22px square in the app's accent (rounded in Smooth, cut in ONI) holding **one letter**,
+  the initial of the product's name in capitals, in the head font, weight 700, in `--im-accent-on`. No drawn symbol,
+  no image. The name (`im-wordmark`) is always beside it.
+- Mukade and Muro both show M; the hue and the name beside it tell them apart *(call)*.
+- `titlebarHtml` always writes the mark and the name from `brand.name`; `brand.image` and `im-brand-image` are
+  removed. The gallery's `MARKS` symbols go. An app's logo image stays what Windows shows (taskbar, executable),
+  not what the title bar shows.
+- `imago-check` reports a title bar whose brand is not that markup (rule `brand-mark`).
+
+### The icon of the executables
+
+The owner asked on 2026-11-21 that the icons of the executables follow the mark too, "sia cli sia ui": the program
+of the command line and the program of the window. The owner saw two fills at the real sizes of Windows (16 to 96
+pixels) on a dark and on a light taskbar, was advised the first, and answered "ok".
+
+- The icon is the mark: a square with rounded corners (6 of 22, as the mark in Smooth) holding the capital initial,
+  weight 700. The fill is the app's accent of the dark themes, `oklch(0.82 0.12 H)`, and the letter its ink,
+  `oklch(0.2 0.04 H)`, both as the sRGB values `css/tokens.css` already carries. One icon per app, the same for its
+  command-line program and its window program *(call)*, and the favicon of a page served in a browser.
+- Mukade and Muro both show M, and on a taskbar no name stands beside the icon: the hue alone tells them apart
+  (violet and mint). The owner was told and did not object *(call)*.
+- The icons are made in the package by one script for the five apps and committed, so that they are the same
+  construction; an app copies its own from the package, and `imago-check` reports an app whose icon files differ
+  (rule `app-icon`).
+- How each app embeds an icon in its command-line program is the app's own plan: Mukade and Xiox already compile a
+  resource file; for Shinatama, Muro and Daodan the plan first finds out how the program is built and says whether an
+  icon can be embedded.
+
 ### One control for one need
 
 | Need | Stays | Removed or merged |
@@ -121,7 +159,7 @@ different in each. Nothing checks an app against the rules.
 | Steps | `im-steps`; an item that can be opened is a button inside it | `im-step-nav` as a separate drawing |
 | Selected | Fill, weight and the accent mark, the same whatever attribute says it: `aria-selected`, `aria-current`, `aria-pressed`, `:checked` | The colour-only rules |
 | Dialog | `confirm` for a decision, `openFormDialog` for a form, `openContentDialog` for an app-owned `dialog` element; one drawing (`im-dialog`), centred | The drawer variants |
-| Tone | `ok`, `warn`, `err`, `info` | `accent` (becomes `info`), `danger` (becomes `err`), `good`, `bad` |
+| Tone | The status tones `ok`, `warn`, `err`, `info`, on a chip, a dot, a note or a notice. `accent` on a chip, a dot or a summary only: it is not a status, it marks data in the app's colour, as the approved preview and the first gallery do ("lead", "Demo") | `danger` (becomes `err`), `good`, `bad`; `accent` on a note or a notice |
 | Zoom | 50 to 200% in steps of 10 | The `levels` option |
 
 A drawing that the native element and the ARIA element share is done once in `css/controls.css`; the gallery shows
@@ -174,6 +212,14 @@ a rule in the design file and a line in the app's review.
 
 Every class the package defines appears in the gallery, in both looks and themes, and the contrast test covers it.
 A test fails when `css/` defines an `im-` class the gallery never renders.
+
+### The window code of the crate
+
+Xiox's own window code does three things the crate `imago-shell` did not: it trims the WebView2 context menu to
+the editing commands, it tints the acrylic for light and for dark (which shows on Windows 10 only), and it ignores
+the failures WebView2 reports while the application closes. The owner asked for the three in the crate on
+2026-11-21 ("Sì certo"), knowing they are Rust and proved only by the run on GitHub. Xiox then drops its own code
+for them when it adopts the crate. Task 18 of the package plan.
 
 ### The apps
 

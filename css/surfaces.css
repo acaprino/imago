@@ -81,7 +81,7 @@
 }
 .im-menu-item[aria-disabled="true"]:hover { background: transparent; }
 
-.im-menu-item[data-im-tone="danger"] { color: var(--im-err); }
+.im-menu-item[data-im-tone="err"] { color: var(--im-err); }
 
 .im-menu-sep {
   height: 0;
@@ -296,11 +296,7 @@
 /* An app-owned form, including native submission, in the same modal stack. */
 dialog.im-content-dialog { margin: 0; padding: 0; width: min(36rem, calc(100% - 32px)); }
 dialog.im-content-dialog:not([open]) { display: none; }
-.im-scrim:has(> .im-content-dialog--drawer) { place-items: stretch end; }
-dialog.im-content-dialog--drawer { height: 100%; max-height: 100%; width: min(30rem, 100%); border-radius: var(--im-r-sheet) 0 0 var(--im-r-sheet); }
-.im-content-dialog--drawer > .im-form { min-height: 100%; }
 
 /* Native forms share the sheet chrome. Keep their author-controlled close/open state. */
 dialog.im-form-sheet { position: absolute; margin: 0; width: min(600px, calc(100% - 16px)); max-height: calc(100% - var(--im-h-titlebar) - 32px); }
-dialog.im-content-drawer { position: absolute; inset: var(--im-h-titlebar) 0 0 auto; width: min(580px, 100%); max-height: none; margin: 0; overflow: auto; }
-dialog.im-content-drawer[data-covered], dialog:not([open]).im-dialog, dialog:not([open]).im-sheet { display: none; }
+dialog:not([open]).im-dialog, dialog:not([open]).im-sheet { display: none; }

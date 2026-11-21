@@ -1,11 +1,15 @@
-import { setPanelState, type PanelState } from '../../ts/ui/panel-state.ts';
+import { panelStateHtml, setPanelState, type PanelState, type PanelStateMarkup } from '../../ts/ui/panel-state.ts';
 import type { MountContext } from '../main.ts';
 
+type Panels = { empty: HTMLElement; loading: HTMLElement; error: HTMLElement };
 declare global {
   interface Window {
     __imagoPanelState?: {
       setPanelState: typeof setPanelState;
-      panels: { empty: HTMLElement; loading: HTMLElement; error: HTMLElement };
+      panelStateHtml: typeof panelStateHtml;
+      panels: Panels;
+      /** The same three panels, their bodies written from panelStateHtml as an app that repaints from strings does. */
+      fromStrings: Panels;
     };
   }
 }
@@ -35,7 +39,7 @@ function sessionRows(): HTMLElement[] {
   });
 }
 
-function panel(name: string, title: string, initial: PanelState): HTMLElement {
+function frame(name: string, title: string): { element: HTMLElement; body: HTMLElement } {
   const element = document.createElement('section');
   element.className = 'im-panel';
   element.dataset.gPanel = name;
@@ -48,11 +52,31 @@ function panel(name: string, title: string, initial: PanelState): HTMLElement {
   header.append(heading);
   const body = document.createElement('div');
   body.className = 'im-panel-body';
-  body.append(...sessionRows());
   element.append(header, body);
+  return { element, body };
+}
+
+function panel(name: string, title: string, initial: PanelState): HTMLElement {
+  const { element, body } = frame(name, title);
+  body.append(...sessionRows());
   setPanelState(element, initial);
   return element;
 }
+
+// A panel whose body is the string of its state: an app that repaints from strings writes the layer itself, and the
+// aria-busy of a loading panel on the panel, as setPanelState does.
+function panelFromString(name: string, title: string, state: PanelStateMarkup): HTMLElement {
+  const { element, body } = frame(name, title);
+  body.innerHTML = panelStateHtml(state);
+  if (state.kind === 'loading') element.setAttribute('aria-busy', 'true');
+  return element;
+}
+
+// The buttons setPanelState makes for the action and the Retry below, written as an app writes them in a string.
+const NEW_ROOM = '<button class="im-btn" type="button"><span>New room</span><kbd class="im-key">N</kbd></button>';
+const RETRY = '<button class="im-btn" type="button"><span>Retry</span></button>';
+const EMPTY_TEXT = 'No rooms yet. A room is where your agents talk to each other.';
+const ERROR_TEXT = "Couldn't load the sessions. Last updated 09:14.";
 
 function containerFor(root: HTMLElement, sections?: HTMLElement): HTMLElement {
   const parent = sections ?? root.parentElement ?? document.body;
@@ -87,24 +111,30 @@ function containerFor(root: HTMLElement, sections?: HTMLElement): HTMLElement {
   return container;
 }
 
-// Three panels under the shell, one in each state. The test switches them through window.__imagoPanelState.
+// Three panels under the shell, one in each state, and the same three filled from strings. The test switches them through
+// window.__imagoPanelState.
 export default function mount({ root, sections }: MountContext): () => void {
   const container = containerFor(root, sections);
   const panels = {
     empty: panel('empty', 'Rooms', {
       kind: 'empty',
-      text: 'No rooms yet. A room is where your agents talk to each other.',
+      text: EMPTY_TEXT,
       action: { label: 'New room', keys: 'N', run: () => {} },
     }),
     loading: panel('loading', 'Sessions', { kind: 'loading', rows: 3 }),
     error: panel('error', 'Sessions', {
       kind: 'error',
-      text: "Couldn't load the sessions. Last updated 09:14.",
+      text: ERROR_TEXT,
       retry: { label: 'Retry', run: () => {} },
     }),
   };
-  container.append(panels.empty, panels.loading, panels.error);
-  window.__imagoPanelState = { setPanelState, panels };
+  const fromStrings = {
+    empty: panelFromString('string-empty', 'Rooms', { kind: 'empty', text: EMPTY_TEXT, actionHtml: NEW_ROOM }),
+    loading: panelFromString('string-loading', 'Sessions', { kind: 'loading', rows: 3 }),
+    error: panelFromString('string-error', 'Sessions', { kind: 'error', text: ERROR_TEXT, retryHtml: RETRY }),
+  };
+  container.append(panels.empty, panels.loading, panels.error, fromStrings.empty, fromStrings.loading, fromStrings.error);
+  window.__imagoPanelState = { setPanelState, panelStateHtml, panels, fromStrings };
 
   return () => {
     delete window.__imagoPanelState;

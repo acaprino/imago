@@ -1,9 +1,9 @@
 import { escapeHtml as esc, iconHtml, type ChipTone } from './markup.ts';
+import { chipToneAttribute } from './tone.ts';
 
 /** Text is escaped; parameters ending in Html are trusted component output. */
 export function actionChipHtml(label: string, action: string, options: { id?: string; accessibleLabel?: string; tone?: ChipTone; icon?: string } = {}): string {
-  const tone = options.tone === 'good' ? 'ok' : options.tone === 'bad' ? 'err' : options.tone ?? '';
-  return `<button type="button" class="im-chip" data-im-tone="${esc(tone)}" data-action="${esc(action)}"${options.id !== undefined ? ` data-id="${esc(options.id)}"` : ''}${options.accessibleLabel ? ` aria-label="${esc(options.accessibleLabel)}"` : ''}>${options.icon ? iconHtml(options.icon) : ''}${esc(label)}</button>`;
+  return `<button type="button" class="im-chip"${chipToneAttribute(options.tone)} data-action="${esc(action)}"${options.id !== undefined ? ` data-id="${esc(options.id)}"` : ''}${options.accessibleLabel ? ` aria-label="${esc(options.accessibleLabel)}"` : ''}>${options.icon ? iconHtml(options.icon) : ''}${esc(label)}</button>`;
 }
 
 export const bulletListHtml = (items: readonly string[]): string => items.length ? `<ul class="im-bullet-list">${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : '';
@@ -50,9 +50,8 @@ export function tableHtml(headers: readonly string[], rowsHtml: string, options:
   return `<div class="im-panel im-surface im-table-scroll" data-im-surface="sheet"${options.label ? ` role="region" aria-label="${esc(options.label)}" tabindex="0"` : ''}><table class="im-table${variant}"><thead><tr>${headers.map(header => `<th scope="col">${esc(header)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-export function summaryHtml(options: { label: string; title: string; tone?: ChipTone | string; icon?: string; metadata?: readonly { label: string; value: string }[] }): string {
-  const tone = options.tone === 'good' ? 'ok' : options.tone === 'bad' ? 'err' : options.tone ?? '';
-  return `<section class="im-summary" data-im-tone="${esc(tone)}" aria-label="${esc(options.label)}">${options.icon ? `<span class="im-summary-icon">${iconHtml(options.icon)}</span>` : ''}<div class="im-grow"><strong>${esc(options.title)}</strong>${options.metadata?.length ? `<small class="im-summary-meta">${options.metadata.map(item => `<span>${esc(item.label)} <b>${esc(item.value)}</b></span>`).join('')}</small>` : ''}</div></section>`;
+export function summaryHtml(options: { label: string; title: string; tone?: ChipTone; icon?: string; metadata?: readonly { label: string; value: string }[] }): string {
+  return `<section class="im-summary"${chipToneAttribute(options.tone)} aria-label="${esc(options.label)}">${options.icon ? `<span class="im-summary-icon">${iconHtml(options.icon)}</span>` : ''}<div class="im-grow"><strong>${esc(options.title)}</strong>${options.metadata?.length ? `<small class="im-summary-meta">${options.metadata.map(item => `<span>${esc(item.label)} <b>${esc(item.value)}</b></span>`).join('')}</small>` : ''}</div></section>`;
 }
 
 export function taskCardHtml(options: { id: string; title: string; leadingHtml?: string; actionsHtml?: string; phase?: string; elapsed?: string; progressLabel: string; progressText?: string; description?: string; detailHtml?: string }): string {

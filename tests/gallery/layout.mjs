@@ -36,10 +36,13 @@ const REMOVED = [
 const stale = (page) => page.evaluate((names) => [...document.querySelectorAll('[class], [data-im-badge]')]
   .flatMap((el) => [...el.classList].filter((name) => names.includes(name)).concat(el.hasAttribute('data-im-badge') ? ['data-im-badge'] : [])), REMOVED);
 
-// The regions of a shell, as a list: tag, region classes, and what the frame's markup gives each (a name, the content's id
-// and tabindex). Only regions are walked, so what an app puts inside a region is its own.
+// The frame of a shell, as a list: the skip link and the regions (tag, region classes, and what the frame's markup gives
+// each: a name, the content's id and tabindex), and every child of the content region, which is a panel: its header,
+// tools, body and foot by tag and class, anything else as the app's. What an app puts inside the other regions, and
+// inside the content's parts, is its own.
 const skeleton = (page, selector, markup) => page.evaluate(({ selector, markup }) => {
-  const REGION = ['im-titlebar', 'im-body', 'im-sidebar', 'im-work', 'im-status', 'im-columns', 'im-content', 'im-inspector', 'im-actions', 'im-footer'];
+  const REGION = ['im-shell-skip-link', 'im-titlebar', 'im-body', 'im-sidebar', 'im-work', 'im-status', 'im-columns', 'im-content', 'im-inspector', 'im-actions', 'im-footer'];
+  const PART = ['im-panel-header', 'im-panel-tools', 'im-panel-body', 'im-panel-foot'];
   let shell = selector ? document.querySelector(selector) : null;
   if (markup) {
     shell = document.createElement('div');
@@ -51,9 +54,15 @@ const skeleton = (page, selector, markup) => page.evaluate(({ selector, markup }
       const region = REGION.find((name) => child.classList.contains(name));
       if (!region) continue;
       const classes = [...child.classList].filter((name) => name === 'im-panel' || REGION.includes(name)).join('.');
-      const extra = (child.hasAttribute('aria-label') ? '[aria-label]' : '') + (region === 'im-content' ? `${child.id ? '[id]' : ''}[tabindex=${child.getAttribute('tabindex')}]` : '');
+      const extra = (child.hasAttribute('aria-label') ? '[aria-label]' : '') + (region === 'im-content' ? `${child.id ? '[id]' : ''}[tabindex=${child.getAttribute('tabindex')}]` : '')
+        + (region === 'im-shell-skip-link' ? `[href=${child.getAttribute('href') === '#' + shell.querySelector('.im-content')?.id ? 'content' : child.getAttribute('href')}]` : '');
       out.push(`${'  '.repeat(depth)}${child.localName}.${classes}${extra}`);
-      walk(child, depth + 1);
+      if (region === 'im-content') {
+        for (const inner of child.children) {
+          const part = PART.find((name) => inner.classList.contains(name));
+          out.push(`${'  '.repeat(depth + 1)}${part ? `${inner.localName}.${part}` : `${inner.localName} (not a part of a panel)`}`);
+        }
+      } else walk(child, depth + 1);
     }
   };
   walk(shell, 0);
@@ -110,20 +119,27 @@ function checkRegions(r, width, label, { dockFrom = 1000, inspectorWidth = 300, 
   }
 }
 
-// Muro, Shinatama and Daodan had their own frames until 0.1.4; their fixtures are the frame shellFrameHtml writes, and the
-// regions are where the design file says at 1160, 900, 700, 500 and 250.
+// Every fixture is the frame shellFrameHtml writes, the skip link and the content's panel parts included. Muro, Shinatama
+// and Daodan had their own frames until 0.1.4: their regions are where the design file says at 1160, 900, 700, 500, 250.
 async function canonicalFixtures(page, look, theme) {
-  for (const app of ['muro', 'shinatama', 'daodan']) {
+  for (const app of APPS) {
     await show(page, { app, look, theme, glass: false, width: 1160 });
-    const hasSidebar = await page.evaluate(() => !!document.querySelector('#g-window .im-sidebar'));
-    const markup = await page.evaluate((sidebar) => {
+    // The frame shellFrameHtml writes with the regions and the content parts this app uses.
+    const markup = await page.evaluate(() => {
       const api = window.__imagoSurfaces;
+      const live = document.querySelector('#g-window .im-shell');
+      const has = (selector) => (live.querySelector(selector) ? '' : undefined);
       return api.shellFrameHtml({
         titlebarHtml: '<header class="im-titlebar"></header>', contentHtml: '', contentLabel: 'View', skipLabel: 'Skip', inspectorLabel: 'Inspector',
-        sidebarHtml: sidebar ? api.sidebarHtml({ id: 'probe', label: 'Probe', rowsHtml: '' }) : undefined, statusHtml: '', actionsHtml: '', footerHtml: '',
+        sidebarHtml: live.querySelector('.im-sidebar') ? api.sidebarHtml({ id: 'probe', label: 'Probe', rowsHtml: '' }) : undefined,
+        statusHtml: has('.im-status'), actionsHtml: has('.im-actions'), footerHtml: has('.im-footer'),
+        contentHeaderHtml: has('.im-content > .im-panel-header'), contentToolsHtml: has('.im-content > .im-panel-tools'), contentFootHtml: has('.im-content > .im-panel-foot'),
       });
-    }, hasSidebar);
-    assert.deepEqual(await skeleton(page, '#g-window .im-shell'), await skeleton(page, null, markup), `${look} ${theme}: ${app}'s fixture is the canonical frame`);
+    });
+    const live = await skeleton(page, '#g-window .im-shell');
+    assert.ok(live.some((line) => line.includes('im-shell-skip-link')) && live.some((line) => line.includes('im-panel-body')), `${look} ${theme}: the skeleton reads the skip link and the content's parts (${live.join(' | ')})`);
+    assert.deepEqual(live, await skeleton(page, null, markup), `${look} ${theme}: ${app}'s fixture is the canonical frame`);
+    if (!['muro', 'shinatama', 'daodan'].includes(app)) continue;
     for (const width of [1160, 900, 700, 500, 250]) {
       await show(page, { app, look, theme, glass: false, width });
       checkRegions(await regionBoxes(page, '#g-window .im-shell'), width, `${look} ${theme}: ${app} at ${width}`);
@@ -153,6 +169,7 @@ const buildFrame = (page, width, options = {}) => page.evaluate(({ width, option
     titlebarHtml: api.titlebarHtml({ brand: { name: 'Frame' }, navigationHtml: nav, views: { label: 'Views', action: 'views' }, commands: { label: 'Commands', action: 'palette', shortcut: 'Ctrl K' }, windowControls: true }),
     sidebarHtml: options.sidebar === false ? undefined : api.sidebarHtml({ id: 'frame-side', label: 'Threads', rowsHtml: ['Alpha', 'Beta', 'Gamma'].map(row).join(''), collapse: { collapse: 'Collapse sidebar', expand: 'Expand sidebar' } }),
     statusHtml: options.bare ? undefined : '<span class="im-chip" data-im-tone="ok">Ready</span><span class="im-status-text">Summary</span><span class="im-spacer"></span><span class="im-status-end">Info</span>',
+    contentHeaderHtml: '<h4 class="im-panel-title">First</h4>', contentToolsHtml: '<span class="im-chip">Filter</span>',
     contentHtml: api.pageContentHtml('<h1>Page title</h1><h2>Section</h2><h3>Group</h3><p>Body text</p><ul><li>Item</li></ul>'),
     contentLabel: 'First', contentId: 'frame-main', skipLabel: 'Skip to content', inspectorLabel: 'Details',
     actionsHtml: options.bare ? undefined : '<button type="button" class="im-btn"><span>Check</span></button><button type="button" class="im-btn im-btn--primary"><span>Apply</span></button>',
@@ -190,10 +207,18 @@ async function builtFrame(page, look) {
           h1: heading('h1'), h2: heading('h2'), h3: heading('h3'),
           hi: probe('color', 'var(--im-text-hi)'), head: probe('font-family', 'var(--im-font-head)'),
           p: getComputedStyle(content.querySelector('p')).marginTop, list: getComputedStyle(content.querySelector('ul')).listStyleType,
+          parts: [...shell.querySelector('.im-content').children].map((el) => {
+            const r = el.getBoundingClientRect();
+            return { name: el.className, top: r.top, bottom: r.bottom };
+          }),
         };
       }, FRAME);
       assert.equal(page_.padding, width >= 620 ? '24px' : '16px', where(`page padding at ${width}`));
       assert.equal(page_.scrolls, 'auto', where('the content panel body scrolls'));
+      assert.deepEqual(page_.parts.map((p) => p.name), ['im-panel-header', 'im-panel-tools', 'im-panel-body'], where('the content is a panel: header, tools, body'));
+      for (let at = 1; at < page_.parts.length; at++) {
+        assert.ok(page_.parts[at - 1].bottom <= page_.parts[at].top + 0.5, where(`${page_.parts[at - 1].name} is above ${page_.parts[at].name} at ${width}`));
+      }
       for (const [tag, size] of [['h1', '18px'], ['h2', '14px'], ['h3', '13px']]) {
         const h = page_[tag];
         assert.deepEqual([h.size, h.weight, h.transform, h.margin], [size, '600', 'none', '0px'], where(`${tag} at ${width}`));
@@ -392,7 +417,9 @@ export default async (page, url) => {
       const contentBefore = await box(page, '.im-content');
       await page.focus('#g-width'); // the last control before the window, in the page's order
       await page.keyboard.press('Tab');
-      assert.equal((await focused()).toggle, true, where('Tab from the page reaches the sidebar button first'));
+      assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('im-shell-skip-link')), true, where('Tab from the page reaches the skip link first'));
+      await page.keyboard.press('Tab');
+      assert.equal((await focused()).toggle, true, where('then the sidebar button, the first control of the title bar'));
       await page.keyboard.press('Enter');
       assert.equal(await visible(page, '.im-sidebar'), true, where('Enter opens the sidebar'));
       assert.equal(await toggle.getAttribute('aria-expanded'), 'true', where('the button says it is open'));

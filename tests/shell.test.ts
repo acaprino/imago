@@ -190,6 +190,16 @@ test('clampZoom keeps 50 to 200 percent, in steps of 10', () => {
   assert.equal(clampZoom(Number.NEGATIVE_INFINITY), 0.5);
 });
 
+test('clampZoom rounds a level that is not a multiple of 10 to the nearest one, half up, and takes no list of levels', () => {
+  assert.equal(clampZoom(0.67), 0.7);
+  assert.equal(clampZoom(0.75), 0.8);
+  assert.equal(clampZoom(1.25), 1.3);
+  assert.equal(clampZoom(1.75), 1.8);
+  assert.equal(clampZoom(1.95), 2);
+  assert.equal(clampZoom(0.45), 0.5);
+  assert.equal(clampZoom.length, 1, "the second parameter, the app's own steps, is gone");
+});
+
 test('stepZoom steps by 10 percent, stops at the ends and resets on 0', () => {
   assert.equal(stepZoom(2, 1), 2);
   assert.equal(stepZoom(0.5, -1), 0.5);
@@ -201,6 +211,14 @@ test('stepZoom steps by 10 percent, stops at the ends and resets on 0', () => {
   assert.equal(level, 2, 'ten steps up are exactly 200 percent, with no float residue');
   for (let i = 0; i < 15; i++) level = stepZoom(level, -1);
   assert.equal(level, 0.5);
+});
+
+test('stepZoom steps from a level that is not a multiple of 10 by first rounding it, and takes no list of levels', () => {
+  assert.equal(stepZoom(0.67, 1), 0.8);
+  assert.equal(stepZoom(0.67, -1), 0.6);
+  assert.equal(stepZoom(1.75, 1), 1.9);
+  assert.equal(stepZoom(1.25, 0), 1);
+  assert.equal(stepZoom.length, 2, "the third parameter, the app's own steps, is gone");
 });
 
 test('zoomDirection reads Ctrl+= Ctrl++ Ctrl+- Ctrl+0 by key or by physical key', () => {
@@ -330,6 +348,16 @@ test('mountZoom: Ctrl+wheel zooms one step per notch, small deltas add up, a pla
   doc.fire('wheel', { ctrlKey: true, deltaY: 30, deltaMode: 0 });
   await settle();
   assert.deepEqual(applied, [1, 1.1, 1], 'two small deltas make one step down');
+});
+
+test('mountZoom: the wheel and the keys step by 10 whatever steps an older app still passes', async () => {
+  const doc = stubDoc();
+  const applied: number[] = [];
+  mountZoom(doc, { apply: (level) => { applied.push(level); }, storage: memoryStorage(), levels: [0.67, 0.75, 1, 1.25, 1.75] } as Parameters<typeof mountZoom>[1]);
+  doc.fire('wheel', { ctrlKey: true, deltaY: -100, deltaMode: 0 });
+  doc.fire('keydown', ctrl('=', 'Equal'));
+  await settle();
+  assert.deepEqual(applied, [1, 1.1, 1.2]);
 });
 
 test('mountZoom stops answering after it is unmounted', () => {
@@ -764,5 +792,8 @@ test('the shell entry point exports every public name', () => {
     'mountWindowControls', 'guardDesktop',
   ]) {
     assert.equal(typeof (shell as Record<string, unknown>)[name], 'function', name);
+  }
+  for (const name of ['applyShinatamaPalette', 'SHINATAMA_PALETTES']) {
+    assert.ok(!(name in shell), `${name} is Shinatama's, from the tag v0.1.4: the package does not export it`);
   }
 });

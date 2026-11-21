@@ -1,12 +1,15 @@
-// Repaints a mounted frame (`shellFrameHtml`) from new markup. The shell keeps its region elements: the title bar,
-// the body, the work area, the columns, the content and the inspector are never replaced, so what holds a reference to
-// them keeps working. The dialog's inert body stays inert and the layers and notices in the shell stay where they are.
-// The inspector is not touched at all: its content, and the values a person typed in it, are the inspector's own.
+// Repaints a mounted frame (`shellFrameHtml`) from new markup. Every element of the frame stays the same element for the
+// life of the shell, so what holds a reference to it keeps working: the title bar, the body, the work area, the columns,
+// the content with its panel body and the inspector are never replaced, and the dialog's inert body stays inert. The
+// layers and notices in the shell stay where they are. The inspector is not touched at all: its content, and the values
+// a person typed in it, are the inspector's own.
 //
-// What is inside the title bar, the sidebar, the status row, the content's panel body, the action bar and the footer is
-// replaced. A region the markup no longer has is removed, and one it has again is put back in its place; a sidebar that
-// comes back is a new element, which the app wires again (`sidebarDrawer`, `sidebarCollapse`, `sidebarResize`), as after
-// the first paint. Focus inside a replaced region is the app's to restore (`captureDomState`, `restoreDomState`).
+// What is inside the title bar, the sidebar, the status row, the content's header, tools, body and foot, the action bar
+// and the footer is replaced. A region the markup no longer has is taken out and kept; when the markup has it again, the
+// same element goes back in its place, with what the markup now gives it. So a sidebar that goes and comes back is the
+// sidebar `sidebarDrawer`, `sidebarCollapse` and `sidebarResize` were wired to, and the title bar's sidebar button and
+// window buttons are the ones `sidebarDrawer` and `mountWindowControls` hold: nothing is wired again. Focus inside a
+// replaced region is the app's to restore (`captureDomState`, `restoreDomState`).
 
 const REGIONS = 'a title bar, a body, a work area, columns, a content region with its panel body and an inspector';
 
@@ -19,12 +22,16 @@ type Frame = {
   status: Element | null;
   columns: Element | null;
   content: Element | null;
+  contentHeader: Element | null;
+  contentTools: Element | null;
   contentBody: Element | null;
+  contentFoot: Element | null;
   inspector: Element | null;
   actions: Element | null;
   footer: Element | null;
 };
-type Complete = { [K in keyof Frame]: K extends 'skip' | 'sidebar' | 'status' | 'actions' | 'footer' ? Element | null : Element };
+type Fixed = 'titlebar' | 'body' | 'work' | 'columns' | 'content' | 'contentBody' | 'inspector';
+type Complete = { [K in keyof Frame]: K extends Fixed ? Element : Element | null };
 
 /** The child of `parent` that has the class, where the frame's markup puts each region. */
 const child = (parent: ParentNode | null, name: string): Element | null =>
@@ -47,7 +54,9 @@ function regionsOf(root: ParentNode): Frame {
   const content = child(columns, 'im-content');
   return {
     skip: child(root, 'im-shell-skip-link'), titlebar: child(root, 'im-titlebar'), body, sidebar: child(body, 'im-sidebar'), work,
-    status: child(work, 'im-status'), columns, content, contentBody: child(content, 'im-panel-body'),
+    status: child(work, 'im-status'), columns, content,
+    contentHeader: child(content, 'im-panel-header'), contentTools: child(content, 'im-panel-tools'),
+    contentBody: child(content, 'im-panel-body'), contentFoot: child(content, 'im-panel-foot'),
     inspector: child(columns, 'im-inspector'), actions: child(work, 'im-actions'), footer: child(work, 'im-footer'),
   };
 }
@@ -60,14 +69,15 @@ function takeAttributes(mounted: Element, incoming: Element): void {
   for (const { name, value } of Array.from(incoming.attributes)) mounted.setAttribute(name, value);
 }
 
-/** The children and attributes of `incoming` into `mounted`; `incoming` alone is put in with `place`; `mounted` alone goes. */
-function repaint(mounted: Element | null, incoming: Element | null, place: (region: Element) => void): void {
-  if (mounted && incoming) {
-    takeAttributes(mounted, incoming);
-    mounted.replaceChildren(...Array.from(incoming.childNodes));
-  } else if (incoming) place(incoming);
-  else mounted?.remove();
+/** The attributes and the children of `incoming`, into `target`. */
+function fill(target: Element, incoming: Element): void {
+  takeAttributes(target, incoming);
+  target.replaceChildren(...Array.from(incoming.childNodes));
 }
+
+// The elements of a frame that are out of it for now, per shell and by name: a region or a wired control the markup left
+// out, kept until the markup has it again.
+const away = new WeakMap<Element, Map<string, Element>>();
 
 // The controls a module of the package wires in place keep their element, with its listeners and the state the module
 // set on it: the sidebar's button (sidebarDrawer) and fold button (sidebarCollapse), which take their other attributes
@@ -77,22 +87,6 @@ const SCRIPTED: Record<string, readonly string[] | null> = {
   'im-sidebar-collapse': ['aria-expanded', 'aria-label', 'title'],
   'im-window-buttons': null,
 };
-
-/** Puts the mounted control in the place of its copy in the incoming markup, before the markup moves in. */
-function keep(mountedRegion: Element, incomingRegion: Element, name: string): Element | null {
-  const mounted = find(mountedRegion, name);
-  const incoming = find(incomingRegion, name);
-  if (!mounted || !incoming) return null;
-  const scripted = SCRIPTED[name];
-  if (scripted) {
-    for (const { name: attribute, value } of Array.from(incoming.attributes)) {
-      if (!scripted.includes(attribute)) mounted.setAttribute(attribute, value);
-    }
-    mounted.replaceChildren(...Array.from(incoming.childNodes));
-  }
-  incoming.replaceWith(mounted);
-  return mounted;
-}
 
 /**
  * Repaint shell content while preserving the regions that own modality, the inspector and every overlay host.
@@ -107,36 +101,86 @@ export function renderShellFrame(shell: HTMLElement, markup: string): void {
   const mounted = regionsOf(shell);
   const sidebar = next.sidebar ? 'on' : 'off';
   if (!mounted.titlebar && !mounted.body) {
+    away.delete(shell);
     shell.setAttribute('data-im-sidebar', sidebar);
     shell.replaceChildren(template.content);
     return;
   }
   if (!complete(mounted)) throw new Error('The mounted Imago frame is incomplete: it needs ' + REGIONS);
   shell.setAttribute('data-im-sidebar', sidebar);
+  const kept = away.get(shell) ?? new Map<string, Element>();
+  away.set(shell, kept);
 
-  repaint(mounted.skip, next.skip, (link) => mounted.titlebar.before(link));
+  /**
+   * One region: the mounted element, or the one kept from when it went, takes what the incoming one gives (`update`)
+   * and, if it is not in the frame, goes in with `place`. One the markup no longer has is taken out and kept.
+   */
+  const region = (key: string, current: Element | null, incoming: Element | null, place: (element: Element) => void, update = fill): void => {
+    if (!incoming) {
+      if (current) {
+        kept.set(key, current);
+        current.remove();
+      }
+      return;
+    }
+    const target = current ?? kept.get(key) ?? null;
+    if (!target) {
+      place(incoming);
+      return;
+    }
+    kept.delete(key);
+    update(target, incoming);
+    if (!current) place(target);
+  };
+
+  /** Puts the wired control in the place of its copy in the incoming markup, before the markup moves in. */
+  const keep = (target: Element, incomingRegion: Element, name: string): Element | null => {
+    const inFrame = find(target, name);
+    const incoming = find(incomingRegion, name);
+    if (!incoming) {
+      // it goes with the children it was among; kept, it comes back when the markup has it again
+      if (inFrame) kept.set(name, inFrame);
+      return null;
+    }
+    const control = inFrame ?? kept.get(name) ?? null;
+    if (!control) return null;
+    kept.delete(name);
+    const scripted = SCRIPTED[name];
+    if (scripted) {
+      for (const { name: attribute, value } of Array.from(incoming.attributes)) {
+        if (!scripted.includes(attribute)) control.setAttribute(attribute, value);
+      }
+      control.replaceChildren(...Array.from(incoming.childNodes));
+    }
+    incoming.replaceWith(control);
+    return control;
+  };
+
+  region('skip', mounted.skip, next.skip, (link) => mounted.titlebar.before(link));
   keep(mounted.titlebar, next.titlebar, 'im-sidebar-toggle');
   keep(mounted.titlebar, next.titlebar, 'im-window-buttons');
-  repaint(mounted.titlebar, next.titlebar, () => {});
+  fill(mounted.titlebar, next.titlebar);
 
-  if (mounted.sidebar && next.sidebar) {
-    const fold = keep(mounted.sidebar, next.sidebar, 'im-sidebar-collapse');
+  region('sidebar', mounted.sidebar, next.sidebar, (element) => mounted.work.before(element), (target, incoming) => {
+    const fold = keep(target, incoming, 'im-sidebar-collapse');
     // The splitter of sidebarResize is the package's own child of the sidebar: it stays, at the end.
-    const splitters = Array.from(mounted.sidebar.children).filter((element) => element.classList.contains('im-sidebar-splitter'));
-    repaint(mounted.sidebar, next.sidebar, () => {});
-    mounted.sidebar.append(...splitters);
+    const splitters = Array.from(target.children).filter((element) => element.classList.contains('im-sidebar-splitter'));
+    fill(target, incoming);
+    target.append(...splitters);
     // Its name follows the shell's state, as sidebarCollapse names it, from the labels the markup now gives.
     const label = fold?.getAttribute(shell.getAttribute('data-im-sidebar-collapsed') === 'true' ? 'data-im-label-expand' : 'data-im-label-collapse');
     if (fold && label) {
       fold.setAttribute('aria-label', label);
       fold.setAttribute('title', label);
     }
-  } else repaint(mounted.sidebar, next.sidebar, (region) => mounted.work.before(region));
+  });
 
-  repaint(mounted.status, next.status, (region) => mounted.columns.before(region));
+  region('status', mounted.status, next.status, (element) => mounted.columns.before(element));
   takeAttributes(mounted.content, next.content);
-  repaint(mounted.contentBody, next.contentBody, () => {});
-  repaint(mounted.actions, next.actions, (region) => mounted.columns.after(region));
-  const actions = child(mounted.work, 'im-actions');
-  repaint(mounted.footer, next.footer, (region) => (actions ?? mounted.columns).after(region));
+  region('content-header', mounted.contentHeader, next.contentHeader, (element) => mounted.content.prepend(element));
+  region('content-tools', mounted.contentTools, next.contentTools, (element) => mounted.contentBody.before(element));
+  fill(mounted.contentBody, next.contentBody);
+  region('content-foot', mounted.contentFoot, next.contentFoot, (element) => mounted.contentBody.after(element));
+  region('actions', mounted.actions, next.actions, (element) => mounted.columns.after(element));
+  region('footer', mounted.footer, next.footer, (element) => (child(mounted.work, 'im-actions') ?? mounted.columns).after(element));
 }

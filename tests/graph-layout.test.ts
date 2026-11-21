@@ -16,6 +16,11 @@ test('grouped layout owns placement, shared children and ungrouped nodes', () =>
   }
 });
 
+test('the edges to a selected node carry the accent, the selection mark; the others no tone', () => {
+  const scene = groupedGraphScene([{ id: 'g', label: 'Group', children: ['a', 'b'] }], [{ id: 'a', label: 'A', selected: true }, { id: 'b', label: 'B' }]);
+  assert.deepEqual(scene.edges.map(e => [e.target, e.tone]), [['a', 'accent'], ['b', undefined]]);
+});
+
 test('long proportional and multilingual labels fit inside their nodes', () => {
   const text = 'WWWW'.repeat(30) + '漢字';
   const scene = groupedGraphScene([{ id: 'group', label: text, children: ['node'] }], [{ id: 'node', label: text, count: 10 }]);

@@ -7,9 +7,11 @@
 //
 // In an app it reads "imago" from the app's package.json:
 //   { "src": ["apps/desktop/src"], "cargo": "apps/desktop/src-tauri/Cargo.toml", "agents": ["AGENTS.md", "CLAUDE.md"],
-//     "entry": "apps/desktop/src/main.ts" }
-// `src` defaults to ["src"] and `agents` to those two files; without `cargo` or `entry` their rules are skipped, and
-// the program says so.
+//     "entry": "apps/desktop/src/main.ts", "app": "muro",
+//     "icons": { "src-tauri/icons/icon.ico": "icon.ico", "src-tauri/icons/128x128@2x.png": "256x256.png" } }
+// `src` defaults to ["src"] and `agents` to those two files; without `cargo`, `entry` or `icons` their rules are
+// skipped, and the program says so. `app` is the id of the app (shinatama, xiox, mukade, muro or daodan) and `icons`
+// maps a file of the app to the file of icons/<app>/ in the package that it must equal; `icons` needs `app`.
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -31,7 +33,7 @@ export class UsageError extends Error {}
 export const USAGE = `Usage: imago-check [--root <dir>] [--package]
 
   Checks an app against the design rules of @acaprino/imago (docs/design-file.md), reading the "imago" block of its
-  package.json: { "src": [...], "cargo": "...", "agents": [...], "entry": "..." }.
+  package.json: { "src": [...], "cargo": "...", "agents": [...], "entry": "...", "app": "...", "icons": { ... } }.
   --package       check the package's own css/ instead
   --root <dir>    the folder to check (default: the current folder)
 
@@ -95,20 +97,34 @@ const sourceAt = (root, path) => parseSource(fromRoot(root, path), read(path));
 /**
  * The "imago" block of the app's package.json, with its defaults.
  * @param {unknown} block
- * @returns {{ src: string[], agents: string[], cargo: string | null, entry: string | null }}
+ * @returns {{ src: string[], agents: string[], cargo: string | null, entry: string | null, app: string | null, icons: Record<string, string> | null }}
  */
 export function readConfig(block) {
   const value = block ?? {};
   if (typeof value !== 'object' || Array.isArray(value)) throw new UsageError('"imago" in package.json is not an object');
-  /** @type {Record<string, 'list' | 'path'>} */
-  const keys = { src: 'list', agents: 'list', cargo: 'path', entry: 'path' };
+  const text = (/** @type {unknown} */ item) => typeof item === 'string' && item !== '';
+  /** @type {Record<string, { is: (entry: any) => boolean, must: string }>} */
+  const keys = {
+    src: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths' },
+    agents: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths' },
+    cargo: { is: text, must: 'a path' },
+    entry: { is: text, must: 'a path' },
+    app: { is: text, must: 'the id of the app' },
+    icons: {
+      is: (entry) => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry) && Object.keys(entry).length > 0 && Object.values(entry).every(text),
+      must: 'a map from the path of a file in the app to its file name in icons/<app>/ of the package',
+    },
+  };
   for (const [key, entry] of Object.entries(value)) {
-    if (!(key in keys)) throw new UsageError(`"imago.${key}" in package.json is not a key the check reads (src, agents, cargo, entry)`);
-    const good = keys[key] === 'list' ? Array.isArray(entry) && entry.every((item) => typeof item === 'string' && item) : typeof entry === 'string' && entry;
-    if (!good) throw new UsageError(`"imago.${key}" in package.json must be ${keys[key] === 'list' ? 'a list of paths' : 'a path'}`);
+    if (!Object.hasOwn(keys, key)) throw new UsageError(`"imago.${key}" in package.json is not a key the check reads (${Object.keys(keys).join(', ')})`);
+    if (!keys[key].is(entry)) throw new UsageError(`"imago.${key}" in package.json must be ${keys[key].must}`);
   }
   const config = /** @type {Record<string, any>} */ (value);
-  return { src: config.src ?? ['src'], agents: config.agents ?? ['AGENTS.md', 'CLAUDE.md'], cargo: config.cargo ?? null, entry: config.entry ?? null };
+  if (config.icons && !config.app) throw new UsageError('"imago.icons" in package.json needs "imago.app", the id of the app: shinatama, xiox, mukade, muro or daodan');
+  return {
+    src: config.src ?? ['src'], agents: config.agents ?? ['AGENTS.md', 'CLAUDE.md'], cargo: config.cargo ?? null, entry: config.entry ?? null,
+    app: config.app ?? null, icons: config.icons ?? null,
+  };
 }
 
 /** The folders from `path` up to `root`, both included. */
@@ -276,6 +292,32 @@ function checkApp(root, findings, exceptions, notes) {
   } else {
     notes.push('mount-app: skipped, no "entry" in the "imago" block of package.json');
   }
+
+  if (config.icons && config.app) {
+    findings.push(...rules.appIcon(config.app, iconFiles(root, installed, config.app, config.icons)));
+  } else {
+    notes.push('app-icon: skipped, no "icons" in the "imago" block of package.json');
+  }
+}
+
+/**
+ * The icon files the app lists, each with the package's own file beside it for the rule to compare.
+ * @param {string} root @param {string} installed the installed package @param {string} app @param {Record<string, string>} icons
+ */
+function iconFiles(root, installed, app, icons) {
+  const all = join(installed, 'icons');
+  const folder = join(all, app);
+  if (/[\\/]/.test(app) || !isFolder(folder)) {
+    const known = isFolder(all) ? readdirSync(all).sort().join(', ') : 'none';
+    throw new UsageError(`"imago.app" is ${app}, and the installed @acaprino/imago has no icons/${app}/ (it has the icons of: ${known})`);
+  }
+  return Object.entries(icons).map(([path, name]) => {
+    if (/[\\/]/.test(name) || name === '..') throw new UsageError(`"imago.icons" gives ${name} for ${path}: it must be a file name in icons/${app}/ of the package, not a path`);
+    const packaged = join(folder, name);
+    if (!isFile(packaged)) throw new UsageError(`"imago.icons" names ${name} for ${path}, and icons/${app}/ of the installed @acaprino/imago has no such file`);
+    const own = resolve(root, path);
+    return { file: fromRoot(root, own), name, have: isFile(own) ? readFileSync(own) : null, want: readFileSync(packaged) };
+  });
 }
 
 // ---------- output ----------

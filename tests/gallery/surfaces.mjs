@@ -209,6 +209,35 @@ async function menus(page, look, theme) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Every dialog is one drawing, in the middle of the layer under the title bar. The only side panel is the inspector.
+async function assertCentred(page, selector, text) {
+  const offset = await page.evaluate((s) => {
+    const el = document.querySelector(s);
+    const d = el.getBoundingClientRect(), z = el.closest('.im-scrim').getBoundingClientRect();
+    return [(d.left + d.right - z.left - z.right) / 2, (d.top + d.bottom - z.top - z.bottom) / 2];
+  }, selector);
+  assert.ok(offset.every((n) => Math.abs(n) <= 1.5), `${text} is off the middle of its layer by ${offset.map(Math.round)}`);
+}
+
+// A form dialog, wide or not, with a short body or a long one, is centred and stays inside its layer.
+async function formDialogPlacement(page, look, theme) {
+  const where = (text) => `${look} ${theme}: ${text}`;
+  await show(page, { app: 'xiox', look, theme, width: 1160 });
+  for (const [name, wide, lines] of [['short', false, 1], ['wide', true, 3], ['long', false, 200]]) {
+    await page.evaluate(([name, wide, lines]) => {
+      const form = window.__imagoSurfaces.openFormDialog(document.querySelector('.im-shell'), { title: `Form ${name}`, closeLabel: 'Close', wide });
+      for (let i = 0; i < lines; i++) form.body.append(Object.assign(document.createElement('p'), { textContent: `Line ${i}` }));
+      window.__placed = form;
+    }, [name, wide, lines]);
+    assert.equal(await page.getByRole('dialog', { name: `Form ${name}` }).count(), 1, where(`the ${name} form is open`));
+    await assertCentred(page, '.im-form-dialog', where(`the ${name} form dialog`));
+    assert.equal(await page.evaluate(() => /drawer/.test(document.querySelector('.im-form-dialog').className)), false, where('a form dialog is not a drawer'));
+    assert.ok((await box(page, '.im-form-dialog')).height <= (await box(page, '.im-scrim')).height, where(`the ${name} form stays inside its layer`));
+    await page.evaluate(() => window.__placed.close());
+    assert.equal(await count(page, '.im-scrim'), 0, where(`the ${name} form is gone`));
+  }
+}
+
 async function dialogs(page, look, theme) {
   const where = (text) => `${look} ${theme}: ${text}`;
   await show(page, { app: 'xiox', look, theme, width: 1160 });
@@ -244,6 +273,7 @@ async function dialogs(page, look, theme) {
   const scrim = await box(page, '.im-scrim');
   const titlebar = await box(page, '.im-titlebar');
   assert.ok(Math.abs(scrim.top - titlebar.bottom) <= 0.5, where('the layer starts under the title bar'));
+  await assertCentred(page, '.im-dialog', where('the confirm dialog'));
 
   // The buttons: the verb given, the filled danger class on the confirming one, Cancel first.
   const buttons = await dialog.locator('button').evaluateAll((list) => list.map((b) => ({ text: b.textContent.trim(), cls: b.className })));
@@ -700,8 +730,8 @@ async function everyApp(page) {
   });
   await page.click('#menu-hook');
   assert.equal(await count(page, '.im-shell .im-menu'), 1, 'the menu hook opens the sample menu');
-  assert.equal(await page.locator('.im-shell .im-menu-item[data-im-tone="danger"]').count(), 1, 'its danger item is marked');
-  await page.click('.im-shell .im-menu-item[data-im-tone="danger"]');
+  assert.equal(await page.locator('.im-shell .im-menu-item[data-im-tone="err"]').count(), 1, 'its danger item is marked with the err tone');
+  await page.click('.im-shell .im-menu-item[data-im-tone="err"]');
   assert.equal(await count(page, '.im-shell .im-menu'), 0, 'running the item closes the menu');
   assert.equal(await count(page, '.im-dialog'), 1, 'and the dialog opens');
   assert.equal((await active(page)).text, 'Cancel', 'with focus on Cancel');
@@ -1261,6 +1291,7 @@ export default async (page, url) => {
     for (const theme of THEMES) {
       await menus(page, look, theme);
       await dialogs(page, look, theme);
+      await formDialogPlacement(page, look, theme);
       await sheets(page, look, theme);
       await inspectors(page, look, theme);
       await palettes(page, look, theme);

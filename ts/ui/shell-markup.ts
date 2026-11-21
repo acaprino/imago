@@ -1,4 +1,6 @@
-import { escapeHtml, iconHtml, spinnerHtml } from './markup.ts';
+import { isIconName } from './icon.ts';
+import { escapeHtml, iconHtml } from './markup.ts';
+import { chipToneAttribute, toneAttribute, type ChipTone, type Tone } from './tone.ts';
 
 /** String-rendered shell components. Text is escaped; named HTML slots contain trusted component output. */
 export interface NavigationTab {
@@ -32,6 +34,8 @@ export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Mini
 
 export interface TitlebarOptions {
   brand: { name: string; image?: string };
+  /** The button that opens the sidebar as a drawer under 620 (`sidebarDrawer`): its name and the id of the sidebar. */
+  sidebarToggle?: { label: string; controls: string };
   navigationHtml?: string;
   views?: { label: string; action: string };
   statusHtml?: string;
@@ -39,9 +43,10 @@ export interface TitlebarOptions {
   windowControls?: boolean | WindowButtonLabels;
 }
 export function titlebarHtml(options: TitlebarOptions): string {
-  const { brand, views, commands } = options;
+  const { brand, sidebarToggle, views, commands } = options;
   const brandHtml = brand.image ? `<img class="im-brand-image" src="${escapeHtml(brand.image)}" alt="${escapeHtml(brand.name)}" data-tauri-drag-region>` : `<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
-  return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${options.navigationHtml ?? ''}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
+  const toggleHtml = sidebarToggle ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${escapeHtml(sidebarToggle.label)}" title="${escapeHtml(sidebarToggle.label)}" aria-expanded="false" aria-controls="${escapeHtml(sidebarToggle.controls)}">${iconHtml('sidebar')}</button>` : '';
+  return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${toggleHtml}${options.navigationHtml ?? ''}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
 }
 
 export interface StatusButtonOptions {
@@ -49,28 +54,45 @@ export interface StatusButtonOptions {
   accessibleLabel: string;
   action: string;
   id?: string;
-  tone: 'ok' | 'warn' | 'err' | 'accent';
+  /** The tone of the dot: a status tone, the accent, or none (`''`). */
+  tone: ChipTone;
 }
 export function statusButtonHtml(options: StatusButtonOptions): string {
-  return `<button type="button" class="im-btn im-btn--ghost im-titlebar-status" data-action="${escapeHtml(options.action)}"${options.id === undefined ? '' : ` data-id="${escapeHtml(options.id)}"`} aria-label="${escapeHtml(options.accessibleLabel)}"><i class="im-dot" data-im-tone="${escapeHtml(options.tone)}" aria-hidden="true"></i><span>${escapeHtml(options.label)}</span></button>`;
+  return `<button type="button" class="im-btn im-btn--ghost im-titlebar-status" data-action="${escapeHtml(options.action)}"${options.id === undefined ? '' : ` data-id="${escapeHtml(options.id)}"`} aria-label="${escapeHtml(options.accessibleLabel)}"><i class="im-dot"${chipToneAttribute(options.tone)} aria-hidden="true"></i><span>${escapeHtml(options.label)}</span></button>`;
 }
 
-export interface BannerOptions {
-  title: string;
+export interface NoteOptions {
+  /** An icon of the package (`IconName`), before the note's text; an unknown name writes no icon. */
+  icon?: string;
+  title?: string;
   message?: string;
   items?: readonly { label: string; message: string }[];
+  /** Trusted component markup: the note's buttons. */
   actionsHtml?: string;
-  tone: 'ok' | 'warn' | 'err' | 'accent';
+  /** A status tone: a note is a message, and the accent is not a status. */
+  tone?: Tone;
 }
-export function bannerHtml(options: BannerOptions): string {
+/**
+ * A message that stays in the page. A title and a line make the compact `im-note` of the design (its icon, then the
+ * title in `b` and the line in `span`); a list or actions make an `im-note--block`, its icon, title, paragraph, list and
+ * actions one under the other. An `err` or `warn` note is announced at once (`role="alert"`), any other as a status.
+ * Text is escaped.
+ */
+export function noteHtml(options: NoteOptions): string {
+  const { title, message, items, actionsHtml } = options;
   const role = options.tone === 'err' || options.tone === 'warn' ? 'alert' : 'status';
-  return `<div class="im-banner" data-im-tone="${escapeHtml(options.tone)}" role="${role}"><div><strong>${escapeHtml(options.title)}</strong>${options.message ? `<p>${escapeHtml(options.message)}</p>` : ''}${options.items?.length ? `<ul>${options.items.map(item => `<li><b>${escapeHtml(item.label)}</b>: ${escapeHtml(item.message)}</li>`).join('')}</ul>` : ''}</div>${options.actionsHtml ?? ''}</div>`;
+  const icon = options.icon && isIconName(options.icon) ? iconHtml(options.icon) : '';
+  const open = (block: boolean): string => `<div class="im-note${block ? ' im-note--block' : ''}"${toneAttribute(options.tone)} role="${role}">${icon}`;
+  if (!items?.length && !actionsHtml) {
+    return `${open(false)}<div>${title ? `<b>${escapeHtml(title)}</b>` : ''}${message ? `<span>${escapeHtml(message)}</span>` : ''}</div></div>`;
+  }
+  return open(true)
+    + (title ? `<b>${escapeHtml(title)}</b>` : '')
+    + (message ? `<p>${escapeHtml(message)}</p>` : '')
+    + (items?.length ? `<ul>${items.map(item => `<li><b>${escapeHtml(item.label)}</b>: ${escapeHtml(item.message)}</li>`).join('')}</ul>` : '')
+    + (actionsHtml ? `<div class="im-action-row">${actionsHtml}</div>` : '')
+    + '</div>';
 }
-
-export const busyIndicatorHtml = (label: string): string => `<div class="im-busy" role="status">${spinnerHtml}<span>${escapeHtml(label)}</span></div>`;
-
-/** A loading placeholder occupying an empty content surface. */
-export const loadingStateHtml = (label: string): string => `<div class="im-panel im-surface im-empty" data-im-surface="sheet" role="status">${spinnerHtml}<span>${escapeHtml(label)}</span></div>`;
 
 /** A constrained page inside the shell's scrolling content area. */
 export function pageContentHtml(contentHtml: string, width: 'normal' | 'narrow' = 'normal'): string {
@@ -79,8 +101,14 @@ export function pageContentHtml(contentHtml: string, width: 'normal' | 'narrow' 
 
 export interface ShellFrameOptions {
   titlebarHtml: string;
-  /** What the content region shows: its panel body's children. */
+  /** What the content region shows: its panel body's children. The body scrolls. */
   contentHtml: string;
+  /** The children of the content panel's header (`.im-panel-header`), above the body: its title and tools. */
+  contentHeaderHtml?: string;
+  /** The children of the content panel's tools row (`.im-panel-tools`), between the header and the body. */
+  contentToolsHtml?: string;
+  /** The children of the content panel's foot (`.im-panel-foot`), under the body. */
+  contentFootHtml?: string;
   /** The accessible name of the content region. */
   contentLabel: string;
   /** The id of the content region, which the skip link goes to. Default `main`. */
@@ -102,7 +130,8 @@ export interface ShellFrameOptions {
 /**
  * Contents of an `.im-shell` root: the window's seven regions, in the order of docs/using-imago.md section 4. A region
  * that is not given (undefined) is left out; the content and the inspector are always there, the inspector empty and
- * hidden until `inspector(shell).open()`. Repaint a mounted frame with `renderShellFrame`.
+ * hidden until `inspector(shell).open()`. The content region is a panel: header, tools, body and foot, the three around
+ * the body left out when not given. Repaint a mounted frame with `renderShellFrame`.
  */
 export function shellFrameHtml(options: ShellFrameOptions): string {
   const id = escapeHtml(options.contentId ?? 'main');
@@ -110,7 +139,12 @@ export function shellFrameHtml(options: ShellFrameOptions): string {
   return `<a class="im-shell-skip-link" href="#${id}">${escapeHtml(options.skipLabel)}</a>${options.titlebarHtml}`
     + `<div class="im-body">${options.sidebarHtml ?? ''}<div class="im-work">`
     + region(options.statusHtml, '<div class="im-status">', '</div>')
-    + `<div class="im-columns"><main id="${id}" class="im-panel im-content" tabindex="-1" aria-label="${escapeHtml(options.contentLabel)}" aria-busy="${!!options.busy}"><div class="im-panel-body">${options.contentHtml}</div></main>`
+    + `<div class="im-columns"><main id="${id}" class="im-panel im-content" tabindex="-1" aria-label="${escapeHtml(options.contentLabel)}" aria-busy="${!!options.busy}">`
+    + region(options.contentHeaderHtml, '<header class="im-panel-header">', '</header>')
+    + region(options.contentToolsHtml, '<div class="im-panel-tools">', '</div>')
+    + `<div class="im-panel-body">${options.contentHtml}</div>`
+    + region(options.contentFootHtml, '<div class="im-panel-foot">', '</div>')
+    + '</main>'
     + `<section class="im-panel im-inspector" aria-label="${escapeHtml(options.inspectorLabel)}" hidden></section></div>`
     + region(options.actionsHtml, '<div class="im-actions">', '</div>')
     + region(options.footerHtml, '<footer class="im-footer">', '</footer>')

@@ -9,14 +9,14 @@ TypeScript and its CSS for the names in the first column.
 | Old name | New name, or what to do instead |
 |---|---|
 | `im-app-layout` | Remove it. The window is `im-shell` with its seven regions; a shell placed directly in `<body>` fills the window, and the document defaults it gave (no margins on headings, paragraphs, lists and fieldsets, no bullets, `[hidden]`) apply in every `im-shell` |
-| `im-main` | The content region, `main.im-panel.im-content`, whose `im-panel-body` scrolls; `shellFrameHtml` writes it. The padding went to `im-page-content` |
+| `im-main` | The content region, `main.im-panel.im-content`: a panel whose `im-panel-body` scrolls, with an optional `im-panel-header`, `im-panel-tools` and `im-panel-foot`; `shellFrameHtml` writes it. The padding went to `im-page-content` |
 | `im-desktop-frame` | `im-shell` |
 | `im-desktop-content` | `im-work`: the status row, the columns, the action bar and the footer |
 | `im-page` | Remove it: a page sits in the content region of `im-shell`, and its headings are the shell's (h1 18, h2 14, h3 13) |
 | `im-skip-link` | `im-shell-skip-link`, which `shellFrameHtml` writes first |
 | `im-page-frame` | `im-shell` |
 | `im-page-view` | `im-content` |
-| `im-work-column` | `im-content`: a panel, with `im-panel-header` above `im-panel-body` |
+| `im-work-column` | `im-content`: a panel, with `im-panel-header` above `im-panel-body` (`shellFrameHtml`'s `contentHeaderHtml` and `contentHtml`) |
 | `im-workbench` | The shell's `im-sidebar`, `im-content` and `im-inspector` |
 | `im-work-area` | `im-columns` |
 | `im-workspace-area` | `im-content` |
@@ -40,7 +40,7 @@ TypeScript and its CSS for the names in the first column.
 | `im-toolbar` | `im-content-toolbar` |
 | `im-panel-strip` | `im-content-toolbar`; at the head of a panel, `im-panel-tools` |
 | `im-master-detail` | Remove it: the detail is the inspector |
-| `shellFrameHtml({ mainHtml })` | `contentHtml`, with `contentLabel` (the content region's name) and `inspectorLabel`; `sidebarHtml`, `statusHtml`, `actionsHtml` and `footerHtml` add the other regions |
+| `shellFrameHtml({ mainHtml })` | `contentHtml` (the children of the content's panel body), with `contentLabel` (the content region's name) and `inspectorLabel`; `contentHeaderHtml`, `contentToolsHtml` and `contentFootHtml` add the content panel's header, tools and foot; `sidebarHtml`, `statusHtml`, `actionsHtml` and `footerHtml` add the other regions |
 | `shellFrameHtml({ mainId })` | `contentId` |
 | `uiPart('main')` gave `main.im-main` | It gives a `main` with no class: the frame owns the content region |
 

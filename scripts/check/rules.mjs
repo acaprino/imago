@@ -542,9 +542,31 @@ export function mountApp(sources) {
   return [finding(file, 1, 'mount-app', `neither ${file} nor a file it imports calls mountApp(shell, registry, options), which attaches the layers, the keys, the regions, the sidebar and the standard commands`)];
 }
 
+// ---------- app-icon ----------
+
+export const ICONS_PATH = 'node_modules/@acaprino/imago/icons';
+
+/**
+ * The icon files an app copied from the package (`icons/<app>/`, see using-imago.md): each is the package's file, byte
+ * for byte. A line ending is a byte, so the files are compared as they are, not as text.
+ * @param {string} app the id of the app, which names the package's folder
+ * @param {{ file: string, name: string, have: Uint8Array | null, want: Uint8Array }[]} icons `file` is the path in the app, `name` the file in the package's folder, `have` is null when the app has no such file
+ * @returns {Finding[]}
+ */
+export function appIcon(app, icons) {
+  const id = 'app-icon';
+  const same = (/** @type {Uint8Array} */ a, /** @type {Uint8Array} */ b) => a.length === b.length && a.every((byte, k) => byte === b[k]);
+  return icons.flatMap(({ file, name, have, want }) => {
+    const source = `${ICONS_PATH}/${app}/${name}`;
+    if (have === null) return [finding(file, 1, id, `${file} does not exist: copy ${source} to it`)];
+    if (same(have, want)) return [];
+    return [finding(file, 1, id, `${file} is not ${source} (${have.length} bytes, the package's has ${want.length}): copy the package's file over it`)];
+  });
+}
+
 // ---------- exceptions ----------
 
-const EXCEPTION = /imago-check:\s*allow\s+([a-z]+(?:-[a-z]+)*)([^\n]*)/g;
+const EXCEPTION =/imago-check:\s*allow\s+([a-z]+(?:-[a-z]+)*)([^\n]*)/g;
 
 /**
  * The exceptions written in the comments of a source: `imago-check: allow <rule> — <reason>`, a hyphen accepted for

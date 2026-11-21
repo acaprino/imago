@@ -9,6 +9,7 @@
   },
   "exports": {
     "./css/*": "./css/*",
+    "./icons/*": "./icons/*",
     "./ui": "./lib/ui/index.js",
     "./shell": "./lib/shell/index.js",
     "./tokens": "./tokens/imago.tokens.json",
@@ -23,6 +24,7 @@
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
     "tokens": "node scripts/build-tokens.mjs",
+    "icons": "node scripts/icons.mjs",
     "gallery": "vite --config gallery/vite.config.ts",
     "build": "npm run build:package && tsc --noEmit && vite build --config gallery/vite.config.ts",
     "test:gallery": "node tests/gallery/run.mjs",
@@ -43,6 +45,8 @@
     "@types/d3-selection": "3.0.12",
     "@types/d3-zoom": "3.0.9",
     "playwright": "1.63.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "typescript": "7.0.2",
     "vite": "8.3.5"
   },
@@ -63,6 +67,7 @@
     "css",
     "docs",
     "tokens",
+    "icons",
     "ts",
     "react",
     "scripts/check"
