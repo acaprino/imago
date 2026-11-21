@@ -217,6 +217,23 @@ describe('literal-color', () => {
     assert.deepEqual(found(rules.literalColor, "head.innerHTML = '<meta name=\"theme-color\" content=\"rgb(0 0 0)\">';\n", 'src/head.ts'), ['1 literal-color']);
   });
 
+  test('finds a colour in the presentation attributes of SVG, in markup, in JSX and in a page, and on a canvas context', () => {
+    const ts = "el.innerHTML = '<svg><path fill=\"#fff\" stroke=\"#1c3563\"/></svg>';\nel.innerHTML = `<stop offset=\"0\" stop-color=\"red\"/><feFlood flood-color=\"#000\"/>`;\nctx.fillStyle = '#f00';\nctx.strokeStyle = 'rgb(0 0 0)';\nctx.shadowColor = 'black';\n";
+    assert.deepEqual(found(rules.literalColor, ts, 'src/graph.ts'), [1, 1, 2, 2, 3, 4, 5].map((line) => `${line} literal-color`), 'one finding per attribute');
+    const tsx = 'export const Mark = () => (\n  <svg>\n    <path d={d} fill="#fff" />\n    <stop stopColor="#123456" />\n    <text color={\'#abc\'}>x</text>\n  </svg>\n);\n';
+    assert.deepEqual(found(rules.literalColor, tsx, 'src/mark.tsx'), ['3 literal-color', '4 literal-color', '5 literal-color']);
+    const html = '<!doctype html>\n<svg><path fill="#123456"/><feDiffuseLighting lighting-color="white"/></svg>\n<font color="red">x</font>\n';
+    assert.deepEqual(found(rules.literalColor, html, 'index.html'), ['2 literal-color', '2 literal-color', '3 literal-color']);
+  });
+
+  test('leaves none, currentColor, a url(#…), a token, and a variable that is not an attribute', () => {
+    const ts = "el.innerHTML = '<svg><path fill=\"none\" stroke=\"currentColor\"/><rect fill=\"url(#g)\" stroke=\"var(--im-line)\"/></svg>';\nconst fill = '#fff';\nlet color = 'red';\nctx.fillStyle = gradient;\nif (i <n) { const stroke = '#000'; }\n";
+    assert.deepEqual(found(rules.literalColor, ts, 'src/graph.ts'), []);
+    const tsx = 'const a = <path fill="none" stroke="currentColor" />;\nconst b = <rect fill="url(#g)" stroke="var(--im-accent)" />;\n';
+    assert.deepEqual(found(rules.literalColor, tsx, 'src/mark.tsx'), []);
+    assert.deepEqual(found(rules.literalColor, '<svg><path fill="none" stroke="currentColor"/><use href="#fff"/></svg>\n', 'index.html'), []);
+  });
+
   test('leaves a hex or a colour function in a string that is not style: an issue number, a hash, a constant', () => {
     const ts = "const title = 'Issue #123 closed';\nlocation.hash = '#bad';\nconst fill = \"rgb(0, 0, 0)\";\nconst ring = `0 0 0 2px #fffa`;\n";
     assert.deepEqual(found(rules.literalColor, ts, 'src/view.ts'), []);
@@ -296,6 +313,18 @@ describe('the app\'s own custom properties', () => {
     const css = ':root {\n  --mk-gap: 12px;\n  --mk-hair: 1px;\n  --mk-red: red;\n}\n.a { gap: var(--mk-gap); border-radius: var(--mk-hair); }\n.b { color: var(--mk-red); }\n.c { animation: var(--mk-red) 1s; }\n';
     assert.deepEqual(where(judged(rules.literalSpace, { 'src/app.css': css })), ['src/app.css:6 literal-space']);
     assert.deepEqual(where(judged(rules.literalColor, { 'src/app.css': css })), ['src/app.css:7 literal-color']);
+  });
+
+  test('a chain of properties that doubles at each step resolves at once, still reports the literal, and says where it stopped', () => {
+    const chain = Array.from({ length: 20 }, (_, k) => `  --c${k + 1}: var(--c${k}) var(--c${k});`).join('\n');
+    const files = { ...cleanApp(), 'src/chain.css': `:root {\n  --c0: 13px;\n${chain}\n}\n.mk-a { padding: var(--c20); }\n` };
+    const started = performance.now();
+    const { findings, notes } = check({ root: folder(files), packageMode: false });
+    const took = performance.now() - started;
+    assert.ok(took < 1000, `took ${Math.round(took)} ms`);
+    assert.deepEqual(findings.map((f: Finding) => `${f.file}:${f.line} ${f.rule}`), ['src/chain.css:24 literal-space']);
+    assert.ok(findings[0].message.includes('13px') && findings[0].message.includes('src/chain.css:2'), findings[0].message);
+    assert.ok(notes.some((note: string) => note.includes('--c20') && /\b1000\b/.test(note)), notes.join('\n'));
   });
 
   test('a hex in an app\'s property is found once, where it is defined', () => {
@@ -400,7 +429,7 @@ describe('own-keydown', () => {
 describe('unknown-value', () => {
   test('finds a value outside the set, in a page, in markup, in setAttribute, in dataset, in a selector and in JSX', () => {
     assert.deepEqual(found(rules.unknownValue, '<span class="im-chip" data-im-tone="good">x</span>\n<html data-im-theme="system">\n', 'index.html'), ['1 unknown-value', '2 unknown-value']);
-    const ts = "el.innerHTML = '<span data-im-tone=\"good\">x</span>';\nel.setAttribute('data-im-look', 'glass');\nel.dataset.imSidebar = 'rail';\ndocument.querySelector('[data-im-step=failed]');\n";
+    const ts = "el.innerHTML = '<span data-im-tone=\"good\">x</span>';\nel.setAttribute('data-im-look', 'glass');\nel.dataset.imSidebar = 'rail';\ndocument.querySelector('[data-im-step=blocked]');\n";
     assert.deepEqual(found(rules.unknownValue, ts, 'src/view.ts'), [1, 2, 3, 4].map((line) => `${line} unknown-value`));
     assert.deepEqual(found(rules.unknownValue, 'const a = <span data-im-tone="bad">x</span>;\n', 'src/view.tsx'), ['1 unknown-value']);
     assert.deepEqual(found(rules.unknownValue, '[data-im-surface="card"] .mk-a { color: var(--im-text); }\n'), ['1 unknown-value']);
@@ -414,10 +443,26 @@ describe('unknown-value', () => {
     assert.deepEqual(found(rules.unknownValue, '[data-im-tone="ok"] .mk-a { color: var(--im-text); }\n[data-im-tone] .mk-b { color: var(--im-text); }\n[data-im-look^="o"] .mk-c { color: var(--im-text); }\n'), []);
   });
 
-  test('values.mjs holds the sets of the brief', () => {
+  test('values.mjs holds the sets of the brief, and the failed and skipped steps the package draws', () => {
     assert.deepEqual(VALUES['data-im-tone'], ['ok', 'warn', 'err', 'info', 'accent']);
     assert.deepEqual(VALUES['data-im-surface'], ['ground', 'sheet', 'dense', 'float']);
+    assert.deepEqual(VALUES['data-im-step'], ['done', 'now', 'todo', 'failed', 'skipped']);
     assert.deepEqual(Object.keys(VALUES).sort(), ['data-im-app', 'data-im-inspector', 'data-im-look', 'data-im-sidebar', 'data-im-step', 'data-im-surface', 'data-im-theme', 'data-im-tone']);
+    assert.deepEqual(found(rules.unknownValue, '<ol class="im-steps"><li data-im-step="failed">a</li><li data-im-step="skipped">b</li></ol>\n', 'index.html'), []);
+  });
+
+  test('every value the package\'s css/ matches for an attribute of values.mjs is in its set', () => {
+    const css = readdirSync(join(root, 'css'), { recursive: true }).map(String).filter((name) => name.endsWith('.css'));
+    for (const name of css) {
+      const sheet = parseCss(readFileSync(join(root, 'css', name), 'utf8'));
+      for (const rule of sheet.rules) {
+        for (const match of rule.selector.matchAll(/\[\s*(data-im-[a-z0-9-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s\]]+))\s*\]/g)) {
+          const set = VALUES[match[1]];
+          const value = match[2] ?? match[3] ?? match[4];
+          if (set) assert.ok(set.includes(value), `css/${name}:${rule.line} draws ${match[1]}="${value}", which values.mjs does not list`);
+        }
+      }
+    }
   });
 });
 
@@ -876,6 +921,39 @@ describe('imago-check on an app', () => {
     assert.ok(findings[0].message.includes('viewer/node_modules/@acaprino/imago/docs/design-file.md'), findings[0].message);
     writeFileSync(join(dir, 'AGENTS.md'), 'Before UI work, read viewer/node_modules/@acaprino/imago/docs/design-file.md.\n');
     assert.deepEqual(check({ root: dir, packageMode: false }).findings, []);
+  });
+
+  test('mount-app follows a re-export of the package\'s mountApp through the app\'s own files, to any depth', () => {
+    const mounts = (files: Record<string, string>) => {
+      const app = cleanApp();
+      delete app['src/boot.ts'];
+      return check({ root: folder({ ...app, ...files }), packageMode: false }).findings.filter((f: Finding) => f.rule === 'mount-app').length;
+    };
+    const call = 'mountApp(shell, registry, { search() {} });\n';
+    assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './ui.ts';\n${call}`, 'src/ui.ts': "export { mountApp } from '@acaprino/imago/ui';\n" }), 0, 'export { mountApp } from');
+    assert.equal(mounts({ 'src/main.ts': "import { mount } from './ui';\nmount(shell, registry, {});\n", 'src/ui.ts': "export { confirm, mountApp as mount } from '@acaprino/imago/ui';\n" }), 0, 'export { mountApp as x } from');
+    assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './ui.js';\n${call}`, 'src/ui.ts': "export * from '@acaprino/imago/ui';\n" }), 0, 'export * from');
+    assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './app';\n${call}`, 'src/app/index.ts': "export * from '../ui.ts';\n", 'src/ui.ts': "export { mountApp } from '@acaprino/imago/ui';\n" }), 0, 'two files deep');
+    assert.equal(mounts({ 'src/main.ts': "import * as ui from './ui.ts';\nui.mountApp(shell, registry, {});\n", 'src/ui.ts': "export * from '@acaprino/imago/ui';\n" }), 0, 'through a namespace');
+    assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './ui.ts';\n${call}`, 'src/ui.ts': "import { mountApp } from '@acaprino/imago/ui';\nexport { mountApp };\n" }), 0, 'imported, then exported');
+    assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './ui.ts';\n${call}`, 'src/ui.ts': 'export function mountApp(): void {}\n' }), 1, 'an own function of that name');
+    assert.equal(mounts({ 'src/main.ts': `import { mountApp } from './a.ts';\n${call}`, 'src/a.ts': "export * from './b.ts';\n", 'src/b.ts': "export * from './a.ts';\n" }), 1, 'a cycle ends, and passes nothing');
+  });
+
+  test('reading no source file is exit 2, with the folders it looked in; the summary says how many files of each kind it read', () => {
+    const empty = cleanApp();
+    empty['package.json'] = manifest({ src: [] });
+    const none = runCli(['--root', folder(empty)]);
+    assert.equal(none.status, 2, none.stdout + none.stderr);
+    assert.match(none.stderr, /no source file/);
+    const docs = { ...cleanApp(), 'package.json': manifest({ src: ['docs'] }), 'docs/readme.md': '# x\n' };
+    const result = runCli(['--root', folder(docs)]);
+    assert.equal(result.status, 2, result.stdout + result.stderr);
+    assert.match(result.stderr, /no source file.*\bdocs\b/);
+    const clean = runCli(['--root', folder(cleanApp())]);
+    assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+    assert.match(clean.stdout, /^imago-check: no findings in 3 files \(1 css, 2 script\)\.$/m);
+    assert.deepEqual(check({ root: folder(cleanApp()), packageMode: false }).read, { css: 1, script: 2, html: 0 });
   });
 
   test('a dangling symlink in src is skipped with a note: no stack, and no exit 1 of its own', () => {

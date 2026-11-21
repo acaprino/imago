@@ -22,7 +22,9 @@ import { parseCss, parseDeclarations } from './css.mjs';
  * @typedef {{ specifier: string, line: number, kind: 'import' | 'export' | 'dynamic', type: boolean, names: Binding[], namespace: string | null }} Import
  *   A module a script imports (`import`, `import('…')`) or re-exports (`export … from`), with the names it binds:
  *   `names` are the named bindings, `namespace` the name of `* as ns`. `type` marks `import type`.
- * @typedef {{ file: string, kind: 'css' | 'script' | 'html', sheets: Sheet[], strings: Str[], code: Chunk[], comments: Comment[], imports: Import[] }} Source
+ * @typedef {{ local: string, name: string }} Exported
+ *   A binding of the module that `export { local as name }` exports, without `from`.
+ * @typedef {{ file: string, kind: 'css' | 'script' | 'html', sheets: Sheet[], strings: Str[], code: Chunk[], comments: Comment[], imports: Import[], exported: Exported[] }} Source
  */
 
 /** Stands for a ${} of a template literal: a name next to it is built at run time. */
@@ -75,7 +77,7 @@ export function parseSource(file, text) {
   const lower = file.toLowerCase();
   if (lower.endsWith('.css')) {
     const sheet = parseCss(text);
-    return { file, kind: 'css', sheets: [sheet], strings: [], code: [], comments: sheet.comments, imports: [] };
+    return { file, kind: 'css', sheets: [sheet], strings: [], code: [], comments: sheet.comments, imports: [], exported: [] };
   }
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return parseHtml(file, text);
   const lexed = lexScript(text);
@@ -89,6 +91,7 @@ export function parseSource(file, text) {
     code: [{ text: lexed.code, line: 1 }],
     comments: lexed.comments,
     imports: importsIn(lexed.code, lexed.strings, 1),
+    exported: exportedIn(lexed.code),
   };
 }
 
@@ -136,6 +139,15 @@ function importsIn(code, strings, firstLine) {
     add(match, 'dynamic', { names, namespace: null });
   }
   return found.sort((a, b) => a.at - b.at).map(({ at, ...each }) => each);
+}
+
+/**
+ * The bindings a script exports by `export { a, b as c }`, without `from` (those with `from` are imports).
+ * @param {string} code the code of the script, its strings blanked
+ * @returns {Exported[]}
+ */
+function exportedIn(code) {
+  return [...code.matchAll(/(?<![\w$.])export\s*\{([^{}]*)\}(?!\s*from\s*["'])/g)].flatMap((match) => bindingsOf(`{${match[1]}}`).names.map(({ imported, local }) => ({ local: imported, name: local })));
 }
 
 /**
@@ -308,8 +320,9 @@ export function lexScript(text, firstLine = 1) {
 
 /**
  * The declarations a script writes as style: a `style="…"` in its markup, `el.style.prop = '…'`,
- * `el.style.setProperty('prop', '…')`, `el.style.cssText = '…'` and `el.setAttribute('style', '…')`, and the colour
- * of a `<meta name="theme-color">` in its markup. They form rules without a selector.
+ * `el.style.setProperty('prop', '…')`, `el.style.cssText = '…'` and `el.setAttribute('style', '…')`; the colour of a
+ * `<meta name="theme-color">` and of the attributes of COLOR_ATTRIBUTES in its markup and in JSX; and the colours a
+ * canvas context is given (`ctx.fillStyle = '…'`, strokeStyle, shadowColor). They form rules without a selector.
  * @param {Str[]} strings
  * @returns {Sheet}
  */
@@ -329,6 +342,20 @@ function inlineSheet(strings) {
       const at = lineAt(str.text, match.index ?? 0, str.line);
       const color = themeColor(match[0]);
       if (color !== null) add(parseDeclarations(`theme-color: ${color}`, at), at);
+    }
+    for (const match of str.text.matchAll(MARKUP_COLOR)) {
+      const at = lineAt(str.text, match.index ?? 0, str.line);
+      add(parseDeclarations(`${match[1].toLowerCase()}: ${match[2] ?? match[3] ?? ''}`, at), at);
+    }
+    const jsx = /(?:fill|stroke|color|Color|-color)\s*=\s*\{?\s*$/.test(str.before) ? JSX_COLOR.exec(str.before) : null;
+    if (jsx) {
+      add(parseDeclarations(`${kebab(jsx[2])}: ${str.text}`, str.line), str.line);
+      return;
+    }
+    const canvas = /\.(fillStyle|strokeStyle|shadowColor)\s*=\s*$/.exec(str.before);
+    if (canvas) {
+      add(parseDeclarations(`${kebab(canvas[1])}: ${str.text}`, str.line), str.line);
+      return;
     }
     const property = /\.style\.([A-Za-z]+)\s*=\s*$/.exec(str.before);
     if (property && property[1] !== 'cssText') {
@@ -350,6 +377,14 @@ function inlineSheet(strings) {
   });
   return { rules, atRules: [], comments: [] };
 }
+
+/** The attributes of markup that take a colour: the presentation attributes of SVG, and color. */
+const COLOR_ATTRIBUTES = new Set(['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color', 'color']);
+// One of them with its value in the markup a string holds; `data-fill` and `stroke-width` are not one.
+const MARKUP_COLOR = /(?<![\w:-])(fill|stroke|stop-color|flood-color|lighting-color|color)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+// One of them, with its JSX name, as the attribute of a JSX tag whose value is the string that follows: the code
+// before the string opens a tag (`<path d={d} fill=`) and does not leave it. Strings are blanked in that code.
+const JSX_COLOR = /<[A-Za-z][\w.:-]*(?:\s+(?:[^<>;{}()"'`]|\{[^{}]*\}|(["'`])\s*\1)*?)?\s(fill|stroke|stopColor|floodColor|lightingColor|color|stop-color|flood-color|lighting-color)\s*=\s*\{?\s*$/;
 
 /** The content of a `<meta name="theme-color" content="…">` tag, or null for another tag. */
 function themeColor(/** @type {string} */ tag) {
@@ -455,7 +490,7 @@ const inlineRule = (declarations, line) => ({
  */
 function parseHtml(file, text) {
   /** @type {Source} */
-  const source = { file, kind: 'html', sheets: [], strings: [], code: [], comments: [], imports: [] };
+  const source = { file, kind: 'html', sheets: [], strings: [], code: [], comments: [], imports: [], exported: [] };
   /** @type {Rule[]} */
   const objects = [];
   let rest = text;
@@ -484,6 +519,7 @@ function parseHtml(file, text) {
     source.code.push({ text: lexed.code, line: first });
     source.comments.push(...lexed.comments);
     source.imports.push(...importsIn(lexed.code, lexed.strings, first));
+    source.exported.push(...exportedIn(lexed.code));
     objects.push(...styleObjects(lexed.code, lexed.strings, first));
     blankOut(at, at + match[2].length);
   }
@@ -507,6 +543,10 @@ function parseHtml(file, text) {
       source.strings.push({ text: value, line: at, before: `${name}=`, template: false, attribute: name });
       if (name === 'style') {
         const declarations = parseDeclarations(value, at);
+        if (declarations.length) styles.push(inlineRule(declarations, at));
+      }
+      if (COLOR_ATTRIBUTES.has(name)) {
+        const declarations = parseDeclarations(`${name}: ${value}`, at);
         if (declarations.length) styles.push(inlineRule(declarations, at));
       }
     }

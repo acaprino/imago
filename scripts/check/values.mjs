@@ -18,6 +18,6 @@ export const VALUES = {
   'data-im-inspector': ['wide'],
   // The four surfaces.
   'data-im-surface': ['ground', 'sheet', 'dense', 'float'],
-  // The state of a step of im-steps.
-  'data-im-step': ['done', 'now', 'todo'],
+  // The state of a step of im-steps: a failed or a skipped stage is drawn too (css/controls.css).
+  'data-im-step': ['done', 'now', 'todo', 'failed', 'skipped'],
 };

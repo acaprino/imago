@@ -77,35 +77,105 @@ export function customProperties(sources) {
 }
 
 /**
- * The tokens of a value with each var() of an app's own property replaced by the tokens of the values the app gives
- * it, through as many var() as it takes; each such token keeps the definition it came from. A property set in several
- * places gives the tokens of all of them; one the app never sets, or a loop, is left as it is.
- * @param {string} value @param {Properties} properties
+ * The most tokens the values of one custom property are read to. A chain of properties that doubles at each step
+ * (`--c1: var(--c0) var(--c0)`, `--c2: var(--c1) var(--c1)`, …) would otherwise take time and memory in two to the
+ * power of its depth; past this size the rest of that property is not read, and the program says so in a note. A
+ * thousand tokens is some hundred values of a shorthand, far more than a real property holds.
+ */
+export const MAX_EXPANSION = 1000;
+
+/**
+ * @typedef {{ tokens: Map<string, Resolved[]>, resolving: Set<string>, cut: Set<string> }} Expansions
+ *   The properties resolved so far, each once for the whole run; those being resolved, to stop a loop; and those
+ *   whose values passed MAX_EXPANSION.
+ */
+/** @type {WeakMap<Properties, Expansions>} */
+const EXPANSIONS = new WeakMap();
+
+/** @param {Properties} properties @returns {Expansions} */
+function expansionsOf(properties) {
+  let expansions = EXPANSIONS.get(properties);
+  if (!expansions) {
+    expansions = { tokens: new Map(), resolving: new Set(), cut: new Set() };
+    EXPANSIONS.set(properties, expansions);
+  }
+  return expansions;
+}
+
+/**
+ * The tokens of every value the app gives `name`, resolved, each with the definition it came from: computed once,
+ * then reused. Null when `name` is being resolved already (a loop), which leaves its var() as it is.
+ * @param {string} name @param {Properties} properties @param {Expansions} expansions
+ * @returns {Resolved[] | null}
+ */
+function expand(name, properties, expansions) {
+  const known = expansions.tokens.get(name);
+  if (known) return known;
+  if (expansions.resolving.has(name)) return null;
+  expansions.resolving.add(name);
+  /** @type {Resolved[]} */
+  const out = [];
+  reading: for (const definition of properties.get(name) ?? []) {
+    for (const token of splice(valueTokens(definition.value), properties, expansions)) {
+      if (out.length === MAX_EXPANSION) {
+        expansions.cut.add(name);
+        break reading;
+      }
+      out.push(token.via ? token : { ...token, via: definition });
+    }
+  }
+  expansions.resolving.delete(name);
+  expansions.tokens.set(name, out);
+  return out;
+}
+
+/**
+ * Tokens with each var() of an app's own property replaced by the tokens of its values, the functions round the var()
+ * kept round them.
+ * @param {Token[]} tokens @param {Properties} properties @param {Expansions} expansions
  * @returns {Resolved[]}
  */
-function resolve(value, properties, resolving = new Set()) {
-  const tokens = valueTokens(value);
-  if (!properties.size) return tokens;
+function splice(tokens, properties, expansions) {
   /** @type {Resolved[]} */
   const out = [];
   for (let k = 0; k < tokens.length; k++) {
     const token = tokens[k];
     const name = token.type === 'function' && token.name === 'var' ? tokens[k + 1]?.text ?? '' : '';
-    const definitions = properties.get(name);
-    if (!definitions || resolving.has(name)) {
+    const expanded = properties.has(name) ? expand(name, properties, expansions) : null;
+    if (!expanded) {
       out.push(token);
       continue;
     }
     let close = k + 1;
     while (close < tokens.length && !(tokens[close].type === 'close' && tokens[close].fns.length === token.fns.length + 1)) close++;
-    resolving.add(name);
-    for (const definition of definitions) {
-      for (const inner of resolve(definition.value, properties, resolving)) out.push({ ...inner, fns: [...token.fns, ...inner.fns], via: inner.via ?? definition });
-    }
-    resolving.delete(name);
+    for (const inner of expanded) out.push({ ...inner, fns: [...token.fns, ...inner.fns] });
     k = close;
   }
   return out;
+}
+
+/**
+ * The tokens of a value with each var() of an app's own property replaced by the tokens of the values the app gives
+ * it, through as many var() as it takes; each such token keeps the definition it came from. A property set in several
+ * places gives the tokens of all of them; one the app never sets, or a loop, is left as it is. Each property is
+ * resolved once for the run (a loop may leave a property met inside it resolved without the loop's part).
+ * @param {string} value @param {Properties} properties
+ * @returns {Resolved[]}
+ */
+function resolve(value, properties) {
+  const tokens = valueTokens(value);
+  return properties.size ? splice(tokens, properties, expansionsOf(properties)) : tokens;
+}
+
+/**
+ * What the program says about the app's own custom properties once the rules have read them: the properties whose
+ * values passed MAX_EXPANSION, and were read only that far.
+ * @param {Properties} properties
+ * @returns {string[]}
+ */
+export function propertyNotes(properties) {
+  const cut = [...(EXPANSIONS.get(properties)?.cut ?? [])].sort();
+  return cut.length ? [`the values of ${cut.join(', ')} expand to more than ${MAX_EXPANSION} tokens: literal-color, literal-font-size and literal-space read the first ${MAX_EXPANSION} of each`] : [];
 }
 
 /**
@@ -128,7 +198,12 @@ function perDeclaration(source, id, literalsOf, message, properties = NO_PROPERT
       if (own.length) findings.push(finding(source.file, declaration.line, id, message(list(own.map(literalText)), declaration), declaration.endLine));
       /** @type {Map<Definition, Resolved[]>} */
       const byDefinition = new Map();
-      for (const token of literals) if (token.via) byDefinition.set(token.via, [...(byDefinition.get(token.via) ?? []), token]);
+      for (const token of literals) {
+        if (!token.via) continue;
+        const group = byDefinition.get(token.via);
+        if (group) group.push(token);
+        else byDefinition.set(token.via, [token]);
+      }
       for (const [via, tokens] of byDefinition) {
         const from = `${list(tokens.map(literalText))} from ${via.name} (${via.file}:${via.line})`;
         findings.push({ ...finding(source.file, declaration.line, id, message(from, declaration), declaration.endLine), via: { file: via.file, line: via.line, endLine: via.endLine } });
@@ -717,16 +792,63 @@ const escapeRegExp = (/** @type {string} */ text) => text.replace(/[$()*+.?[\\\]
 
 /**
  * The entry of the app, or a file it imports, imports mountApp from @acaprino/imago/ui and calls that binding (under
- * its own name, an alias, or through a namespace). An app's own function of the same name is not it.
+ * its own name, an alias, or through a namespace). A file of the app may pass it on: `export { mountApp } from …`,
+ * `export { mountApp as x } from …`, `export * from …`, or an import exported again with `export { mountApp }`, to any
+ * depth. An app's own function of the same name is not it.
  * @param {Source[]} sources the entry first, then the files it imports
+ * @param {Map<string, Map<string, string>>} [links] for each file, the file of the app each relative specifier of it is
  * @returns {Finding[]}
  */
-export function mountApp(sources) {
+export function mountApp(sources, links = new Map()) {
+  const byFile = new Map(sources.map((source) => [source.file, source]));
+  /** @type {Map<string, Set<string>>} */
+  const exportsOf = new Map();
+  /**
+   * The names under which a module exports the package's mountApp: the package itself, or a file of the app that passes
+   * it on. A file met again while it is being read (a cycle) exports nothing more.
+   * @param {Source} from @param {string} specifier @param {Set<string>} reading
+   * @returns {Set<string>}
+   */
+  const mountNames = (from, specifier, reading) => {
+    if (specifier === '@acaprino/imago/ui') return new Set(['mountApp']);
+    const file = links.get(from.file)?.get(specifier);
+    const source = file === undefined ? undefined : byFile.get(file);
+    if (!source || reading.has(source.file)) return new Set();
+    const known = exportsOf.get(source.file);
+    if (known) return known;
+    reading.add(source.file);
+    const { locals } = bound(source, reading);
+    /** @type {Set<string>} */
+    const names = new Set();
+    for (const each of source.imports.filter((one) => one.kind === 'export' && !one.type)) {
+      const passed = mountNames(source, each.specifier, reading);
+      if (!each.names.length && !each.namespace) for (const name of passed) names.add(name);
+      for (const binding of each.names) if (passed.has(binding.imported)) names.add(binding.local);
+    }
+    for (const { local, name } of source.exported) if (locals.has(local)) names.add(name);
+    reading.delete(source.file);
+    exportsOf.set(source.file, names);
+    return names;
+  };
+  /**
+   * The names a file binds to the package's mountApp: its locals, and `ns.name` through a namespace import.
+   * @param {Source} source @param {Set<string>} reading
+   */
+  const bound = (source, reading) => {
+    /** @type {Set<string>} */
+    const locals = new Set();
+    /** @type {string[]} */
+    const members = [];
+    for (const each of source.imports.filter((one) => one.kind !== 'export' && !one.type)) {
+      const names = mountNames(source, each.specifier, reading);
+      for (const binding of each.names) if (names.has(binding.imported)) locals.add(binding.local);
+      if (each.namespace) for (const name of names) members.push(`${escapeRegExp(each.namespace)}\\s*\\.\\s*${escapeRegExp(name)}`);
+    }
+    return { locals, members };
+  };
   const calls = sources.some((source) => {
-    const imports = source.imports.filter((each) => each.specifier === '@acaprino/imago/ui' && each.kind !== 'export' && !each.type);
-    const locals = imports.flatMap((each) => each.names.filter((name) => name.imported === 'mountApp').map((name) => name.local));
-    const namespaces = imports.flatMap((each) => (each.namespace ? [each.namespace] : []));
-    const patterns = [...locals.map((local) => `(?<![\\w$.])${escapeRegExp(local)}\\s*\\(`), ...namespaces.map((name) => `(?<![\\w$.])${escapeRegExp(name)}\\s*\\.\\s*mountApp\\s*\\(`)];
+    const { locals, members } = bound(source, new Set([source.file]));
+    const patterns = [...[...locals].map((local) => `(?<![\\w$.])${escapeRegExp(local)}\\s*\\(`), ...members.map((member) => `(?<![\\w$.])${member}\\s*\\(`)];
     if (!patterns.length) return false;
     const call = new RegExp(patterns.join('|'));
     return source.code.some((chunk) => call.test(chunk.text));

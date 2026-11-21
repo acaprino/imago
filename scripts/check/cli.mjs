@@ -3,8 +3,9 @@
 //
 // Checks an app against the rules of docs/design-file.md that a program can judge, or, with --package, the package's
 // own css/. This file is the command: its arguments, the files it reads, what it prints and its exit code (1 on any
-// finding, 0 on none, 2 on a bad argument or an error of the system, which is one line). A file or a folder that cannot
-// be read (a link to nothing) is skipped with a note. The rules are in rules.mjs.
+// finding, 0 on none, 2 on a bad argument, on an app where it reads no source file, or on an error of the system, which
+// is one line). It says how many files of each kind it read. A file or a folder that cannot be read (a link to nothing)
+// is skipped with a note. The rules are in rules.mjs.
 //
 // In an app it reads "imago" from the app's package.json:
 //   { "src": ["apps/desktop/src"], "tests": ["apps/desktop/tests"], "cargo": "apps/desktop/src-tauri/Cargo.toml",
@@ -28,7 +29,9 @@ import { importsOf, parseSource, SCRIPT_EXTENSIONS, SOURCE_EXTENSIONS } from './
  * @typedef {import('./rules.mjs').Finding} Finding
  * @typedef {import('./rules.mjs').Exception} Exception
  * @typedef {import('./source.mjs').Source} Source
- * @typedef {{ findings: Finding[], accepted: Exception[], notes: string[] }} Result
+ * @typedef {{ css: number, script: number, html: number }} Read
+ *   How many files of each kind the check read.
+ * @typedef {{ findings: Finding[], accepted: Exception[], notes: string[], read: Read }} Result
  * @typedef {{ root: string, notes: string[], skip: string | null }} Reading
  *   What a walk of the app needs: its root, the notes of what it skipped, and the installed package, never read as
  *   the app's own source.
@@ -45,7 +48,8 @@ export const USAGE = `Usage: imago-check [--root <dir>] [--package]
   --package       check the package's own css/ instead
   --root <dir>    the folder to check (default: the current folder)
 
-  Prints file:line  rule  message for each finding. Exit 1 on a finding, 0 on none, 2 on a bad argument.
+  Prints file:line  rule  message for each finding, and how many files it read. Exit 1 on a finding, 0 on
+  none, 2 on a bad argument, on an app where it reads no source file, or on an error of the system.
   An exception is a comment on the line or the line above: imago-check: allow <rule> — <reason>`;
 
 /** Where an app has the package installed, from the folder of its package.json. */
@@ -233,13 +237,16 @@ function npmManifest(root, src) {
 }
 
 /**
- * The entry and every file it imports by a relative path (scripts only, not node_modules).
+ * The entry and every file it imports or re-exports by a relative path (scripts only, not node_modules), and for each
+ * file the file of the app each of its relative specifiers is.
  * @param {Reading} reading @param {string} entry
- * @returns {Source[]}
+ * @returns {{ sources: Source[], links: Map<string, Map<string, string>> }}
  */
 function importGraph(reading, entry) {
   /** @type {Map<string, Source>} */
   const seen = new Map();
+  /** @type {Map<string, Map<string, string>>} */
+  const links = new Map();
   const queue = [entry];
   while (queue.length) {
     const path = /** @type {string} */ (queue.shift());
@@ -247,6 +254,9 @@ function importGraph(reading, entry) {
     const source = sourceAt(reading, path);
     if (!source) continue;
     seen.set(path, source);
+    /** @type {Map<string, string>} */
+    const targets = new Map();
+    links.set(source.file, targets);
     for (const spec of importsOf(source)) {
       if (!spec.startsWith('.')) continue;
       const base = resolve(dirname(path), spec);
@@ -255,10 +265,13 @@ function importGraph(reading, entry) {
         ...SCRIPT_EXTENSIONS.map((ending) => base + ending), ...SCRIPT_EXTENSIONS.map((ending) => join(base, `index${ending}`)),
       ];
       const target = candidates.find((candidate) => isFile(candidate) && SCRIPT_EXTENSIONS.some((ending) => candidate.endsWith(ending)));
-      if (target && !target.split(/[\\/]/).includes('node_modules')) queue.push(target);
+      if (target && !target.split(/[\\/]/).includes('node_modules')) {
+        targets.set(spec, fromRoot(reading.root, target));
+        queue.push(target);
+      }
     }
   }
-  return [...seen.values()];
+  return { sources: [...seen.values()], links };
 }
 
 /**
@@ -306,8 +319,10 @@ export function check({ root, packageMode }) {
   const exceptions = [];
   /** @type {string[]} */
   const notes = [];
-  if (packageMode) checkPackage(root, findings, exceptions, notes);
-  else checkApp(root, findings, exceptions, notes);
+  const sources = packageMode ? checkPackage(root, findings, exceptions, notes) : checkApp(root, findings, exceptions, notes);
+  /** @type {Read} */
+  const read = { css: 0, script: 0, html: 0 };
+  for (const source of sources) read[source.kind]++;
   const applied = rules.applyExceptions(findings, exceptions);
   const order = (/** @type {{ file: string, line: number, rule: string }} */ a, /** @type {{ file: string, line: number, rule: string }} */ b) =>
     (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line || (a.rule < b.rule ? -1 : a.rule > b.rule ? 1 : 0));
@@ -316,31 +331,39 @@ export function check({ root, packageMode }) {
     findings: [...unique.values()].sort(order).map(({ file, line, rule, message }) => ({ file, line, rule, message })),
     accepted: applied.accepted.sort(order),
     notes,
+    read,
   };
 }
 
 /**
  * The package's own css/: every rule but the app's, and css/tokens.css apart from the literal rules (it is where the
- * literals are named).
+ * literals are named). Returns the files it read.
  * @param {string} root @param {Finding[]} findings @param {Exception[]} exceptions @param {string[]} notes
+ * @returns {Source[]}
  */
 function checkPackage(root, findings, exceptions, notes) {
   const css = join(root, 'css');
   if (!isFolder(css)) throw new UsageError(`${root} has no css/ folder: --package checks the package's own css/`);
   /** @type {Reading} */
   const reading = { root, notes, skip: null };
+  /** @type {Source[]} */
+  const sources = [];
   for (const path of sourcesUnder(reading, css, ['.css'])) {
     const source = sourceAt(reading, path);
     if (!source) continue;
+    sources.push(source);
     for (const rule of [rules.classPrefix, rules.cursorPointer, rules.disabledOpacity, rules.mediaWidth]) findings.push(...rule(source));
     if (source.file !== 'css/tokens.css') for (const rule of [rules.literalColor, rules.literalFontSize, rules.literalSpace]) findings.push(...rule(source));
     exceptions.push(...rules.exceptionsIn(source));
   }
+  return sources;
 }
 
 /**
- * An app: its sources and its tests, its pins, the files of its agents, its entry and its icons.
+ * An app: its sources and its tests, its pins, the files of its agents, its entry and its icons. Returns the files of
+ * `src` and `tests` it read; reading none is a bad configuration, not a pass.
  * @param {string} root @param {Finding[]} findings @param {Exception[]} exceptions @param {string[]} notes
+ * @returns {Source[]}
  */
 function checkApp(root, findings, exceptions, notes) {
   const manifestPath = join(root, 'package.json');
@@ -365,6 +388,10 @@ function checkApp(root, findings, exceptions, notes) {
   const reading = { root, notes, skip: installed };
   const sources = sourcesOf(reading, config.src, 'src');
   const tests = sourcesOf(reading, config.tests, 'tests').filter((source) => !sources.some((other) => other.file === source.file));
+  if (!sources.length && !tests.length) {
+    const folders = [...config.src, ...config.tests];
+    throw new UsageError(`read no source file (${SOURCE_EXTENSIONS.join(', ')}) in ${folders.length ? folders.join(', ') : 'no folder: "imago.src" is empty'}: point "imago.src" at the app's sources`);
+  }
   const properties = rules.customProperties(sources);
   for (const source of sources) {
     for (const rule of [rules.imSelector, rules.cursorPointer, rules.disabledOpacity, rules.mediaWidth, rules.showModal, rules.ownKeydown, rules.literalCase, rules.unknownValue]) {
@@ -372,6 +399,7 @@ function checkApp(root, findings, exceptions, notes) {
     }
     for (const rule of [rules.literalColor, rules.literalFontSize, rules.literalSpace]) findings.push(...rule(source, properties));
   }
+  notes.push(...rules.propertyNotes(properties));
   for (const source of [...sources, ...tests]) {
     findings.push(...rules.unknownName(source, defined), ...rules.removedName(source));
     exceptions.push(...rules.exceptionsIn(source));
@@ -407,7 +435,8 @@ function checkApp(root, findings, exceptions, notes) {
   if (config.entry) {
     const entryPath = resolve(root, config.entry);
     if (!isFile(entryPath)) throw new UsageError(`"imago.entry" names ${config.entry}, which does not exist`);
-    findings.push(...rules.mountApp(importGraph(reading, entryPath)));
+    const graph = importGraph(reading, entryPath);
+    findings.push(...rules.mountApp(graph.sources, graph.links));
   } else {
     notes.push('mount-app: skipped, no "entry" in the "imago" block of package.json');
   }
@@ -417,6 +446,7 @@ function checkApp(root, findings, exceptions, notes) {
   } else {
     notes.push('app-icon: skipped, no "icons" in the "imago" block of package.json');
   }
+  return [...sources, ...tests];
 }
 
 /**
@@ -437,10 +467,11 @@ function iconFiles(root, installed, app, icons) {
 // ---------- output ----------
 
 /**
- * What the program prints: the findings, then the exceptions it accepted, the notes and a summary.
+ * What the program prints: the findings, then the exceptions it accepted, the notes and a summary, which says how many
+ * files of each kind the check read.
  * @param {Result} result
  */
-export function format({ findings, accepted, notes }) {
+export function format({ findings, accepted, notes, read }) {
   /** @type {string[][]} */
   const sections = [];
   if (findings.length) sections.push(findings.map((each) => `${each.file}:${each.line}  ${each.rule}  ${each.message}`));
@@ -452,7 +483,9 @@ export function format({ findings, accepted, notes }) {
   const byRule = [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([rule, count]) => `${rule} ${count}`).join(', ');
   const plural = (/** @type {number} */ count, /** @type {string} */ word) => `${count} ${word}${count === 1 ? '' : 's'}`;
   const total = findings.length ? `${plural(findings.length, 'finding')} (${byRule})` : 'no findings';
-  sections.push([`imago-check: ${total}${accepted.length ? `, ${plural(accepted.length, 'exception')} accepted` : ''}.`]);
+  const kinds = Object.entries(read).filter(([, count]) => count > 0).map(([kind, count]) => `${count} ${kind}`).join(', ');
+  const files = `${plural(Object.values(read).reduce((sum, count) => sum + count, 0), 'file')}${kinds ? ` (${kinds})` : ''}`;
+  sections.push([`imago-check: ${total} in ${files}${accepted.length ? `, ${plural(accepted.length, 'exception')} accepted` : ''}.`]);
   return `${sections.map((lines) => lines.join('\n')).join('\n\n')}\n`;
 }
 

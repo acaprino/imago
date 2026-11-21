@@ -456,12 +456,13 @@ export const isLength = (/** @type {Token} */ token) => token.type === 'dimensio
 export const SIZE_KEYWORDS = new Set(['xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large', 'xxx-large', 'smaller', 'larger', 'math']);
 
 // The properties whose value may hold a colour. `theme-color` is not one of CSS: it is the name the reader gives the
-// content of a <meta name="theme-color">.
+// content of a <meta name="theme-color">; `fill-style`, `stroke-style` and `shadow-color` are its names for the
+// fillStyle, strokeStyle and shadowColor of a canvas context.
 const COLOR_PROPERTIES = new Set(['color', 'background', 'background-color', 'background-image', 'border', 'border-color', 'outline',
   'outline-color', 'box-shadow', 'text-shadow', 'fill', 'stroke', 'caret-color', 'accent-color', 'column-rule', 'column-rule-color',
   'text-decoration', 'text-decoration-color', 'text-emphasis', 'text-emphasis-color', 'scrollbar-color', 'stop-color', 'flood-color',
   'lighting-color', 'filter', 'backdrop-filter', 'border-image', 'border-image-source', 'mask', 'mask-image', 'list-style',
-  'list-style-image', 'theme-color']);
+  'list-style-image', 'theme-color', 'fill-style', 'stroke-style', 'shadow-color']);
 
 /** Whether a property takes a colour, so that a word in its value (`red`) is a colour and not a name (`animation: red 1s`). */
 export const takesColor = (/** @type {string} */ property) =>
