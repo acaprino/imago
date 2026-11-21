@@ -34,3 +34,8 @@ export * from './segmented.ts';
 export * from './readout.ts';
 export * from './icon.ts';
 
+export * from './dom-parts.ts';
+export * from './portrait-notice.ts';
+export * from './file-workspace.ts';
+export * from './keyed-list.ts';
+export * from './tiling-workspace.ts';

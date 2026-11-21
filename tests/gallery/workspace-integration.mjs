@@ -147,6 +147,34 @@ async function picker(page) {
   await page.evaluate(async () => { const pending = pick.refresh(); search.resolve([{ id: 'p', label: 'P' }]); await pending; });
   await input.press('Enter');
   assert.deepEqual(await page.evaluate(() => [submits, choices]), [0, ['p']]);
+  const operations = await page.evaluate(async () => {
+    let choices = 0;
+    let marks = 0;
+    let finish;
+    const pending = new Promise(resolve => { finish = resolve; });
+    const control = ui.searchPicker(document, {
+      label: 'Async selection', empty: 'Empty', loading: 'Wait', errorText: String,
+      search: async () => [{ id: 'broken', label: 'Unavailable', disabled: true }, { id: 'ok', label: 'Ready' }],
+      onChoose: async () => { choices++; },
+      mark: { label: 'List', available: item => !item.disabled, checked: () => marks > 0,
+        toggle: async () => { await pending; marks++; } },
+    });
+    root.append(control.element);
+    await control.refresh();
+    const rows = control.element.querySelectorAll('[role=option]');
+    rows[0].click();
+    const marker = rows[1].querySelector('.im-picker-mark');
+    marker.click();
+    marker.click();
+    rows[1].click();
+    finish();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    rows[1].click();
+    const result = [choices, marks, marker.dataset.imChecked, rows[0].getAttribute('aria-disabled')];
+    control.destroy();
+    return result;
+  });
+  assert.deepEqual(operations, [1, 1, 'true', 'true']);
   await input.press('Escape');
   await input.press('Enter');
   assert.equal(await page.evaluate(() => submits), 1);
@@ -303,9 +331,38 @@ async function breadcrumbs(page) {
   assert.deepEqual(result, { path: ['root'], current: ['Leaf'], submits: 0 });
 }
 
+async function nativeForms(page) {
+  await page.evaluate(() => {
+    root.className = 'im-shell';
+    root.innerHTML = '<button id="open">Open</button><button id="command">Run</button><dialog><input></dialog>';
+    ui.attachLayers(root);
+    const anchor = root.querySelector('#open');
+    const command = root.querySelector('#command');
+    const dialog = root.querySelector('dialog');
+    window.runs = 0;
+    command.onclick = () => { runs++; };
+    ui.openMenu(anchor, [{ label: 'Run', control: command, run: () => command.click() }]);
+    window.show = () => ui.openDialogSheet(dialog, { anchor: () => anchor, placement: 'below', lightDismiss: () => false });
+    window.lock = true;
+    dialog.oncancel = event => { if (lock) event.preventDefault(); };
+  });
+  await page.getByRole('menuitem', { name: 'Run' }).click();
+  assert.deepEqual(await page.evaluate(() => [runs, root.querySelector('#command').parentElement === root]), [1, true]);
+  assert.equal(await page.evaluate(() => show()), true);
+  await page.locator('dialog input').focus();
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('dialog').isVisible(), true);
+  await page.locator('#command').click();
+  assert.equal(await page.locator('dialog').isVisible(), true);
+  await page.evaluate(() => { lock = false; });
+  await page.locator('dialog input').press('Escape');
+  assert.equal(await page.locator('dialog').isVisible(), false);
+  assert.equal(await page.evaluate(() => ui.topLayer()), undefined);
+}
+
 export default async function workspaceIntegration(page, url) {
   const reset = await fixture(page, url);
-  for (const scenario of [inspector, docking, picker, tree, splits, breadcrumbs]) {
+  for (const scenario of [inspector, docking, picker, tree, splits, breadcrumbs, nativeForms]) {
     await reset();
     await scenario(page);
   }

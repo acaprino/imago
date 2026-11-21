@@ -55,6 +55,26 @@ detail region. `im-content-toolbar` is an inline row; `im-toolbar` is a padded
 panel strip. `im-activity-list` uses timestamp rows; `im-timeline` draws a vertical
 timeline. Both sets can coexist without one stylesheet changing the other.
 
+## Stateful desktop views
+
+Use the DOM API when a view keeps input focus, text selection, a native form or
+an external renderer alive during updates. `uiPart` creates a named layout or
+semantic part. `uiButton`, `uiInput`, `uiSelect` and `uiTextarea` return native
+controls that can be bound to application commands. `componentElement` mounts
+one trusted result from an Imago HTML renderer. Pass service and user text to
+the renderer's text parameters.
+
+`createTilingWorkspace` presents a controlled tree of weighted splits and tab
+groups. Supply the current layout, reducer and stable DOM bindings keyed by view
+ID. A layout edit moves an existing binding. The consumer starts and disposes
+the underlying resource independently of panel visibility. `fileWorkspace`
+provides the tree, command and document regions for a file tool. The application
+loads the actual document and connects its editor inside the document region.
+
+`portraitNotice` provides the image, live text and action controls of a
+detached notice. The host decides which event it represents, whether to show
+the window, and when to acknowledge the event.
+
 ## Graphs
 
 Use `graphView` from `@acaprino/imago/graph`, and `groupedGraphScene` from
@@ -64,3 +84,9 @@ routes, SVG, keyboard navigation, camera and legend. Preserve `viewport()` per
 document and call `restoreViewport()` after a remount, retaining both the camera
 and the automatic-fit mode. Dispose the previous graph before
 removing its host. See [directed graphs](graphs.md).
+
+For a user-editable topology, the graph entry point also exposes
+`graphEditorWorkspace`, `graphEditor`, `graphEditorNode`, `graphEditorPort`
+and `graphEditorEdge`. The consumer supplies node and connection data, allowed
+edits and persistence. Imago owns the graph controls, pointer gestures,
+keyboard targets, geometry and inspectors.

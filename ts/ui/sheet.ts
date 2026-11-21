@@ -2,7 +2,7 @@
 // modal and one is open at a time. Escape and a press outside close it; focus goes back to the control.
 // While it is open it follows its anchor, which moves with splitters, the sidebar and window resizes.
 
-import { closeLayers, follow, nameOf, placeBelow, pushLayer, shellOf, tabbables, trapTab, type Layer } from './layers.ts';
+import { closeLayers, follow, hasLayer, hasModal, topLayer, nameOf, placeBelow, pushLayer, shellOf, tabbables, trapTab, type Layer } from './layers.ts';
 
 export type SheetPlacement = 'below' | 'pane-top' | 'pane-bottom';
 
@@ -39,11 +39,12 @@ function place(shell: HTMLElement, anchor: HTMLElement, sheet: HTMLElement, plac
 }
 
 /** Opens a sheet holding `content`, docked to `anchor`. Opening one closes the open one. Returns the function that closes it. */
-export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { placement?: SheetPlacement } = {}): () => void {
+export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { placement?: SheetPlacement; onClose?: () => void } = {}): () => void {
   const placement = options.placement ?? 'below';
   const doc = anchor.ownerDocument;
   const shell = shellOf(anchor);
   closeLayers(['sheet']);
+  if (hasLayer('sheet')) return () => {};
 
   const sheet = doc.createElement('div');
   sheet.className = 'im-float im-sheet';
@@ -75,6 +76,7 @@ export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { 
     }
     pop();
     sheet.remove();
+    options.onClose?.();
   }
 
   // The sheet is not modal, but Tab stays inside it: Escape is the way out, and focus then returns to the control.
@@ -95,4 +97,57 @@ export function openSheet(anchor: HTMLElement, content: HTMLElement, options: { 
   });
   (tabbables(sheet)[0] ?? sheet).focus();
   return close;
+}
+/** Dock a native form sheet while retaining its native close/cancel event contract.
+ * The owner may refuse cancellation during a save. */
+export function openDialogSheet(dialog: HTMLDialogElement, options: {
+  anchor: () => HTMLElement | null;
+  placement: SheetPlacement;
+  lightDismiss?: () => boolean;
+}): boolean {
+  if (hasModal()) return false;
+  if (dialog.open) return topLayer()?.el === dialog;
+  closeLayers(['sheet', 'menu']);
+  if (hasLayer('sheet')) return false;
+  const target = options.anchor();
+  if (!target) return false;
+  const anchor: HTMLElement = target;
+  const shell = shellOf(anchor);
+  const focused = dialog.ownerDocument.activeElement;
+  const opener = options.placement === 'below' ? anchor : focused instanceof HTMLElement ? focused : null;
+  const expanded = anchor.getAttribute('aria-expanded');
+  const cancel = () => {
+    if (dialog.open && dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
+    if (!dialog.open) release();
+  };
+  dialog.classList.add('im-float', 'im-sheet', 'im-form-sheet');
+  dialog.dataset.imLayer = 'sheet';
+  dialog.dataset.sheet = options.placement;
+  dialog.removeAttribute('aria-modal');
+  dialog.removeAttribute('data-covered');
+  if (options.placement === 'below') anchor.setAttribute('aria-expanded', 'true');
+  shell.append(dialog);
+  dialog.show();
+  const position = () => place(shell, options.anchor() ?? anchor, dialog, options.placement);
+  position();
+  const stop = follow(position);
+  const pop = pushLayer({ el: dialog, kind: 'sheet', close: cancel, toggles: options.placement === 'below',
+    lightDismiss: options.lightDismiss, acceptsEscape: target => target instanceof Node && dialog.contains(target),
+    dispose: () => { dialog.close(); release(); } }, opener);
+  const observed = new MutationObserver(() => { if (!dialog.open) release(); });
+  observed.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+  function release() {
+    observed.disconnect();
+    if (options.placement === 'below') {
+      if (expanded === null) anchor.removeAttribute('aria-expanded');
+      else anchor.setAttribute('aria-expanded', expanded);
+    }
+    stop();
+    pop();
+    delete dialog.dataset.imLayer;
+    delete dialog.dataset.sheet;
+    for (const property of ['left','top','bottom','width','max-height']) dialog.style.removeProperty(property);
+    dialog.classList.remove('im-float', 'im-sheet', 'im-form-sheet');
+  }
+  return true;
 }

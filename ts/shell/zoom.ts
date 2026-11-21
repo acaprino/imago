@@ -10,14 +10,19 @@ const MIN_TENTHS = 5;
 const MAX_TENTHS = 20;
 
 /** A zoom level the app offers: 0.5 to 2, rounded to a tenth. Anything that is not a number is 100 %. */
-export function clampZoom(value: number): number {
+export function clampZoom(value: number, levels?: readonly number[]): number {
+  if (levels) return levels.find(level => Math.abs(level - value) < 0.001) ?? 1;
   if (Number.isNaN(value)) return 1;
   return Math.min(MAX_TENTHS, Math.max(MIN_TENTHS, Math.round(value * 10))) / 10;
 }
 
 /** The level after one step from `current` (which need not be one the app offers): 1 in, -1 out, 0 back to 100 %. */
-export function stepZoom(current: number, direction: 1 | -1 | 0): number {
+export function stepZoom(current: number, direction: 1 | -1 | 0, levels?: readonly number[]): number {
   if (direction === 0) return 1;
+  if (levels) {
+    if (direction === 1) return levels.find(level => level > current + 0.001) ?? levels.at(-1) ?? 1;
+    return [...levels].reverse().find(level => level < current - 0.001) ?? levels[0] ?? 1;
+  }
   return clampZoom(clampZoom(current) + direction / 10);
 }
 
@@ -56,6 +61,10 @@ export type ZoomOptions = {
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
   /** Default `imago.zoom`; an app gives its own (`xiox.zoom`) to keep the level it already saved. */
   storageKey?: string;
+  /** Optional ascending zoom factors including 1. Unknown saved or requested factors reset to 1. */
+  levels?: readonly number[];
+  /** Default true. Set false for hosts whose native window already starts at 100%. */
+  applyDefaultOnStart?: boolean;
   /** Called with the level every time it changes (a notice, the settings control), not for the first one. */
   onChange?(level: number): void;
 };
@@ -65,67 +74,93 @@ const defaultStorage = (): Pick<Storage, 'getItem' | 'setItem'> | undefined => {
 };
 
 /** The saved level: nothing, or something that is not a number, is 100 %. */
-function savedLevel(storage: ZoomOptions['storage'], key: string): number {
+function savedLevel(storage: ZoomOptions['storage'], key: string, levels?: readonly number[]): number {
   try {
     const raw = storage?.getItem(key) ?? null;
-    return clampZoom(raw === null || raw.trim() === '' ? Number.NaN : Number(raw));
+    return clampZoom(raw === null || raw.trim() === '' ? Number.NaN : Number(raw), levels);
   } catch {
     return 1;
   }
 }
 
-/**
- * Applies the saved level and answers the zoom keys and Ctrl+wheel on `doc`. Returns the function that stops it.
- * The level is applied at start even at 100 %: a page reloaded after a crash finds the webview at its last factor.
+export interface ZoomController {
+  /** Settles after restoring the saved zoom, falling back to 100% on refusal. */
+  readonly ready: Promise<void>;
+  current(): number;
+  /** Updates immediately and resolves to whether the native host accepted the request. */
+  set(level: number): Promise<boolean>;
+  /** Handles and consumes a matching key. Null means there is no action to report. */
+  handleKey(event: KeyboardEvent): Promise<boolean> | null;
+}
+
+/** Shares one zoom preference between Settings and keyboard commands without installing listeners.
+ * Consumers decide which events belong to their UI. mountZoom also installs Ctrl+wheel.
  */
-export function mountZoom(doc: Document, options: ZoomOptions): () => void {
+export function createZoomController(options: ZoomOptions): ZoomController {
   const key = options.storageKey ?? 'imago.zoom';
   const storage = options.storage ?? defaultStorage();
-  let level = savedLevel(storage, key);
+  const levels = options.levels && [...options.levels];
+  if (levels && (!levels.includes(1) || levels.some((n, i) => !Number.isFinite(n) || n <= 0 || (i > 0 && n <= levels[i - 1]))))
+    throw new RangeError('Zoom levels must be positive, ascending and include 1.');
 
-  const attempt = (next: number): Promise<unknown> => {
-    try { return Promise.resolve(options.apply(next)); } catch (error) { return Promise.reject(error); }
+  let level = savedLevel(storage, key, levels);
+  let confirmed = 1;
+  let confirmedRequest = -1;
+  let revision = 0;
+  const pending = new Map<number, number>();
+  const apply = async (next: number, request: number, save: boolean): Promise<boolean> => {
+    pending.set(request, next);
+    if (save) options.onChange?.(next);
+    let accepted = false;
+    try {
+      await options.apply(next);
+      accepted = true;
+      if (request > confirmedRequest) {
+        confirmedRequest = request;
+        confirmed = next;
+        if (save) try { storage?.setItem(key, String(next)); } catch { /* The window keeps its zoom. */ }
+      }
+    } catch { /* Restore the latest accepted or outstanding level. */ }
+    pending.delete(request);
+    let shown = confirmed;
+    for (const [id, wanted] of pending) if (id > confirmedRequest) shown = wanted;
+    if (shown !== level) {
+      level = shown;
+      if (save || revision !== 0) options.onChange?.(shown);
+    }
+    return accepted;
   };
-  const initial = level;
-  void attempt(initial).catch(() => { if (level === initial) level = 1; });
-
-  // The level moves at once, so presses faster than the engine count every step; a refusal moves it back.
-  const move = (next: number): void => {
-    const previous = level;
-    level = next;
-    options.onChange?.(next);
-    void attempt(next).then(
-      () => {
-        try { storage?.setItem(key, String(next)); } catch { /* no storage: the level lasts until the window closes */ }
-      },
-      () => {
-        if (level !== next) return;
-        level = previous;
-        options.onChange?.(previous);
-      },
-    );
+  const ready = level !== 1 || options.applyDefaultOnStart !== false
+    ? apply(level, 0, false).then(() => {}) : Promise.resolve();
+  const set = (value: number): Promise<boolean> => {
+    level = clampZoom(value, levels);
+    return apply(level, ++revision, true);
   };
-
-  const onKeyDown = (event: KeyboardEvent): void => {
+  function handleKey(event: KeyboardEvent): Promise<boolean> | null {
     const direction = zoomDirection(event);
-    if (direction === null) return;
-    // Capture: a terminal or a field never sees these keys, as in Windows Terminal.
+    if (direction === null) return null;
     event.preventDefault();
     event.stopPropagation();
-    if (event.repeat && direction === 0) return;
-    const next = stepZoom(level, direction);
-    if (next !== level) move(next);
-  };
+    if (event.repeat && direction === 0) return null;
+    const next = stepZoom(level, direction, levels);
+    return next === level ? Promise.resolve(true) : set(next);
+  }
+  return { ready, current: () => level, set, handleKey };
+}
 
+/** Restores the saved zoom and handles zoom keys and Ctrl+wheel until the returned cleanup runs. */
+export function mountZoom(doc: Document, options: ZoomOptions): () => void {
+  const controller = createZoomController(options);
+  const onKeyDown = (event: KeyboardEvent): void => { void controller.handleKey(event); };
   let travel = 0;
   const onWheel = (event: WheelEvent): void => {
     if (!event.ctrlKey) { travel = 0; return; }
     event.preventDefault();
-    travel += wheelPixels(event.deltaY, event.deltaMode, level);
+    travel += wheelPixels(event.deltaY, event.deltaMode, controller.current());
     if (Math.abs(travel) < WHEEL_NOTCH) return;
-    const next = stepZoom(level, travel < 0 ? 1 : -1);
+    const next = stepZoom(controller.current(), travel < 0 ? 1 : -1, options.levels);
     travel = 0;
-    if (next !== level) move(next);
+    if (next !== controller.current()) void controller.set(next);
   };
 
   doc.addEventListener('keydown', onKeyDown, { capture: true });

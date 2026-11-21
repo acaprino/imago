@@ -295,3 +295,4 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
   }
   return { draw, fit, camera, restore, viewport, restoreViewport, dispose() { observer.disconnect(); selection.on('.zoom', null); root.remove(); } };
 }
+export * from './graph-editor.ts';

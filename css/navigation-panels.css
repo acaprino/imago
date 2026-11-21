@@ -1,0 +1,74 @@
+/* Independently resizable navigation beside a flexible workspace. A compact
+   rail uses the same saved expanded width when the user unfolds it again. */
+.im-resizable-nav {
+  position: relative;
+  display: flex;
+  flex: 0 0 var(--im-nav-width, 16.5rem);
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+  background: var(--im-sheet);
+  border-inline-end: 1px solid var(--im-line);
+}
+.im-resizable-nav > header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--im-s-1); padding: var(--im-s-2); }
+.im-resizable-nav > header > h2 { flex: 1; margin: 0; }
+.im-resizable-nav > .im-scroll { flex: 1; padding: var(--im-s-2); }
+.im-resizable-nav > .im-splitter { position: absolute; inset-block: 0; inset-inline-end: 0; z-index: 1; }
+.im-resizable-nav[data-im-compact] { flex-basis: 3rem; }
+.im-resizable-nav[data-im-compact] > header { flex-direction: column; }
+.im-resizable-nav[data-im-compact] > header > h2 { display: none; }
+@media (max-width: 480px) {
+  .im-work-area > .im-resizable-nav:not([data-im-compact]) {
+    position: absolute; inset: 0 auto 0 0; z-index: 2;
+    inline-size: min(var(--im-nav-width, 16.5rem), calc(100% - 3rem));
+    background: var(--im-sheet-solid);
+  }
+  .im-work-area > .im-resizable-nav:not([data-im-compact]) > .im-splitter { display: none; }
+}
+.im-nav-rail, .im-resizable-nav .im-stack-list { list-style: none; padding: 0; margin: 0; }
+.im-nav-rail { display: flex; flex-direction: column; align-items: center; gap: var(--im-s-1); overflow: auto; }
+.im-nav-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--im-s-1); margin-block: var(--im-s-1); }
+.im-nav-line > button:first-child { flex: 1 1 7rem; min-inline-size: 0; }
+.im-nav-entry.im-btn { display: flex; justify-content: start; flex-wrap: wrap; gap: var(--im-s-1); height: auto; text-align: start; }
+.im-nav-entry.im-btn > span:empty:not(.im-nav-mark) { display: none; }
+.im-nav-entry > span:not(:empty) { overflow: hidden; text-overflow: ellipsis; }
+.im-nav-entry[aria-current=true], .im-nav-rail [aria-current=true] { box-shadow: inset 3px 0 var(--im-item-color, var(--im-accent-text)); }
+.im-nav-mark, .im-signal { display: inline-block; inline-size: .65em; block-size: .65em; flex: none; border: 1px solid var(--im-line-strong); }
+[aria-pressed=true] > .im-nav-mark, .im-nav-rail .im-btn[aria-pressed=true] { background: var(--im-item-color, var(--im-selected)); }
+.im-nav-rail .im-btn[aria-pressed=true] { color: var(--im-item-ink, #111827); }
+.im-nav-detail { padding: var(--im-s-2); border-inline-start: 2px solid var(--im-item-color, var(--im-line)); }
+.im-resizable-nav .im-form { padding: var(--im-s-1); }
+.im-signal { border-radius: 50%; background: var(--im-tone, var(--im-muted)); }
+[data-im-badge] { position: relative; }
+[data-im-badge]::after { content: ''; position: absolute; inset: 0 0 auto auto; inline-size: .5em; block-size: .5em; border-radius: 50%; background: var(--im-warn); }
+
+/* A non-modal inspector leaves a wide workspace usable alongside it and
+   overlays a narrow workspace. Messages scroll independently of the composer. */
+.im-docked-inspector {
+  --im-inspector-size: min(26.25rem, calc(100% - 1rem));
+  position: relative; flex: 0 0 var(--im-inspector-size);
+  z-index: 18; display: flex; flex-direction: column; gap: var(--im-s-2);
+  box-sizing: border-box; inline-size: var(--im-inspector-size); min-block-size: 0;
+  padding: var(--im-s-3); overflow: auto; background: var(--im-sheet-solid); color: var(--im-text);
+  border-inline-start: 1px solid var(--im-item-color, var(--im-line));
+}
+@media (max-width: 1000px) {
+  .im-docked-inspector { position: absolute; inset: 0 0 0 auto; }
+}
+.im-docked-inspector > :is(h1,h2,p,ul,ol) { margin: 0; }
+.im-scroll-log { flex: 1 1 10rem; min-block-size: 4rem; padding: var(--im-s-2); overflow: auto; list-style: none; overflow-wrap: anywhere; }
+.im-scroll-log p { white-space: pre-wrap; }
+.im-summary-list { flex: 0 1 auto; max-block-size: 25%; overflow: auto; }
+.im-docked-inspector > .im-form { flex: none; padding: 0; }
+
+dialog.im-sectioned-drawer[open], dialog.im-padded-drawer[open] { display: flex; flex-direction: column; gap: var(--im-s-3); padding: var(--im-s-3); }
+dialog.im-sectioned-drawer[open] { overflow: hidden; block-size: calc(100% - var(--im-h-titlebar)); }
+.im-sectioned-drawer > .im-scroll { position: relative; flex: 1 1 auto; }
+.im-sectioned-drawer nav [aria-current=true] { box-shadow: inset 0 -2px var(--im-accent-text); }
+.im-sectioned-drawer .im-section { padding-block: var(--im-s-3); border-block-start: 1px solid var(--im-line); }
+.im-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); gap: var(--im-s-2); }
+.im-choice-list { display: grid; max-block-size: 11rem; gap: var(--im-s-1); }
+.im-choice-row.im-btn { display: flex; justify-content: space-between; gap: var(--im-s-2); }
+.im-choice-row[aria-selected=true] { background: var(--im-selected); border-color: var(--im-accent-text); }
+:is(.im-resizable-nav, .im-docked-inspector, .im-sectioned-drawer, .im-padded-drawer)[hidden],
+:is(.im-resizable-nav, .im-docked-inspector, .im-sectioned-drawer, .im-padded-drawer) [hidden] { display: none !important; }

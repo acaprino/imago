@@ -8,10 +8,17 @@ import { closeLayers, nameOf, placeBelow, pushLayer, shellOf, type Layer } from 
 export type MenuItem =
   | {
       label: string;
+      /** An existing command button whose identity and handlers must survive responsive folding.
+       * Its original DOM position, role and tab stop are restored before run(). */
+      control?: HTMLButtonElement;
       keys?: string;
       /** The reason the item is not available. The item stays visible and explains itself in its tooltip. */
       disabled?: string;
       danger?: boolean;
+      /** A radio item stays open while its choice changes. */
+      checked?: () => boolean;
+      initialFocus?: boolean;
+      configure?: (row: HTMLButtonElement) => void;
       run: () => void;
     }
   | 'separator';
@@ -30,7 +37,11 @@ export function keyCaps(doc: Document, keys: string): HTMLElement {
 }
 
 /** Opens a menu under `anchor`. Returns the function that closes it. */
-export function openMenu(anchor: HTMLElement, items: MenuItem[]): () => void {
+export function openMenu(anchor: HTMLElement, items: MenuItem[], options: {
+  heading?: HTMLElement;
+  configure?: (menu: HTMLElement) => void;
+  onClose?: () => void;
+} = {}): () => void {
   const doc = anchor.ownerDocument;
   const shell = shellOf(anchor);
   closeLayers(['menu']); // one menu at a time
@@ -42,7 +53,13 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[]): () => void {
   const name = nameOf(anchor);
   if (name) menu.setAttribute('aria-label', name);
 
-  const runs = new Map<HTMLElement, () => void>();
+  options.configure?.(menu);
+  if (options.heading) menu.append(options.heading);
+  const runs = new Map<HTMLElement, Exclude<MenuItem, string>>();
+  const radios = new Map<HTMLElement, () => boolean>();
+  const restoreButtons: (() => void)[] = [];
+  const reused = new Set<HTMLElement>();
+  let initialFocus: HTMLElement | undefined;
   for (const item of items) {
     if (item === 'separator') {
       const rule = doc.createElement('hr');
@@ -50,20 +67,40 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[]): () => void {
       menu.append(rule);
       continue;
     }
-    const row = doc.createElement('button');
-    row.type = 'button';
-    row.className = 'im-menu-item';
-    row.setAttribute('role', 'menuitem');
+    const row = item.control ?? doc.createElement('button');
+    if (item.control) {
+      reused.add(row);
+      const wasMenuItem = row.classList.contains('im-menu-item');
+      const home = doc.createComment('menu command');
+      row.before(home);
+      const previous = ['role', 'tabindex', 'aria-disabled', 'aria-checked', 'data-im-tone', 'title'].map(name => [name, row.getAttribute(name)] as const);
+      restoreButtons.push(() => {
+        home.replaceWith(row);
+        row.classList.toggle('im-menu-item', wasMenuItem);
+        for (const [name, value] of previous) {
+          if (value === null) row.removeAttribute(name);
+          else row.setAttribute(name, value);
+        }
+      });
+    } else row.type = 'button';
+    row.classList.add('im-menu-item');
+    row.setAttribute('role', item.checked ? 'menuitemradio' : 'menuitem');
+    if (item.checked) {
+      radios.set(row, item.checked);
+      row.setAttribute('aria-checked', String(item.checked()));
+    }
+    item.configure?.(row);
     const label = doc.createElement('span');
     label.textContent = item.label;
-    row.append(label);
-    if (item.keys) row.append(keyCaps(doc, item.keys));
+    if (!item.control) row.append(label);
+    if (item.keys && !item.control) row.append(keyCaps(doc, item.keys));
     if (item.danger) row.dataset.imTone = 'danger';
     if (item.disabled !== undefined) {
       row.setAttribute('aria-disabled', 'true');
       row.title = item.disabled;
     } else {
-      runs.set(row, item.run);
+      runs.set(row, item);
+      if (item.initialFocus) initialFocus = row;
     }
     menu.append(row);
   }
@@ -79,20 +116,32 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[]): () => void {
     stopRoving();
     anchor.setAttribute('aria-expanded', 'false');
     pop();
+    for (const restore of restoreButtons) restore();
     menu.remove();
+    options.onClose?.();
   }
 
   function activate(row: HTMLElement): void {
-    const run = runs.get(row);
-    if (!run) return; // a disabled item is not run
-    close();
-    run();
+    const item = runs.get(row);
+    if (!item) return;
+    if (item.checked) {
+      item.run();
+      for (const [radio, checked] of radios) radio.setAttribute('aria-checked', String(checked()));
+    } else {
+      close();
+      item.run();
+    }
   }
 
   menu.addEventListener('click', (event) => {
     const row = event.target instanceof Element ? event.target.closest<HTMLElement>('.im-menu-item') : null;
-    if (row) activate(row);
-  });
+    if (!row) return;
+    if (reused.has(row)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+    activate(row);
+  }, true);
   menu.addEventListener('keydown', (event) => {
     if (event.key === 'Tab') close(); // Tab leaves the menu; the browser then moves on from the anchor
   });
@@ -104,6 +153,6 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[]): () => void {
   anchor.setAttribute('aria-haspopup', 'menu');
   anchor.setAttribute('aria-expanded', 'true');
   stopRoving = roving(menu, { item: '.im-menu-item', orientation: 'vertical', onSelect: activate });
-  Array.from(menu.querySelectorAll<HTMLElement>('.im-menu-item')).find((row) => runs.has(row))?.focus();
+  (initialFocus ?? runs.keys().next().value)?.focus();
   return close;
 }

@@ -7,6 +7,8 @@ export function splitter(doc: Document, options: {
   min: number;
   max: number;
   value: number;
+  step?: number;
+  onStart?: () => void;
   onResize: (pixels: number) => void;
   onCommit?: (pixels: number) => void;
 }) {
@@ -48,7 +50,7 @@ export function splitter(doc: Document, options: {
       finish(false);
     } else {
       if (drag || event.altKey || event.metaKey || event.ctrlKey) return;
-      const step = (event.shiftKey ? 32 : 8) * sign();
+      const step = (options.step ?? (event.shiftKey ? 32 : 8)) * sign();
       if (event.key === 'Home') setValue(min);
       else if (event.key === 'End') setValue(max);
       else if (event.key === (vertical ? 'ArrowLeft' : 'ArrowUp')) setValue(value - step);
@@ -61,6 +63,7 @@ export function splitter(doc: Document, options: {
   };
   element.onpointerdown = event => {
     if (drag || event.button !== 0 || !event.isPrimary) return;
+    options.onStart?.();
     element.focus();
     element.setPointerCapture(event.pointerId);
     drag = { id: event.pointerId, start: position(event), value, sign: sign() };
@@ -85,5 +88,5 @@ export function splitter(doc: Document, options: {
     element.setAttribute('aria-valuemax', String(max));
     setValue(next);
   }
-  return { element, setValue, setBounds };
+  return { element, setValue, setBounds, cancel: () => finish(false), get dragging() { return !!drag; } };
 }

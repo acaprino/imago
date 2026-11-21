@@ -94,6 +94,24 @@ async function menus(page, look, theme) {
   assert.equal((await active(page)).id, 'anchor', where('focus is back on the anchor'));
   assert.equal(await page.getAttribute('#anchor', 'aria-expanded'), 'false', where('the anchor says it is collapsed'));
 
+  // A radio choice can change a later command's context without closing the menu.
+  await page.evaluate(() => {
+    let value = 'First';
+    const choices = ['First', 'Second'].map(label => ({
+      label, checked: () => value === label, run() { value = label; },
+    }));
+    window.__imagoSurfaces.openMenu(document.getElementById('anchor'), [
+      ...choices, { label: 'Open', initialFocus: true, run() { window.__radioResult = value; } },
+    ]);
+  });
+  assert.equal((await active(page)).text, 'Open');
+  await page.getByRole('menuitemradio', { name: 'Second' }).click();
+  assert.equal(await page.getByRole('menuitemradio', { name: 'First' }).getAttribute('aria-checked'), 'false');
+  assert.equal(await page.getByRole('menuitemradio', { name: 'Second' }).getAttribute('aria-checked'), 'true');
+  await page.getByRole('menuitem', { name: 'Open', exact: true }).click();
+  assert.equal(await page.evaluate(() => window.__radioResult), 'Second');
+  assert.equal(await count(page, '.im-shell .im-menu'), 0);
+
   // A press outside closes it, and the press still reaches what was pressed.
   await page.evaluate(() => {
     window.__clicks = 0;
