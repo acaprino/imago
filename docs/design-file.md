@@ -579,7 +579,8 @@ undoes them all. The options are in [using-imago.md](using-imago.md), section 6.
 - Enter runs the primary action of the focused surface. Escape closes the top surface only.
 - A key is answered once. A handler of the package that answers a key (Escape that closes a surface, the inspector or the
   sidebar drawer; an arrow that moves a list) claims it, and the registry runs no command on a claimed key. A key that is
-  only refused to the browser (by `guardDesktop`, or the zoom keys) still runs the app's command.
+  only refused to the browser by `guardDesktop` still runs the app's command; the zoom keys are the zoom's, which stops them
+  at the document, so no command bound to them runs.
 - An app's own key handler on the document (a terminal, an editor) is added before `mountApp`, so it runs before the
   registry, and calls `claimKey(event)` when it answers a key; from a React handler, `claimKey(event.nativeEvent)`.
   `imago-check` reports such a handler (rule `own-keydown`), and the app keeps it with an exception comment that says why.
