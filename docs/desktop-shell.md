@@ -40,7 +40,7 @@ Facts about the material:
   under a light look and dark under a dark one. Under the theme `system` the tint follows a change of Windows' colours
   only when the page calls `applyLook` again at that change, as [using-imago.md](using-imago.md), section 3, asks
   (listening to `prefers-color-scheme`): then the page sends the theme it draws again. The demo's page does it
-  (`gallery/mount/desktop.ts`). The first frame keeps the tint of the app's own config, which
+  (`gallery/mount/desktop.ts` of the repository `acaprino/imago`). The first frame keeps the tint of the app's own config, which
   `glass_window_config` leaves as it is, until the page's first `set_window_theme`. On Windows 11 22H2 and later
   nothing changes: setting the effect again sets the backdrop the window already has (the call Tauri made when it
   built the window), and that backdrop takes no tint.
@@ -136,7 +136,7 @@ has been captured on a real window with Imago's CSS unless [verification.md](ver
 ### 1.5 How to check it on screen
 
 A webview screenshot draws the acrylic as white: it cannot judge the glass. Photograph the real window from the
-screen. Imago's demo app (`examples/demo`) is the gallery in a real glass window, and `npm run capture` copies it
+screen. Imago's demo app (`examples/demo` of the repository `acaprino/imago`) is the gallery in a real glass window, and `npm run capture` copies it
 from the screen in both looks and both themes over a dark and a bright window. The demo is never built on a
 developer's machine: the `demo` job of the Verify workflow builds it and keeps it as the artifact `imago-demo`. Run
 `npm run demo:fetch` first, which downloads the artifact of the latest successful run of a push to `develop` to
@@ -272,11 +272,11 @@ A call the capability does not allow is a rejected promise, and who sees it depe
 passes the refusal of `minimize`, `toggleMaximize` and `close` to its `onError`. It does not see a refused `listen`,
 `unlisten`, drag or zoom: `mountZoom` moves a refused zoom back to the level it had, and a refused drag leaves the window where it is.
 A refused `listen` is a rejection that only the app can catch, where it calls `listen`: the demo's `stopOnResolve`
-(`gallery/mount/desktop.ts`) catches it and shows it in a notice. Left alone it is an unhandled rejection, and the page
+(`gallery/mount/desktop.ts` of the repository `acaprino/imago`) catches it and shows it in a notice. Left alone it is an unhandled rejection, and the page
 never hears `caption-maximize`, so the maximize button draws no hover or press from Windows.
 
 The app's own commands (`set_window_theme`, `window_caption_maximize`) are not on this list. The file that works is
-`examples/demo/src-tauri/capabilities/default.json`; it grants these nine and nothing else, and its `windows` names
+`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago` (it is not in the npm package); it grants these nine and nothing else, and its `windows` names
 the label `main`. [using-imago.md](using-imago.md), section 5, shows the file's shape.
 
 ## 4. WebView2 recovery
@@ -354,8 +354,9 @@ inert and leaves a borderless window that cannot be moved, minimized or closed.
 - **The inspector** (`inspector`) replaces the right-hand drawers of Shinatama and Muro and Xiox's bottom detail box.
   From 1000 up it is docked at the right and pushes the content; it has no scrim and nothing is inert, so a terminal
   keeps working beside it. Below 1000 it covers the content as a drawer.
-- **Dialogs** (`confirm`): only for decisions about the whole window. Everything below the title bar becomes inert;
-  containment and Escape are explicit; the actions stay at the bottom.
+- **Dialogs** (`confirm`, and the others of [native-forms.md](native-forms.md)): `confirm` is for a decision about the
+  whole window; a form that must block the window while it saves is a dialog too (`openFormDialog`). Everything below
+  the title bar becomes inert; containment and Escape are explicit; the actions stay at the bottom.
 - **Sheets** (`openSheet`): docked to the control or pane they belong to (below, pane top, pane bottom). A press
   outside dismisses one the way Escape does. One at a time.
 - **Notices** (`notify`): bottom centre, never take focus. An error says Error in text, not only in colour.

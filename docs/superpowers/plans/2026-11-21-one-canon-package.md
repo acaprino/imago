@@ -10,6 +10,8 @@
 
 **Spec:** [docs/superpowers/specs/2026-11-21-one-canon-design.md](../specs/2026-11-21-one-canon-design.md)
 
+> This is the plan as written before the build, and it is not updated. Where it differs from the built package (the signature of `footerKeys`, the tone of a notice, a name), [design-file.md](../../design-file.md) wins.
+
 ## Global Constraints
 
 - Work on the branch `canon`, from `develop`; merged back into `develop` and deleted. Never `main`. No version change by hand.

@@ -31,7 +31,7 @@ inside a field's box has no frame, fill or ring of its own: the box draws it onc
 |---|---|
 | `textFieldHtml(label, name, value, options)` | A labelled input in its box, with a hint and an error slot ([html-composition.md](html-composition.md)) |
 | `selectHtml(options)` | A `select.im-select` (`SelectMarkupOptions`: `name`, `options`, `value`, `label?`, `disabled?`, `attrs?`); a `class` in `attrs` is added after it. Its options are `SelectOption`s, `[value, label]`, written by `selectOptionsHtml(options, selected)` |
-| `selectFieldHtml(label, name, options, selected)` | A select in a labelled `im-field` |
+| `selectFieldHtml(label, name, options, selected)` | A select in a labelled `im-field`. Like `textFieldHtml`, it writes the label in a bare `span` and a hint in a `small`, not the `im-field-label` and `im-field-hint` of a field written by hand: the two draw the label in different colours, so one form does not mix them |
 | `checkboxOptionHtml(options)` | An `input.im-check` in its `label.im-option` (`CheckboxMarkupOptions`: `name`, `checked`, `label`, `value?`, `hint?`, `hintHtml?`, `leadingHtml?`, `top?`, `disabled?`); `top` aligns the box with the first line (`im-leading`) |
 | `inputHtml(options)` | An input in its box, with its name, its accessible name and the ids that describe it: `{ name, label, value, describedBy?, invalid?, attrs? }` |
 | `formGroupHtml(legend, contentHtml, hint)` | A `fieldset` with its legend and a muted hint |
@@ -50,7 +50,7 @@ native control. A setting saves itself when it changes and says "Saved" ([design
 
 ## Checking and saving
 
-- `showFieldErrors(form, errors, options)` writes plain-text errors (`FieldErrors`, by field name) into the error slots,
+- `showFieldErrors(form, errors, options)` writes plain-text errors (`FieldErrors`, by field name) into the error slots, as given: the sentence starts with the word "Error" ([design-file.md](design-file.md), "States"), which the app writes in its language;
   marks each field `aria-invalid`, opens every disclosure round the first one and focuses it. `ValidationOptions.field`
   finds the target of an error that is about a group. It returns `true` when there is no error: the form is valid.
   `clearFieldError(element)` takes one away as the person corrects it.
@@ -74,7 +74,7 @@ uses `showModal()`.
 |---|---|---|
 | `confirm(shell, options)` | A decision | A promise of `true` or `false` ([using-imago.md](using-imago.md), section 5) |
 | `openFormDialog(shell, options)` | A form the package lays out: a head, a body that scrolls, a foot that stays | A `FormDialog`: `root`, `dialog`, `body` and `foot` to append the controls to, `close()` (true when this call dismissed it), `lock(locked)` and `setTitle(title, subtitle)`. `FormDialogOptions`: `title`, `subtitle?`, `icon?`, `wide?` (`im-form-dialog--wide`), `closeLabel` (the words of the close button), `onClose?` |
-| `openContentDialog(shell, dialog, options)` | A `dialog` element the app owns, with its own heading, name and form | `{ close(), dispose() }`. `ContentDialogOptions`: `canDismiss?`, `onClose?`. It opens at its top with the focus on the dialog, or on the control that carries `autofocus` |
+| `openContentDialog(shell, dialog, options)` | A `dialog` element the app owns, with its own heading, name and form | `{ close(), dispose() }`. `ContentDialogOptions`: `canDismiss?`, `onClose?`. It opens at its top with the focus on the dialog, or on the control that carries `autofocus`: a dialog that confirms a destructive action puts `autofocus` on its Cancel button (`confirm` focuses Cancel itself) |
 | `createContentDialog(shell, options)` | A `dialog` the package makes and the app fills again and again with trusted markup | `{ element, show(markup), close(), dismiss(), dispose() }`. `ContentDialogControllerOptions`: `label?` (its name when the markup has no `h1` or `h2`), `canDismiss?`, `onClose?`, `fallbackFocus?` |
 | `openDialogSheet(dialog, options)` | A native form `dialog` docked as a sheet to a control or a pane | Whether it opened. `{ anchor, placement, lightDismiss? }`; its own cancel event still decides whether it closes |
 | `openDialogDrawer(dialog, options)` | A `dialog` the app owns that stays beside live panels: not a dialog of the list above | Whether it opened. `{ opener?, acceptsEscape? }`. See "A drawer" below |
@@ -126,5 +126,5 @@ order are `stepNavigationHtml` ([inspection.md](inspection.md)).
 
 ## Browser regression
 
-`node tests/gallery/run.mjs content-dialog.mjs` checks native values, a refused dismissal, completion, reuse, a native
+In the repository `acaprino/imago`, `node tests/gallery/run.mjs content-dialog.mjs` checks native values, a refused dismissal, completion, reuse, a native
 close, the cleanup of notices and wrapped inputs, in both looks and both themes.

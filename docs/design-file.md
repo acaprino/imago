@@ -46,6 +46,10 @@ and this file differ, this file wins.
 | The check of an app against these rules | `scripts/check/` (the program `imago-check`) |
 | Every control in every state, both looks, both themes, each app's accent | the gallery: `npm run gallery` |
 
+The npm package carries `docs/`, `css/`, `lib/`, `ts/`, `icons/`, `tokens/`, `react/` and `scripts/check/`. The gallery
+(`gallery/`), the demo app (`examples/demo/`), the gallery's tests (`tests/gallery/`) and `scripts/icons.mjs` are in the
+repository `acaprino/imago` only: an app that reads this file from `node_modules` finds them on GitHub, not on its disk.
+
 The gallery is the acceptance surface. A control is done when its row is complete and its contrast test passes. Every
 class `css/` defines is shown there, but those `tests/gallery/coverage.mjs` lists as pending removal (today `im-path`). The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
 `focus`): it is the gallery's, never an app's. The names these documents write are checked against the code by
@@ -170,7 +174,9 @@ The accent goes on four things only: the one primary action, the selection mark,
 bars, not on every button, not on navigation backgrounds. ONI also takes the accent as the text of short labels. On
 data, the accent is the tone `accent` of a chip, a dot or a summary, and the class `im-text-accent` on a short label or a
 key figure. The button modifier `im-btn--accent` (the `accent` option of `buttonHtml`) puts the accent on a secondary
-action, which this rule does not allow: an app does not use it.
+action, which this rule does not allow: an app does not use it. Two drawings of the package itself also take the accent:
+the close window button fills with it on hover, and the timeline of a React view (`im-timeline`) draws its 2px line in
+it.
 
 ### Status
 
@@ -248,11 +254,15 @@ Every size of text is one of five:
 
 Numbers use tabular figures (`im-num`) and are right-aligned in columns. Smooth writes sentence case; ONI writes
 capitals with letter spacing on titles, tabs and buttons, through `--im-case` and `--im-track`. An app never sets a case
-or a spacing of its own (rule `literal-case`).
+or a spacing of its own (rule `literal-case`): its own title, tab or button takes the look's by writing
+`text-transform: var(--im-case)` and `letter-spacing: var(--im-track)` where the package's equivalent does, and a text
+that is a title in the head font writes `font-family: var(--im-font-head)`. A literal case or spacing is the finding; these
+two custom properties are not.
 
 ## Measures
 
-The measures change with the look. A control has one height per row of controls. A pointer target is at least 24px.
+The measures change with the look. A control has one height per row of controls. A pointer target is at least 24px, except ONI's small control
+(`im-btn--sm`, the title bar's command button), which is 22.
 
 | Token | Measure | Smooth | ONI |
 |---|---|---|---|
@@ -309,7 +319,7 @@ what replaces it.
 
 | Region | Class | What it is |
 |---|---|---|
-| Title bar | `im-titlebar` | The brand (`im-brand`, see "The mark" below), then the view tabs, the command button (`im-titlebar-command`, `Ctrl+K`), the three window buttons (`im-window-buttons`). It always names the product, in ONI too |
+| Title bar | `im-titlebar` | The brand (`im-brand`, see "The mark" below), then the view tabs, the command button (`im-titlebar-command`, `Ctrl+K`), the three window buttons (`im-window-buttons`). It always names the product, in ONI too. A status that opens something (`statusButtonHtml`, `titlebarHtml`'s `statusHtml`) may stand in it, before the command button; the last result of the window is the status row's |
 | Status row | `im-status` | The last result as a chip, a summary (`im-status-text`), and info at the right (`im-status-end`) |
 | Sidebar | `im-sidebar` | The list of the app's objects: threads, rooms, categories, projects. An app without one (Muro) sets `data-im-sidebar="off"` on the shell and writes none |
 | Content | `im-content` | What the app is for, a panel whose body scrolls. The content of this region is the app's own |
@@ -321,7 +331,8 @@ The window is `im-shell`. Its body is `im-body` (the sidebar and the work area `
 the columns `im-columns` with the content and the inspector, the action bar and the footer); its first element is the
 skip link `im-shell-skip-link`. It measures its own width (a container query), so the breakpoints follow the window and
 not the screen. `shellFrameHtml` writes the frame, `renderShellFrame` repaints it, and the React `Shell` and `Workbench`
-write the same markup ([using-imago.md](using-imago.md), section 4).
+write the same regions with a smaller set of parts: the React sidebar has no fold button, no count and no foot, and the
+content panel has no header, tools or foot ([inspection.md](inspection.md) says what each writes).
 
 The shell fills the window: put it directly in `<body>`, or, when the app renders into a root of its own (React's
 `<div id="app">`), give that root, and every element between the body and the shell, the class `im-root`. Without it
@@ -344,14 +355,23 @@ the shell is as tall as its title bar, and `checkShellFill` says so on the conso
 
 | Window width | Layout |
 |---|---|
-| 1000 or more | The inspector is docked at the right and pushes the content. It never covers the content |
+| 1000 or more | The inspector is docked at the right and pushes the content. It never covers the content. A wide inspector (`data-im-inspector="wide"`) beside the 232 sidebar keeps the drawer up to 1012 |
 | Under 1000 | The inspector covers the right edge of the content as a drawer |
-| 850 or more | The full sidebar, 232px. A button in its header (`im-sidebar-collapse`) folds it into the rail; the user's choice is kept by the app |
+| 850 or more | The full sidebar, 232px. A button in its header (`im-sidebar-collapse`, written by `sidebarHtml`'s `collapse`) folds it into the rail; the user's choice is kept by the app |
 | 620 to under 850 | The sidebar is the 56px rail: one icon per row (`im-rail-item`), each with a tooltip and an accessible name. The width forces it; the user's choice does not matter |
 | Under 620 | The sidebar is not in the layout. A title-bar button (`im-sidebar-toggle`) opens it as an overlay from the left edge. The view tabs become one "Views" menu (`im-views-menu`). The command button shrinks to its icon |
 | Under 450 | The command button is gone from the title bar (`Ctrl+K` still opens the palette) and the gaps of the bar close up. The name of the product gives way before the window buttons: it ends in an ellipsis |
 | Under 340 | The mark and the name are gone, and the Views menu is its chevron alone (its label stays its accessible name) |
 
+Three of these steps need the app's own wiring, which `mountApp` does not do. The sidebar toggle opens nothing unless
+the title bar has it: an app with a sidebar writes `sidebarToggle` in `titlebarHtml`, or the button in its own markup, and
+under 620 it cannot otherwise open the sidebar. The Views button does nothing by itself: the app opens a menu of its views
+from `.im-views-menu` (`openMenu`, each tab an item with `checked`), and under 620, where the tabs are hidden, that menu is
+the only way to change view. The command button, written with its icon and its word in a `b`, shrinks to the icon under
+620 only in that markup: `titlebarHtml` writes the button as its label and the key cap, and the Views button as its
+label, so under 620 the word stays and under 340 the Views button, whose text the CSS then takes away, is an empty
+box. An app that needs the two narrow steps writes the title bar by hand, as section 4 of [using-imago.md](using-imago.md)
+shows (its markup is the gallery's).
 Every breakpoint is a container query on the shell (`@container im-shell`) at 1000, 850 or 620; the narrower steps of
 the title bar follow the same container. Nothing is a `@media` on a width (rule `media-width`).
 
@@ -393,13 +413,13 @@ keys); **outside a form it is the ARIA element** whose state the app sets.
 | Field | `im-field` with `im-field-label`, `im-field-hint`, `im-field-error`; the box `im-input` | | `<span class="im-input"><input></span>`, the box round the input when it holds an icon or a key cap (`im-input--code` for code); `input.im-input` otherwise |
 | Text area | `im-textarea` | | `textarea.im-textarea` |
 | Search | `im-input` with an `im-icon` and an `im-key` | | `<span class="im-input">` round the input |
-| Select | `im-select` | `button.im-select` that opens a menu of the choices (`openMenu`, items with `checked`) | `select.im-select` (`selectHtml`, `uiSelect`) |
+| Select | `im-select` | `button.im-select` that opens a menu of the choices (`openMenu`, items whose `checked` is a function that says whether the item is the current one) | `select.im-select` (`selectHtml`, `uiSelect`) |
 | Checkbox, radio, switch | `im-check`, `im-radio`, `im-switch`, in an `im-option` | `role="checkbox"`, `"radio"` or `"switch"` with `aria-checked` (`true`, `false`, `mixed` for a checkbox) | `input.im-check`, `input.im-radio`, `input.im-switch` with `role="switch"`: `:checked`, `:indeterminate`, `:disabled` |
 | Segmented | `im-seg` | Buttons with `aria-selected`, for a choice of view (`role="tablist"`) | Labels over native radios, `label > input[type=radio] + span` (`role="radiogroup"`), for a value (`segmentedHtml`, `segmentedControl`) |
 | Tabs | `im-tabs`, `im-tab` | `button role="tab"` with `aria-selected` | |
 | Menu | `im-menu`, `im-menu-item`, `im-menu-sep` | Opened by `openMenu` | |
 | Tooltip | the `title` attribute | There is no tooltip element | |
-| Row | `im-row`, `im-row-text`, `im-row-title`, `im-row-sub`, `im-row-meta`; one line `im-row--1`, or two | `role="option"` with `aria-selected` in a listbox; a native `button` with `aria-pressed` in the React binding (`im-row--detail`) | |
+| Row | `im-row`, `im-row-text`, `im-row-title`, `im-row-sub`, `im-row-meta`; one line `im-row--1`, or two | `role="option"` with `aria-selected` in a listbox; a native `button` with `aria-pressed` in the React binding (`im-row--detail`), in a list that is a `role="group"`, not a listbox | |
 | Table | `im-table`, `im-cell-title`, `im-cell-sub`, `im-col-check` (a column of checks), `im-num` | A row with `aria-selected` | |
 | Facts | `im-facts`, `im-facts-code` | A name and its value; the value is content and can be selected; a code value in the code font | |
 | Tree | `im-tree`, `im-tree-item`, `im-tree-chevron`, `im-tree-label` | `role="tree"`, items `role="treeitem"` with `aria-level` and `aria-expanded` | |
@@ -430,7 +450,7 @@ The same for every control. They are real attributes and pseudo-classes, never e
 | Checked | A checkbox, radio or switch that is on | `aria-checked="true"` or `:checked`; `"mixed"` or `:indeterminate` |
 | Disabled | A dashed edge and the muted text colour, readable at 4.5:1. No hover. It says why in a tooltip or a line beside it. Never an opacity | `disabled`, `:disabled` or `aria-disabled="true"` |
 | Busy | The label and the width stay; a progress mark (`im-spinner`) takes the icon's place; a second press does nothing | `aria-busy="true"` |
-| Invalid | The field's edge takes `--im-err`, with one sentence under the field that starts with the word "Error", tied by `aria-describedby`, shown after the field loses focus or on submit | `aria-invalid="true"` on the input |
+| Invalid | The field's edge takes `--im-err`, with one sentence under the field that starts with the word "Error" (the app writes the word, in its language, at the start of the text it gives), tied by `aria-describedby`, shown after the field loses focus or on submit | `aria-invalid="true"` on the input |
 | Read-only | No field fill, no frame, text selectable, no caret | `readonly` on the input |
 
 A selected button (`aria-pressed`) takes the selection fill and a 2px bar inside its bottom edge in the accent text
@@ -507,7 +527,7 @@ the gallery shows each one so written. They are the package's, and no app redefi
 | In a table: a record's name and path as a ghost button; a state with its icon (in `ok`, `im-tone-ok`); a cell's head on one line, and a line under it; a note of a log that keeps its line breaks | `im-record-button`, `im-inline-cell`, `im-tone-ok`, `im-inline`, `im-cell-meta`, `im-log-note` | Muro |
 | A row of chips in a definition | `im-tag-row` | Muro |
 | The numbered result of a run: its chips, the request, the numbered steps, a line | `im-numbered-result` | Muro |
-| A column of controls beside the content, in two stacks of 12 and of 4 | `im-aside-layout`, `im-stack-3`, `im-stack-2` | Muro |
+| A column of controls beside the content, in two stacks, `im-stack-3` with a gap of 12 and `im-stack-2` with a gap of 4 (the number is not the space token's) | `im-aside-layout`, `im-stack-3`, `im-stack-2` | Muro |
 | A list of choices, each a button with `aria-pressed`; or a listbox of buttons `im-btn im-choice-row`, each with its two texts | `im-choice-list`, `im-choice-row` | Muro |
 | A grid of fields | `im-form-grid` | Muro |
 | In a form: a field shown for one choice; a slot hidden while empty; a section that takes focus; the operations it runs with their status; notes with their files; a disclosure of more actions; a line pushed to the start of the foot | `im-field-space`, `im-hide-empty`, `im-form-section`, `im-operation-list`, `im-operation-status`, `im-notes`, `im-file-lines`, `im-disclosure-section`, `im-push-start` | Muro |
@@ -536,9 +556,9 @@ an editable path `im-path-field` (`pathField`). A page's own headings are `h1` 1
 |---|---|---|
 | A few commands | Menu | Under its control. Escape or a press outside closes it. Focus returns to the control |
 | A short choice tied to one control or pane | Sheet | Docked to its control or pane. One at a time. Tab stays inside it |
-| Details or a form for the selected object | Inspector | Not modal. The rest of the window keeps working. Leaving it with unsaved changes asks once |
+| Details or a form for the selected object | Inspector | Not modal. The rest of the window keeps working. Leaving it with unsaved changes asks once. It writes no close control of its own: the content carries the close button of its header |
 | Content the app owns, beside the panels, that does not block them | Drawer | `openDialogDrawer(dialog)`: an app-owned `dialog` shown, not modal, at the window's edge under the title bar. The panels stay live and a press in them leaves it open. Escape or its control closes it. Nothing is inert |
-| A decision about the whole window | Dialog | Everything under the title bar is inert. Focus is contained and starts on Cancel. Actions at the bottom right |
+| A decision about the whole window | Dialog | Everything under the title bar is inert. Focus is contained and starts on Cancel in `confirm`; a `dialog` the app owns (`openContentDialog`) starts focus on the dialog, or on the control that carries `autofocus`, which a destructive dialog gives to Cancel. Actions at the bottom right |
 | A form that must block the window while it saves | Dialog | `openFormDialog`, locked while it writes, or `createContentDialog` with `canDismiss`. Never the inspector, which is not modal |
 | A short result | Notice | Bottom centre, above the footer. It never takes focus. An error stays until dismissed and says "Error" in words |
 | A command by name | Command palette | Opened with `Ctrl+K`. Modal like a dialog |
@@ -577,21 +597,25 @@ undoes them all. The options are in [using-imago.md](using-imago.md), section 6.
   (`SEARCH_COMMAND`, `imago.search`), with the same ids in every app.
 - Tab moves between controls. Arrows move inside a list, a table, tabs or a menu, and each is one tab stop (`roving`).
   `F6` moves between the sidebar, the content and the inspector; `Shift+F6` goes back.
-- Enter runs the primary action of the focused surface. Escape closes the top surface only.
+- Enter presses the focused button, and submits a form from one of its fields (the native Enter): in `confirm` focus starts
+  on Cancel, so Enter there cancels. Escape closes the top surface only.
 - A key is answered once. A handler of the package that answers a key (Escape that closes a surface, the inspector or the
   sidebar drawer; an arrow that moves a list) claims it, and the registry runs no command on a claimed key. A key that is
-  only refused to the browser (by `guardDesktop`, or the zoom keys) still runs the app's command.
+  only refused to the browser by `guardDesktop` (Ctrl+F) still runs the app's command. The zoom keys are the zoom's: it
+  stops the key event, so no command runs on them.
 - An app's own key handler on the document (a terminal, an editor) is added before `mountApp`, so it runs before the
   registry, and calls `claimKey(event)` when it answers a key; from a React handler, `claimKey(event.nativeEvent)`.
   `imago-check` reports such a handler (rule `own-keydown`), and the app keeps it with an exception comment that says why.
 - No command is bound to Enter or Space: the focused control's own activation would also fire. A button's key cap may
-  show them. No command is bound to `F6` or `Shift+F6`, which are the regions'.
+  show them. No command is bound to `F6` or `Shift+F6`, which are the regions'. A key name is what `event.key` says: a key that types
+  a character only with Shift is bound as `Shift+?`, and `Ctrl+=` depends on the layout.
 - In a text field (an input, a textarea, a select or an editable element) a binding without Ctrl or Alt does not run,
   and does not cancel the key: the field keeps every key that types and every key that edits or moves in it (letters,
   Space, Delete, Backspace, Home, End, the arrows, Enter, Tab). Escape and F1 to F24 stay available there, and so does
   any binding with Ctrl or Alt. A key pressed while an input method composes text belongs to the input method.
 - No command runs while a dialog or the palette is open: a key never acts behind a pending decision.
-- `Ctrl+=`, `Ctrl+-` and `Ctrl+0` zoom from 50 to 200%, in steps of 10, saved per machine (`mountZoom`).
+- `Ctrl+=`, `Ctrl+-` and `Ctrl+0` zoom from 50 to 200%, in steps of 10, saved per machine (`mountZoom`). The level in
+  the code is a factor: `1.2` is 120%.
 
 ### Destructive actions
 
@@ -727,9 +751,10 @@ The calls are in [content-composition.md](content-composition.md) and [inspectio
 
 The package has no UI framework, and an app needs none. There is one exception: `@acaprino/imago/react`, a binding for
 Daodan's viewer, which is written in React. Its components (`Shell`, `Workbench`, `ListAction`, `Timeline`, `TabList`,
-`Disclosure`) write the package's canonical markup and nothing of their own: `Shell` is `im-shell`, and `Workbench` its
-body, with the sidebar, the content region and the inspector. No other app uses React. The props are in
-[inspection.md](inspection.md).
+`Disclosure`) write the package's canonical classes and nothing of their own: `Shell` is `im-shell`, and `Workbench` its
+body, with the sidebar, the content region and the inspector, in a smaller set of parts than `shellFrameHtml` (no fold
+button, no count and no foot in the sidebar; no header, tools or foot in the content panel). No other app uses React. The
+props, and what the binding leaves out, are in [inspection.md](inspection.md).
 
 ## What a program checks
 

@@ -101,8 +101,15 @@ The parts the app writes in its own markup round the editor, as Shinatama's team
 | In the form of a connection: a choice of kinds, each with a sample of its line; a group of options; a description | `im-editor-choice`, `im-editor-sample`, `im-editor-options`, `im-editor-description` |
 | In a list of saved arrangements: a preset, and the form on one line that saves one | `im-editor-preset`, `im-editor-inline-form`, in `im-editor-popup` |
 
+The editor's stylesheet also reads six states that the app sets on its own elements; the package writes none of them, and
+they do not carry `data-im-` (they predate the rule): `data-pending` and `data-empty` on an `im-editor-node` draw a dashed
+edge, `data-bad` an outline in the error colour, `data-lifted` raises the node and shows the grabbing cursor, and
+`data-over` (a node) and `data-drop` (the shelf or the scroll region) draw the accent ring of a drop target. `graphMiniature`
+writes `data-kind` on a line from the `kind` it is given.
+
 The details and the form of the selected node or connection go in the shell's inspector (`inspector(shell).open`).
 `graphInspector(label)` makes a panel inside the editor's stage (`im-editor-inspector`) instead, and Shinatama's team map
-also puts its saved arrangements in one (with `im-editor-popup`). An editor does not use it: the form of what is selected
+also puts its saved arrangements in one (with `im-editor-popup`): it is a second side panel, which the package still
+exports and no new editor uses. An editor does not use it: the form of what is selected
 goes in the shell's inspector, the only side panel, and a short choice tied to a control (the saved arrangements) in a
 sheet (`openSheet`) ([design-file.md](design-file.md), "Surfaces: which one for what").
