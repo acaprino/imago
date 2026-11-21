@@ -59,4 +59,52 @@ export default async function files(page) {
   assert.equal(await splitter.count(), 0);
   await page.evaluate(() => window.__imago.set({ width: 1160 }));
   assert.equal(await splitter.getAttribute('aria-valuenow'), '240');
+
+  // The document panes, under both looks: the editor fills its pane, the rendered document reads in the look's
+  // type, panes side by side are divided, a hidden pane takes no room, a picture fits, a visual editor's fields.
+  for (const look of ['smooth', 'oni']) {
+    await page.evaluate((look) => window.__imago.set({ app: 'shinatama', look, theme: 'dark', width: 1160 }), look);
+    const region = page.getByLabel('Document panes');
+    await region.scrollIntoViewIfNeeded();
+    const seen = await region.evaluate((element) => {
+      const px = (node, property) => getComputedStyle(node).getPropertyValue(property);
+      const pane = (label) => element.querySelector(`[aria-label="${label}"]`);
+      const source = pane('File source'), rendered = pane('Rendered Markdown');
+      const result = {
+        editor: [source.firstElementChild.getBoundingClientRect().height, source.getBoundingClientRect().height],
+        h1: px(rendered.querySelector('h1'), 'font-size'), h2: px(rendered.querySelector('h2'), 'font-size'),
+        h2Rule: px(rendered.querySelector('h2'), 'border-bottom-style'), p: px(rendered.querySelector('p'), 'font-size'),
+        link: px(rendered.querySelector('a'), 'text-decoration-line'), code: px(rendered.querySelector('pre'), 'font-family'),
+        divided: px(rendered, 'border-inline-start-style'), first: px(source, 'border-inline-start-style'),
+        selectable: px(rendered, 'user-select'),
+      };
+      const picture = pane('Picture'), form = pane('Visual editor');
+      result.hiddenPicture = picture.getClientRects().length;
+      source.hidden = true; rendered.hidden = true; picture.hidden = false;
+      result.image = [picture.querySelector('img').getBoundingClientRect().width, picture.getBoundingClientRect().width];
+      result.pictureDivided = px(picture, 'border-inline-start-style');
+      picture.hidden = true; form.hidden = false;
+      const [title, code, kept] = form.children;
+      result.title = [px(title, 'font-size'), px(title, 'font-weight')];
+      result.codeField = px(code, 'font-family');
+      result.kept = [px(kept, 'white-space'), px(kept, 'border-left-style')];
+      form.hidden = true; source.hidden = false; rendered.hidden = false;
+      return result;
+    });
+    const where = (text) => `${look}: ${text}`;
+    assert.ok(Math.abs(seen.editor[0] - seen.editor[1]) <= 1, where(`the editor fills its pane (${seen.editor})`));
+    assert.deepEqual([seen.h1, seen.h2, seen.p], ['24px', '19px', '14px'], where('the rendered headings and body'));
+    assert.equal(seen.h2Rule, 'solid', where('a second-level heading is underlined'));
+    assert.equal(seen.link, 'underline', where('a link is underlined'));
+    assert.match(seen.code, /mono|code|consol|courier/i, where(`code is monospaced (${seen.code})`));
+    assert.equal(seen.selectable, 'text', where('the document text is selectable'));
+    assert.equal(seen.divided, 'solid', where('the second pane side by side is divided from the first'));
+    assert.equal(seen.first, 'none', where('the first is not'));
+    assert.equal(seen.hiddenPicture, 0, where('a hidden pane takes no room'));
+    assert.ok(seen.image[0] <= seen.image[1], where(`a picture fits its pane (${seen.image})`));
+    assert.equal(seen.pictureDivided, 'none', where('a pane alone is not divided'));
+    assert.deepEqual(seen.title, ['22px', '700'], where('a first-level heading field'));
+    assert.match(seen.codeField, /mono|code|consol|courier/i, where('a code field is monospaced'));
+    assert.deepEqual(seen.kept, ['pre-wrap', 'solid'], where('kept source wraps and is marked'));
+  }
 }

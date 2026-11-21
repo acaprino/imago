@@ -53,6 +53,8 @@ const traits = {
   editorSummary: 'im-editor-summary', editorCaption: 'im-editor-caption', editorDescription: 'im-editor-description',
   editorNodeTitle: 'im-editor-node-title', editorNodeFoot: 'im-editor-node-foot', editorDot: 'im-editor-dot',
   editorOptions: 'im-editor-options', editorChoice: 'im-editor-choice', editorSample: 'im-editor-sample',
+  // The fields of a visual document editor (documentPane('form')): a heading (with data-im-level), code, kept source.
+  documentHeading: 'im-document-heading', documentCode: 'im-document-code', documentKept: 'im-document-kept',
 } as const satisfies Record<string, string>;
 
 /** Every role and the classes that draw it, for a check that each is in Imago's stylesheets. */

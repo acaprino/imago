@@ -13,3 +13,34 @@ dialog.im-file-dialog > header > select { max-width: min(100%, 260px); margin-in
 .im-render-view > .im-content-toolbar > input { flex: 1; min-width: 60px; }
 .im-render-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .im-render-view canvas:focus-visible { outline: 1px solid var(--im-accent); outline-offset: -1px; }
+/* The panes of the document region: the app's editor fills a source pane; a rendered document reads in the look's
+   type; a picture is at most as wide as its pane; a visual editor's fields stack in a form pane. */
+.im-document-panes > .im-document-pane:not([hidden]) ~ .im-document-pane:not([hidden]) { border-inline-start: 1px solid color-mix(in srgb, var(--im-line) 70%, transparent); }
+.im-document-pane--source { position: relative; overflow: hidden; }
+.im-document-pane--source > * { height: 100%; }
+.im-document-pane--rendered { overflow: auto; padding: 14px 24px 14px 18px; color: var(--im-text); font-size: 14px; line-height: 1.65; user-select: text; scrollbar-width: thin; }
+.im-document-panes > .im-document-pane--rendered :is(h1, h2, h3, h4, h5, h6) { margin: 1.2em 0 .5em; font-family: var(--im-font-display); font-weight: 650; letter-spacing: -.01em; line-height: 1.25; text-transform: none; color: var(--im-text); }
+.im-document-panes > .im-document-pane--rendered h1 { font-size: 24px; }
+.im-document-panes > .im-document-pane--rendered h2 { font-size: 19px; padding-bottom: 4px; border-bottom: 1px solid color-mix(in srgb, var(--im-line) 70%, transparent); }
+.im-document-panes > .im-document-pane--rendered h3 { font-size: 16px; }
+.im-document-panes > .im-document-pane--rendered :is(h4, h5, h6) { font-size: 14px; }
+.im-document-panes > .im-document-pane--rendered > :first-child { margin-top: 0; }
+.im-document-panes > .im-document-pane--rendered p { margin: 0 0 .9em; font-size: 14px; color: var(--im-text); }
+.im-document-panes > .im-document-pane--rendered :is(ul, ol) { padding-left: 1.4em; }
+.im-document-panes > .im-document-pane--rendered blockquote { margin: 0 0 .9em; padding-left: 12px; border-left: 1px solid var(--im-line-strong); color: var(--im-muted); }
+.im-document-pane--rendered pre { background: var(--im-ground); padding: 10px 12px; overflow: auto; font: 12.5px/1.55 var(--im-font-code); }
+.im-document-pane--rendered code { font-family: var(--im-font-code); font-size: .92em; }
+.im-document-pane--rendered table { border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.im-document-pane--rendered :is(th, td) { padding: 6px 12px 6px 0; border-bottom: 1px solid var(--im-line); text-align: left; vertical-align: top; }
+.im-document-pane--rendered th { color: var(--im-muted); font-weight: 600; }
+.im-document-pane--rendered a { color: var(--im-accent-text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.im-document-pane--picture { overflow: auto; padding: 14px; background: var(--im-ground); }
+.im-document-pane--picture:not([hidden]) { display: flex; align-items: flex-start; justify-content: center; }
+.im-document-pane--picture img { max-width: 100%; height: auto; image-rendering: auto; }
+.im-document-pane--form { overflow: auto; padding: 14px 24px 14px 18px; }
+.im-document-pane--form:not([hidden]) { display: flex; flex-direction: column; gap: 8px; }
+.im-document-pane--form :is(input, textarea) { width: 100%; height: auto; resize: vertical; }
+.im-document-panes > .im-document-pane--form .im-document-heading { font-weight: 700; font-size: 18px; }
+.im-document-panes > .im-document-pane--form .im-document-heading[data-im-level="1"] { font-size: 22px; }
+.im-document-panes > .im-document-pane--form .im-document-code { font: 13px/1.5 var(--im-font-code); background: var(--im-ground); }
+.im-document-kept { margin: 0; padding: 6px 8px; color: var(--im-muted); background: var(--im-ground); border-left: 1px solid var(--im-line-strong); white-space: pre-wrap; font: 12px/1.5 var(--im-font-code); }

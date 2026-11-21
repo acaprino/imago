@@ -80,7 +80,7 @@ groups. Supply the current layout, reducer and stable DOM bindings keyed by view
 ID. A layout edit moves an existing binding. The consumer starts and disposes
 the underlying resource independently of panel visibility. `fileWorkspace`
 provides the tree, command and document regions for a file tool. The application
-loads the actual document and connects its editor inside the document region.
+loads the actual document and connects its editor inside the document region. `documentPane(kind, label)` makes the panes of that region: a `source` pane the editor fills, a `rendered` pane for a rendered document in the look's reading type, a `picture` pane and a `form` pane for a visual editor, whose fields take the `documentHeading`, `documentCode` and `documentKept` roles.
 
 `portraitNotice` provides the image, live text and action controls of a
 detached notice. The host decides which event it represents, whether to show
