@@ -54,7 +54,7 @@ export function graphEditor() {
  */
 export function graphInspector(label: string) {
   const inspector = document.createElement('section');
-  inspector.className = 'im-editor-inspector im-native-controls';
+  inspector.className = 'im-editor-inspector';
   inspector.setAttribute('role', 'dialog');
   inspector.setAttribute('aria-label', label);
   return inspector;

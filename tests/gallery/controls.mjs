@@ -1,7 +1,7 @@
 // The controls and their states, in both looks and both themes: the matrix draws every pair of the manifest, and each
 // state is told apart without colour alone, never changes the size of the control, and keeps its text readable.
 import assert from 'node:assert/strict';
-import { CONTROLS } from '../../gallery/manifest.ts';
+import { CONTROLS, NATIVE_TWINS } from '../../gallery/manifest.ts';
 
 const LOOKS = ['smooth', 'oni'];
 const THEMES = ['dark', 'light'];
@@ -28,6 +28,13 @@ const TARGET = {
   tree: '.im-tree-item',
   'table-row': 'tbody tr',
   'menu-item': '.im-menu-item',
+  // The native twins: the same class on the native element (a segment is the label over its radio).
+  'checkbox-native': '.im-check',
+  'radio-native': '.im-radio',
+  'switch-native': '.im-switch',
+  'select-native': '.im-select',
+  'segmented-native': '.im-seg > label',
+  textarea: '.im-textarea',
 };
 const TEXT = {
   field: 'input',
@@ -35,6 +42,9 @@ const TEXT = {
   checkbox: '.im-option',
   radio: '.im-option',
   switch: '.im-option',
+  'checkbox-native': '.im-option',
+  'radio-native': '.im-option',
+  'switch-native': '.im-option',
   row: '.im-row-title',
   tree: '.im-tree-label',
   'table-row': '.im-cell-title',
@@ -42,7 +52,7 @@ const TEXT = {
 };
 const BUTTONS = ['button-primary', 'button-secondary', 'button-ghost', 'button-danger', 'button-confirm-danger'];
 // Controls with a box one control high: their height is --im-h-control in every state.
-const CONTROL_HEIGHT = [...BUTTONS, 'icon-button', 'field', 'search', 'select', 'tab', 'segmented', 'row'];
+const CONTROL_HEIGHT = [...BUTTONS, 'icon-button', 'field', 'search', 'select', 'select-native', 'tab', 'segmented', 'segmented-native', 'row'];
 // css/surfaces.css draws the menu item: its edge is not ours to assert.
 const NO_EDGE = ['menu-item'];
 
@@ -50,9 +60,9 @@ const NO_EDGE = ['menu-item'];
 // a control that stands alone 2 outside; a field 1 outside; an item of a list, table, tree, menu, tab strip or
 // segmented control 2 inside (its container clips); an ONI chamfered button 5 inside (a clip-path cuts an outer ring).
 const RING_OFFSET = (() => {
-  const alone = { 'icon-button': 2, select: 2, checkbox: 2, radio: 2, switch: 2 };
-  const field = { field: 1, search: 1 };
-  const item = { tab: -2, segmented: -2, row: -2, tree: -2, 'table-row': -2, 'menu-item': -2 };
+  const alone = { 'icon-button': 2, select: 2, checkbox: 2, radio: 2, switch: 2, 'select-native': 2, 'checkbox-native': 2, 'radio-native': 2, 'switch-native': 2 };
+  const field = { field: 1, search: 1, textarea: 1 };
+  const item = { tab: -2, segmented: -2, 'segmented-native': -2, row: -2, tree: -2, 'table-row': -2, 'menu-item': -2 };
   const buttons = (offset) => Object.fromEntries(BUTTONS.map((id) => [id, offset]));
   return { smooth: { ...buttons(2), ...alone, ...field, ...item }, oni: { ...buttons(-5), ...alone, ...field, ...item } };
 })();
@@ -204,6 +214,7 @@ const MARKED = [
   { id: 'row', item: '.im-row', text: '.im-row-title', host: null, pseudo: '::before' },
   { id: 'tree', item: '.im-tree-item', text: '.im-tree-label', host: null, pseudo: '::before' },
   { id: 'segmented', item: '.im-seg > button', text: null, host: null, pseudo: '::after' },
+  { id: 'segmented-native', item: '.im-seg > label', text: null, host: null, pseudo: '::after' },
   // The tab's line is always there; it is scaled to nothing until the tab is selected.
   { id: 'tab', item: '.im-tab', text: null, host: null, pseudo: '::after', scaled: true },
   { id: 'table-row', item: 'tbody tr', text: '.im-cell-title', host: ':scope > :first-child', pseudo: '::before' },
@@ -266,8 +277,43 @@ const marksOf = (marked) => {
   return out;
 };
 
+// What a control looks like, read from its computed style: its box and edge, its fill, its ring, its text, and its mark
+// (`::after`: the tick, the bar of a mixed checkbox, the dot, the thumb). For each cell of a native control, the same read of
+// the cell of its twin in the same state; a cell with more than one control (a checkbox and its mixed one) is read in order.
+// Self-contained: Playwright sends its source to the page.
+const drawingsOf = ({ twins, target }) => {
+  const BOX = ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopStyle', 'borderRightStyle',
+    'borderBottomStyle', 'borderLeftStyle', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+    'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius', 'backgroundColor', 'boxShadow',
+    'outlineStyle', 'outlineWidth', 'outlineOffset', 'outlineColor', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'letterSpacing',
+    'textTransform'];
+  const MARK = ['content', 'display', 'position', 'top', 'left', 'width', 'height', 'backgroundColor', 'borderTopWidth', 'borderRightWidth',
+    'borderBottomWidth', 'borderLeftWidth', 'borderTopStyle', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+    'borderTopLeftRadius', 'transform'];
+  const pick = (style, names) => Object.fromEntries(names.map((name) => [name, style[name]]));
+  // A mark with no content is not drawn: the rest of its style is the browser's and says nothing.
+  const mark = (style) => (style.content === 'none' ? 'none' : pick(style, MARK));
+  const read = (cell, control) => [...cell.querySelectorAll(target[control])].map((el) => {
+    const box = el.getBoundingClientRect();
+    return { tag: el.localName, width: box.width, height: box.height, ...pick(getComputedStyle(el), BOX), mark: mark(getComputedStyle(el, '::after')) };
+  });
+  const out = [];
+  for (const [native, twin] of Object.entries(twins)) {
+    for (const cell of document.querySelectorAll(`#im-gallery-matrix [data-control="${native}"][data-state]`)) {
+      const other = document.querySelector(`#im-gallery-matrix [data-control="${twin}"][data-state="${cell.dataset.state}"]`);
+      out.push({ native, twin, state: cell.dataset.state, drawn: read(cell, native), twinDrawn: other ? read(other, twin) : [] });
+    }
+  }
+  return out;
+};
+
+// The native inputs whose mark is a pseudo-element: [control, state, which of the cell's controls].
+const MARKS = [['checkbox-native', 'selected', 0], ['checkbox-native', 'selected', 1], ['checkbox-native', 'disabled', 0], ['radio-native', 'selected', 0], ['switch-native', 'rest', 0], ['switch-native', 'selected', 0]];
+
 export default async (page) => {
   const expected = CONTROLS.flatMap(({ id, states }) => states.map((state) => `${id}|${state}`)).sort();
+  // Takes the mark of one element away, to compare its pixels with and without it.
+  await page.addStyleTag({ content: '[data-g-unmarked]::after { content: none !important; }' });
 
   for (const look of LOOKS) {
     for (const theme of THEMES) {
@@ -344,8 +390,43 @@ export default async (page) => {
         if (id === 'tab') assert.notEqual(sel.textColor, a.textColor, where('a selected tab has its own text colour'));
         else assert.ok(sel.textColor !== a.textColor || sel.fill !== a.fill, where('a selected row changes the colour or the fill'));
       }
-      for (const id of ['segmented', 'tree', 'table-row']) {
+      for (const id of ['segmented', 'segmented-native', 'tree', 'table-row']) {
         assert.ok(at(id, 'selected').fontWeight > rest(id).fontWeight, where(`${id} selected is heavier`));
+      }
+      // A pressed button (aria-pressed) takes the selection fill, and in Smooth the weight 600; ONI's buttons are bold already.
+      for (const id of ['button-secondary', 'button-ghost']) {
+        const sel = at(id, 'selected');
+        assert.notEqual(sel.fill, rest(id).fill, where(`${id} pressed has the selection fill`));
+        assert.equal(sel.fontWeight, look === 'oni' ? 700 : 600, where(`${id} pressed is ${sel.fontWeight}`));
+      }
+
+      // One drawing for a control on a native element and on an ARIA element: in every state, each native cell has the box,
+      // the edge, the fill, the ring, the text and the mark of its twin's cell. A text area is the field's drawing on more
+      // than one line, so its height is its own, and the field of the matrix is the code one (im-input--code), so its font.
+      const drawings = await page.evaluate(drawingsOf, { twins: NATIVE_TWINS, target: TARGET });
+      const pairs = Object.entries(NATIVE_TWINS).flatMap(([native]) => CONTROLS.find((c) => c.id === native).states.map((state) => `${native}|${state}`));
+      assert.deepEqual(drawings.map((d) => `${d.native}|${d.state}`).sort(), pairs.sort(), where('every state of every native control is compared'));
+      for (const { native, twin, state, drawn, twinDrawn } of drawings) {
+        const said = (message) => where(`${native} ${state} (${drawn.map((d) => d.tag).join(', ')}) ${message}`);
+        assert.ok(drawn.length > 0 && drawn.length === twinDrawn.length, said(`has ${drawn.length} controls, ${twin} has ${twinDrawn.length}`));
+        drawn.forEach((one, n) => {
+          const { tag, ...mine } = one;
+          const { tag: twinTag, ...theirs } = twinDrawn[n];
+          if (native === 'textarea') for (const name of ['height', 'fontFamily', 'fontSize']) delete mine[name], delete theirs[name];
+          assert.notEqual(tag, twinTag, said(`is a native element, not a second ${twinTag}`));
+          assert.deepEqual(mine, theirs, said(`is drawn as ${twin} (${twinTag})`));
+        });
+      }
+
+      // The mark of a native input is a pseudo-element of the input, as it is of the ARIA element: WebView2 and Chromium paint
+      // the ::after of an input with `appearance: none`. Proven on the pixels: the box looks different without its mark.
+      for (const [control, state, n] of MARKS) {
+        const box = page.locator(`#im-gallery-matrix [data-control="${control}"][data-state="${state}"] ${TARGET[control]}`).nth(n);
+        const marked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => el.setAttribute('data-g-unmarked', ''));
+        const unmarked = await box.screenshot({ animations: 'disabled' });
+        await box.evaluate((el) => el.removeAttribute('data-g-unmarked'));
+        assert.ok(!marked.equals(unmarked), where(`${control} ${state} ${n}: the mark of the native input is painted`));
       }
 
       // Busy: the label and the width stay, a spinner takes the icon's place, a second press does nothing.
@@ -395,7 +476,7 @@ export default async (page) => {
         for (const state of CONTROLS.find((c) => c.id === id).states) {
           const cell = at(id, state);
           // A segment sits in a track with 2px of padding and a 1px edge: the track is the control.
-          const height = id === 'segmented' ? cell.height + 6 : cell.height;
+          const height = id.startsWith('segmented') ? cell.height + 6 : cell.height;
           assert.ok(Math.abs(height - control) <= 0.5, where(`${id} ${state} is ${height}px high, the control height is ${control}px`));
         }
       }
@@ -447,6 +528,9 @@ export default async (page) => {
           disabledRow: style(cell('row', 'disabled').querySelector('.im-row-title')).color,
           progressFill: getComputedStyle(cell('progress', 'rest').querySelector('.im-progress'), '::before').backgroundColor,
           checked: style(cell('checkbox', 'selected').querySelector('.im-check')).backgroundColor,
+          nativeChecked: style(cell('checkbox-native', 'selected').querySelector('.im-check')).backgroundColor,
+          // Forced colours drop a gradient: the chevron of a native select is then the browser's own, in system colours.
+          nativeSelect: { image: style(cell('select-native', 'rest').querySelector('select')).backgroundImage, appearance: style(cell('select-native', 'rest').querySelector('select')).appearance },
         };
       });
       const marks = await page.evaluate(marksOf, MARKED);
@@ -458,6 +542,8 @@ export default async (page) => {
       assert.equal(forced.disabledRow, forced.grayText, where('forced colours: a disabled row is GrayText'));
       assert.equal(forced.progressFill, forced.highlight, where('forced colours: the progress fill is Highlight'));
       assert.equal(forced.checked, forced.highlight, where('forced colours: a checked box is Highlight'));
+      assert.equal(forced.nativeChecked, forced.highlight, where('forced colours: a checked native box is Highlight'));
+      assert.ok(!/^none(, none)*$/.test(forced.nativeSelect.image) || forced.nativeSelect.appearance !== 'none', where(`forced colours: a native select keeps a chevron (${JSON.stringify(forced.nativeSelect)})`));
 
       // A selected item is a Highlight bar inside the item. It is not the outline, which is the focus ring, and the ring
       // (the outer band of the item) does not cover it: a focused selected item shows both.
@@ -523,7 +609,8 @@ export default async (page) => {
       },
       [control, state, inner],
     );
-  const LIVE = [['button-secondary', '.im-btn', true], ['button-primary', '.im-btn', true], ['icon-button', '.im-icon-btn', true], ['row', '.im-row', false], ['tab', '.im-tab', false]];
+  const LIVE = [['button-secondary', '.im-btn', true], ['button-primary', '.im-btn', true], ['icon-button', '.im-icon-btn', true], ['row', '.im-row', false], ['tab', '.im-tab', false],
+    ['checkbox-native', '.im-check', false], ['select-native', '.im-select', false], ['segmented-native', '.im-seg > label:first-child', false], ['textarea', '.im-textarea', false]];
   for (const [control, inner, hasPress] of LIVE) {
     await page.locator(`[data-control="${control}"][data-state="rest"] ${inner}`).hover();
     await page.waitForTimeout(300);

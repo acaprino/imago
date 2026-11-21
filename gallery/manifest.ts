@@ -13,21 +13,42 @@ export interface Control {
 const PUSH: State[] = ['rest', 'hover', 'press', 'focus', 'disabled', 'busy'];
 const PICK: State[] = ['rest', 'hover', 'focus', 'selected', 'disabled'];
 
+const FIELD: State[] = ['rest', 'hover', 'focus', 'disabled', 'invalid', 'readonly'];
+const SELECT: State[] = ['rest', 'hover', 'focus', 'disabled'];
+
+/** The controls drawn on a native element (an input, a select, a text area, radios under labels), each with the control it
+ * is drawn as: one drawing serves both markups, and tests/gallery/controls.mjs measures that the two cells of a state match. */
+export const NATIVE_TWINS: Record<string, string> = {
+  'checkbox-native': 'checkbox',
+  'radio-native': 'radio',
+  'switch-native': 'switch',
+  'select-native': 'select',
+  'segmented-native': 'segmented',
+  textarea: 'field',
+};
+
 export const CONTROLS: Control[] = [
   { id: 'button-primary', states: PUSH },
-  { id: 'button-secondary', states: PUSH },
-  { id: 'button-ghost', states: PUSH },
+  // A neutral and a ghost button can be pressed (aria-pressed): selected is that state.
+  { id: 'button-secondary', states: [...PUSH, 'selected'] },
+  { id: 'button-ghost', states: [...PUSH, 'selected'] },
   { id: 'button-danger', states: PUSH },
   { id: 'button-confirm-danger', states: PUSH },
   { id: 'icon-button', states: ['rest', 'hover', 'press', 'focus', 'disabled'] },
-  { id: 'field', states: ['rest', 'hover', 'focus', 'disabled', 'invalid', 'readonly'] },
+  { id: 'field', states: FIELD },
+  { id: 'textarea', states: FIELD },
   { id: 'search', states: ['rest', 'hover', 'focus', 'disabled'] },
-  { id: 'select', states: ['rest', 'hover', 'focus', 'disabled'] },
+  { id: 'select', states: SELECT },
+  { id: 'select-native', states: SELECT },
   { id: 'checkbox', states: PICK },
+  { id: 'checkbox-native', states: PICK },
   { id: 'radio', states: PICK },
+  { id: 'radio-native', states: PICK },
   { id: 'switch', states: PICK },
+  { id: 'switch-native', states: PICK },
   { id: 'tab', states: PICK },
   { id: 'segmented', states: PICK },
+  { id: 'segmented-native', states: PICK },
   { id: 'row', states: PICK },
   { id: 'tree', states: PICK },
   { id: 'table-row', states: ['rest', 'hover', 'focus', 'selected'] },

@@ -167,9 +167,11 @@ export default async function workspace(page) {
     await input.press('Shift+Enter');
     assert.equal(await demo.getByRole('button', { name: 'Show in sidebar · Mukade' }).getAttribute('aria-pressed'), 'true');
     const mark = demo.getByRole('option', { name: 'Mukade' }).locator('.im-picker-mark');
-    assert.equal(await mark.getAttribute('data-im-checked'), 'true');
+    // The mark is an im-check: its state is the check's aria-checked, and it is drawn as every checkbox is.
+    assert.equal(await mark.locator('.im-check').getAttribute('aria-checked'), 'true');
+    assert.equal(await mark.locator('.im-check').evaluate(el => getComputedStyle(el).backgroundColor), await mark.locator('.im-check').evaluate(el => getComputedStyle(el).borderTopColor), 'a checked mark is filled with its edge colour, the accent');
     await mark.click();
-    assert.equal(await mark.getAttribute('data-im-checked'), 'false');
+    assert.equal(await mark.locator('.im-check').getAttribute('aria-checked'), 'false');
     assert.ok(await input.evaluate(el => el === document.activeElement));
     await input.press('Enter');
     assert.equal(await demo.locator('output').textContent(), 'Opened Mukade');

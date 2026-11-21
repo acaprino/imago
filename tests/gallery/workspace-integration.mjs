@@ -170,7 +170,7 @@ async function picker(page) {
     finish();
     await new Promise(resolve => setTimeout(resolve, 0));
     rows[1].click();
-    const result = [choices, marks, marker.dataset.imChecked, rows[0].getAttribute('aria-disabled')];
+    const result = [choices, marks, marker.querySelector('.im-check').getAttribute('aria-checked'), rows[0].getAttribute('aria-disabled')];
     control.destroy();
     return result;
   });

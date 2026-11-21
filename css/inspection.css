@@ -1,11 +1,5 @@
 /* Inspection content: what a page or a document in the content region of the shell is made of. */
-.im-visually-hidden, .im-seg--choice input { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-.im-seg--choice { min-inline-size: 0; margin: 0; }
-.im-seg--choice label { position: relative; display: inline-flex; align-items: center; padding: var(--im-s-1) var(--im-s-3); border-radius: var(--im-r-control); }
-.im-seg--choice label:has(:checked) { color: var(--im-accent-text); background: var(--im-selected); }
-.im-seg--choice label:has(:focus-visible) { outline: 2px solid var(--im-accent-text); outline-offset: -2px; }
-.im-seg--choice label:has(:disabled) { color: var(--im-muted); opacity: .65; }
-.im-seg--choice label:has(:enabled):hover { background: var(--im-hover); }
+.im-visually-hidden { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 .im-canvas-panel { display: flex; flex: 1; flex-direction: column; min-block-size: 0; min-inline-size: 0; }
 .im-section + .im-section { margin-block-start: var(--im-s-4); }
 .im-note--block { display: block; overflow-wrap: anywhere; }
@@ -30,7 +24,6 @@
 .im-detail-list > li { padding-block: var(--im-s-1); overflow-wrap: anywhere; }
 .im-row--detail { width: 100%; height: auto; min-block-size: var(--im-h-row); text-align: start; justify-content: flex-start; white-space: normal; }
 .im-row--detail .im-row-text :is(.im-row-title,.im-row-sub) { white-space: normal; overflow-wrap: anywhere; }
-.im-row[aria-pressed="true"], .im-row[aria-current="page"], .im-btn[aria-pressed="true"] { color: var(--im-accent-text); background: var(--im-selected); }
 .im-timeline { border-inline-start: 2px solid var(--im-accent-text); padding-inline-start: var(--im-s-3); }
 .im-timeline > li { display: grid; gap: var(--im-s-1); padding-block: var(--im-s-2); overflow-wrap: anywhere; }
 .im-inset { padding: var(--im-s-3); }
@@ -41,7 +34,4 @@
 /* A toolbar that wraps keeps what it pushed to its end on the left. */
 @container im-shell (width < 850px) {
   .im-content-toolbar .im-end, [data-im-align="end"] { margin-inline-start: 0; }
-}
-@media (forced-colors: active) {
-  .im-seg--choice label:has(:checked), .im-row[aria-pressed="true"] { outline: 1px solid SelectedItem; }
 }

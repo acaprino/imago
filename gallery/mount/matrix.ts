@@ -20,6 +20,8 @@ export default function mount(ctx: MountContext): () => void {
     <h2 id="g-h-matrix">Controls and their states</h2>
     <p>Every control in every state it can be in. Hover, pressed and focus are forced on the cell; the other states are the real attributes. The look, theme and app are the ones of the pickers above.</p>
     <div class="g-mx-surface">${matrixMarkup()}</div>`;
+  // A native checkbox is mixed only from a script: no attribute says it.
+  for (const input of Array.from(section.querySelectorAll<HTMLInputElement>('input[data-indeterminate]'))) input.indeterminate = true;
   const surface = section.querySelector<HTMLElement>('.g-mx-surface');
   if (surface) {
     for (const { name, value } of Array.from(ctx.root.attributes)) {

@@ -22,11 +22,13 @@ export interface SelectMarkupOptions {
   label?: string;
   attrs?: FormAttributes;
 }
+/** A native select with the drawing of the select button, `select.im-select`; a class in `attrs` is added to it. */
 export function selectHtml(options: SelectMarkupOptions): string {
   const { name, value, label, attrs } = options;
-  const { disabled, ...extra } = attrs ?? {};
+  const { disabled, class: extraClass, ...extra } = attrs ?? {};
   if ('name' in extra || 'value' in extra) throw new Error('A select name/value must be supplied through its options');
-  return `<select ${attributes({ name, ...extra, ...(label ? { 'aria-label': label } : {}), disabled })}>${selectOptionsHtml(options.options, value)}</select>`;
+  const classes = ['im-select', typeof extraClass === 'string' ? extraClass : ''].filter(Boolean).join(' ');
+  return `<select ${attributes({ class: classes, name, ...extra, ...(label ? { 'aria-label': label } : {}), disabled })}>${selectOptionsHtml(options.options, value)}</select>`;
 }
 export function selectFieldHtml(label: string, name: string, options: readonly SelectOption[], selected: string): string {
   return `<label class="im-field"><span>${esc(label)}</span>${selectHtml({ name, options, value: selected })}</label>`;
@@ -43,9 +45,10 @@ export interface CheckboxMarkupOptions {
   top?: boolean;
   disabled?: boolean;
 }
+/** A native checkbox with the drawing of every checkbox, `input.im-check`, in its labelled option. */
 export function checkboxOptionHtml(options: CheckboxMarkupOptions): string {
   const { name, checked, label, value, hint, hintHtml, leadingHtml = '', top, disabled } = options;
-  return `<label class="im-option${top ? ' im-leading' : ''}"><input ${attributes({ type: 'checkbox', name, value, checked, disabled })}>${leadingHtml}<span>${hint === undefined && hintHtml === undefined ? esc(label) : `<strong>${esc(label)}</strong><small>${hintHtml ?? esc(hint)}</small>`}</span></label>`;
+  return `<label class="im-option${top ? ' im-leading' : ''}"><input ${attributes({ type: 'checkbox', class: 'im-check', name, value, checked, disabled })}>${leadingHtml}<span>${hint === undefined && hintHtml === undefined ? esc(label) : `<strong>${esc(label)}</strong><small>${hintHtml ?? esc(hint)}</small>`}</span></label>`;
 }
 
 export function formGroupHtml(legend: string, contentHtml: string, hint = ''): string {
@@ -87,10 +90,11 @@ export function settingsRowHtml(options: { title: string; hintHtml?: string; con
   return `<div class="im-setting-row"><div><strong>${esc(title)}</strong>${hintHtml ? `<small${field ? ` id="hint-${esc(field)}"` : ''}>${hintHtml}</small>` : ''}${field ? fieldErrorHtml(`err-${field}`, error) : ''}</div>${controlHtml}</div>`;
 }
 
+/** A native input in its field box, `span.im-input > input`. */
 export function inputHtml(options: { name: string; label: string; value: string; describedBy?: string; invalid?: boolean; attrs?: FormAttributes }): string {
   const { name, label, value, describedBy, invalid, attrs } = options;
   if (attrs && ('name' in attrs || 'value' in attrs)) throw new Error('An input name/value must be supplied through its options');
-  return `<input ${attributes({ ...attrs, name, 'aria-label': label, 'aria-describedby': describedBy, ...(invalid ? { 'aria-invalid': 'true' } : {}), value })}>`;
+  return `<span class="im-input"><input ${attributes({ ...attrs, name, 'aria-label': label, 'aria-describedby': describedBy, ...(invalid ? { 'aria-invalid': 'true' } : {}), value })}></span>`;
 }
 
 /** Add explicit data/ARIA attributes without rewriting serialized markup. */

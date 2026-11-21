@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { CONTROLS } from '../gallery/manifest.ts';
+import { CONTROLS, NATIVE_TWINS } from '../gallery/manifest.ts';
 
 // The manifest is the matrix of controls and their states. These names of the control set are not in it, each proven
 // where it is drawn:
@@ -15,14 +15,14 @@ const MANIFEST_IDS: Record<string, string[]> = {
   button: ['button-primary', 'button-secondary', 'button-ghost', 'button-danger', 'button-confirm-danger', 'icon-button'],
   'key cap': ['key'],
   count: ['count'],
-  field: ['field'],
+  field: ['field', 'textarea'],
   search: ['search'],
-  select: ['select'],
-  checkbox: ['checkbox'],
-  radio: ['radio'],
-  switch: ['switch'],
+  select: ['select', 'select-native'],
+  checkbox: ['checkbox', 'checkbox-native'],
+  radio: ['radio', 'radio-native'],
+  switch: ['switch', 'switch-native'],
   tabs: ['tab'],
-  segmented: ['segmented'],
+  segmented: ['segmented', 'segmented-native'],
   menu: ['menu-item'],
   tooltip: [],
   row: ['row'],
@@ -104,4 +104,15 @@ test('the states a control can only have once it is interactive are listed where
   }
   assert.ok(has('steps', 'selected'), 'steps show the current step as selected');
   assert.ok(has('progress', 'busy'), 'progress shows the indeterminate one as busy');
+  for (const id of ['button-secondary', 'button-ghost']) assert.ok(has(id, 'selected'), `${id} can be pressed (aria-pressed) and shows it as selected`);
+});
+
+// A control drawn on a native element and on an ARIA element is drawn once: the matrix shows both, in the same states, and
+// tests/gallery/controls.mjs measures that each native cell is drawn as its twin's.
+test('each native control has the states of the control it is drawn as', () => {
+  assert.deepEqual(Object.keys(NATIVE_TWINS).sort(), ['checkbox-native', 'radio-native', 'segmented-native', 'select-native', 'switch-native', 'textarea']);
+  for (const [native, twin] of Object.entries(NATIVE_TWINS)) {
+    assert.ok(byId.has(native) && byId.has(twin), `${native} and ${twin} are both in the manifest`);
+    assert.deepEqual(byId.get(native)?.states, byId.get(twin)?.states, `${native} has the states of ${twin}`);
+  }
 });

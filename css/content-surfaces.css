@@ -1,5 +1,5 @@
 /* A native dialog assembled from stable controls can hold long reports, tables and literal text. */
-dialog.im-content-dialog.im-native-controls:has(> .im-section-heading) {
+dialog.im-content-dialog:has(> .im-section-heading) {
   padding: var(--im-s-4);
   grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: max-content;
@@ -36,4 +36,3 @@ dialog.im-content-drawer {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
-.im-native-controls [role="status"][data-state="error"] { color: var(--im-err); }

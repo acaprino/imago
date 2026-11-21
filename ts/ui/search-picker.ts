@@ -73,8 +73,7 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
   function paintMarks() {
     if (!options.mark) return;
     for (const [index, row] of Array.from(list.children).entries()) {
-      const marker = row.querySelector<HTMLElement>('.im-picker-mark');
-      if (marker) marker.dataset.imChecked = String(options.mark.checked(rows[index]));
+      row.querySelector('.im-picker-mark > .im-check')?.setAttribute('aria-checked', String(options.mark.checked(rows[index])));
     }
   }
   function clear() {
@@ -123,6 +122,12 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
           marker.dataset.imMark = options.mark.key?.(item) ?? item.id;
           marker.title = options.mark.label + ' · ' + item.label;
           marker.setAttribute('aria-hidden', 'true');
+          // The mark is drawn as every checkbox is; the button below the list says the state to assistive technology.
+          const check = doc.createElement('span');
+          check.className = 'im-check';
+          check.setAttribute('role', 'checkbox');
+          check.setAttribute('aria-checked', 'false');
+          marker.append(check);
           marker.onclick = event => {
             event.stopPropagation();
             select(index);
