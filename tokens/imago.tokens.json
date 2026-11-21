@@ -21,7 +21,8 @@
     "ease": { "$type": "cubicBezier", "$value": [0.16, 1, 0.3, 1] },
     "w-sidebar": { "$type": "dimension", "$value": { "value": 232, "unit": "px" } },
     "w-rail": { "$type": "dimension", "$value": { "value": 56, "unit": "px" } },
-    "w-inspector": { "$type": "dimension", "$value": { "value": 300, "unit": "px" } }
+    "w-inspector": { "$type": "dimension", "$value": { "value": 300, "unit": "px" } },
+    "w-inspector-wide": { "$type": "dimension", "$value": { "value": 360, "unit": "px" } }
   },
   "measure": {
     "smooth": {

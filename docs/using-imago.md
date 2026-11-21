@@ -138,7 +138,8 @@ goes and comes back is the same element again, in its place. The content region 
 `contentToolsHtml` and `contentFootHtml` give its header, tools and foot around the body, which scrolls. Notes:
 
 - `im-shell` fills its parent (`block-size: 100%`) and measures its own width, so the breakpoints follow the window.
-  Put it directly in `<body>`, or in an element that fills the window.
+  Put it directly in `<body>`, or in a root of the app's own that carries `im-root` (`<div id="app" class="im-root">`,
+  where React renders), as every element between the body and the shell does.
 - The brand is the mark and the name: `im-mark` holds one letter, the initial of the product's name in capitals, on the
   app's accent, and `im-wordmark` the name. No drawing and no logo: the app's logo is what Windows shows (the icons of
   its executables). `titlebarHtml({ brand: { name } })` writes the two; `imago-check` reports a brand that is not
@@ -164,8 +165,8 @@ goes and comes back is the same element again, in its place. The content region 
 `mountWindowControls` finds the buttons by `data-im-window="minimize"`, `"maximize"` and `"close"` inside the title
 bar. A button that is missing is skipped. On the maximize button the page sets `data-im-os` (`hover` or `pressed`,
 from Windows' own hit test), and, when the app gives `onMaximized`, `data-im-maximized` (`true` or `false`) with a
-matching `aria-label` and `title`. The maximize button holds two icons, maximize first and restore last: the CSS shows
-one of them by `data-im-maximized`.
+matching `aria-label` and `title`, in the words of the option `labels` (English when it is not given). The maximize
+button holds two icons, maximize first and restore last: the CSS shows one of them by `data-im-maximized`.
 
 ## 5. The calls
 

@@ -8,8 +8,10 @@
 // and the footer is replaced. A region the markup no longer has is taken out and kept; when the markup has it again, the
 // same element goes back in its place, with what the markup now gives it. So a sidebar that goes and comes back is the
 // sidebar `sidebarDrawer`, `sidebarCollapse` and `sidebarResize` were wired to, and the title bar's sidebar button and
-// window buttons are the ones `sidebarDrawer` and `mountWindowControls` hold: nothing is wired again. Focus inside a
-// replaced region is the app's to restore (`captureDomState`, `restoreDomState`).
+// window buttons are the ones `sidebarDrawer` and `mountWindowControls` hold: nothing is wired again. The sidebar's list
+// stays the same element in its place, with its scroll, and takes the new rows. A kept control or region that held the
+// focus holds it after the repaint; focus on something the markup replaced (a row, a field) is the app's to restore
+// (`captureDomState`, `restoreDomState`).
 
 const REGIONS = 'a title bar, a body, a work area, columns, a content region with its panel body and an inspector';
 
@@ -64,7 +66,11 @@ function regionsOf(root: ParentNode): Frame {
 const complete = (frame: Frame): frame is Complete =>
   !!(frame.titlebar && frame.body && frame.work && frame.columns && frame.content && frame.contentBody && frame.inspector);
 
-/** Gives `mounted` the attributes of `incoming`. An attribute a script set and the markup does not write (`inert`) stays. */
+/**
+ * Gives `mounted` the attributes of `incoming`, and removes none. An attribute a script set and the markup does not write
+ * (`inert`) stays; so does one an earlier paint wrote and the markup now drops: the markup takes an attribute away by
+ * writing its new value (`aria-busy="false"`), not by leaving it out.
+ */
 function takeAttributes(mounted: Element, incoming: Element): void {
   for (const { name, value } of Array.from(incoming.attributes)) mounted.setAttribute(name, value);
 }
@@ -110,6 +116,10 @@ export function renderShellFrame(shell: HTMLElement, markup: string): void {
   shell.setAttribute('data-im-sidebar', sidebar);
   const kept = away.get(shell) ?? new Map<string, Element>();
   away.set(shell, kept);
+  // A kept control is moved into the new markup, and a moved element loses the focus: it is given back at the end.
+  const doc = shell.ownerDocument;
+  const focused = doc.activeElement;
+  const held = focused && focused !== shell && shell.contains(focused) ? focused : null;
 
   /**
    * One region: the mounted element, or the one kept from when it went, takes what the incoming one gives (`update`)
@@ -162,18 +172,41 @@ export function renderShellFrame(shell: HTMLElement, markup: string): void {
   fill(mounted.titlebar, next.titlebar);
 
   region('sidebar', mounted.sidebar, next.sidebar, (element) => mounted.work.before(element), (target, incoming) => {
-    const fold = keep(target, incoming, 'im-sidebar-collapse');
+    keep(target, incoming, 'im-sidebar-collapse');
     // The splitter of sidebarResize is the package's own child of the sidebar: it stays, at the end.
     const splitters = Array.from(target.children).filter((element) => element.classList.contains('im-sidebar-splitter'));
-    fill(target, incoming);
-    target.append(...splitters);
-    // Its name follows the shell's state, as sidebarCollapse names it, from the labels the markup now gives.
-    const label = fold?.getAttribute(shell.getAttribute('data-im-sidebar-collapsed') === 'true' ? 'data-im-label-expand' : 'data-im-label-collapse');
-    if (fold && label) {
+    const list = child(target, 'im-panel-body');
+    const nextList = child(incoming, 'im-panel-body');
+    if (list && nextList) {
+      // The list never leaves the frame, so it keeps its scroll: it takes the new rows, and what is round it (the header,
+      // a tools row, the foot) is replaced.
+      takeAttributes(target, incoming);
+      const parts = Array.from(incoming.childNodes);
+      const at = parts.indexOf(nextList);
+      for (const node of Array.from(target.childNodes)) {
+        if (node !== list && !splitters.includes(node as Element)) node.remove();
+      }
+      fill(list, nextList);
+      list.before(...parts.slice(0, at));
+      list.after(...parts.slice(at + 1));
+    } else {
+      fill(target, incoming);
+      target.append(...splitters);
+    }
+  });
+  // The fold button's name and aria-expanded follow the shell's state, as sidebarCollapse sets them, with the labels the
+  // markup now gives: on the button the module wired, or on one the markup gives for the first time.
+  const shown = child(mounted.body, 'im-sidebar');
+  const fold = shown ? find(shown, 'im-sidebar-collapse') : null;
+  if (fold) {
+    const collapsed = shell.getAttribute('data-im-sidebar-collapsed') === 'true';
+    const label = fold.getAttribute(collapsed ? 'data-im-label-expand' : 'data-im-label-collapse');
+    if (label) {
       fold.setAttribute('aria-label', label);
       fold.setAttribute('title', label);
     }
-  });
+    fold.setAttribute('aria-expanded', String(!collapsed));
+  }
 
   region('status', mounted.status, next.status, (element) => mounted.columns.before(element));
   takeAttributes(mounted.content, next.content);
@@ -183,4 +216,8 @@ export function renderShellFrame(shell: HTMLElement, markup: string): void {
   region('content-foot', mounted.contentFoot, next.contentFoot, (element) => mounted.contentBody.after(element));
   region('actions', mounted.actions, next.actions, (element) => mounted.columns.after(element));
   region('footer', mounted.footer, next.footer, (element) => (child(mounted.work, 'im-actions') ?? mounted.columns).after(element));
+
+  if (held && doc.activeElement !== held && shell.contains(held) && 'focus' in held) {
+    (held as HTMLElement).focus({ preventScroll: true });
+  }
 }

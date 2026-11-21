@@ -34,6 +34,13 @@
    narrow). The measure is the column's own: the padding is outside it. */
 .im-page-content { box-sizing: content-box; max-width: 1180px; margin: 0 auto; padding: var(--im-s-5); }
 .im-page-content--narrow { max-width: 860px; }
+/* A page is content: its text can be selected and copied (a path, a commit, an id), as im-content-text can elsewhere in
+   the shell. The controls on it are chrome, as everywhere: buttons, tabs, menus, checks and the rows of a list. */
+.im-page-content { -webkit-user-select: text; user-select: text; }
+.im-page-content :is(button, select, summary, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"], .im-row) {
+  -webkit-user-select: none;
+  user-select: none;
+}
 .im-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .im-page-heading p { color: var(--im-muted); margin-top: 2px; }
 .im-action-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

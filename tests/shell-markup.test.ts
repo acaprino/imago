@@ -3,7 +3,7 @@ import test from 'node:test';
 import { APP_IDS, APPS, shellMarkup } from '../gallery/apps.ts';
 import { cellMarkup } from '../gallery/matrix.ts';
 import { iconHtml } from '../ts/ui/markup.ts';
-import { brandInitial, noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions } from '../ts/ui/shell-markup.ts';
+import { brandInitial, noteHtml, pageContentHtml, shellFrameHtml, sidebarHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml, windowButtonsHtml, type ShellFrameOptions, type SidebarOptions } from '../ts/ui/shell-markup.ts';
 import { renderShellFrame } from '../ts/ui/shell-frame.ts';
 
 test('tabs expose one initial keyboard stop and announced counts without repeating their visual badge', () => {
@@ -90,6 +90,30 @@ test('sidebarHtml writes the sidebar of section 4: a titled panel, a listbox of 
   assert.doesNotMatch(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '' }), /im-sidebar-collapse/, 'no fold button unless its two labels are given');
 });
 
+test('sidebarHtml writes a count in the header and a foot under the list, when they are given', () => {
+  const html = sidebarHtml({
+    id: 'side', label: 'Threads', rowsHtml: '<div class="im-row" role="option">Row</div>', count: 9,
+    footHtml: '<button type="button" class="im-btn">New thread</button>', collapse: { collapse: 'Fold', expand: 'Unfold' },
+  });
+  assert.match(html, /<header class="im-panel-header"><h4 class="im-panel-title">Threads<\/h4><span class="im-count">9<\/span><span class="im-spacer"><\/span><button type="button" class="im-icon-btn im-sidebar-collapse"/);
+  assert.match(html, /<div class="im-panel-body im-list" role="listbox" aria-label="Threads"><div class="im-row" role="option">Row<\/div><\/div><div class="im-panel-foot"><button type="button" class="im-btn">New thread<\/button><\/div><\/section>$/);
+  assert.match(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '', count: 0 }), /<\/h4><span class="im-count">0<\/span>/, 'none is a count too');
+  assert.doesNotMatch(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '' }), /im-count|im-panel-foot/, 'no count and no foot unless they are given');
+  assert.doesNotMatch(sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '', count: Number.NaN }), /im-count/, 'a count that is not a number is not written');
+});
+
+test("the gallery's sidebars are the ones sidebarHtml writes: the count in the header, and a foot under the list", () => {
+  const sidebars = APP_IDS.flatMap((id) => {
+    const side = APPS[id].side;
+    return side ? [{ id, side, html: /<section class="im-panel im-sidebar"[^]*?<\/section>/.exec(shellMarkup(id))?.[0] ?? '' }] : [];
+  });
+  assert.ok(sidebars.length >= 4);
+  for (const { id, side, html } of sidebars) {
+    assert.ok(html.startsWith(`<section class="im-panel im-sidebar" id="g-sidebar" aria-label="${side.title}"><header class="im-panel-header"><h4 class="im-panel-title">${side.title}</h4><span class="im-count">${side.n}</span><span class="im-spacer"></span>`), `${id}: ${html.slice(0, 200)}`);
+  }
+  assert.ok(sidebars.some(({ html }) => /<\/div><div class="im-panel-foot">[^]*<\/div><\/section>$/.test(html)), 'a sidebar of the gallery has a foot under its list');
+});
+
 test('the content region is a panel: its header, tools, body and foot in that order, each part left out when not given', () => {
   const inside = (html: string): string => /<main [^>]*>([\s\S]*)<\/main>/.exec(html)?.[1] ?? '';
   const parts = { contentHeaderHtml: '<h4 class="im-panel-title">Sync</h4>', contentToolsHtml: '<span>Filter</span>', contentFootHtml: '<span>Foot</span>' };
@@ -116,6 +140,16 @@ class FakeNode {
     if (!parent) return;
     parent.childNodes.splice(parent.childNodes.indexOf(this), 1);
     this.parentNode = null;
+    // As in a browser, a node that is taken out loses the focus it held and the scroll of everything in it, even when it
+    // goes back in at once (a move is a removal, then an insertion).
+    for (let at: FakeNode | null = fakeDocument.activeElement; at; at = at.parentNode) {
+      if (at === this) fakeDocument.activeElement = null;
+    }
+    const unscroll = (node: FakeNode): void => {
+      if (node instanceof FakeElement) node.scrollTop = 0;
+      if (node instanceof FakeParent) node.childNodes.forEach(unscroll);
+    };
+    unscroll(this);
   }
   before(...nodes: FakeNode[]): void { this.parentNode?.insert(nodes, this); }
   after(...nodes: FakeNode[]): void {
@@ -175,7 +209,9 @@ class FakeFragment extends FakeParent {}
 class FakeElement extends FakeParent {
   localName: string;
   attrs = new Map<string, string>();
+  scrollTop = 0;
   constructor(localName: string) { super(); this.localName = localName; }
+  focus(): void { fakeDocument.activeElement = this; }
   get ownerDocument() { return fakeDocument; }
   get attributes(): { name: string; value: string }[] { return [...this.attrs].map(([name, value]) => ({ name, value })); }
   getAttribute(name: string): string | null { return this.attrs.get(name) ?? null; }
@@ -191,7 +227,10 @@ class FakeTemplate extends FakeElement {
   content = new FakeFragment();
   set innerHTML(html: string) { this.content = parse(html); }
 }
-const fakeDocument = { createElement: (tag: string) => (tag === 'template' ? new FakeTemplate('template') : new FakeElement(tag)) };
+const fakeDocument: { activeElement: FakeElement | null; createElement: (tag: string) => FakeElement } = {
+  activeElement: null,
+  createElement: (tag: string) => (tag === 'template' ? new FakeTemplate('template') : new FakeElement(tag)),
+};
 
 function parse(html: string): FakeFragment {
   const root = new FakeFragment();
@@ -414,6 +453,89 @@ test('the controls the package wires keep their element: the sidebar button, the
   assert.equal(shell.find('im-sidebar-toggle'), null, 'a control the markup no longer has goes');
   renderShellFrame(shell as unknown as HTMLElement, frame('5'));
   assert.equal($(shell, 'im-sidebar-toggle'), toggle, 'and comes back as the same element');
+});
+
+test("a repaint shows the sidebar's new count and foot; its list stays the same element, in its place, with its scroll", () => {
+  const side = (paint: string, extra: Partial<SidebarOptions> = {}): string => sidebarHtml({
+    id: 'side', label: 'Threads', rowsHtml: `<div class="im-row" role="option">Row ${paint}</div>`, count: Number(paint),
+    footHtml: `<span>Foot ${paint}</span>`, collapse: { collapse: `Fold ${paint}`, expand: `Unfold ${paint}` }, ...extra,
+  });
+  const shell = mount(frame('1', { sidebarHtml: side('1') }));
+  const sidebar = $(shell, 'im-sidebar');
+  const list = $(sidebar, 'im-list');
+  const splitter = new FakeElement('div');
+  splitter.setAttribute('class', 'im-splitter im-sidebar-splitter');
+  sidebar.append(splitter);
+  const parts = () => sidebar.children.map((el) => el.getAttribute('class'));
+  list.scrollTop = 120;
+  renderShellFrame(shell as unknown as HTMLElement, frame('2', { sidebarHtml: side('2') }));
+  assert.equal($(sidebar, 'im-list'), list, 'the list is the same element');
+  assert.equal(list.scrollTop, 120, 'and it keeps its scroll');
+  assert.equal(list.textContent, 'Row 2', 'with the new rows');
+  assert.equal($(sidebar, 'im-count').textContent, '2', 'the header shows the new count');
+  assert.equal($(sidebar, 'im-panel-foot').textContent, 'Foot 2', 'the foot shows what the markup now gives');
+  assert.deepEqual(parts(), ['im-panel-header', 'im-panel-body im-list', 'im-panel-foot', 'im-splitter im-sidebar-splitter']);
+  renderShellFrame(shell as unknown as HTMLElement, frame('3', { sidebarHtml: side('3', { count: undefined, footHtml: undefined }) }));
+  assert.equal(sidebar.find('im-count'), null, 'a count the markup no longer has goes');
+  assert.deepEqual(parts(), ['im-panel-header', 'im-panel-body im-list', 'im-splitter im-sidebar-splitter'], 'and so does a foot');
+  assert.equal(list.scrollTop, 120);
+  renderShellFrame(shell as unknown as HTMLElement, frame('4', { sidebarHtml: side('4') }));
+  assert.deepEqual(parts(), ['im-panel-header', 'im-panel-body im-list', 'im-panel-foot', 'im-splitter im-sidebar-splitter'], 'the foot comes back under the list');
+  assert.equal($(sidebar, 'im-panel-foot').textContent, 'Foot 4');
+  assert.equal($(sidebar, 'im-list'), list);
+});
+
+test('a repaint gives the focus back to the kept control or region that held it', () => {
+  const shell = mount(frame('1'));
+  try {
+    for (const name of ['im-sidebar-collapse', 'im-sidebar-toggle', 'im-window-button', 'im-content', 'im-list']) {
+      const element = $(shell, name);
+      element.focus();
+      renderShellFrame(shell as unknown as HTMLElement, frame('2'));
+      assert.equal(fakeDocument.activeElement, element, `${name} still has the focus`);
+    }
+    // What the markup replaced is new: the app gives the focus back to it (captureDomState, restoreDomState).
+    const row = $(shell, 'im-row');
+    row.focus();
+    renderShellFrame(shell as unknown as HTMLElement, frame('3'));
+    assert.notEqual(fakeDocument.activeElement, row);
+  } finally {
+    fakeDocument.activeElement = null;
+  }
+});
+
+test("a repaint sets the fold button's aria-expanded from the shell's state, as it sets its name", () => {
+  const shell = mount(frame('1'));
+  const fold = $(shell, 'im-sidebar-collapse');
+  // An app that folds the sidebar itself (a choice it stored), not through the button.
+  shell.setAttribute('data-im-sidebar-collapsed', 'true');
+  renderShellFrame(shell as unknown as HTMLElement, frame('2'));
+  assert.equal(fold.getAttribute('aria-expanded'), 'false');
+  assert.equal(fold.getAttribute('aria-label'), 'Unfold 2');
+  shell.removeAttribute('data-im-sidebar-collapsed');
+  renderShellFrame(shell as unknown as HTMLElement, frame('3'));
+  assert.equal(fold.getAttribute('aria-expanded'), 'true');
+  assert.equal(fold.getAttribute('aria-label'), 'Fold 3');
+  // A fold button that the markup gives for the first time takes the state too.
+  const bare = mount(frame('1', { sidebarHtml: sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: '' }) }));
+  bare.setAttribute('data-im-sidebar-collapsed', 'true');
+  renderShellFrame(bare as unknown as HTMLElement, frame('2'));
+  assert.equal($(bare, 'im-sidebar-collapse').getAttribute('aria-expanded'), 'false');
+  assert.equal($(bare, 'im-sidebar-collapse').getAttribute('aria-label'), 'Unfold 2');
+  assert.equal($(bare, 'im-sidebar-collapse').getAttribute('title'), 'Unfold 2');
+  // And so does the fold button of a sidebar that the markup gives for the first time.
+  const none = mount(frame('1', { sidebarHtml: undefined }));
+  none.setAttribute('data-im-sidebar-collapsed', 'true');
+  renderShellFrame(none as unknown as HTMLElement, frame('2'));
+  assert.equal($(none, 'im-sidebar-collapse').getAttribute('aria-expanded'), 'false');
+  assert.equal($(none, 'im-sidebar-collapse').getAttribute('aria-label'), 'Unfold 2');
+});
+
+test('a repaint gives a region the attributes the markup writes and removes none: one the markup drops stays', () => {
+  const shell = mount(frame('1', { titlebarHtml: '<header class="im-titlebar" data-x="1"></header>' }));
+  renderShellFrame(shell as unknown as HTMLElement, frame('2', { titlebarHtml: '<header class="im-titlebar" data-y="2"></header>' }));
+  assert.equal($(shell, 'im-titlebar').getAttribute('data-y'), '2');
+  assert.equal($(shell, 'im-titlebar').getAttribute('data-x'), '1', 'to take an attribute away, the markup writes its new value');
 });
 
 test('renderShellFrame refuses a frame without its fixed regions and changes nothing', () => {

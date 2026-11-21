@@ -218,6 +218,102 @@ const markContrast = (page) =>
     return { text: mark.textContent, ink: ink.join(','), fill: fill.join(','), accent: flatten([getComputedStyle(mark).getPropertyValue('--im-accent').trim()]).join(','), ratio: (hi + 0.05) / (lo + 0.05) };
   });
 
+// Rows of the eight categorical colours (data-im-cat), at rest, hovered and selected, in the live sidebar's list (in the
+// inspector of an app without a sidebar): each with a rail avatar, an avatar, a dot and a chip of its colour, and its title,
+// line and meta. For each, the text that is the hardest to read on what is under it, and the colours the design gives
+// them: the avatar and the dot are filled with the colour, the avatar's text in --im-cat-on, the chip's text in the colour.
+// The rows are taken out again before the page is read for anything else.
+const categoryRows = (page) =>
+  page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const flatten = (colours) => {
+      g.clearRect(0, 0, 1, 1);
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 1, 1);
+      for (const c of colours) {
+        g.fillStyle = c;
+        g.fillRect(0, 0, 1, 1);
+      }
+      const d = g.getImageData(0, 0, 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    const background = (el) => {
+      const layers = [];
+      for (let node = el; node; node = node.parentElement) {
+        const paint = getComputedStyle(node).backgroundColor;
+        if (paint !== 'rgba(0, 0, 0, 0)' && paint !== 'transparent') layers.unshift(paint);
+      }
+      return layers;
+    };
+    const channel = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = ([r, g2, b]) => 0.2126 * channel(r) + 0.7152 * channel(g2) + 0.0722 * channel(b);
+    const ratio = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const list = document.querySelector('.im-shell .im-sidebar .im-list') ?? document.querySelector('.im-shell .im-inspector .im-panel-body');
+    const STATES = { rest: '', hover: ' data-im-force="hover"', selected: '' };
+    const rows = [];
+    for (let n = 1; n <= 8; n++) {
+      for (const [state, force] of Object.entries(STATES)) {
+        const row = document.createElement('div');
+        row.innerHTML = `<div class="im-row" role="option" aria-selected="${state === 'selected'}" data-im-cat="${n}"${force}><span class="im-avatar im-rail-item" data-im-cat="${n}" aria-hidden="true">TH</span>`
+          + `<span class="im-avatar" data-im-cat="${n}">CA</span><span class="im-dot" data-im-cat="${n}"></span><span class="im-row-text"><span class="im-row-title">Thread ${n}</span>`
+          + `<span class="im-row-sub">1 session · running</span></span><span class="im-row-meta">2m</span><span class="im-chip" data-im-cat="${n}">thread</span></div>`;
+        rows.push({ n, state, el: row.firstElementChild });
+        list.append(row.firstElementChild);
+      }
+    }
+    const colour = (value) => {
+      const el = document.createElement('i');
+      el.style.color = value;
+      list.append(el);
+      const result = getComputedStyle(el).color;
+      el.remove();
+      return result;
+    };
+    const out = rows.map(({ n, state, el }) => {
+      let worst = { ratio: Infinity, text: '' };
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const holder = node.parentElement;
+        if (!node.textContent.trim() || !holder.getClientRects().length) continue;
+        const under = background(holder);
+        const r = ratio(flatten([...under, getComputedStyle(holder).color]), flatten(under));
+        if (r < worst.ratio) worst = { ratio: r, text: node.textContent.trim() };
+      }
+      const style = (selector) => getComputedStyle(el.querySelector(selector));
+      return {
+        n, state, worst, cat: colour(`var(--im-cat-${n})`), on: colour('var(--im-cat-on)'),
+        avatar: [style('.im-avatar:not(.im-rail-item)').backgroundColor, style('.im-avatar:not(.im-rail-item)').color],
+        rail: [style('.im-rail-item').backgroundColor, style('.im-rail-item').color],
+        dot: style('.im-dot').backgroundColor, chip: style('.im-chip').color,
+      };
+    });
+    for (const { el } of rows) el.remove();
+    return out;
+  });
+
+/** Every categorised row of `categoryRows` reads at 4.5:1 and takes its colour as the design says. */
+async function checkCategories(page, where) {
+  const rows = await categoryRows(page);
+  assert.equal(rows.length, 24, where('eight colours in three states'));
+  const unreadable = rows.filter((row) => row.worst.ratio < 4.5).map((row) => `category ${row.n} ${row.state}: "${row.worst.text}" is ${row.worst.ratio.toFixed(2)}:1`);
+  assert.deepEqual(unreadable, [], where('text on a categorised row under 4.5:1'));
+  for (const row of rows) {
+    const said = (text) => where(`category ${row.n} ${row.state}: ${text}`);
+    assert.deepEqual(row.avatar, [row.cat, row.on], said('the avatar is filled with the colour, its text in --im-cat-on'));
+    assert.deepEqual(row.rail, [row.cat, row.on], said('the rail item too'));
+    assert.equal(row.dot, row.cat, said('the dot is filled with the colour'));
+    assert.equal(row.chip, row.cat, said('the chip takes the colour as its tone'));
+  }
+}
+
 const index = (rows) => {
   const map = new Map(rows.map((row) => [`${row.control}|${row.state}`, row]));
   return (control, state) => map.get(`${control}|${state}`);
@@ -383,6 +479,14 @@ export default async (page) => {
         assert.match(mark.text, /^\p{Lu}$/u, where(`${app}: the mark holds one capital letter, not "${mark.text}"`));
         assert.equal(mark.fill, mark.accent, where(`${app}: the square is the accent`));
         assert.ok(mark.ratio >= 4.5, where(`${app}: the letter of the mark is ${mark.ratio.toFixed(2)}:1 (${mark.ink} on ${mark.fill})`));
+      }
+      // The categorical colours on a row, at rest, hovered and selected, in every app (the selection is in the app's accent),
+      // in the whole sidebar and in the rail.
+      for (const app of APPS) {
+        for (const width of [1160, 840]) {
+          await show(page, { app, look, theme, glass: false, width });
+          await checkCategories(page, (message) => where(`${app} at ${width}: ${message}`));
+        }
       }
       await show(page, { app: 'xiox', look, theme, glass: false, width: 1160 });
 

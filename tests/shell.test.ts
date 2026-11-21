@@ -554,6 +554,24 @@ test('the maximize button says what it will do', () => {
   assert.equal(t.buttons.maximize.getAttribute('data-im-maximized'), 'false');
 });
 
+test("the maximize button says it in the app's words when the app gives them", () => {
+  const t = setup();
+  const labels = { maximize: 'Ingrandisci la finestra', restore: 'Ripristina la finestra', maximizeTitle: 'Ingrandisci', restoreTitle: 'Ripristina' };
+  mountWindowControls(t.titlebar, t.api, { labels });
+  t.maximized(true);
+  assert.equal(t.buttons.maximize.getAttribute('aria-label'), 'Ripristina la finestra');
+  assert.equal(t.buttons.maximize.title, 'Ripristina');
+  t.maximized(false);
+  assert.equal(t.buttons.maximize.getAttribute('aria-label'), 'Ingrandisci la finestra');
+  assert.equal(t.buttons.maximize.title, 'Ingrandisci');
+  // A word the app leaves out is the English one.
+  const u = setup();
+  mountWindowControls(u.titlebar, u.api, { labels: { restore: 'Ripristina la finestra' } });
+  u.maximized(true);
+  assert.equal(u.buttons.maximize.getAttribute('aria-label'), 'Ripristina la finestra');
+  assert.equal(u.buttons.maximize.title, 'Restore');
+});
+
 /** What escapes while `run` and the turns after it go by: unhandled rejections and errors thrown out of listeners. */
 async function escapedWhile(run: () => void): Promise<unknown[]> {
   const seen: unknown[] = [];

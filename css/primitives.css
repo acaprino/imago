@@ -5,9 +5,13 @@
    They are written as ranges, so no fractional width falls between two blocks. */
 
 /* ---------- the shell ---------- */
-/* A shell put directly in the page's body fills the window: the page has no margin of its own. */
-html:has(> body > .im-shell),
-body:has(> .im-shell) { block-size: 100%; margin: 0; }
+/* A shell fills the window wherever the app mounts it: directly in the page's body, or in a root of the app's own (the
+   <div id="app"> React renders into) that carries im-root, as every element between the body and the shell does. The
+   page then takes the window's height and has no margin of its own. A page that only shows a shell among other things
+   (the gallery) keeps its own height. */
+html:has(> body > :is(.im-shell, .im-root)),
+body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
+.im-root { block-size: 100%; }
 .im-shell {
   --im-pane-pad: var(--im-s-4);
   --im-rail-icon: 20px;
@@ -165,8 +169,8 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
 }
 /* The content region takes focus from the skip link (tabindex -1) without a ring round the whole region. */
 .im-columns > main[tabindex="-1"]:focus { outline: 0; }
-/* data-im-inspector="wide" on the shell: the inspector is 360, the top of the range the design allows. */
-.im-shell[data-im-inspector="wide"] { --im-w-inspector: 360px; }
+/* data-im-inspector="wide" on the shell: the inspector is --im-w-inspector-wide, 360, the top of the range the design allows. */
+.im-shell[data-im-inspector="wide"] { --im-w-inspector: var(--im-w-inspector-wide); }
 .im-actions {
   display: flex;
   align-items: center;
@@ -221,8 +225,13 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
 .im-panel-tools > .im-note { flex: 1 1 auto; }
 .im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line) transparent; }
 .im-panel-foot { display: flex; flex: none; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3) var(--im-pane-pad); border-top: 1px solid var(--im-line-soft); }
-/* A row's icon for the rail is shown only in the rail (see the 850 breakpoint). */
-.im-row > .im-rail-item { display: none; }
+/* The inspector's content is a panel. Its header, body and foot are the inspector's own children (a fragment opened in
+   it), or the children of the one element it shows (a form): that element is then laid out as the panel is, so the body
+   scrolls between the header and the foot. */
+.im-inspector > :has(> .im-panel-body) { display: flex; flex: 1 1 auto; flex-direction: column; min-block-size: 0; }
+/* A row's icon for the rail is shown only in the rail (see the 850 breakpoint). A row whose control is a check has the
+   check as its rail item: it is shown in the whole sidebar too, and ticked in the rail as there. */
+.im-row > .im-rail-item:not(.im-check) { display: none; }
 /* The button that folds the sidebar into the rail is shown from 850 up, where the rail is a choice and not a necessity. */
 .im-sidebar .im-sidebar-collapse { display: none; }
 .im-list { display: flex; flex-direction: column; gap: 1px; padding: 0 var(--im-list-pad) var(--im-s-2); }
@@ -327,8 +336,21 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
   .im-sidebar .im-panel-tools,
   .im-sidebar .im-panel-foot { display: none; }
   .im-sidebar .im-row > :not(.im-rail-item, .im-row-text) { display: none; }
-  .im-sidebar .im-row > .im-rail-item { display: grid; }
-  .im-sidebar .im-row > .im-rail-item:not(.im-avatar) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
+  .im-sidebar .im-row > .im-rail-item:not(.im-check) { display: grid; }
+  .im-sidebar .im-row > .im-rail-item:not(.im-avatar, .im-check) { flex: none; place-items: center; inline-size: var(--im-rail-icon); block-size: var(--im-rail-icon); }
+  /* A row's badge is a dot on the corner of its rail item, not at the end of the row. */
+  .im-sidebar .im-row[data-im-badge]::after { display: none; }
+  .im-sidebar .im-row[data-im-badge] > .im-rail-item { position: relative; }
+  .im-sidebar .im-row[data-im-badge] > .im-rail-item::before {
+    content: "";
+    position: absolute;
+    inset-block-start: -3px;
+    inset-inline-end: -3px;
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--im-badge);
+  }
   .im-sidebar .im-row > .im-row-text {
     position: absolute;
     inline-size: 1px;
@@ -338,9 +360,10 @@ body:has(> .im-shell) { block-size: 100%; margin: 0; }
     white-space: nowrap;
   }
   .im-sidebar .im-row { position: relative; justify-content: center; padding-inline: 0; }
-  /* the selection is a heavier line, or a ringed avatar, as well as a fill */
+  /* the selection is a heavier line, a ringed avatar or a ringed check, as well as a fill */
   .im-sidebar .im-row[aria-selected="true"] > .im-rail-item .im-icon { stroke-width: 2.4; }
   .im-sidebar .im-row[aria-selected="true"] > .im-avatar.im-rail-item { border-color: var(--im-accent-text); font-weight: 700; }
+  .im-sidebar .im-row[aria-selected="true"] > .im-check.im-rail-item { box-shadow: 0 0 0 2px var(--im-accent-text); }
   .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
 }

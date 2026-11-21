@@ -456,6 +456,14 @@ test('the measures equal the Global Constraints table, per look', () => {
   }
 });
 
+test('the wide inspector is a token, --im-w-inspector-wide (360), and data-im-inspector="wide" reads it', () => {
+  assert.deepEqual(at('shared.w-inspector-wide').$value, { value: 360, unit: 'px' });
+  assert.equal(declarations(css(), '[data-im-look]').get('--im-w-inspector-wide'), '360px');
+  const primitives = readFileSync(join(root, 'css', 'primitives.css'), 'utf8');
+  assert.match(primitives, /\.im-shell\[data-im-inspector="wide"\] \{ --im-w-inspector: var\(--im-w-inspector-wide\); \}/);
+  assert.doesNotMatch(primitives, /\b360px\b/, 'the layout writes no 360 of its own');
+});
+
 test('the size of text has five tokens, the same in both looks', () => {
   const sizes: Record<string, number> = { 'fs-micro': 11, 'fs-meta': 12, 'fs-body': 13, 'fs-title': 14, 'fs-display': 18 };
   const everyLook = declarations(css(), '[data-im-look]');

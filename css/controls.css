@@ -130,13 +130,14 @@
 }
 
 /* A toned chip has a ground of its own, 14% of its tone over the sheet, and not a wash over what is behind it: a row that is
-   hovered, pressed or selected (a fill the chip sits on) must not dim the text of the chip under 4.5:1. */
-.im-chip[data-im-tone] {
+   hovered, pressed or selected (a fill the chip sits on) must not dim the text of the chip under 4.5:1. A chip of a
+   category (data-im-cat) takes its colour as its tone. */
+.im-chip:is([data-im-tone], [data-im-cat]) {
   color: var(--im-tone);
   background: color-mix(in srgb, var(--im-tone) 14%, var(--im-sheet));
 }
 
-.im-chip[data-im-tone]::before {
+.im-chip:is([data-im-tone], [data-im-cat])::before {
   content: "";
   width: 6px;
   height: 6px;
@@ -158,6 +159,29 @@
   border: 1px solid var(--im-line);
   border-radius: var(--im-r-control);
 }
+
+/* A categorical colour: the colour of one thing among others of its kind (a thread, a project), data-im-cat="1" to "8", a
+   fixed hue each, the same in every app. It is never the only thing that tells the things apart: each is named in words.
+   A row draws it as a 3px mark at its start edge, beside its selection mark; an avatar, a rail item and a dot are filled
+   with it, their text in --im-cat-on; a chip takes it as its tone. As text, a categorical colour stands only on a ground
+   of its own (the chip's): on the fill of a selected row some reach barely 4.5:1. */
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="1"] { --im-item-color: var(--im-cat-1); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="2"] { --im-item-color: var(--im-cat-2); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="3"] { --im-item-color: var(--im-cat-3); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="4"] { --im-item-color: var(--im-cat-4); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="5"] { --im-item-color: var(--im-cat-5); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="6"] { --im-item-color: var(--im-cat-6); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="7"] { --im-item-color: var(--im-cat-7); }
+:is(.im-row, .im-rail-item, .im-avatar, .im-dot, .im-chip)[data-im-cat="8"] { --im-item-color: var(--im-cat-8); }
+
+:is(.im-rail-item, .im-avatar, .im-dot):not(.im-check)[data-im-cat] {
+  color: var(--im-cat-on);
+  background: var(--im-item-color);
+}
+
+.im-rail-item[data-im-cat]:not(.im-avatar, .im-check) { border-radius: var(--im-r-control); }
+
+.im-chip[data-im-cat] { --im-tone: var(--im-item-color); }
 
 /* The progress mark of a busy control: the size of an icon, so the control keeps its width. */
 .im-spinner {
@@ -525,6 +549,16 @@ input.im-input:disabled,
 
 .im-input > input:disabled { color: var(--im-muted); }
 
+/* An input that carries im-input itself (uiInput()) and sits in the box of a field (.im-input > .im-input, as pathField puts
+   it) is drawn once, by the box: in every state it has no frame, no fill and no ring of its own. */
+.im-input > input.im-input {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+}
+
 /* ---------- check, radio, switch ---------- */
 
 .im-option {
@@ -864,6 +898,36 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
 }
 
 .im-row[aria-disabled="true"] :is(.im-row-title, .im-row-sub, .im-row-meta) { color: var(--im-muted); }
+
+/* A row of a category (data-im-cat, above) has its mark at its start edge, inside the line ONI draws round a selected row:
+   beside the selection mark, never in its place. Forced colours draw no categorical colour; their selection bar takes
+   this place on a selected row. */
+.im-row[data-im-cat] { position: relative; }
+
+.im-row[data-im-cat]::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--im-s-1);
+  inset-inline-start: 1px;
+  inline-size: 3px;
+  border-radius: var(--im-r-chip);
+  background: var(--im-item-color);
+}
+
+/* A badge (data-im-badge): a dot that says the row wants something, at the end of the row, or on the corner of its rail
+   item in the rail (css/primitives.css). Its tone is the row's data-im-tone, warn when the row has none. A dot alone is
+   colour alone: the row's text says the same (its line, "needs you"), and so does its accessible name. */
+.im-row[data-im-badge] { --im-badge: var(--im-warn); }
+.im-row[data-im-badge][data-im-tone] { --im-badge: var(--im-tone); }
+
+.im-row[data-im-badge]::after {
+  content: "";
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--im-badge);
+}
 
 /* ---------- tree ---------- */
 
@@ -1295,6 +1359,10 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   .im-note,
   .im-key,
   .im-avatar { border-color: ButtonText; }
+
+  /* A badge keeps its tone, as a status dot does (css/base.css): the row's text says the same. */
+  .im-row[data-im-badge]::after,
+  .im-row[data-im-badge] > .im-rail-item::before { forced-color-adjust: none; }
 
   /* A pressed button: its fill and its bar vanish (a shadow), so its edge is the system's selection colour. */
   .im-btn:is([aria-selected="true"], [aria-current]:where(:not([aria-current="false"])), [aria-pressed="true"]) { border-color: Highlight; }

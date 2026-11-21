@@ -1,7 +1,7 @@
 // The five apps' sample content, ported from docs/reference/toolkit-preview.html: the live shell of the gallery is
 // drawn from here. The markup uses the classes of css/primitives.css (regions) and css/controls.css (controls);
 // nothing in this file styles anything.
-import { brandInitial, noteHtml } from '../ts/ui/shell-markup.ts';
+import { brandInitial, noteHtml, sidebarHtml } from '../ts/ui/shell-markup.ts';
 
 export type AppId = 'xiox' | 'mukade' | 'shinatama' | 'muro' | 'daodan';
 type Tone = 'ok' | 'warn' | 'err' | 'info' | 'accent';
@@ -42,16 +42,22 @@ function button(text: string, o: ButtonOptions = {}): string {
 }
 const iconButton = (name: string, label: string): string => `<button type="button" class="im-icon-btn" aria-label="${label}" title="${label}">${icon(name)}</button>`;
 const segmented = (items: string[], on = 0): string => `<div class="im-seg" role="tablist">${items.map((t, x) => `<button type="button" role="tab" aria-selected="${x === on}">${t}</button>`).join('')}</div>`;
-const check = (state: 'on' | 'off' | 'part', label: string): string => `<span class="im-check" role="checkbox" aria-checked="${state === 'on' ? 'true' : state === 'part' ? 'mixed' : 'false'}" aria-label="${label}"></span>`;
+const check = (state: 'on' | 'off' | 'part', label: string, extra = ''): string => `<span class="im-check${extra}" role="checkbox" aria-checked="${state === 'on' ? 'true' : state === 'part' ? 'mixed' : 'false'}" aria-label="${label}"></span>`;
 
 const initials = (text: string): string => text.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-type Row = { t: string; s?: string; m?: string; sel?: boolean; ck?: 'on' | 'off' | 'part'; av?: string; icon?: string; dot?: Tone; chip?: [string, Tone?] };
+/**
+ * A row of a list. Its rail item is its check when it has one (`ck`), else its icon, else its initials. `cat` is its
+ * categorical colour (`data-im-cat`, on the row and on its rail item); `badge` marks a row that waits for the person
+ * (`data-im-badge`, in the row's tone, warn by default), which its line says in words.
+ */
+type Row = { t: string; s?: string; m?: string; sel?: boolean; ck?: 'on' | 'off' | 'part'; av?: string; icon?: string; dot?: Tone; chip?: [string, Tone?]; cat?: number; badge?: boolean };
 function row(r: Row): string {
-  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.t}">${r.icon ? `<span class="im-rail-item" aria-hidden="true">${icon(r.icon)}</span>` : `<span class="im-avatar im-rail-item" aria-hidden="true">${initials(r.t)}</span>`}${r.ck ? check(r.ck, r.t) : ''}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
+  const cat = r.cat ? ` data-im-cat="${r.cat}"` : '';
+  const rail = r.ck ? check(r.ck, r.t, ' im-rail-item') : r.icon ? `<span class="im-rail-item"${cat} aria-hidden="true">${icon(r.icon)}</span>` : `<span class="im-avatar im-rail-item"${cat} aria-hidden="true">${initials(r.t)}</span>`;
+  return `<div class="im-row${r.s ? '' : ' im-row--1'}" role="option" aria-selected="${!!r.sel}" title="${r.t}"${cat}${r.badge ? ' data-im-badge' : ''}>${rail}${r.av ? `<span class="im-avatar">${r.av}</span>` : ''}${r.dot ? `<span class="im-dot" data-im-tone="${r.dot}"></span>` : ''}<span class="im-row-text"><span class="im-row-title">${r.t}</span>${r.s ? `<span class="im-row-sub">${r.s}</span>` : ''}</span>${r.m ? `<span class="im-row-meta">${r.m}</span>` : ''}${r.chip ? chip(r.chip[0], r.chip[1]) : ''}</div>`;
 }
 type HeaderOptions = { n?: number; sub?: string; right?: string };
 const header = (title: string, o: HeaderOptions = {}): string => `<header class="im-panel-header"><h4 class="im-panel-title">${title}</h4>${count(o.n)}${o.sub ? `<span class="im-panel-sub">${o.sub}</span>` : ''}${spacer}${o.right ?? ''}</header>`;
-const collapseButton = (t: Strings): string => `<button type="button" class="im-icon-btn im-sidebar-collapse" aria-label="${t.collapse}" title="${t.collapse}" aria-expanded="true" aria-controls="g-sidebar" data-im-label-collapse="${t.collapse}" data-im-label-expand="${t.expand}">${icon('sidebar')}</button>`;
 const facts = (rows: [string, string, boolean?][]): string => `<dl class="im-facts">${rows.map(([k, v, code]) => `<dt>${k}</dt><dd${code ? ' class="im-facts-code"' : ''}>${v}</dd>`).join('')}</dl>`;
 const two = (title: string, sub: string): string => `<span class="im-cell-title">${title}</span><span class="im-cell-sub">${sub}</span>`;
 
@@ -76,7 +82,7 @@ type App = {
   primary: { text: string; keys?: string; icon?: string; act?: string };
   secondary: { text: string; keys?: string; icon?: string };
   status: [string, Tone, string, string]; footer: string; keys: [string, string][];
-  side: { title: string; n: number; rows: Row[] } | null;
+  side: { title: string; n: number; rows: Row[]; foot?: string } | null;
   content: () => string; inspector: () => string;
   strings: Strings;
 };
@@ -94,9 +100,10 @@ export const APPS: Record<AppId, App> = {
     status: ['Analysis done', 'ok', '13.48 GB to delete · 46,999 files', 'administrator · RAM 32 GB'],
     footer: 'Winapp2 260915 loaded · 70 items', keys: [['↑↓', 'move'], ['space', 'toggle'], ['↵', 'clean']],
     side: { title: 'Categories', n: 7, rows: [
-      { ck: 'part', icon: 'sliders', t: 'System', s: '6 items · 4 selected', m: '11.29 GB' }, { ck: 'off', icon: 'folder', t: 'Explorer', s: '1 item · 0 selected', m: '180.0 MB' },
-      { ck: 'off', icon: 'window', t: 'Windows', s: '8 items · 0 selected', m: '21.21 GB', sel: true }, { ck: 'part', icon: 'globe', t: 'Browser', s: '5 items · 2 selected', m: '1.54 GB' },
-      { ck: 'off', icon: 'code', t: 'Development & AI', s: '4 items · 0 selected', m: '19.85 GB' }, { ck: 'part', icon: 'apps', t: 'Applications', s: '44 items · 2 selected', m: '4.16 GB' }] },
+      { ck: 'part', t: 'System', s: '6 items · 4 selected', m: '11.29 GB' }, { ck: 'off', t: 'Explorer', s: '1 item · 0 selected', m: '180.0 MB' },
+      { ck: 'off', t: 'Windows', s: '8 items · 0 selected', m: '21.21 GB', sel: true }, { ck: 'part', t: 'Browser', s: '5 items · 2 selected', m: '1.54 GB' },
+      { ck: 'off', t: 'Development & AI', s: '4 items · 0 selected', m: '19.85 GB' }, { ck: 'part', t: 'Applications', s: '44 items · 2 selected', m: '4.16 GB' }],
+      foot: '<span class="im-panel-sub">8 of 70 items selected · 13.48 GB</span>' },
     content: () => `${header('Cleanup', { sub: '70 items · 8 selected', right: segmented(['All', 'Selected', 'Caution']) })}<div class="im-panel-tools"><label class="im-input" style="flex:1">${icon('search')}<input type="text" placeholder="Search this view" aria-label="Search this view">${key('Ctrl F')}</label></div><div class="im-panel-body">${table([{ check: true }, { t: 'Item' }, { t: 'Level' }, { t: 'Files', n: true }, { t: 'Size', n: true }], [
       { c: [check('on', 'Mozilla Firefox – Cache'), two('Mozilla Firefox – Cache', 'Pages and images Firefox saved to load faster'), chip('Recommended', 'ok'), '5,300', '1.50 GB'] },
       { c: [check('on', 'Cookies'), two('Cookies', 'Sites in your keep list stay signed in'), chip('Caution', 'warn'), '6,410', '40.0 MB'] },
@@ -130,9 +137,9 @@ export const APPS: Record<AppId, App> = {
     status: ['Local runtime', 'ok', 'resources available', '4 terminals'],
     footer: 'Local runtime · 4 terminals · 268 MiB', keys: [['Ctrl ⇧ T', 'new session'], ['F6', 'next region']],
     side: { title: 'Threads', n: 9, rows: [
-      { dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
-      { dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { t: 'Dunning emails', s: '1 session', m: '6m' },
-      { t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
+      { cat: 1, dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { cat: 2, badge: true, t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
+      { cat: 3, dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { cat: 4, t: 'Dunning emails', s: '1 session', m: '6m' },
+      { cat: 5, t: 'Migrate to Postgres 16', s: '1 session', m: '8m' }, { cat: 6, t: 'Invoice PDF layout', s: '1 session', m: '1h' }] },
     content: () => `${header('Pane 4', { sub: 'billing-service · Claude Code', right: iconButton('plus', 'New tab') })}<div class="im-panel-body g-term-body"><pre class="g-term im-content-text"><span class="g-t-a">&gt;</span> run docs/plans/billing-retries.md
 
 I will hand the tasks to implementer, and keep reviewer for the diff:
@@ -198,7 +205,7 @@ export function shellMarkup(id: AppId): string {
   const on = a.on ?? 0;
   const tabs = a.tabs.map((t, x) => `<button type="button" role="tab" class="im-tab" aria-selected="${x === on}">${t}</button>`).join('');
   const side = a.side
-    ? `<section class="im-panel im-sidebar" id="g-sidebar" aria-label="${a.side.title}">${header(a.side.title, { n: a.side.n, right: collapseButton(a.strings) })}<div class="im-panel-body im-list" role="listbox" aria-label="${a.side.title}">${a.side.rows.map(row).join('')}</div></section>`
+    ? sidebarHtml({ id: 'g-sidebar', label: a.side.title, rowsHtml: a.side.rows.map(row).join(''), count: a.side.n, footHtml: a.side.foot, collapse: { collapse: a.strings.collapse, expand: a.strings.expand } })
     : '';
   const keys = a.keys.map(([k, label]) => `<span>${key(k)}${label}</span>`).join('');
   return `<div class="im-shell" data-im-sidebar="${a.side ? 'on' : 'off'}">

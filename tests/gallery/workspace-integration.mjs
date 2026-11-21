@@ -54,6 +54,99 @@ async function inspector(page) {
   assert.ok(await page.evaluate(() => guard.parent === 1 && drawer.a.isOpen()));
 }
 
+// The inspector's content is a panel: a fragment of a header, a body and a foot opens as the inspector's own three parts,
+// and one element whose children are those three (a form) opens as itself, laid out the same. Either way the header is at
+// the top, the foot at the bottom, and the body between them scrolls.
+async function inspectorPanel(page) {
+  const shapes = await page.evaluate(() => {
+    const shell = document.createElement('div');
+    shell.className = 'im-shell';
+    shell.style.cssText = 'width:1100px;height:520px';
+    root.append(shell);
+    ui.renderShellFrame(shell, ui.shellFrameHtml({
+      titlebarHtml: ui.titlebarHtml({ brand: { name: 'App' } }), contentHtml: '<p>Page</p>', contentLabel: 'Items', skipLabel: 'Skip to content', inspectorLabel: 'Details',
+    }));
+    const parts = () => {
+      const header = document.createElement('header');
+      header.className = 'im-panel-header';
+      header.innerHTML = '<h4 class="im-panel-title">Details</h4>';
+      const body = document.createElement('div');
+      body.className = 'im-panel-body';
+      body.innerHTML = '<p style="block-size: 2000px">Facts</p>';
+      const foot = document.createElement('div');
+      foot.className = 'im-panel-foot';
+      foot.innerHTML = '<button type="button" class="im-btn">Save</button>';
+      return [header, body, foot];
+    };
+    const region = shell.querySelector('.im-inspector');
+    const rect = (el) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, height: r.height }; };
+    const measure = (label) => {
+      const [header, body, foot] = ['.im-panel-header', '.im-panel-body', '.im-panel-foot'].map((selector) => region.querySelector(selector));
+      return {
+        label, children: [...region.children].map((el) => el.className || el.localName),
+        region: rect(region), header: rect(header), body: rect(body), foot: rect(foot),
+        scrolls: body.scrollHeight > body.clientHeight && getComputedStyle(body).overflowY === 'auto',
+      };
+    };
+    const panel = ui.inspector(shell);
+    const fragment = document.createDocumentFragment();
+    fragment.append(...parts());
+    panel.open(fragment);
+    const asFragment = measure('a fragment');
+    const form = document.createElement('form');
+    form.append(...parts());
+    panel.open(form);
+    const asElement = measure('one element');
+    panel.close();
+    shell.remove();
+    return [asFragment, asElement];
+  });
+  assert.deepEqual(shapes[0].children, ['im-panel-header', 'im-panel-body', 'im-panel-foot'], 'a fragment opens as the three parts of the inspector');
+  assert.deepEqual(shapes[1].children, ['form'], 'one element opens as itself');
+  for (const shape of shapes) {
+    const said = (text) => `the inspector opened with ${shape.label}: ${text} (${JSON.stringify(shape)})`;
+    assert.ok(Math.abs(shape.header.top - shape.region.top) <= 1, said('the header is at the top'));
+    assert.ok(Math.abs(shape.foot.bottom - shape.region.bottom) <= 1 && shape.foot.height > 0, said('the foot is at the bottom'));
+    assert.ok(shape.header.bottom <= shape.body.top + 0.5 && shape.body.bottom <= shape.foot.top + 0.5, said('the body is between them'));
+    assert.ok(shape.scrolls, said('and scrolls'));
+  }
+}
+
+// An input that carries im-input itself (uiInput) in the box of a field (pathField's span.im-input) is drawn once, by the
+// box: one edge, one fill, and one ring when it has the focus, in every state.
+async function doubledField(page) {
+  const drawn = await page.evaluate(() => {
+    const input = ui.uiInput();
+    input.setAttribute('aria-label', 'Folder');
+    input.value = 'C:/work';
+    const field = ui.pathField(input, { buttonLabel: 'Browse', choose: async () => null, onError() {} });
+    root.append(field);
+    const box = field.querySelector('span.im-input');
+    const clear = (colour) => colour === 'rgba(0, 0, 0, 0)' || colour === 'transparent';
+    const count = () => ({
+      edges: [box, input].filter((el) => { const s = getComputedStyle(el); return parseFloat(s.borderTopWidth) > 0 && s.borderTopStyle !== 'none' && !clear(s.borderTopColor); }).length,
+      fills: [box, input].filter((el) => !clear(getComputedStyle(el).backgroundColor)).length,
+      rings: [box, input].filter((el) => { const s = getComputedStyle(el); return s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0; }).length,
+    });
+    const out = { inside: input.parentElement === box && input.classList.contains('im-input'), rest: count() };
+    input.focus();
+    out.focus = count();
+    input.blur();
+    input.setAttribute('aria-invalid', 'true');
+    out.invalid = count();
+    input.removeAttribute('aria-invalid');
+    input.disabled = true;
+    out.disabled = { ...count(), dashed: getComputedStyle(box).borderTopStyle };
+    field.remove();
+    return out;
+  });
+  assert.equal(drawn.inside, true, 'pathField puts the input of uiInput, im-input itself, in its box');
+  assert.deepEqual(drawn.rest, { edges: 1, fills: 1, rings: 0 }, 'at rest: one edge and one fill');
+  assert.deepEqual(drawn.focus, { edges: 1, fills: 1, rings: 1 }, 'focused: one edge and one ring');
+  assert.deepEqual(drawn.invalid, { edges: 1, fills: 1, rings: 0 }, 'invalid: one edge');
+  assert.deepEqual(drawn.disabled, { edges: 1, fills: 0, rings: 0, dashed: 'dashed' }, 'disabled: one dashed edge, no fill');
+}
+
 async function docking(page) {
   await page.evaluate(() => {
     root.innerHTML = '<section data-im-pane="outer"><button data-im-dock-tab="outerTab">Outer</button><div id="inner">' +
@@ -371,7 +464,9 @@ async function frame(page) {
     root.append(shell);
     const paint = (n, options = {}) => ui.shellFrameHtml({
       titlebarHtml: ui.titlebarHtml({ brand: { name: 'App ' + n }, navigationHtml: options.sidebar === false ? '' : '<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="side">T</button>', windowControls: true }),
-      sidebarHtml: options.sidebar === false ? undefined : ui.sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: `<div class="im-row" role="option" tabindex="0" aria-selected="true" title="Row ${n}"><span class="im-avatar im-rail-item" aria-hidden="true">R</span><span class="im-row-text"><span class="im-row-title">Row ${n}</span></span></div>`, collapse: { collapse: 'Collapse sidebar', expand: 'Expand sidebar' } }),
+      sidebarHtml: options.sidebar === false ? undefined : ui.sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: `<div class="im-row" role="option" tabindex="0" aria-selected="true" title="Row ${n}"><span class="im-avatar im-rail-item" aria-hidden="true">R</span><span class="im-row-text"><span class="im-row-title">Row ${n}</span></span></div>`
+        + Array.from({ length: options.rows ?? 0 }, (_, at) => `<div class="im-row" role="option" tabindex="-1" aria-selected="false" title="Other ${at}"><span class="im-avatar im-rail-item" aria-hidden="true">O</span><span class="im-row-text"><span class="im-row-title">Other ${at}</span></span></div>`).join(''),
+      collapse: { collapse: 'Collapse sidebar', expand: 'Expand sidebar' } }),
       statusHtml: options.status === false ? undefined : `<span class="im-status-text">Status ${n}</span>`,
       contentHtml: `<button type="button" id="opener">Delete item ${n}</button>`,
       contentLabel: 'Items', skipLabel: 'Skip to content', inspectorLabel: 'Details',
@@ -451,6 +546,37 @@ async function frame(page) {
   assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), 'true', 'and so does a press on one of its rows');
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), undefined, 'and Escape closes it');
+
+  // A repaint keeps the focus on a kept control that held it, keeps the scroll of the sidebar's list, and sets the fold
+  // button's aria-expanded from the shell's state, as its name.
+  const kept = await page.evaluate(() => {
+    const { shell, paint } = frameTest;
+    shell.style.width = '1100px';
+    const focus = {};
+    for (const selector of ['.im-sidebar-collapse', '[data-im-window="maximize"]', '.im-content']) {
+      const element = shell.querySelector(selector);
+      element.focus();
+      ui.renderShellFrame(shell, paint(8));
+      focus[selector] = document.activeElement === element;
+    }
+    ui.renderShellFrame(shell, paint(9, { rows: 40 }));
+    const list = shell.querySelector('.im-sidebar .im-list');
+    list.scrollTop = 300;
+    const before = list.scrollTop;
+    ui.renderShellFrame(shell, paint(10, { rows: 40 }));
+    const scroll = { same: shell.querySelector('.im-sidebar .im-list') === list, before, after: list.scrollTop };
+    const fold = shell.querySelector('.im-sidebar-collapse');
+    shell.dataset.imSidebarCollapsed = 'true';
+    ui.renderShellFrame(shell, paint(11));
+    const folded = [fold.getAttribute('aria-expanded'), fold.getAttribute('aria-label')];
+    delete shell.dataset.imSidebarCollapsed;
+    ui.renderShellFrame(shell, paint(12));
+    return { focus, scroll, folded, unfolded: [fold.getAttribute('aria-expanded'), fold.getAttribute('aria-label')] };
+  });
+  assert.deepEqual(kept.focus, { '.im-sidebar-collapse': true, '[data-im-window="maximize"]': true, '.im-content': true }, 'a kept control or region that held the focus holds it after a repaint');
+  assert.ok(kept.scroll.same && kept.scroll.before > 0 && kept.scroll.after === kept.scroll.before, `the sidebar's list keeps its scroll (${JSON.stringify(kept.scroll)})`);
+  assert.deepEqual(kept.folded, ['false', 'Expand sidebar'], "a repaint says the fold in the button's aria-expanded, as in its name");
+  assert.deepEqual(kept.unfolded, ['true', 'Collapse sidebar']);
   await page.evaluate(() => {
     for (const stop of frameTest.stops) stop();
     frameTest.shell.remove();
@@ -460,7 +586,7 @@ async function frame(page) {
 
 export default async function workspaceIntegration(page, url) {
   const reset = await fixture(page, url);
-  for (const scenario of [inspector, docking, picker, tree, splits, breadcrumbs, nativeForms, frame]) {
+  for (const scenario of [inspector, inspectorPanel, doubledField, docking, picker, tree, splits, breadcrumbs, nativeForms, frame]) {
     await reset();
     await scenario(page);
   }

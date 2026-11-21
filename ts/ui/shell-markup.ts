@@ -172,14 +172,24 @@ export interface SidebarOptions {
   rowsHtml: string;
   /** The two names of the header's fold button (`sidebarCollapse`). Without them the header has no fold button. */
   collapse?: { collapse: string; expand: string };
+  /** How many things the list holds: an `im-count` after the title. Without it the header has no count. */
+  count?: number;
+  /** Trusted component markup under the list: the children of an `im-panel-foot`. Not shown in the rail. */
+  footHtml?: string;
 }
-/** The sidebar region: a titled panel whose body is a listbox of rows, with the button that folds it into the rail. */
+/**
+ * The sidebar region: a titled panel whose body is a listbox of rows, with the button that folds it into the rail, a
+ * count in its header and a foot under its list when they are given. `renderShellFrame` repaints them all.
+ */
 export function sidebarHtml(options: SidebarOptions): string {
   const id = escapeHtml(options.id);
   const label = escapeHtml(options.label);
   const fold = options.collapse
     ? `<button type="button" class="im-icon-btn im-sidebar-collapse" aria-label="${escapeHtml(options.collapse.collapse)}" title="${escapeHtml(options.collapse.collapse)}" aria-expanded="true" aria-controls="${id}" data-im-label-collapse="${escapeHtml(options.collapse.collapse)}" data-im-label-expand="${escapeHtml(options.collapse.expand)}">${iconHtml('sidebar')}</button>`
     : '';
-  return `<section class="im-panel im-sidebar" id="${id}" aria-label="${label}"><header class="im-panel-header"><h4 class="im-panel-title">${label}</h4><span class="im-spacer"></span>${fold}</header>`
-    + `<div class="im-panel-body im-list" role="listbox" aria-label="${label}">${options.rowsHtml}</div></section>`;
+  const count = typeof options.count === 'number' && Number.isFinite(options.count) ? `<span class="im-count">${options.count}</span>` : '';
+  return `<section class="im-panel im-sidebar" id="${id}" aria-label="${label}"><header class="im-panel-header"><h4 class="im-panel-title">${label}</h4>${count}<span class="im-spacer"></span>${fold}</header>`
+    + `<div class="im-panel-body im-list" role="listbox" aria-label="${label}">${options.rowsHtml}</div>`
+    + (options.footHtml === undefined ? '' : `<div class="im-panel-foot">${options.footHtml}</div>`)
+    + '</section>';
 }

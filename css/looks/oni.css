@@ -82,14 +82,14 @@
 /* ---------- chips and counts: outlined, not filled ---------- */
 
 /* Outlined, on the sheet's colour: the fill of a row under the chip (hover, pressed, selected) must not dim its text. */
-[data-im-look="oni"] .im-chip[data-im-tone] {
+[data-im-look="oni"] .im-chip:is([data-im-tone], [data-im-cat]) {
   background: var(--im-sheet);
   border: 1px solid currentColor;
 }
 
-[data-im-look="oni"] .im-chip[data-im-tone]::before { display: none; }
+[data-im-look="oni"] .im-chip:is([data-im-tone], [data-im-cat])::before { display: none; }
 
-[data-im-look="oni"] .im-chip:not([data-im-tone]) { border: 1px solid var(--im-line-soft); }
+[data-im-look="oni"] .im-chip:not([data-im-tone], [data-im-cat]) { border: 1px solid var(--im-line-soft); }
 
 [data-im-look="oni"] .im-count { border: 1px solid var(--im-line-soft); }
 

@@ -96,9 +96,9 @@ const REMOVED = [
   'im-nav-entry', 'im-nav-line', 'im-nav-mark', 'im-nav-detail', 'im-signal', 'im-docked-inspector', 'im-inspection-rail',
   'im-detail-panel', 'im-document', 'im-toolbar', 'im-panel-strip', 'im-master-detail',
 ];
-/** Every element of the gallery page that carries a removed class or data-im-badge. */
+/** Every element of the gallery page that carries a removed class, or a badge anywhere but on a row. */
 const stale = (page) => page.evaluate((names) => [...document.querySelectorAll('[class], [data-im-badge]')]
-  .flatMap((el) => [...el.classList].filter((name) => names.includes(name)).concat(el.hasAttribute('data-im-badge') ? ['data-im-badge'] : [])), REMOVED);
+  .flatMap((el) => [...el.classList].filter((name) => names.includes(name)).concat(el.hasAttribute('data-im-badge') && !el.classList.contains('im-row') ? ['data-im-badge'] : [])), REMOVED);
 
 // The frame of a shell, as a list: the skip link and the regions (tag, region classes, and what the frame's markup gives
 // each: a name, the content's id and tabindex), and every child of the content region, which is a panel: its header,
@@ -234,7 +234,10 @@ const buildFrame = (page, width, options = {}) => page.evaluate(({ width, option
     sidebarHtml: options.sidebar === false ? undefined : api.sidebarHtml({ id: 'frame-side', label: 'Threads', rowsHtml: ['Alpha', 'Beta', 'Gamma'].map(row).join(''), collapse: { collapse: 'Collapse sidebar', expand: 'Expand sidebar' } }),
     statusHtml: options.bare ? undefined : '<span class="im-chip" data-im-tone="ok">Ready</span><span class="im-status-text">Summary</span><span class="im-spacer"></span><span class="im-status-end">Info</span>',
     contentHeaderHtml: '<h4 class="im-panel-title">First</h4>', contentToolsHtml: '<span class="im-chip">Filter</span>',
-    contentHtml: api.pageContentHtml('<h1>Page title</h1><h2>Section</h2><h3>Group</h3><p>Body text</p><ul><li>Item</li></ul>'),
+    contentHtml: api.pageContentHtml('<h1>Page title</h1><h2>Section</h2><h3>Group</h3><p>Body text</p><ul><li>Item</li></ul>'
+      + '<p>Commit <code>a1b2c3d</code> on <code>C:\\work\\app</code></p><button type="button" class="im-btn" data-test="copy"><span>Copy</span></button>'
+      + '<div class="im-tabs" role="tablist" aria-label="Parts"><button type="button" role="tab" class="im-tab" aria-selected="true">Tab</button></div>'
+      + '<div role="listbox" aria-label="Rows"><div class="im-row im-row--1" role="option" aria-selected="false"><span class="im-row-text"><span class="im-row-title">Row</span></span></div></div>'),
     contentLabel: 'First', contentId: 'frame-main', skipLabel: 'Skip to content', inspectorLabel: 'Details',
     actionsHtml: options.bare ? undefined : '<button type="button" class="im-btn"><span>Check</span></button><button type="button" class="im-btn im-btn--primary"><span>Apply</span></button>',
     footerHtml: options.bare ? undefined : '<span class="im-dot" data-im-tone="ok"></span><span class="im-footer-text">State</span><span class="im-spacer"></span><span class="im-footer-keys"><span><kbd class="im-key">F6</kbd>next region</span></span>',
@@ -290,6 +293,20 @@ async function builtFrame(page, look) {
         assert.equal(h.family, page_.head, where(`${tag} is in --im-font-head`));
       }
       assert.deepEqual([page_.p, page_.list], ['0px', 'none'], where('the document resets apply in the shell'));
+      // Page content is content: its text can be selected and copied (a path, a commit, an id); its controls cannot, as
+      // everywhere in the shell.
+      if (width === 1160) {
+        const select = await page.evaluate((s) => {
+          const content = document.querySelector(s).querySelector('.im-page-content');
+          const of = (selector) => getComputedStyle(content.querySelector(selector)).userSelect;
+          return {
+            heading: of('h1'), paragraph: of('p'), code: of('code'), item: of('li'),
+            button: of('[data-test="copy"]'), label: of('[data-test="copy"] > span'), tab: of('.im-tab'), row: of('.im-row'), title: of('.im-row-title'),
+            chrome: getComputedStyle(document.querySelector(s).querySelector('.im-titlebar')).userSelect,
+          };
+        }, FRAME);
+        assert.deepEqual(select, { heading: 'text', paragraph: 'text', code: 'text', item: 'text', button: 'none', label: 'none', tab: 'none', row: 'none', title: 'none', chrome: 'none' }, where('page content is selectable, its controls are not'));
+      }
     }
     // The wide inspector: 360, docked from 1012 beside the sidebar, from 1000 without one.
     await buildFrame(page, 1160, { wide: true });
@@ -331,9 +348,9 @@ const addSidebarParts = (page) =>
 const removeSidebarParts = (page) => page.evaluate(() => document.querySelectorAll('.im-sidebar [data-test]').forEach((el) => el.remove()));
 
 // What the sidebar is in the rail, whether the width forced it (840) or the user folded it (1160): the rail's width, an
-// icon or the initials for every row, the row's text kept for the accessible name (the name is longer than the title
-// tooltip, which is what a name falls back to when the text is gone), the selection told by weight or ring as well as by
-// fill, and neither tools nor foot.
+// icon, the initials or the row's check for every row, the row's text kept for the accessible name (the name is longer
+// than the title tooltip, which is what a name falls back to when the text is gone), the selection told by weight or
+// ring as well as by fill, and neither tools nor foot.
 async function checkRail(page, where, widths, label) {
   near((await box(page, '.im-sidebar')).width, widths.rail, where(`${label}: rail width`));
   const rows = page.locator('.im-sidebar [role="option"]');
@@ -346,8 +363,10 @@ async function checkRail(page, where, widths, label) {
     const name = /option "([^"]+)"/.exec(await row.ariaSnapshot())?.[1] ?? '';
     assert.ok(name.startsWith(title) && name.length > title.length, where(`${label}: row ${i} is named by its text, not only by its title (${name})`));
     const item = row.locator('.im-rail-item');
+    assert.equal(await item.count(), 1, where(`${label}: row ${i} has one rail item`));
     assert.equal(await item.isVisible(), true, where(`${label}: row ${i} shows its rail item`));
     if (await item.locator('svg').count()) assert.equal(await item.locator('svg').isVisible(), true, where(`${label}: row ${i} shows its icon`));
+    else if ((await item.getAttribute('role')) === 'checkbox') assert.ok(await item.getAttribute('aria-checked'), where(`${label}: row ${i} shows its check`));
     else assert.ok(((await item.innerText()) ?? '').trim(), where(`${label}: row ${i} shows its initials`));
   }
   const looks = await page.evaluate(() =>
@@ -355,24 +374,215 @@ async function checkRail(page, where, widths, label) {
       const item = row.querySelector('.im-rail-item');
       const style = getComputedStyle(item);
       const svg = item.querySelector('svg');
-      return { on: row.getAttribute('aria-selected') === 'true', icon: !!svg, stroke: svg ? parseFloat(getComputedStyle(svg).strokeWidth) : 0, ring: style.borderTopColor, box: item.getBoundingClientRect().width };
+      const kind = svg ? 'icon' : item.classList.contains('im-check') ? 'check' : 'avatar';
+      return { on: row.getAttribute('aria-selected') === 'true', kind, stroke: svg ? parseFloat(getComputedStyle(svg).strokeWidth) : 0, ring: kind === 'check' ? style.boxShadow : style.borderTopColor, box: item.getBoundingClientRect().width };
     }));
-  for (const icon of [true, false]) {
-    const on = looks.filter((l) => l.on && l.icon === icon);
-    const off = looks.filter((l) => !l.on && l.icon === icon);
+  for (const kind of ['icon', 'avatar', 'check']) {
+    const on = looks.filter((l) => l.on && l.kind === kind);
+    const off = looks.filter((l) => !l.on && l.kind === kind);
     if (!on.length || !off.length) continue;
-    if (icon) assert.ok(Math.min(...on.map((l) => l.stroke)) > Math.max(...off.map((l) => l.stroke)), where(`${label}: the selected icon is drawn heavier`));
-    else assert.ok(on.every((l) => off.every((o) => o.ring !== l.ring)), where(`${label}: the selected avatar has a ring`));
+    if (kind === 'icon') assert.ok(Math.min(...on.map((l) => l.stroke)) > Math.max(...off.map((l) => l.stroke)), where(`${label}: the selected icon is drawn heavier`));
+    else assert.ok(on.every((l) => off.every((o) => o.ring !== l.ring)), where(`${label}: the selected ${kind} has a ring (${on.map((l) => l.ring)} and ${off.map((l) => l.ring)})`));
   }
-  assert.ok(looks.filter((l) => l.icon).every((l) => l.box === 20), where(`${label}: an icon sits in the rail's 20px box`));
+  // A sidebar whose selected row has no icon: an icon row, selected for the test, is drawn heavier too.
+  if (!looks.some((l) => l.on && l.kind === 'icon') && looks.some((l) => l.kind === 'icon')) {
+    const strokes = await page.evaluate(() => {
+      const row = [...document.querySelectorAll('.im-sidebar [role="option"]')].find((el) => el.querySelector(':scope > .im-rail-item svg'));
+      const stroke = () => parseFloat(getComputedStyle(row.querySelector(':scope > .im-rail-item svg')).strokeWidth);
+      const was = row.getAttribute('aria-selected');
+      const rest = stroke();
+      row.setAttribute('aria-selected', 'true');
+      const selected = stroke();
+      row.setAttribute('aria-selected', was);
+      return { rest, selected };
+    });
+    assert.ok(strokes.selected > strokes.rest, where(`${label}: a selected icon is drawn heavier (${JSON.stringify(strokes)})`));
+  }
+  assert.ok(looks.filter((l) => l.kind === 'icon').every((l) => l.box === 20), where(`${label}: an icon sits in the rail's 20px box`));
+  assert.ok(looks.filter((l) => l.kind === 'check').every((l) => l.box === 16), where(`${label}: a check keeps its own 16px box`));
   const rail = await box(page, '.im-sidebar');
   const centres = await page.evaluate(() => [...document.querySelectorAll('.im-sidebar .im-rail-item')].filter((el) => el.getClientRects().length).map((el) => el.getBoundingClientRect()).map((r) => r.left + r.width / 2));
   assert.ok(centres.length >= 3 && centres.every((x) => Math.abs(x - (rail.left + rail.width / 2)) <= 1.5), where(`${label}: the rail items are centred in the rail`));
-  // a tools row and a foot in the sidebar are not for a rail
+  // a tools row and a foot in the sidebar are not for a rail: the sidebar's own foot neither
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-sidebar > .im-panel-foot')].some((el) => el.getClientRects().length > 0)), false, where(`${label}: the sidebar's foot is not in the rail`));
   await addSidebarParts(page);
   assert.equal(await visible(page, '[data-test="tools"]'), false, where(`${label}: no tools row`));
   assert.equal(await visible(page, '[data-test="foot"]'), false, where(`${label}: no foot`));
   await removeSidebarParts(page);
+}
+
+// ---------- the rows of the sidebar: a check in the rail, a categorical colour, a badge ----------
+
+/** The checks that are the rail items of the sidebar's rows: how each is drawn, and whether a press at its centre reaches it. */
+const railChecks = (page) => page.evaluate(() => [...document.querySelectorAll('.im-sidebar [role="option"] > .im-check.im-rail-item')].map((check) => {
+  check.scrollIntoView({ block: 'nearest' });
+  const s = getComputedStyle(check);
+  const mark = getComputedStyle(check, '::after');
+  const r = check.getBoundingClientRect();
+  return {
+    hit: r.width > 0 && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === check,
+    drawn: [r.width, r.height, s.backgroundColor, s.borderTopWidth, s.borderTopStyle, s.borderTopColor, mark.content,
+      mark.content === 'none' ? '' : [mark.width, mark.height, mark.backgroundColor, mark.borderRightColor, mark.transform].join(' ')].join(' | '),
+  };
+}));
+
+// Xiox's rows are checks: each row's check is its rail item, drawn in the rail as in the whole sidebar, and a press on it
+// there reaches it, so the person ticks it in the rail as in the whole sidebar.
+async function checksInRail(page, where, at) {
+  await at(1160);
+  const whole = await railChecks(page);
+  assert.ok(whole.length >= 3 && whole.every((check) => check.hit), where(`the checks of the rows are their rail items (${JSON.stringify(whole)})`));
+  await at(840);
+  const rail = await railChecks(page);
+  assert.deepEqual(rail.map((check) => check.drawn), whole.map((check) => check.drawn), where('a check is drawn in the rail as in the whole sidebar'));
+  assert.ok(rail.every((check) => check.hit), where('a press in the rail reaches the check'));
+  const check = page.locator('.im-sidebar [role="option"] > .im-check.im-rail-item[aria-checked="false"]').first();
+  await check.evaluate((el) => { el.dataset.test = 'tick'; el.addEventListener('click', () => el.setAttribute('aria-checked', 'true'), { once: true }); });
+  await page.locator('[data-test="tick"]').click();
+  assert.equal(await page.locator('[data-test="tick"]').getAttribute('aria-checked'), 'true', where('a check in the rail is ticked by a press'));
+  assert.notEqual(await page.locator('[data-test="tick"]').evaluate((el) => getComputedStyle(el, '::after').content), 'none', where('and shows its tick'));
+}
+
+/** What a categorised row of the sidebar draws: the mark at its start, and its rail item's fill. */
+const categories = (page) => page.evaluate(() => [...document.querySelectorAll('.im-sidebar .im-row[data-im-cat]')].map((row) => {
+  const n = row.dataset.imCat;
+  const probe = (value) => {
+    const el = document.createElement('i');
+    el.style.color = value;
+    row.after(el);
+    const colour = getComputedStyle(el).color;
+    el.remove();
+    return colour;
+  };
+  const mark = getComputedStyle(row, '::before');
+  const item = row.querySelector(':scope > .im-rail-item[data-im-cat]');
+  return {
+    n, cat: probe(`var(--im-cat-${n})`), on: probe('var(--im-cat-on)'), item: item ? { cat: item.dataset.imCat, background: getComputedStyle(item).backgroundColor, color: getComputedStyle(item).color } : null,
+    mark: { content: mark.content, position: mark.position, width: mark.width, left: parseFloat(mark.left), color: mark.backgroundColor },
+  };
+}));
+
+/** The selection of the sidebar's selected row, as the eye sees it: its fill, its inset line, the weight of its title. */
+const selection = (page) => page.evaluate(() => {
+  const row = document.querySelector('.im-sidebar .im-row[aria-selected="true"]');
+  const style = getComputedStyle(row);
+  return { fill: style.backgroundColor, line: style.boxShadow, weight: getComputedStyle(row.querySelector('.im-row-title')).fontWeight };
+});
+
+/** The badge of the badged row: the dot at the row's end, the dot at its rail item's corner, and the colours of the tones. */
+const badge = (page) => page.evaluate(() => {
+  const row = document.querySelector('.im-sidebar .im-row[data-im-badge]');
+  const item = row.querySelector(':scope > .im-rail-item');
+  const probe = (value) => {
+    const el = document.createElement('i');
+    el.style.color = value;
+    row.after(el);
+    const colour = getComputedStyle(el).color;
+    el.remove();
+    return colour;
+  };
+  const end = getComputedStyle(row, '::after');
+  const corner = getComputedStyle(item, '::before');
+  return {
+    warn: probe('var(--im-warn)'), err: probe('var(--im-err)'), meta: row.querySelector('.im-row-meta').getBoundingClientRect().right,
+    end: { content: end.content, display: end.display, width: end.width, height: end.height, color: end.backgroundColor },
+    corner: { content: corner.content, position: corner.position, width: corner.width, height: corner.height, color: corner.backgroundColor, top: parseFloat(corner.top), right: parseFloat(corner.right) },
+  };
+});
+
+// Shinatama colours its threads by category and marks the one that waits for the person with a badge.
+async function categoryAndBadge(page, where, at) {
+  await at(1160, 'shinatama');
+  const whole = await categories(page);
+  assert.ok(whole.length >= 3, where('Shinatama colours its threads'));
+  for (const row of whole) {
+    const said = (text) => where(`category ${row.n}: ${text}`);
+    assert.deepEqual([row.mark.content, row.mark.position, row.mark.width], ['""', 'absolute', '3px'], said('a row draws a 3px mark'));
+    assert.ok(row.mark.left >= 0 && row.mark.left <= 4, said(`at its start edge (${row.mark.left})`));
+    assert.equal(row.mark.color, row.cat, said('in its categorical colour'));
+  }
+  // The mark is beside the selection mark, never instead of it: the selected row draws its selection as it would without
+  // a category.
+  const marked = await selection(page);
+  const n = await page.evaluate(() => {
+    const row = document.querySelector('.im-sidebar .im-row[aria-selected="true"]');
+    const value = row.dataset.imCat;
+    delete row.dataset.imCat;
+    return value;
+  });
+  assert.ok(n, where('the selected thread has a category'));
+  assert.deepEqual(marked, await selection(page), where('a categorised row is selected as any row is'));
+  await page.evaluate((value) => { document.querySelector('.im-sidebar .im-row[aria-selected="true"]').dataset.imCat = value; }, n);
+
+  // The badge: at the row's end, after its meta, in the tone of the row (warn by default), and said in the row's words.
+  const badged = page.locator('.im-sidebar .im-row[data-im-badge]');
+  assert.equal(await badged.count(), 1, where('one thread waits for the person'));
+  const name = /option "([^"]+)"/.exec(await badged.ariaSnapshot())?.[1] ?? '';
+  assert.match(name, /needs you/, where(`the badged row says what its badge says (${name})`));
+  const wide = await badge(page);
+  assert.deepEqual([wide.end.content, wide.end.width, wide.end.height, wide.end.color], ['""', '8px', '8px', wide.warn], where('the badge is a warn dot at the end of the row'));
+  assert.equal(wide.corner.content, 'none', where('and not on the rail item, outside the rail'));
+  const metaWithout = await badged.evaluate((row) => {
+    row.removeAttribute('data-im-badge');
+    const right = row.querySelector('.im-row-meta').getBoundingClientRect().right;
+    row.setAttribute('data-im-badge', '');
+    return right;
+  });
+  assert.ok(metaWithout - wide.meta > 8, where(`the badge takes the end of the row, after the meta (${metaWithout} without it, ${wide.meta} with it)`));
+  await badged.evaluate((row) => row.setAttribute('data-im-tone', 'err'));
+  assert.equal((await badge(page)).end.color, wide.err, where("the badge takes the row's tone"));
+  await badged.evaluate((row) => row.removeAttribute('data-im-tone'));
+
+  // In the rail: the badge is on the corner of the rail item, and the rail item takes the colour of its category.
+  await at(840, 'shinatama');
+  const rail = await badge(page);
+  assert.equal(rail.end.display === 'none' || rail.end.content === 'none', true, where('in the rail the badge is not at the end of the row'));
+  assert.deepEqual([rail.corner.content, rail.corner.position, rail.corner.width, rail.corner.height, rail.corner.color], ['""', 'absolute', '8px', '8px', rail.warn], where('in the rail the badge is a dot on the rail item'));
+  assert.ok(rail.corner.top <= 0 && rail.corner.right <= 0, where(`at its corner (${rail.corner.top}, ${rail.corner.right})`));
+  for (const row of await categories(page)) {
+    assert.ok(row.item, where(`category ${row.n}: the rail item carries the category`));
+    assert.deepEqual([row.item.background, row.item.color], [row.cat, row.on], where(`category ${row.n}: the rail item is filled with it, its text in --im-cat-on`));
+  }
+}
+
+// A viewer mounts its shell in the root of React (<div id="app">), not in the body. That root carries im-root, and the
+// shell fills the window there as it does in the body: the content region is not 0 pixels tall, and a canvas that
+// fills it neither.
+async function rootFills(page, url) {
+  const css = await page.locator('link[rel=stylesheet]').first().evaluate((link) => link.href);
+  const frame = await page.evaluate(() => {
+    const api = window.__imagoSurfaces;
+    return api.shellFrameHtml({
+      titlebarHtml: api.titlebarHtml({ brand: { name: 'Viewer' } }), contentHtml: '<div id="canvas" style="block-size: 100%"></div>', contentLabel: 'Graph',
+      skipLabel: 'Skip to content', inspectorLabel: 'Details', footerHtml: '<span class="im-footer-text">Ready</span>',
+    });
+  });
+  const fresh = await page.context().newPage();
+  try {
+    const address = new URL('/root-test/viewer', url).href;
+    await fresh.route(address, (route) => route.fulfill({ contentType: 'text/html', body:
+      `<!doctype html><html lang="en" data-im-app="daodan" data-im-look="smooth" data-im-theme="light"><head><link rel="stylesheet" href="${css}"></head>`
+      + `<body><div id="app" class="im-root"><div class="im-shell" data-im-sidebar="off">${frame}</div></div></body></html>` }));
+    await fresh.goto(address);
+    for (const [width, height] of [[1160, 720], [700, 480]]) {
+      await fresh.setViewportSize({ width, height });
+      const sizes = await fresh.evaluate(() => {
+        const height = (selector) => document.querySelector(selector).getBoundingClientRect().height;
+        return {
+          window: innerHeight, html: height('html'), body: height('body'), root: height('#app'), shell: height('.im-shell'),
+          content: height('.im-content'), canvas: height('#canvas'), margin: getComputedStyle(document.body).marginTop, scroll: document.documentElement.scrollHeight,
+        };
+      });
+      const said = (text) => `a shell in a root that carries im-root, at ${width}x${height}: ${text} (${JSON.stringify(sizes)})`;
+      for (const name of ['html', 'body', 'root', 'shell']) near(sizes[name], sizes.window, said(`${name} is as tall as the window`));
+      assert.equal(sizes.margin, '0px', said('the page has no margin of its own'));
+      assert.ok(sizes.scroll <= sizes.window, said('the page does not scroll'));
+      assert.ok(sizes.content > 200, said('the content region is not 0 pixels tall'));
+      assert.ok(sizes.canvas > 200, said('a canvas that fills the content is drawn'));
+    }
+  } finally {
+    await fresh.close();
+  }
 }
 
 export default async (page, url) => {
@@ -387,6 +597,7 @@ export default async (page, url) => {
       assert.equal(widths.sidebar, 232, where('--im-w-sidebar'));
       assert.equal(widths.rail, 56, where('--im-w-rail'));
       assert.ok(widths.inspector >= 300 && widths.inspector <= 360, where(`--im-w-inspector is ${widths.inspector}`));
+      assert.equal(await token(page, '--im-w-inspector-wide'), 360, where('--im-w-inspector-wide, the top of the range'));
 
       // 1160: the sidebar, the docked inspector and a content of 420 or more, as the tokens say.
       const side = await box(page, '.im-sidebar');
@@ -397,6 +608,10 @@ export default async (page, url) => {
       assert.ok(inspector.left >= content.right - 0.5, where('inspector is on the right of the content at 1160'));
       assert.ok(content.width >= 420, where(`content width at 1160 is ${content.width}`));
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 1160'));
+      // The whole sidebar has its count in the header and its foot under the list.
+      assert.equal(await visible(page, '.im-sidebar > .im-panel-header > .im-count'), true, where('the sidebar counts its rows in its header'));
+      assert.equal(await visible(page, '.im-sidebar > .im-panel-foot'), true, where('the sidebar has its foot under its list'));
+      assert.ok((await box(page, '.im-sidebar > .im-panel-foot')).top >= (await box(page, '.im-sidebar > .im-list')).bottom - 0.5, where('the foot is under the list'));
 
       // The breakpoints, pinned on both sides of each edge: 1000/999, 850/849, 620/619.
       await at(1000);
@@ -450,6 +665,8 @@ export default async (page, url) => {
       assert.equal(await visible(page, '.im-sidebar .im-panel-header'), false, where('the forced rail has no header'));
       assert.equal(await visible(page, '.im-views-menu'), false, where('no Views menu at 840'));
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 840'));
+      await checksInRail(page, where, at);
+      await categoryAndBadge(page, where, at);
 
       // 610: no sidebar, no tabs in the title bar, the Views menu instead (a menu button that is closed).
       await at(610);
@@ -771,6 +988,8 @@ export default async (page, url) => {
       }
     }
   }
+
+  await rootFills(page, url);
 
   // 200% page zoom. The window's minimum is 500 physical pixels, which at 200% is a shell of 250 CSS px; a window half-snapped on a
   // 1366px screen is 683 physical px, 341 CSS px at 200%. The page is laid out in CSS px whatever the zoom, so the shell is
