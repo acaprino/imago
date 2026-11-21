@@ -247,7 +247,11 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 2. `guardDesktop(document)`, outside development only (section 3.2, step 1).
 3. `mountZoom(document, { apply })`, with `getCurrentWebview().setZoom` as `apply`.
 4. `mountWindowControls(titlebar, api, { onError })`.
-5. The behaviour modules: `attachLayers`, the registry's `attach`, `regions`, the sidebar functions.
+5. The app's own key handlers on the document, if it has any (a terminal): before the next step, so they run before the
+   registry and claim what they answer.
+6. `mountApp(shell, registry, options)`, which attaches the layers, the registry's keys, the regions and the sidebar
+   functions, and registers `Ctrl+K`, `Ctrl+F` and the look and theme commands ([using-imago.md](using-imago.md),
+   section 6).
 
 ### 3.5 The capabilities
 

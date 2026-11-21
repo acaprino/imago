@@ -1,8 +1,18 @@
 # Directed graphs
 
-Import `graphView` from `@acaprino/imago/graph` and include the normal Imago stylesheet. Give the host a height. The graph uses D3 for pan and zoom and accepts positions from the application or a layout engine.
+A graph in the content region: a read-only view of nodes and edges, a grouped layout for it, and the parts of an editor
+of a graph the person changes. The rules are in [design-file.md](design-file.md): a graph is content, its keys are the
+package's, and the details or the form of the selected node go in the shell's inspector.
+
+## The view
+
+`graphView(host, options)` from `@acaprino/imago/graph` mounts one read-only diagram in `host`, an element with
+`im-graph-host` (a bounded height) and, round it in a panel, `im-graph-panel`. Include the normal stylesheet. The graph
+uses D3 for pan and zoom and takes its positions from the app or from a layout engine.
 
 ```ts
+import { graphView } from '@acaprino/imago/graph';
+
 const graph = graphView(host, {
   label: 'Dependencies',
   controls: { zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit diagram' },
@@ -17,39 +27,70 @@ graph.draw({
 });
 ```
 
-Supply a unique ID for each node or group. The same IDs identify the endpoints of an edge. An optional array of route points carries the bends supplied by a layout engine. A group accepts a positioned rectangle and DOM content. A node accepts text, detail, a count or custom DOM content. To make a node expandable, supply its `openLabel` and the graph's `onOpen` callback.
+`GraphOptions` is `{ label, key?, controls, onSelect?, onOpen?, onClear? }`: `label` names the region, `controls` gives
+the words of the three buttons, `key` is a stable identity when a screen holds several graphs with the same label.
+`draw(scene, refit?)` takes a `GraphScene`, `{ nodes, edges, groups? }`:
 
-`ariaLabel` supplies a node's full accessible name when its visible label is abbreviated;
-`title` supplies its tooltip. Edges accept `tone: 'err'`, `dotted: true`, and
-`directed: false` for symmetric relationships. Left and Right keyboard navigation
-follows symmetric edges from either endpoint.
+- A node (`GraphNode`, a `GraphBox`: a `GraphPoint` with a width and a height) has a unique `id` and a `label`, and may
+  have `ariaLabel` (its whole name when the label is short), `title` (its tooltip), `detail`, `count`, `content` (DOM
+  content of its own), `selected`, `highlighted`, `dimmed` (set back), `external` (drawn with a dashed edge) and
+  `openLabel` (with the graph's `onOpen`, the node can be opened).
+- An edge (`GraphEdge`) joins a `source` and a `target` by their ids: `label` and `showLabel`, `points` (the bends a
+  layout engine gives; without them it joins the nearest facing sides), `dashed`, `dotted`, `directed: false` for a
+  symmetric relationship, `tone` (`accent`, `warn` or `err`) and `dimmed`.
+- A group (`GraphGroup`) is a positioned rectangle with an `id` and DOM `content`.
 
-Nodes and viewport controls expose stable `data-im-key` values for Imago's DOM
-state and dialog focus restoration. Set `GraphOptions.key` to a stable unique value
-when a screen contains multiple graphs with the same accessible label.
+The view writes `im-graph` round its region `im-graph-pane`, which holds the world `im-graph-world` (its groups
+`im-graph-group`, its edges `im-graph-edge` and its cards `im-graph-card`, each with its node `im-graph-node` and, when it
+opens, `im-graph-open`), and its buttons in `im-graph-tools`. The nodes and the buttons carry stable `data-im-key`
+values, so a repaint and a dialog give focus back to them.
 
-For two-column group-to-member graphs, import `groupedGraphScene` from
-`@acaprino/imago/graph-layout`. Pass unpositioned nodes, groups with `children`
-identifiers, and optional additional relationships. Imago sizes and positions the
-nodes, routes relationships outside the member column, and generates membership
-edges. Shared members occur once, empty groups are omitted, and unrelated members
-follow the grouped ones. Duplicate node identities are rejected. The application
-owns labels and relationship meaning, not layout code.
+Drag the ground to pan; zoom with the wheel, a pinch or the buttons. On the keyboard, Up and Down visit the nodes in the
+order of the scene, Right follows the first outgoing edge and Left the first incoming one (and a symmetric edge from
+either end), Home and End go to the first and the last node, Enter activates the focused button, the plus and minus keys
+zoom and zero fits the diagram. The graph claims the keys it answers.
 
-`graphLegendHtml` from `@acaprino/imago/ui` renders a text key with decorative
-solid/dashed/dotted samples. A host with `im-graph-host` has a bounded responsive
-height; `im-graph-panel` supplies the surrounding panel spacing.
+`draw` again shows a change; it keeps a camera the person moved unless its second argument is `true`. To carry the view
+between mounts, `viewport()` gives a `GraphViewport`, `{ x, y, k, fitted }`, and `restoreViewport(snapshot)` puts it back:
+a graph that fitted itself keeps fitting when it is resized or its scene changes, and one the person panned or zoomed
+keeps its camera; a fit restored before the first draw, or while hidden, waits until the graph can be measured. Keep a
+viewport per document and restore it after a remount. `camera()` gives a `GraphCamera`, `{ x, y, k }`, and
+`restore(camera)` sets a fixed camera the person moved, which never fits by itself. `fit()` fits the diagram once.
+`dispose()` removes the graph; call it before removing its host.
 
-Drag the background to pan. Use the wheel, pinch or the labelled buttons to zoom. On the keyboard, Up and Down visit nodes in scene order. Right follows the first outgoing edge and Left the first incoming edge. Home and End jump to the first and last node. Enter activates the focused button. The plus and minus keys zoom and zero fits the diagram.
+A key of the graph is `graphLegendHtml(items, summary)` from `@acaprino/imago/ui`: a text key, `im-graph-legend`, with a
+decorative sample of each line (`GraphLegendItem`: `{ label, tone?, stroke? }`, `stroke` `solid`, `dashed` or `dotted`),
+and a summary in `im-graph-summary`.
 
-Call `draw` again to reflect changes. It preserves a manually positioned camera unless its second argument is true.
+## The grouped layout
 
-Use `viewport(): GraphViewport` and `restoreViewport(snapshot)` to carry state
-between mounts. The snapshot contains `{ x, y, k, fitted }`: an automatically fitted
-graph continues to fit on resize and scene changes; a manually panned or zoomed
-graph preserves its camera. Restoring automatic fitting before the first draw or
-while hidden keeps that intention until the graph can be measured.
+`groupedGraphScene(groups, items, relations, options)` from `@acaprino/imago/graph-layout` lays out a two-column graph of
+groups and their members: the groups on the left, their members on the right. The app gives unpositioned nodes
+(`GraphItem`), groups with the ids of their `children` (`GraphColumnGroup`) and its other relationships (`GraphEdge`s);
+the package sizes and places the nodes, routes the relationships outside the members' column and writes the edges of
+membership. A member of two groups appears once, an empty group is left out, and members of no group follow the others.
+A node id given twice throws. `GroupedGraphOptions` (`nodeHeight`, `rowGap`, `groupGap`, `columnGap`, `minGroupWidth`,
+`minNodeWidth`) changes the measures. `graphTextWidth(text)` is the width it gives a label at the graph's text size,
+without measuring the page. The app owns the labels and what the relationships mean, not the layout.
 
-The existing `camera(): GraphCamera` and `restore(camera)` API remains available;
-`restore` deliberately selects a fixed manual camera. Call `dispose` when removing
-the graph.
+## The editor
+
+A graph the person edits is made of the editor's parts, from `@acaprino/imago/graph`. The app owns the nodes, their
+content, their coordinates, the edits it allows and their persistence; the package owns the controls, the gestures, the
+keyboard targets and the geometry.
+
+| Call | What it makes |
+|---|---|
+| `graphEditorWorkspace(label, paletteLabel)` | The workspace, `im-editor-workspace`: its body `im-editor-body` with a palette of things to add (`im-editor-palette`) and the stage (`im-editor-stage`) holding an editor. It returns `{ root, body, palette, stage, editor }` |
+| `graphEditor()` | The editing surface: a region that scrolls (`im-editor-scroll`) round a canvas (`im-editor-canvas`) with the lines in an SVG (`im-editor-wires`). It returns `{ scroll, canvas, nodes, edges, defs, wires, point(event) }`, `point` the place of a pointer on the canvas |
+| `graphEditorNode(actions)` | A node the person moves and opens, `im-editor-node`, a button: `{ press(event), open(), nudge(delta) }`. Enter or Space opens it; the arrows nudge it by 10, 40 with Shift; it claims the keys it answers |
+| `graphEditorPort(symbol, title, press)` | The handle of a node from which a connection is dragged, `im-editor-port`, for the pointer only |
+| `graphArrowMarker(defs, id)` | The arrow at the end of a line, `im-editor-arrow` |
+| `graphEditorEdge(a, b, markerId, open)` | A connection, `im-editor-edge`, a button: its wide hit area `im-editor-hit`, its line `im-editor-line` and its label `im-editor-label`. Enter, Space or a click opens it |
+| `graphConnectionPreview(layer, markerId)` | The line that follows the pointer while a connection is dragged, `im-editor-preview`, with `update(from, to)` |
+| `graphGesture(event, { move, release, cancel })` | One gesture of the pointer from a press to its release, even when it leaves the canvas. Escape cancels it and is claimed. It returns the function that stops it |
+| `graphMiniature(options)` | A small decorative drawing of a graph, `im-graph-mini`, with its nodes `im-graph-mini-node` and its edges `im-graph-mini-edge`: `{ width, height, nodeWidth, nodeHeight, nodes, edges }` |
+
+The details and the form of the selected node or connection go in the shell's inspector (`inspector(shell).open`).
+`graphInspector(label)` makes a panel inside the editor's stage (`im-editor-inspector`) instead; an editor does not use
+it, because the inspector is the only side panel ([design-file.md](design-file.md), "Surfaces: which one for what").
