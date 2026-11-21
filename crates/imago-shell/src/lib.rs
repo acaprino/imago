@@ -27,8 +27,7 @@ mod window_state;
 
 pub use frame::{install_reload_menu, install_snap_layouts, SnapLayouts};
 pub use guard::{
-    disable_browser_accelerators, guard_navigation, guard_navigation_with_scheme,
-    trim_context_menu,
+    disable_browser_accelerators, guard_navigation, guard_navigation_with_scheme, trim_context_menu,
 };
 pub use recovery::{
     recovery_action, watch_process_failures, ProcessFailure, Recovery, RecoveryAction,
