@@ -8,11 +8,7 @@ const css = (file: string) => readFileSync(new URL('../css/' + file, import.meta
 const ALL_CSS = readdirSync(new URL('../css/', import.meta.url), { recursive: true })
   .map(String).filter((file) => file.endsWith('.css')).map((file) => css(file.replaceAll('\\', '/'))).join('\n');
 
-<<<<<<< HEAD
 // The frames that 0.1.2 to 0.1.4 added beside im-shell, and their parts: one frame is left (the table "Moving from 0.1.4" in docs/using-imago.md).
-=======
-// The frames that 0.1.2 to 0.1.4 added beside im-shell, and their parts: one frame is left (docs/using-imago.md, section 11).
->>>>>>> worktree-wf_224aac0d-88e-3
 const REMOVED = [
   'im-app-layout', 'im-main', 'im-desktop-frame', 'im-desktop-content', 'im-page', 'im-skip-link', 'im-page-frame', 'im-page-view',
   'im-workbench', 'im-work-column', 'im-work-area', 'im-workspace-area', 'im-navigation-panel', 'im-resizable-nav', 'im-nav-rail',

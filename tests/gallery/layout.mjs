@@ -91,11 +91,7 @@ async function markInk(page, geometry, scale) {
   }, { png: shot.toString('base64'), bar, mark, first, scale });
 }
 
-<<<<<<< HEAD
 // The frames 0.1.2 to 0.1.4 added beside im-shell, and their parts (the table "Moving from 0.1.4" in docs/using-imago.md): none is drawn.
-=======
-// The frames 0.1.2 to 0.1.4 added beside im-shell, and their parts (docs/using-imago.md, section 11): none is drawn.
->>>>>>> worktree-wf_224aac0d-88e-3
 const REMOVED = [
   'im-app-layout', 'im-main', 'im-desktop-frame', 'im-desktop-content', 'im-page', 'im-skip-link', 'im-page-frame', 'im-page-view',
   'im-workbench', 'im-work-column', 'im-work-area', 'im-workspace-area', 'im-navigation-panel', 'im-resizable-nav', 'im-nav-rail',
