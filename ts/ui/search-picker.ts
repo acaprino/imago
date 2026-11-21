@@ -2,6 +2,7 @@ export interface PickerItem {
   id: string;
   label: string;
   detail?: string;
+  disabled?: boolean;
 }
 
 export interface SearchPickerOptions<T extends PickerItem> {
@@ -10,9 +11,9 @@ export interface SearchPickerOptions<T extends PickerItem> {
   empty: string;
   errorText: (error: unknown) => string;
   search: (query: string, signal: AbortSignal) => Promise<readonly T[]>;
-  onChoose: (item: T) => void;
+  onChoose: (item: T) => void | Promise<void>;
   /** An independent, persistent selection such as inclusion in a sidebar. Shift+Enter toggles it. */
-  mark?: { label: string; checked: (item: T) => boolean; toggle: (item: T) => void };
+  mark?: { label: string; checked: (item: T) => boolean; available?: (item: T) => boolean; key?: (item: T) => string; toggle: (item: T) => void | Promise<void> };
 }
 
 let nextPicker = 0;
@@ -51,6 +52,8 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
   let pending: AbortController | undefined;
   let closed = false;
   let disposed = false;
+  let operating = false;
+  const markable = (item: T) => !!options.mark && options.mark.available?.(item) !== false;
   function select(index: number, scroll = false) {
     list.children[active]?.setAttribute('aria-selected', 'false');
     active = index;
@@ -61,7 +64,7 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
       input.setAttribute('aria-activedescendant', row.id);
       if (scroll) row.scrollIntoView({ block: 'nearest' });
     } else input.removeAttribute('aria-activedescendant');
-    mark.hidden = !options.mark || !item;
+    mark.hidden = !item || !markable(item);
     if (options.mark && item) {
       mark.textContent = options.mark.label + ' · ' + item.label;
       mark.setAttribute('aria-pressed', String(options.mark.checked(item)));
@@ -69,8 +72,9 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
   }
   function paintMarks() {
     if (!options.mark) return;
-    for (const [index, marker] of list.querySelectorAll<HTMLElement>('.im-picker-mark').entries()) {
-      marker.dataset.imChecked = String(options.mark.checked(rows[index]));
+    for (const [index, row] of Array.from(list.children).entries()) {
+      const marker = row.querySelector<HTMLElement>('.im-picker-mark');
+      if (marker) marker.dataset.imChecked = String(options.mark.checked(rows[index]));
     }
   }
   function clear() {
@@ -112,9 +116,11 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
           detail.textContent = item.detail;
           text.append(detail);
         }
-        if (options.mark) {
+        if (item.disabled) row.setAttribute('aria-disabled', 'true');
+        if (options.mark && markable(item)) {
           const marker = doc.createElement('span');
           marker.className = 'im-picker-mark';
+          marker.dataset.imMark = options.mark.key?.(item) ?? item.id;
           marker.title = options.mark.label + ' · ' + item.label;
           marker.setAttribute('aria-hidden', 'true');
           marker.onclick = event => {
@@ -127,7 +133,7 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
         }
         row.append(text);
         row.onpointerdown = event => { if (event.pointerType === 'mouse') event.preventDefault(); };
-        row.onclick = () => { select(index); options.onChoose(item); };
+        row.onclick = () => { select(index); void operate(item, false); };
         list.append(row);
       }
       paintMarks();
@@ -148,13 +154,20 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
     input.setAttribute('aria-expanded', 'false');
     status.textContent = '';
   }
+  async function operate(item: T, marking: boolean) {
+    if (operating || (marking ? !markable(item) : item.disabled)) return;
+    operating = true;
+    try {
+      if (marking) await options.mark!.toggle(item);
+      else await options.onChoose(item);
+      if (marking && !closed && !disposed) { paintMarks(); select(active); }
+    } catch (error) {
+      if (!closed && !disposed) status.textContent = options.errorText(error);
+    } finally { operating = false; }
+  }
   function toggle() {
     const item = rows[active];
-    if (item && options.mark) {
-      options.mark.toggle(item);
-      paintMarks();
-      select(active);
-    }
+    if (item) void operate(item, true);
   }
   mark.onclick = toggle;
   input.oninput = () => { void refresh(); };
@@ -173,7 +186,7 @@ export function searchPicker<T extends PickerItem>(doc: Document, options: Searc
     } else if (event.key === 'Enter' && !closed) {
       const item = rows[active];
       if (item && event.shiftKey && options.mark) toggle();
-      else if (item) options.onChoose(item);
+      else if (item) void operate(item, false);
     } else return;
     event.preventDefault();
     event.stopPropagation();

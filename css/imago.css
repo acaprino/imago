@@ -8,6 +8,12 @@
 @import "./surfaces.css";
 @import "./graph.css";
 @import "./workspace.css";
+@import "./dom-parts.css";
+@import "./content-surfaces.css";
+@import "./file-workspace.css";
+@import "./navigation-panels.css";
+@import "./tiling-workspace.css";
+@import "./file-tree-detail.css";
 @import "./inspection.css";
 @import "./looks/oni.css";
 

@@ -1,7 +1,13 @@
+import { iconMarkup, type IconName } from './icon.ts';
+
 /** Supply the files visible to the application. Imago never reads a filesystem. */
 export interface FileTreeEntry {
   id: string;
   name: string;
+  icon?: IconName;
+  detail?: string;
+  title?: string;
+  disabled?: boolean;
   children?: readonly FileTreeEntry[];
   /** A folder whose children are supplied by loadChildren on first expansion. */
   lazy?: boolean;
@@ -9,6 +15,8 @@ export interface FileTreeEntry {
 
 export interface FileTreeOptions {
   label: string;
+  /** Activate a row with one click or Space, as in a file chooser. */
+  singleClick?: boolean;
   expanded?: readonly string[];
   selected?: string;
   active?: string;
@@ -37,12 +45,13 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
   let typedAt = 0;
   const childrenOf = (entry: FileTreeEntry) => entry.children ?? loaded.get(entry.id);
   const isFolder = (entry: FileTreeEntry) => entry.children !== undefined || entry.lazy === true;
-  const canExpand = (entry: FileTreeEntry) => (childrenOf(entry)?.length ?? (entry.lazy ? 1 : 0)) > 0;
+  const canExpand = (entry: FileTreeEntry) => !entry.disabled && (childrenOf(entry)?.length ?? (entry.lazy ? 1 : 0)) > 0;
   let selected = options.selected;
   let active = options.active ?? selected ?? entries[0]?.id;
   type Row = { entry: FileTreeEntry; parent?: string; element: HTMLLIElement; level: number };
   const byId = new Map<string, Row>();
   const changed = new Set<string>();
+  const icons = new Map<IconName, Element>();
   const rowFor = (element: Element | null): Row | undefined => {
     const id = (element as HTMLElement | null)?.dataset.imEntry;
     return id === undefined ? undefined : byId.get(id);
@@ -70,7 +79,26 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
     const label = doc.createElement('span');
     label.className = 'im-tree-label';
     label.textContent = label.title = entry.name;
-    element.append(chevron, label);
+    element.append(chevron);
+    if (entry.icon) {
+      let icon = icons.get(entry.icon);
+      if (!icon) {
+        const template = doc.createElement('template');
+        template.innerHTML = iconMarkup(entry.icon);
+        icon = template.content.firstElementChild!;
+        icons.set(entry.icon, icon);
+      }
+      element.append(icon.cloneNode(true));
+    }
+    element.append(label);
+    if (entry.title) element.title = entry.title;
+    if (entry.disabled) element.setAttribute('aria-disabled', 'true');
+    if (entry.detail) {
+      const detail = doc.createElement('small');
+      detail.className = 'im-tree-detail';
+      detail.textContent = entry.detail;
+      element.append(detail);
+    }
     return { entry, parent, element, level };
   }
 
@@ -180,12 +208,16 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
     if (!row) return;
     navigation++;
     move(row);
-    if (event.target === row.element.firstChild && canExpand(row.entry)) toggle(row);
-    else select(row.entry);
+    if (row.entry.disabled || (options.singleClick && event.detail > 1)) return;
+    if ((options.singleClick || event.target === row.element.firstChild) && canExpand(row.entry)) toggle(row);
+    else {
+      select(row.entry);
+      if (options.singleClick && !isFolder(row.entry)) options.onOpen?.(row.entry);
+    }
   }, { signal: lifetime.signal });
   tree.addEventListener('dblclick', event => {
     const row = fromEvent(event);
-    if (!row || event.target === row.element.firstChild) return;
+    if (!row || row.entry.disabled || options.singleClick || event.target === row.element.firstChild) return;
     if (canExpand(row.entry)) toggle(row);
     else if (!isFolder(row.entry)) options.onOpen?.(row.entry);
   }, { signal: lifetime.signal });
@@ -210,8 +242,12 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
         if (canExpand(row.entry) && expanded.has(row.entry.id)) toggle(row);
         else if (row.parent !== undefined) move(byId.get(row.parent));
         break;
-      case ' ': select(row.entry); break;
+      case ' ':
+        if (row.entry.disabled) break;
+        if (!options.singleClick) { select(row.entry); break; }
+        // Single-click choosers also activate with Space.
       case 'Enter':
+        if (row.entry.disabled) break;
         if (canExpand(row.entry)) toggle(row);
         else { select(row.entry); if (!isFolder(row.entry)) options.onOpen?.(row.entry); }
         break;
@@ -233,7 +269,7 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
     event.stopPropagation();
   }, { signal: lifetime.signal });
   /** Resolve an ancestor-to-leaf chain of IDs, including folders that have never been read. */
-  async function reveal(ids: readonly string[], focus = false): Promise<boolean> {
+  async function reveal(ids: readonly string[], focus = false, expandTarget = false): Promise<boolean> {
     const revision = ++navigation;
     const origin = doc.activeElement;
     let focusMoved = false;
@@ -241,12 +277,17 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
     let group = entries;
     for (const [index, id] of ids.entries()) {
       const entry = group.find(item => item.id === id);
-      if (!entry || lifetime.signal.aborted || revision !== navigation) return false;
+      if (!entry || entry.disabled || lifetime.signal.aborted || revision !== navigation) return false;
       if (index === ids.length - 1) {
         const stillHere = !focusMoved && doc.activeElement === origin;
         move(byId.get(id), stillHere && (focus || tree.contains(origin)));
         select(entry);
         if (stillHere) byId.get(id)?.element.scrollIntoView({ block: 'nearest' });
+        if (expandTarget && isFolder(entry)) {
+          expanded.add(entry.id);
+          updateBranch(entry.id);
+          if (!await load(entry) || lifetime.signal.aborted || revision !== navigation) return false;
+        }
         return true;
       }
       if (!isFolder(entry)) return false;
@@ -276,5 +317,9 @@ export function createFileTree(doc: Document, entries: readonly FileTreeEntry[],
   loadExpanded(entries);
   insert(entries, 1);
   if (active === undefined || !byId.has(active)) move(rowFor(tree.firstElementChild), false);
-  return { element: tree, reveal, destroy() { lifetime.abort(); tree.remove(); } };
+  return { element: tree, reveal, setSelected(id?: string) {
+    if (selected !== undefined) byId.get(selected)?.element.setAttribute('aria-selected', 'false');
+    selected = id;
+    if (id !== undefined) byId.get(id)?.element.setAttribute('aria-selected', 'true');
+  }, destroy() { lifetime.abort(); tree.remove(); } };
 }

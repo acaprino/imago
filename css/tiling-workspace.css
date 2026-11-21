@@ -1,0 +1,64 @@
+.wm-host { position: relative; min-width: 0; min-height: 0; overflow: auto; background: var(--im-ground); }
+.wm-canvas { position: relative; min-width: 100%; min-height: 100%; isolation: isolate; }
+.wm-pane { position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--im-line); background: var(--im-terminal); }
+.wm-pane.wm-focused { border-color: var(--im-accent-text); }
+.wm-header { display: flex; flex: 0 0 30px; min-width: 0; align-items: stretch; background: var(--im-sheet); border-bottom: 1px solid var(--im-line); }
+.wm-control { min-height: 28px; padding: 0 7px; font-size: 12px; letter-spacing: .04em; flex: none; }
+.wm-pane-focus { color: var(--im-muted); padding: 0 7px; border: 0; font: 12px var(--im-font-code); }
+.wm-tabs { display: flex; align-items: stretch; min-width: 0; flex: 1; overflow: auto; scrollbar-width: thin; }
+.wm-tab { display: block; min-width: 0; max-width: 190px; text-align: left; border-top: 0; border-bottom: 0; text-overflow: ellipsis; overflow: hidden; text-transform: none; font: 12px var(--im-font-code); }
+.wm-tab[aria-selected="true"] { color: var(--im-accent-text); background: var(--im-selected); box-shadow: inset 0 -2px var(--im-accent); }
+.wm-body { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.wm-placeholder { display: grid; align-content: center; justify-items: center; min-height: 100%; padding: 10px; color: var(--im-muted); font: 12px var(--im-font-code); text-align: center; overflow-wrap: anywhere; }
+.wm-collapsed .wm-tabs, .wm-collapsed .wm-pane-focus, .wm-collapsed .wm-header > :last-child { display: none; }
+.wm-collapsed .wm-header { flex: 1; justify-content: center; border: 0; }
+.wm-splitter { position: absolute; z-index: 3; touch-action: none; background: transparent; }
+.wm-splitter[data-axis="columns"] { cursor: col-resize; }
+.wm-splitter[data-axis="rows"] { cursor: row-resize; }
+.wm-splitter:hover, .wm-splitter:focus-visible { background: var(--im-line-strong); }
+.wm-drop-preview { position: absolute; z-index: 5; pointer-events: none; border: 2px solid var(--im-accent); background: var(--im-scrim); }
+.wm-changing { user-select: none; }
+.wm-status { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); color: var(--im-warn); background: var(--im-sheet); pointer-events: none; font: 12px var(--im-font-code); }
+.wm-status:empty { display: none; }
+
+/* Simple tab strip: tabs with ×, "+" for a new session; tabs are dragged to arrange the panes. */
+.wm-tabwrap { display: inline-flex; align-items: stretch; flex: none; max-width: 230px; border-right: 1px solid var(--im-line); }
+.wm-tabwrap .wm-tab { border-right: 0; }
+.wm-tab-close { padding: 0 7px; font-size: 15px; line-height: 1; color: var(--im-muted); border: 0; background: transparent; }
+.wm-tab-close:hover { color: var(--im-err); background: var(--im-hover); }
+.wm-tabwrap-active { background: var(--im-selected); box-shadow: inset 0 -2px var(--im-accent); }
+.wm-tabwrap-active .wm-tab { box-shadow: none; }
+.wm-tab-toned .wm-tab::before { content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px 0; vertical-align: middle; background: var(--tab-tone); }
+.wm-tab-toned.wm-tabwrap-active { box-shadow: inset 0 -2px var(--tab-tone); }
+.wm-add { padding: 0 11px; font-size: 17px; line-height: 1; color: var(--im-text-2); border-top: 0; border-bottom: 0; }
+.wm-add:hover { color: var(--im-accent-text, var(--im-accent)); }
+.wm-empty-start { margin-top: 14px; padding: 10px 18px; font: 600 13px var(--im-font-code); border-color: var(--im-accent); color: var(--im-accent-text, var(--im-accent)); }
+/* "+" sits right after the last tab, like a browser; collapse and maximize stay at the far edge. */
+.wm-tabs { flex: 0 1 auto; }
+.wm-pane-tools { margin-left: auto; }
+
+.wm-host { background: transparent; }
+.wm-pane { transition: border-color var(--im-t-base) var(--im-ease); }
+.wm-header { background: var(--im-sheet); }
+.wm-tab, .wm-tab-close, .wm-add { transition: color var(--im-t-fast) var(--im-ease), background-color var(--im-t-fast) var(--im-ease); }
+.wm-pane:has(> .wm-body > .wm-placeholder) { background: color-mix(in srgb, var(--im-terminal) 46%, transparent); }
+.wm-placeholder { position: relative; isolation: isolate; gap: 2px; font-size: 13px; color: var(--im-text-2); }
+.wm-empty-start { margin-top: 16px; min-height: 40px; padding: 0 22px; border-color: var(--im-accent); background: var(--im-accent); color: var(--im-accent-on); font: 600 13px var(--im-font-head); letter-spacing: .08em; clip-path: polygon(0 0, calc(100% - var(--im-cut-md)) 0, 100% var(--im-cut-md), 100% 100%, var(--im-cut-md) 100%, 0 calc(100% - var(--im-cut-md))); transition: background-color var(--im-t-fast) var(--im-ease), scale var(--im-t-fast) var(--im-ease); }
+.wm-empty-start:hover { border-color: var(--im-accent-text); background: var(--im-accent-text); }
+.wm-empty-start:active { scale: .96; }
+.wm-empty-start:focus-visible { outline-color: var(--im-accent-on); outline-offset: -4px; }
+.wm-drop-preview { backdrop-filter: blur(3px); }
+
+/* Tab quick filter: a pane with no tab of the chosen project says so and steps back. */
+.wm-tabs-filtered { align-self: center; padding: 0 10px; color: var(--im-muted); font: 12px var(--im-font-code); white-space: nowrap; }
+.wm-filtered-out > .wm-body { opacity: .35; transition: opacity var(--im-t-base) var(--im-ease); }
+
+/* Tab drag: the tab follows the pointer, the target lights up with what the drop will do. */
+.wm-dragging, .wm-dragging * { cursor: grabbing !important; }
+.wm-tab-dragging { opacity: .45; }
+.wm-drag-ghost { position: fixed; left: 0; top: 0; z-index: 50; max-width: 240px; padding: 5px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; border: 1px solid var(--im-accent); background: var(--im-float); color: var(--im-text); font: 12px var(--im-font-code); box-shadow: 0 8px 22px var(--im-shadow); }
+.wm-drop-preview { display: grid; place-items: center; transition: left var(--im-t-fast) var(--im-ease), top var(--im-t-fast) var(--im-ease), width var(--im-t-fast) var(--im-ease), height var(--im-t-fast) var(--im-ease); background: color-mix(in srgb, var(--im-accent) 14%, var(--im-scrim)); }
+.wm-drop-label { padding: 4px 10px; background: var(--im-sheet); border: 1px solid var(--im-accent); color: var(--im-accent-text, var(--im-accent-text)); font: 12px var(--im-font-code); }
+.wm-drop-marker { position: absolute; z-index: 6; width: 2px; pointer-events: none; background: var(--im-accent); box-shadow: 0 0 6px var(--im-accent); }
+@media (prefers-reduced-motion: reduce) { .wm-drop-preview { transition: none; } }
+.wm-host :is(.wm-pane, .wm-body, .wm-control, .wm-splitter, .wm-drop-preview, .wm-drop-marker, .wm-drag-ghost, .wm-parking)[hidden] { display: none; }

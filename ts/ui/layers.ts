@@ -14,6 +14,9 @@ export type Layer = {
    * to a pane, where a press in the pane outside the layer closes it and still reaches what was pressed.
    */
   toggles?: boolean;
+  lightDismiss?: () => boolean;
+  /** Nonmodal forms can leave Escape to a separate focused workspace. */
+  acceptsEscape?: (target: EventTarget | null) => boolean;
   /** Removes the layer from the screen and pops it. Closing twice does nothing. */
   close: () => void;
   /** Releases a layer when its shell unmounts, even if user dismissal is locked. */
@@ -250,7 +253,7 @@ export function attachLayers(shell: HTMLElement): () => void {
     swallow = null; // a key press is not the click that follows a press on an opener
     if (event.key !== 'Escape' || event.repeat || event.isComposing || event.keyCode === 229) return;
     const top = topLayer();
-    if (!top) return;
+    if (!top || top.acceptsEscape?.(event.target as EventTarget | null) === false) return;
     // The focused picker in this layer gets the first Escape to dismiss its own results.
     const picker = (event.target as Element | null)?.closest?.('.im-search-picker');
     if (picker && top.el.contains(picker) && picker.querySelector('input[role="combobox"][aria-expanded="true"]')) return;
@@ -269,6 +272,7 @@ export function attachLayers(shell: HTMLElement): () => void {
     // The window frame is not "outside" a sheet: pressing the title bar to move the window keeps it.
     const pressed = target instanceof Element ? target : target.parentElement;
     if (!onOpener && entry.layer.kind === 'sheet' && pressed?.closest('.im-titlebar')) return;
+    if (entry.layer.lightDismiss?.() === false) return;
     entry.layer.close();
     if (onOpener) swallow = entry.opener;
   };

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 
-// Exercise delayed providers independently of the example data. These modules have no runtime imports.
+// Serve the provider modules and their relative imports through the same fixture route.
 async function providerTests(page) {
-  await page.route('**/test-controls/*.js', async route => {
-    const file = new URL(route.request().url()).pathname.split('/').pop().replace('.js', '.ts');
+  await page.route(/\/test-controls\/[a-z-]+\.(?:js|ts)$/, async route => {
+    const file = new URL(route.request().url()).pathname.split('/').pop().replace(/\.js$/, '.ts');
     const source = await readFile(new URL('../../ts/ui/' + file, import.meta.url), 'utf8');
     await route.fulfill({ contentType: 'text/javascript', body: stripTypeScriptTypes(source) });
   });
