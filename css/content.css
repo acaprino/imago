@@ -30,7 +30,6 @@
 .im-block { display: block; }
 .im-shell-skip-link { position: absolute; top: -100px; left: 8px; }
 .im-shell-skip-link:focus { top: 8px; z-index: 50; padding: 8px 12px; background: var(--im-sheet); border: 1px solid var(--im-line); border-radius: var(--im-r-control); }
-.im-brand-image { height: 28px; max-width: 84px; object-fit: contain; flex: none; }
 /* A page in the content region's panel body, which scrolls: the padding of the region round a column of 1180 (860
    narrow). The measure is the column's own: the padding is outside it. */
 .im-page-content { box-sizing: content-box; max-width: 1180px; margin: 0 auto; padding: var(--im-s-5); }

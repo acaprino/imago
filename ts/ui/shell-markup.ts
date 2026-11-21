@@ -33,7 +33,8 @@ export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Mini
 }
 
 export interface TitlebarOptions {
-  brand: { name: string; image?: string };
+  /** The product's name: the title bar shows its initial in capitals in the accent's square (`im-mark`), then the name. */
+  brand: { name: string };
   /** The button that opens the sidebar as a drawer under 620 (`sidebarDrawer`): its name and the id of the sidebar. */
   sidebarToggle?: { label: string; controls: string };
   navigationHtml?: string;
@@ -42,9 +43,21 @@ export interface TitlebarOptions {
   commands?: { label: string; action: string; shortcut?: string };
   windowControls?: boolean | WindowButtonLabels;
 }
+/**
+ * The initial the mark at the top left shows for a product's name: its first letter, in capitals, or '' when the name
+ * has no letter (an emoji is not one). `titlebarHtml` writes it in `im-mark`.
+ */
+export function brandInitial(name: string): string {
+  const letter = Array.from(name.trim().normalize('NFC')).find(character => /\p{L}/u.test(character));
+  // toUpperCase, not toLocaleUpperCase: the letter must not change with the machine (a Turkish default makes i a İ).
+  return letter ? Array.from(letter.toUpperCase())[0] : '';
+}
+
 export function titlebarHtml(options: TitlebarOptions): string {
   const { brand, sidebarToggle, views, commands } = options;
-  const brandHtml = brand.image ? `<img class="im-brand-image" src="${escapeHtml(brand.image)}" alt="${escapeHtml(brand.name)}" data-tauri-drag-region>` : `<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
+  const initial = brandInitial(brand.name);
+  const markHtml = initial ? `<span class="im-mark" aria-hidden="true" data-tauri-drag-region>${escapeHtml(initial)}</span>` : '';
+  const brandHtml = `${markHtml}<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
   const toggleHtml = sidebarToggle ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${escapeHtml(sidebarToggle.label)}" title="${escapeHtml(sidebarToggle.label)}" aria-expanded="false" aria-controls="${escapeHtml(sidebarToggle.controls)}">${iconHtml('sidebar')}</button>` : '';
   return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${toggleHtml}${options.navigationHtml ?? ''}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
 }

@@ -183,6 +183,41 @@ const measureAll = (page) =>
     { target: TARGET, text: TEXT },
   );
 
+// The letter of the mark at the top left of the live shell, on the accent of its square: its colour and the fill's, as the
+// eye sees them, and the contrast between them.
+const markContrast = (page) =>
+  page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const flatten = (colours) => {
+      g.clearRect(0, 0, 1, 1);
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 1, 1);
+      for (const c of colours) {
+        g.fillStyle = c;
+        g.fillRect(0, 0, 1, 1);
+      }
+      const d = g.getImageData(0, 0, 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    const channel = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = ([r, g2, b]) => 0.2126 * channel(r) + 0.7152 * channel(g2) + 0.0722 * channel(b);
+    const mark = document.querySelector('#g-window .im-titlebar .im-mark');
+    const layers = [];
+    for (let node = mark; node; node = node.parentElement) {
+      const paint = getComputedStyle(node).backgroundColor;
+      if (paint !== 'rgba(0, 0, 0, 0)' && paint !== 'transparent') layers.unshift(paint);
+    }
+    const fill = flatten(layers);
+    const ink = flatten([...layers, getComputedStyle(mark).color]);
+    const [hi, lo] = [luminance(ink), luminance(fill)].sort((a, b) => b - a);
+    return { text: mark.textContent, ink: ink.join(','), fill: fill.join(','), accent: flatten([getComputedStyle(mark).getPropertyValue('--im-accent').trim()]).join(','), ratio: (hi + 0.05) / (lo + 0.05) };
+  });
+
 const index = (rows) => {
   const map = new Map(rows.map((row) => [`${row.control}|${row.state}`, row]));
   return (control, state) => map.get(`${control}|${state}`);
@@ -340,6 +375,14 @@ export default async (page) => {
       for (const app of APPS.filter((name) => name !== 'xiox')) {
         await show(page, { app, look, theme, glass: false, width: 1160 });
         checkReadable(await measureAll(page), (message) => where(`${app}: ${message}`));
+      }
+      // The letter of the mark at the top left is the initial on the app's accent, at 4.5:1 or more, in every app.
+      for (const app of APPS) {
+        await show(page, { app, look, theme, glass: false, width: 1160 });
+        const mark = await markContrast(page);
+        assert.match(mark.text, /^\p{Lu}$/u, where(`${app}: the mark holds one capital letter, not "${mark.text}"`));
+        assert.equal(mark.fill, mark.accent, where(`${app}: the square is the accent`));
+        assert.ok(mark.ratio >= 4.5, where(`${app}: the letter of the mark is ${mark.ratio.toFixed(2)}:1 (${mark.ink} on ${mark.fill})`));
       }
       await show(page, { app: 'xiox', look, theme, glass: false, width: 1160 });
 

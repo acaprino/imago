@@ -16,6 +16,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brandMark } from './brand.mjs';
 import { packageNames } from './names.mjs';
 import * as rules from './rules.mjs';
 import { importsOf, parseSource, SCRIPT_EXTENSIONS, SOURCE_EXTENSIONS } from './source.mjs';
@@ -257,6 +258,7 @@ function checkApp(root, findings, exceptions, notes) {
         findings.push(...rule(source));
       }
       findings.push(...rules.unknownName(source, defined));
+      findings.push(...brandMark(source));
       exceptions.push(...rules.exceptionsIn(source));
     }
   }

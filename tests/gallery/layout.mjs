@@ -25,6 +25,70 @@ const visible = (page, selector) => page.evaluate((s) => {
 const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) <= 0.5, `${label}: expected ${expected}, got ${actual}`);
 const token = (page, name) => page.evaluate((n) => parseFloat(getComputedStyle(document.querySelector('.im-shell')).getPropertyValue(n)), name);
 
+// The mark at the top left: where the square, the name and the letter are. The boxes come from the layout: the square,
+// the name's box and the title bar, and the letter's own box, read with a Range over its text node (the box the font
+// gives the letter: its ascent and descent). The letter's ink and the ink of the name's first capital are read from the
+// pixels of a screenshot of the title bar at `scale` device pixels per CSS pixel: the ink is what the eye levels, and
+// no DOM box gives it.
+const markGeometry = (page) => page.evaluate(() => {
+  const bar = document.querySelector('#g-window .im-titlebar');
+  const mark = bar.querySelector('.im-mark');
+  const word = bar.querySelector('.im-wordmark');
+  const rect = (r) => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height });
+  const letter = document.createRange();
+  letter.selectNodeContents(mark.firstChild);
+  const first = document.createRange();
+  first.setStart(word.firstChild, 0);
+  first.setEnd(word.firstChild, 1);
+  return {
+    bar: rect(bar.getBoundingClientRect()), mark: rect(mark.getBoundingClientRect()), word: rect(word.getBoundingClientRect()),
+    letter: rect(letter.getBoundingClientRect()), first: rect(first.getBoundingClientRect()),
+    text: mark.textContent, children: mark.children.length,
+  };
+});
+const centre = (r) => ({ x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 });
+
+/** The ink boxes of the letter in the square and of the name's first capital, in CSS px of the page. */
+async function markInk(page, geometry, scale) {
+  const { bar, mark, first } = geometry;
+  const shot = await page.screenshot({ clip: { x: bar.left, y: bar.top, width: bar.width, height: bar.height } });
+  return page.evaluate(async ({ png, bar, mark, first, scale }) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${png}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    g.drawImage(image, 0, 0);
+    const data = g.getImageData(0, 0, canvas.width, canvas.height).data;
+    const pixel = (x, y) => { const at = (y * canvas.width + x) * 4; return [data[at], data[at + 1], data[at + 2]]; };
+    const apart = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+    // The pixels of a region (CSS px from the title bar's corner) that are far from the colour under them.
+    const ink = (left, top, width, height, under) => {
+      const box = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+      for (let y = Math.round(top * scale); y < Math.round((top + height) * scale); y++) {
+        for (let x = Math.round(left * scale); x < Math.round((left + width) * scale); x++) {
+          if (apart(pixel(x, y), under) <= 160) continue;
+          box.left = Math.min(box.left, x / scale);
+          box.top = Math.min(box.top, y / scale);
+          box.right = Math.max(box.right, (x + 1) / scale);
+          box.bottom = Math.max(box.bottom, (y + 1) / scale);
+        }
+      }
+      return { left: box.left + bar.left, right: box.right + bar.left, top: box.top + bar.top, bottom: box.bottom + bar.top };
+    };
+    const m = { left: mark.left - bar.left, top: mark.top - bar.top };
+    // The accent is read inside the square, at the middle of its right edge. The letter is looked for 3px in from each
+    // side: clear of Smooth's rounded corners and of ONI's cut ones (6px), which show the bar through them.
+    const accent = pixel(Math.round((m.left + mark.width - 2) * scale), Math.round((m.top + mark.height / 2) * scale));
+    const letter = ink(m.left + 3, m.top + 3, mark.width - 6, mark.height - 6, accent);
+    const ground = pixel(Math.round((first.left - bar.left - 1) * scale), Math.round(2 * scale));
+    const capital = ink(first.left - bar.left, 0, first.width, bar.height, ground);
+    return { letter, capital };
+  }, { png: shot.toString('base64'), bar, mark, first, scale });
+}
+
 // The frames 0.1.2 to 0.1.4 added beside im-shell, and their parts (docs/superpowers/moving-from-0.1.4.md): none is drawn.
 const REMOVED = [
   'im-app-layout', 'im-main', 'im-desktop-frame', 'im-desktop-content', 'im-page', 'im-skip-link', 'im-page-frame', 'im-page-view',
@@ -668,6 +732,18 @@ export default async (page, url) => {
           assert.ok((await box(page, '.im-titlebar .im-wordmark')).right <= (await box(page, '.im-titlebar')).right, where(`${app} name is inside the title bar at ${width}`));
           if (width === 1160) assert.deepEqual(await stale(page), [], where(`${app}: no element of the gallery carries a removed class`));
         }
+        // The mark is the initial of the name in capitals, a letter and no drawing; the square is centred on the title bar
+        // and on the name's box, and the letter's own box is centred in the square.
+        await at(1160, app);
+        const g = await markGeometry(page);
+        const says = (text) => where(`${app}: ${text}`);
+        assert.deepEqual([g.text, g.children], [NAMES[app][0].toUpperCase(), 0], says('the mark holds the initial, and no element'));
+        near(g.mark.width, 22, says('the square is 22 wide'));
+        near(g.mark.height, 22, says('and 22 high'));
+        const within = (a, b, label) => assert.ok(Math.abs(a - b) <= 1, says(`${label}: ${a.toFixed(2)} and ${b.toFixed(2)} are more than a pixel apart`));
+        within(centre(g.mark).y, centre(g.bar).y, 'the square is centred on the title bar');
+        within(centre(g.mark).y, centre(g.word).y, "the square is level with the name's box");
+        within(centre(g.letter).x, centre(g.mark).x, "the letter's box is centred across the square");
       }
 
       // The title bar and the footer take the measures of the look.
@@ -742,10 +818,78 @@ export default async (page, url) => {
             assert.ok(box.width >= 24, `${label}: the ${name} is only ${box.width}px wide`);
           }
           assert.equal(fits.toggle !== null, app !== 'muro', `${label}: the sidebar button is there exactly when the app has a sidebar`);
+          // Under 340 the brand goes, the mark with the name; from 340 the mark is there.
+          if (width < 340) assert.equal(await visible(zoomed, '.im-titlebar .im-brand'), false, `${label}: the brand is gone`);
+          assert.equal(await visible(zoomed, '.im-titlebar .im-mark'), width >= 340, `${label}: the mark is ${width >= 340 ? 'shown' : 'gone'}`);
         }
       }
     }
   } finally {
     await context.close();
+  }
+
+  // The mark seen as the eye sees it, at four device pixels per CSS pixel: the letter's ink is centred in the square, and
+  // the square is level with the ink of the name's capitals, within a pixel, in both looks, both themes and the five apps.
+  const SCALE = 4;
+  const fine = await page.context().browser().newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: SCALE });
+  try {
+    const sharp = await fine.newPage();
+    await sharp.goto(url);
+    await sharp.waitForFunction(() => Boolean(window.__imago?.ready));
+    await sharp.evaluate(() => document.fonts.ready);
+    for (const look of LOOKS) {
+      for (const theme of THEMES) {
+        for (const app of APPS) {
+          await show(sharp, { app, look, theme, glass: false, width: 1160 });
+          const g = await markGeometry(sharp);
+          const { letter, capital } = await markInk(sharp, g, SCALE);
+          const label = (text) => `${look} ${theme} ${app}: ${text}`;          const within = (a, b, text) => assert.ok(Math.abs(a - b) <= 1, label(`${text}: ${a.toFixed(2)} and ${b.toFixed(2)} are more than a pixel apart`));
+          assert.ok(letter.bottom - letter.top >= 6 && capital.bottom - capital.top >= 6, label(`the letter and the capital are drawn (${JSON.stringify({ letter, capital })})`));
+          within(centre(letter).y, centre(g.mark).y, "the letter's ink is centred down the square");
+          within(centre(letter).x, centre(g.mark).x, "the letter's ink is centred across the square");
+          within(centre(capital).y, centre(g.mark).y, "the square is level with the name's capitals");
+        }
+      }
+    }
+
+    // An engine without text-box (WebView2 before 133) skips the @supports block that draws the mark and the name by
+    // their capitals. Taken out of the page, the base rules still centre the letter in the square, within a pixel and a
+    // half, in both looks.
+    const removed = await sharp.evaluate(() => {
+      let count = 0;
+      const walk = (list, owner) => {
+        for (let k = list.length - 1; k >= 0; k--) {
+          const rule = list[k];
+          if (rule instanceof CSSSupportsRule && rule.conditionText.includes('text-box')) {
+            owner.deleteRule(k);
+            count++;
+          } else if (rule.cssRules) walk(rule.cssRules, rule);
+        }
+      };
+      for (const sheet of document.styleSheets) walk(sheet.cssRules, sheet);
+      return count;
+    });
+    assert.ok(removed >= 1, `the mark and the name are drawn by their capitals inside @supports (text-box: …): ${removed} such block found`);
+    for (const look of LOOKS) {
+      for (const theme of THEMES) {
+        for (const app of APPS) {
+          await show(sharp, { app, look, theme, glass: false, width: 1160 });
+          const base = await sharp.evaluate(() => {
+            const style = (selector) => getComputedStyle(document.querySelector(`#g-window .im-titlebar ${selector}`));
+            return { mark: style('.im-mark').textBoxTrim, word: style('.im-wordmark').textBoxTrim, display: style('.im-mark').display, padding: style('.im-wordmark').paddingTop };
+          });
+          const label = (text) => `without text-box, ${look} ${theme} ${app}: ${text}`;
+          assert.deepEqual(base, { mark: 'none', word: 'none', display: 'grid', padding: '0px' }, label('the base rules draw the mark and the name'));
+          const g = await markGeometry(sharp);
+          const { letter } = await markInk(sharp, g, SCALE);
+          for (const axis of ['y', 'x']) {
+            const off = centre(letter)[axis] - centre(g.mark)[axis];            assert.ok(Math.abs(off) <= 1.5, label(`the letter's ink is ${off.toFixed(2)}px off the square's centre (${axis})`));
+          }
+          assert.ok(Math.abs(centre(g.mark).y - centre(g.bar).y) <= 1, label('the square is centred on the title bar'));
+        }
+      }
+    }
+  } finally {
+    await fine.close();
   }
 };

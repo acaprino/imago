@@ -179,7 +179,7 @@ One window layout for every app, with seven regions. An app fills in the regions
 
 | Region | Class | What it is |
 |---|---|---|
-| Title bar | `im-titlebar` | The mark and name of the app (`im-brand`), the view tabs, the command button (`Ctrl+K`), the three window buttons. It always names the product, in ONI too |
+| Title bar | `im-titlebar` | The mark and name of the app (`im-brand`): the mark (`im-mark`) is the initial of the product's name in capitals, in the square of the app's accent, never a drawing or a logo, and the name (`im-wordmark`) is beside it. Then the view tabs, the command button (`Ctrl+K`), the three window buttons. It always names the product, in ONI too |
 | Status row | `im-status` | The last result as a chip, a summary, and info at the right |
 | Sidebar | `im-sidebar` | The list of the app's objects: threads, rooms, categories, projects. An app without one (Muro) sets `data-im-sidebar="off"` on the shell |
 | Content | `im-content` | What the app is for. The content of this region is the app's own |
