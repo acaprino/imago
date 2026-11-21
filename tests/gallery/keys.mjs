@@ -230,9 +230,9 @@ async function scratch(page) {
       </div>
       <div id="wrap"><div id="inertlist"><button class="yy" id="y1" type="button">y1</button><button class="yy" id="y2" type="button">y2</button></div></div>
       <div id="stoplist">
-        <button class="im-operation-status" id="x1" type="button">x1</button>
-        <button class="im-operation-status" id="x2" type="button">x2</button>
-        <button class="im-operation-status" id="x3" type="button">x3</button>
+        <button class="st" id="x1" type="button">x1</button>
+        <button class="st" id="x2" type="button">x2</button>
+        <button class="st" id="x3" type="button">x3</button>
       </div>`;
     document.body.append(host);
     window.__scratch = {
@@ -241,7 +241,7 @@ async function scratch(page) {
       mini: window.__imagoKeys.regions(document.getElementById('mini')),
       mini2: window.__imagoKeys.regions(document.getElementById('mini2')),
       inertlist: window.__imagoKeys.roving(document.getElementById('inertlist'), { item: '.yy', orientation: 'vertical' }),
-      stoplist: window.__imagoKeys.roving(document.getElementById('stoplist'), { item: '.im-operation-status', orientation: 'vertical' }),
+      stoplist: window.__imagoKeys.roving(document.getElementById('stoplist'), { item: '.st', orientation: 'vertical' }),
     };
   });
   const activeId = () => page.evaluate(() => document.activeElement?.id ?? '');
@@ -324,9 +324,9 @@ async function scratch(page) {
   assert.equal(await activeId(), 'm1');
 
   // The tab stop leaves an item that becomes disabled or hidden, and comes back when one can take it.
-  const stops = () => page.evaluate(() => [...document.querySelectorAll('#stoplist .im-operation-status')].map((el) => el.getAttribute('tabindex')));
+  const stops = () => page.evaluate(() => [...document.querySelectorAll('#stoplist .st')].map((el) => el.getAttribute('tabindex')));
   const waitStops = (expected) =>
-    page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('#stoplist .im-operation-status, #stoplist .st-late')].map((el) => el.getAttribute('tabindex'))) === JSON.stringify(want), expected);
+    page.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('#stoplist .st, #stoplist .st-late')].map((el) => el.getAttribute('tabindex'))) === JSON.stringify(want), expected);
   assert.deepEqual(await stops(), ['0', '-1', '-1']);
   // While the whole list is hidden (a breakpoint) a change inside it does not take the stop away.
   await page.evaluate(() => {
@@ -345,7 +345,7 @@ async function scratch(page) {
   await waitStops(['0', '-1', '-1']);
   await page.evaluate(() => (document.getElementById('x1').disabled = true));
   await waitStops(['-1', '0', '-1']);
-  assert.equal(await tabbable(page, '#stoplist .im-operation-status'), 1, 'a disabled stop leaves exactly one item reachable with Tab');
+  assert.equal(await tabbable(page, '#stoplist .st'), 1, 'a disabled stop leaves exactly one item reachable with Tab');
   await page.evaluate(() => (document.getElementById('x2').hidden = true));
   await waitStops(['-1', '-1', '0']);
   await page.evaluate(() => document.getElementById('x3').setAttribute('aria-disabled', 'true'));

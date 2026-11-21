@@ -8,9 +8,11 @@ html:has(.im-app-layout), body:has(.im-app-layout) { height: 100%; margin: 0; }
 :where(.im-app-layout) :where(h1,h2,h3,p,ul,ol,dl,dd,fieldset) { margin: 0; padding: 0; }
 :where(.im-app-layout) fieldset { border: 0; min-width: 0; }
 :where(.im-app-layout) :where(ul,ol) { list-style: none; }
-:where(.im-app-layout) h1 { font-size: 22px; font-weight: 600; letter-spacing: -.2px; }
-:where(.im-app-layout) h2 { font-size: 15px; font-weight: 600; }
-:where(.im-app-layout) h3 { font-size: 13px; font-weight: 600; }
+/* One class beats host-page element rules. Equal-specificity component classes
+   load later, while inspection headings retain their more specific selectors. */
+.im-app-layout :where(h1) { font-size: 22px; font-weight: 600; letter-spacing: -.2px; }
+.im-app-layout :where(h2) { font-size: 15px; font-weight: 600; }
+.im-app-layout :where(h3) { font-size: 13px; font-weight: 600; }
 :where(.im-app-layout) small { font-size: 12px; color: var(--im-muted); }
 :where(.im-app-layout) code, .im-mono { font: 12px/1.5 var(--im-font-code); }
 .im-muted { color: var(--im-muted); }

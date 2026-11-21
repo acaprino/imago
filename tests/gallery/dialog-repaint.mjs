@@ -5,6 +5,9 @@ export default async function (page) {
     const shell = document.createElement('section');
     shell.id = 'dialog-repaint-fixture';
     shell.className = 'im-shell im-app-layout';
+    // This fixture sits outside the gallery's themed window. Establish the token
+    // scope a real app supplies; otherwise var(--im-font-head) is undefined.
+    Object.assign(shell.dataset, { imApp: 'muro', imLook: 'smooth', imTheme: 'light' });
     shell.innerHTML = '<header class="im-titlebar"><button id="repaint-titlebar">Window action</button></header><main class="im-body"><button id="repaint-opener">Delete item</button><ul class="im-file-list"><li>A file</li></ul><div class="im-settings"><h2>Settings</h2></div><div class="im-banner"><ul><li>A warning</li></ul></div></main>';
     document.body.append(shell);
     window.__repaint = {
@@ -21,6 +24,7 @@ export default async function (page) {
   });
   try {
     const fixture = page.locator('#dialog-repaint-fixture');
+    assert.ok(await fixture.evaluate(el => getComputedStyle(el).getPropertyValue('--im-font-head').trim()), 'the standalone fixture provides Imago font tokens');
     assert.equal(await fixture.locator('.im-file-list').evaluate(el => getComputedStyle(el).paddingTop), '12px', 'document resets leave file-list component padding');
     assert.equal(await fixture.locator('.im-settings h2').evaluate(el => getComputedStyle(el).paddingTop), '14px', 'document resets leave settings heading padding');
     assert.equal(await fixture.locator('.im-banner ul').evaluate(el => getComputedStyle(el).listStyleType), 'disc', 'document resets leave banner bullets');
