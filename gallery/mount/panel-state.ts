@@ -134,10 +134,16 @@ export default function mount({ root, sections }: MountContext): () => void {
     error: panelFromString('string-error', 'Sessions', { kind: 'error', text: ERROR_TEXT, retryHtml: RETRY }),
   };
   container.append(panels.empty, panels.loading, panels.error, fromStrings.empty, fromStrings.loading, fromStrings.error);
+  const section = document.createElement('section');
+  section.className = 'g-block';
+  section.setAttribute('aria-labelledby', 'g-h-panel-states');
+  section.innerHTML = '<h2 id="g-h-panel-states">Panel states</h2><p>A panel empty, loading and in error, set by setPanelState; under them the same three written from panelStateHtml.</p>';
+  container.replaceWith(section);
+  section.append(container);
   window.__imagoPanelState = { setPanelState, panelStateHtml, panels, fromStrings };
 
   return () => {
     delete window.__imagoPanelState;
-    container.remove();
+    section.remove();
   };
 }

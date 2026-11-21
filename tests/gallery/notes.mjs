@@ -112,7 +112,42 @@ const measure = (page) =>
     return { twin, notes, compact: text(compact), matrix: text(matrix), compactWorst: worstText(compact) };
   }, { parts: PARTS, style: STYLE });
 
+/**
+ * Pending: the icon of a block note. The approved note (the compact one) has its icon beside its text; a block note with an
+ * icon puts it on a row of its own above its title, and no rule says where it goes. Decided by the approved note: the icon
+ * sits beside the title, at the compact note's gap, and the title, the paragraph, the list and the actions are one column
+ * to its right. Enable this check once css/ has the rule (see the report of task 10).
+ */
+async function blockNoteIcon(page) {
+  console.log('      pending: block note icon');
+  return;
+  for (const look of LOOKS) {
+    await show(page, { app: 'xiox', look, theme: 'dark', glass: false, width: 1160 });
+    const seen = await page.evaluate(() => {
+      const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+      const root = document.getElementById('im-gallery-notes');
+      const compact = root.querySelector('[data-g-note="compact"] .im-note');
+      const gap = box(compact.querySelector(':scope > div')).left - box(compact.querySelector(':scope > .im-icon')).right;
+      return {
+        gap,
+        notes: [...root.querySelectorAll('[data-g-note="block"] .im-note--block')].map((note) => ({
+          icon: box(note.querySelector(':scope > .im-icon')),
+          title: box(note.querySelector(':scope > b')),
+          rest: [...note.querySelectorAll(':scope > p, :scope > ul, :scope > .im-action-row')].map(box),
+        })),
+      };
+    });
+    for (const [n, { icon, title, rest }] of seen.notes.entries()) {
+      const said = (message) => `${look}: block note ${n + 1}: ${message}`;
+      assert.ok(icon.right <= title.left + 0.5 && icon.top < title.bottom && icon.bottom > title.top, said(`the icon is beside the title, not above it (${JSON.stringify({ icon, title })})`));
+      assert.ok(Math.abs(title.left - icon.right - seen.gap) <= 0.5, said(`the gap from the icon to the title is the compact note's ${seen.gap}px`));
+      for (const part of rest) assert.ok(Math.abs(part.left - title.left) <= 0.5, said('the paragraph, the list and the actions line up with the title'));
+    }
+  }
+}
+
 export default async function (page) {
+  await blockNoteIcon(page);
   for (const look of LOOKS) {
     for (const theme of THEMES) {
       for (const app of APPS) {

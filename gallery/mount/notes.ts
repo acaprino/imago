@@ -13,9 +13,17 @@ const ACTIONS = buttonHtml('Apply 3 changes', 'g-note-apply', { primary: true })
   + chipHtml('3 changes', 'warn')
   + '<kbd class="im-key">Ctrl ↵</kbd>';
 
+// One part of the fixture: a section with its heading, which names it.
+const part = (name: string, title: string, attributes: string, html: string): string =>
+  `<section aria-labelledby="g-h-note-${name}" ${attributes}><h3 id="g-h-note-${name}" class="g-part-title">${title}</h3>${html}</section>`;
+
 // A note for each tone with a title, a line, a list and the actions; the approved compact note; and the actions alone.
 export default function mount({ root, sections }: MountContext): () => void {
   const parent = sections ?? root.parentElement ?? document.body;
+  const section = document.createElement('section');
+  section.className = 'g-block';
+  section.setAttribute('aria-labelledby', 'g-h-notes');
+  section.innerHTML = '<h2 id="g-h-notes">Notes</h2><p>A block note in each status tone, with a list and actions drawn as they are outside a note; the compact note; and the same actions outside any note.</p>';
   const container = document.createElement('div');
   container.id = CONTAINER_ID;
   // The tokens hang on these attributes, so the notes need the same ones as the shell above.
@@ -32,16 +40,17 @@ export default function mount({ root, sections }: MountContext): () => void {
     'border: 1px solid var(--im-line)',
     'border-radius: var(--im-r-sheet)',
   ].join('; ');
-  container.innerHTML = TONES.map((tone) => `<div data-g-note="block" data-g-tone="${tone}">${noteHtml({
+  container.innerHTML = TONES.map((tone) => part(`block-${tone}`, `Block note, ${tone}`, `data-g-note="block" data-g-tone="${tone}"`, noteHtml({
     icon: 'warning',
     title: '3 changes ready to apply',
     message: 'Nothing changes until you apply.',
     items: [{ label: 'Marionette', message: 'update 0.3.0 to 0.4.0' }],
     actionsHtml: ACTIONS,
     tone,
-  })}</div>`).join('')
-    + `<div data-g-note="compact">${noteHtml({ icon: 'warning', title: '3 changes ready to apply', message: 'Nothing changes until you apply.', tone: 'warn' })}</div>`
-    + `<div data-g-note="outside"><div class="im-action-row">${ACTIONS}</div></div>`;
-  parent.append(container);
-  return () => container.remove();
+  }))).join('')
+    + part('compact', 'Compact note', 'data-g-note="compact"', noteHtml({ icon: 'warning', title: '3 changes ready to apply', message: 'Nothing changes until you apply.', tone: 'warn' }))
+    + part('outside', 'The same actions outside a note', 'data-g-note="outside"', `<div class="im-action-row">${ACTIONS}</div>`);
+  section.append(container);
+  parent.append(section);
+  return () => section.remove();
 }

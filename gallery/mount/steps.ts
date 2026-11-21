@@ -78,6 +78,11 @@ export default function mount({ root, sections }: MountContext): () => void {
     'border-radius: var(--im-r-sheet)',
   ].join('; ');
   container.append(...STATES.map(list), live(), process());
-  parent.append(container);
-  return () => container.remove();
+  const section = document.createElement('section');
+  section.className = 'g-block';
+  section.setAttribute('aria-labelledby', 'g-h-steps');
+  section.innerHTML = '<h2 id="g-h-steps">Steps</h2><p>A step that can be opened, in each of its states; a list the arrow keys drive; and the process steps of stepList, two of which open.</p>';
+  section.append(container);
+  parent.append(section);
+  return () => section.remove();
 }

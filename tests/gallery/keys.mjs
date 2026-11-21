@@ -12,9 +12,9 @@ const APPS = [
   { id: 'muro', ...EN },
   { id: 'daodan', commands: 'Comandi', search: 'Cerca in questa vista', placeholder: 'Digita un comando', oni: 'Aspetto ONI', smooth: 'Aspetto Smooth', light: 'Tema chiaro' },
 ];
-const SIDEBAR_ROWS = '.im-sidebar [role="listbox"] .im-row';
-const TABS = '.im-titlebar .im-tabs .im-tab';
-const TABLE_ROWS = '.im-content tbody tr';
+const SIDEBAR_ROWS = '#g-window .im-sidebar [role="listbox"] .im-row';
+const TABS = '#g-window .im-titlebar .im-tabs .im-tab';
+const TABLE_ROWS = '#g-window .im-content tbody tr';
 
 const press = (page, ...keys) => keys.reduce((done, key) => done.then(() => page.keyboard.press(key)), Promise.resolve());
 
@@ -133,12 +133,12 @@ async function liveShell(page) {
     await page.evaluate((value) => window.__imago.set({ app: 'xiox', look: value, theme: 'dark' }), look);
     await width(page, 1160);
     // The selected row, tab and table row are where the tab stop starts.
-    const starts = await page.evaluate(() =>
-      ['.im-sidebar [role="listbox"] .im-row', '.im-titlebar .im-tabs .im-tab', '.im-content tbody tr'].map((s) => {
+    const starts = await page.evaluate((selectors) =>
+      selectors.map((s) => {
         const items = [...document.querySelectorAll(s)];
         return [items.findIndex((el) => el.getAttribute('aria-selected') === 'true'), items.findIndex((el) => el.getAttribute('tabindex') === '0')];
       }),
-    );
+    [SIDEBAR_ROWS, TABS, TABLE_ROWS]);
     for (const [selected, stop] of starts) assert.equal(stop, selected, `${look}: the tab stop starts on the selected item`);
 
     await lists(page, { table: true });

@@ -30,6 +30,11 @@ h1 { margin: 0; font: 600 28px/1.15 var(--g-font-display); }
 
 .g-page { max-width: 1240px; margin: 0 auto; padding: 8px 16px 96px; }
 .g-block { display: grid; gap: 16px; padding-top: 32px; }
+/* the sections under the window: each its heading and a line that says what it shows */
+.g-block > h2 { margin: 0; font: 600 22px/1.2 var(--g-font-display); }
+.g-block > p { margin: 0; max-width: 72ch; color: var(--g-ink-2); }
+/* the heading of a part of a section, drawn on the package's ground or sheet: its muted colour, in small capitals */
+h3.g-part-title { margin: 0 0 var(--im-s-2); font: 600 var(--im-fs-micro)/1.2 var(--im-font-text); letter-spacing: .06em; text-transform: uppercase; color: var(--im-muted); }
 .g-width { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .g-width label { font: 600 14px/1 var(--g-font-text); color: var(--g-ink-2); }
 .g-width input[type="range"] { flex: 1 1 240px; accent-color: var(--g-ink); }
