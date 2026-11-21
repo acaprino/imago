@@ -30,7 +30,9 @@ In the package:
   `im-sectioned-drawer`, `im-padded-drawer`).
 - Rules of the design file that the package's own CSS breaks: disabled by opacity, selection by colour alone
   (`aria-pressed`, `aria-current`), a hand cursor, breakpoints on the viewport (`@media (max-width…)`), sizes of text
-  outside the scale (22, 15, 1.65rem), literal spacing, a literal colour, the tones `accent` and `danger`.
+  outside the scale (22, 15, 1.65rem), literal spacing, a literal colour, the tones `danger`, `good` and `bad`.
+  (Corrected on 2026-11-21: the first text of this audit also named `accent`. That was wrong: the approved preview
+  has an accent chip, and the CSS of v0.1.1 already drew `data-im-tone="accent"`. It stays.)
 - `ts/shell/shinatama-palette.ts` in the package, although the design file says the skins stay in Shinatama.
 - A React entry, although the design says no framework.
 - Documents the design file does not name, whose names no test checks, and patterns the gallery does not show.
@@ -157,7 +159,7 @@ pixels) on a dark and on a light taskbar, was advised the first, and answered "o
 | Steps | `im-steps`; an item that can be opened is a button inside it | `im-step-nav` as a separate drawing |
 | Selected | Fill, weight and the accent mark, the same whatever attribute says it: `aria-selected`, `aria-current`, `aria-pressed`, `:checked` | The colour-only rules |
 | Dialog | `confirm` for a decision, `openFormDialog` for a form, `openContentDialog` for an app-owned `dialog` element; one drawing (`im-dialog`), centred | The drawer variants |
-| Tone | `ok`, `warn`, `err`, `info` | `accent` (becomes `info`), `danger` (becomes `err`), `good`, `bad` |
+| Tone | The status tones `ok`, `warn`, `err`, `info`, on a chip, a dot, a note or a notice. `accent` on a chip, a dot or a summary only: it is not a status, it marks data in the app's colour, as the approved preview and the first gallery do ("lead", "Demo") | `danger` (becomes `err`), `good`, `bad`; `accent` on a note or a notice |
 | Zoom | 50 to 200% in steps of 10 | The `levels` option |
 
 A drawing that the native element and the ARIA element share is done once in `css/controls.css`; the gallery shows

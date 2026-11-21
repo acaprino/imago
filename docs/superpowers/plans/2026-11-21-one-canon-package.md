@@ -19,7 +19,7 @@
 - Colours, accents, measures, fonts and the two looks of the approved design do not change.
 - Every class of the package starts with `im-`; every custom property with `--im-`; every attribute with `data-im-`.
 - Breakpoints only as `@container im-shell` at 1000, 850 and 620.
-- Tones are `ok`, `warn`, `err`, `info`, and no other.
+- Status tones are `ok`, `warn`, `err`, `info`. `accent` is allowed on a chip, a dot and a summary only (data in the app's colour, as the approved preview draws it); no other value. (Corrected on 2026-11-21: the first text removed `accent`.)
 - A removed name is removed, not kept as an alias. Every removal is a row of the table "Moving from 0.1.4" in `docs/using-imago.md` (old name, new name or what to do).
 - English, in the plain voice of the existing documents. Commit messages say what the user of the package gets.
 
@@ -147,7 +147,7 @@
   ```
 - `emptyStateHtml(title, description, actionHtml)` writes the `im-empty` of `setPanelState` (a title in `strong` is allowed there and in `setPanelState`'s `empty` through a new optional `title`).
 - `stepNavigationHtml` writes `ol.im-steps` whose items hold a `button`; `stepList` and `stepProgress` write the same list; `im-steps` draws an item with a button with the common hover, press, focus (2px inside) and selected.
-- `ChipTone` is `'' | Tone`. `statusButtonHtml`, `summaryHtml`, `chipHtml`, `actionChipHtml`, `statusTextHtml`, `settingsMessageHtml` take `Tone`.
+- `ChipTone` is `'' | Tone | 'accent'`. `chipHtml`, `actionChipHtml`, `statusButtonHtml` and `summaryHtml` take `ChipTone`; `noteHtml`, `statusTextHtml`, `settingsMessageHtml` and a notice take `Tone`. (Corrected on 2026-11-21.)
 - Removed: `bannerHtml`, `im-banner`, `im-callout`, `busyIndicatorHtml`, `im-busy`, `loadingStateHtml`, `im-zero-state`, `im-empty-message`, the `im-empty` of `css/forms.css`, `im-step-nav`, the tones `accent`, `danger`, `good`, `bad`, and the classes `im-text-accent`, `im-accent`, `im-kicker`'s accent colour, `im-warning`, `im-error` (use `im-text-warn`, `im-text-err`).
 
 - [ ] **Step 1:** Tests: `panelStateHtml` for each kind equals `setPanelState`'s layer (`outerHTML` in the DOM stub, without the handlers); `noteHtml` roles and classes; a tone outside the four is a type error and, at run time, is written as no tone; steps markup; the gallery's panel-state test runs on a panel filled by `panelStateHtml` too.
