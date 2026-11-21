@@ -136,6 +136,23 @@ async function openSurfaces(page) {
     await settle();
     content.close();
 
+    // A drawer: an app's own dialog beside the panels, not modal. It is closed again by its own cancel.
+    const side = document.createElement('dialog');
+    side.setAttribute('aria-label', 'Side form');
+    side.innerHTML = '<form class="im-form"><button class="im-btn" type="button">Close</button></form>';
+    shell.append(side);
+    api.openDialogDrawer(side, { opener: anchor });
+    await settle();
+    side.close();
+    side.remove();
+
+    // A panel over the whole of its positioned host, by role (uiTraits 'overlay').
+    const { uiPart, uiTraits } = window.__imagoParts;
+    const over = uiTraits(uiPart('stack'), 'overlay');
+    shell.querySelector('.im-content').append(over);
+    await settle();
+    over.remove();
+
     // A destructive confirmation, answered no.
     const answer = api.confirm(shell, { title: 'Delete 8 items permanently?', body: 'This cannot be undone.', confirm: 'Delete 8 items', cancel: 'Cancel', danger: true });
     await settle();
