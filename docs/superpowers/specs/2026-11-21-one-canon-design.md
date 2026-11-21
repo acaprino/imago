@@ -213,6 +213,14 @@ a rule in the design file and a line in the app's review.
 Every class the package defines appears in the gallery, in both looks and themes, and the contrast test covers it.
 A test fails when `css/` defines an `im-` class the gallery never renders.
 
+### The window code of the crate
+
+Xiox's own window code does three things the crate `imago-shell` did not: it trims the WebView2 context menu to
+the editing commands, it tints the acrylic for light and for dark (which shows on Windows 10 only), and it ignores
+the failures WebView2 reports while the application closes. The owner asked for the three in the crate on
+2026-11-21 ("Sì certo"), knowing they are Rust and proved only by the run on GitHub. Xiox then drops its own code
+for them when it adopts the crate. Task 18 of the package plan.
+
 ### The apps
 
 One short branch per app from its `develop`, in a worktree, in this order *(call)*: Muro and Shinatama (already on

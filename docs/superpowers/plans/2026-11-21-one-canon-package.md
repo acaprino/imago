@@ -400,6 +400,28 @@ Source: the ledger's entries F9, F12, F15, F16, F18, and the minors parked by th
 - [ ] **Step 4:** `npm test`, `npm run build`, `node tests/gallery/run.mjs` pass.
 - [ ] **Step 5:** Commit.
 
+### Task 18: The crate does the three things Xiox's window code does and it did not (independent; Rust, proved only by CI)
+
+The owner asked for them on 2026-11-21 ("Sì certo"), after being told they are changes to the Rust of the package that only GitHub can verify. Source: the Xiox plan's "Open points for the package" and Xiox's `develop` (`apps/desktop/src-tauri/src/desktop.rs` and `chrome.rs`, read with `git -C D:/Projects/xiox show develop:<path>`; read-only).
+
+**Files:**
+- Modify: `crates/imago-shell/src/guard.rs` (the context menu), `crates/imago-shell/src/theme.rs` (the tint), `crates/imago-shell/src/recovery.rs` (closing), `crates/imago-shell/src/lib.rs` (re-exports and the crate's own tests of them), `examples/demo/src-tauri/src/main.rs` (the wiring, as an app would do it), `docs/desktop-shell.md` (sections 1, 3 and 4), `docs/verification.md` ("Not run on a real window"), `docs/using-imago.md` only if it lists the crate's items
+- Test: the `#[cfg(test)]` modules of the three source files; `tests/docs.test.ts` already requires every item the crate re-exports to be named in the documents
+
+**Interfaces:**
+- The context menu. A pure function, testable without a window, decides which entries of a WebView2 context menu stay: the editing commands, in a field or on selected text (take Xiox's list and its rule for separators as they are in `desktop.rs:90-114`, with its unit test `the_context_menu_keeps_editing_only`); when nothing is left no menu is shown. A public function installs it on a webview (`ICoreWebView2_11::add_ContextMenuRequested`, as Xiox's `desktop.rs:352-378`), named in the style of `guard_navigation` and `disable_browser_accelerators`, and the demo calls it where it calls those. The page's `guardDesktop` keeps doing what it does; the documents say which of the two does what.
+- The tint. A pure function gives the acrylic tint (RGBA) for a look and a resolved theme, and the function of the crate that gives the window its theme applies the tint with it, so a window on Windows 10, where the acrylic takes its colour from the tint and not from the system backdrop, is light under a light look and dark under a dark one. The four values are the grounds of the looks under glass, the ones `docs/desktop-shell.md` section 1.3 and `tokens/imago.tokens.json` (`glass` extension of each ground) already give: do not invent a value, and write in the code where each comes from. On Windows 11 22H2 and later nothing may change: read `theme.rs` and section 1 of the document first, keep the rule "the window theme follows the look, set before the first frame", and say in the function's comment why the tint is harmless there. A unit test pins the four values against the document's.
+- Closing. WebView2 reports its processes as failed while the application closes; that is not a failure to recover from. `Recovery` learns that the application is closing (a method the app calls when its exit begins, or what `desktop.rs:38-47` and `:165` do, whichever fits the crate's `Recovery` per window better) and from then on answers every failure with no action: no reload, no rebuild, no question. A unit test: a browser-process exit before closing asks for a rebuild, the same after closing asks for nothing. Section 4 of `docs/desktop-shell.md` says it, and the rebuilding contract's text (prevent the exit, do not save the window's state while rebuilding) stays true.
+- `docs/verification.md` gains three lines under "Not run on a real window": the trimmed context menu, the tint on Windows 10 (no machine of the suite runs it), failures ignored while closing.
+
+**How this task is proved.** Rust is never compiled, formatted or linted on this machine. Write as `rustfmt` would format and as `clippy -D warnings` would accept (the crate's existing files are the model: imports, `unsafe` blocks with their `// SAFETY:` comments, error handling); every `unsafe` call copies the pattern of an existing call in the crate or in Xiox's file. The Verify workflow (`cargo fmt --all --check`, `cargo clippy -p imago-shell --all-targets -- -D warnings`, `cargo test -p imago-shell`) runs when the branch reaches GitHub; the controller reads the run and sends back what fails. The crate pins `tauri = "=2.12.5"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"`: use only items those versions have (Xiox's `Cargo.lock` on `develop` resolves the same ones, so an item Xiox's file uses exists).
+
+- [ ] **Step 1:** Write the three pure functions' unit tests first, in the files' test modules.
+- [ ] **Step 2:** Implement; wire the demo; write the documents.
+- [ ] **Step 3:** `npm test` passes (the document tests: every re-exported item is named, every Rust name written as `name(` exists). `npm run build` passes. Do NOT run cargo, rustfmt, clippy or any script that calls them.
+- [ ] **Step 4:** Read your own Rust once more against the compiler: every import used, every type in scope, every `?` in a function that returns `Result`, every `match` exhaustive, no unused variable.
+- [ ] **Step 5:** Commit.
+
 ### Task 12: CI and `develop`
 
 **Files:**
