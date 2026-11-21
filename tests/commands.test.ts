@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { createRegistry, formatKeys, isTextTarget } from '../ts/ui/commands.ts';
 import type { Command, KeyEventLike } from '../ts/ui/commands.ts';
+import { claimKey } from '../ts/ui/key-claim.ts';
 import { pushLayer, type LayerKind } from '../ts/ui/layers.ts';
 
 const press = (key: string, extra: Partial<KeyEventLike> = {}): KeyEventLike => ({
@@ -246,6 +247,39 @@ test('attach runs a matching command once and prevents the default action', () =
   assert.equal(prevented, 1, 'an event that matches nothing keeps its default action');
 });
 
+test('attach runs no command for a key a handler of the package claimed, and leaves that key as it is', () => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('clear', 'Escape', { run: () => void runs++ }));
+  const target = fakeTarget();
+  registry.attach(target);
+
+  // Escape that closed the inspector, the sidebar drawer or a layer: the handler that answered it claimed it.
+  let prevented = 0;
+  const taken = { ...press('Escape'), defaultPrevented: true, preventDefault: () => void prevented++ };
+  claimKey(taken);
+  target.dispatch('keydown', taken);
+  assert.equal(runs, 0, 'a key is answered once, by the handler that claimed it');
+  assert.equal(prevented, 0);
+
+  target.dispatch('keydown', { ...press('Escape'), defaultPrevented: false, preventDefault: () => void prevented++ });
+  assert.equal(runs, 1, 'an Escape that nothing claimed runs the command');
+  assert.equal(prevented, 1);
+});
+
+test('a key that a handler only prevented, and did not claim, still runs its command: guardDesktop refuses Ctrl+F to the browser, not to the app', () => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('search', 'Ctrl+F', { run: () => void runs++ }));
+  const target = fakeTarget();
+  registry.attach(target);
+
+  let prevented = 0;
+  target.dispatch('keydown', { ...press('f', { ctrlKey: true }), defaultPrevented: true, preventDefault: () => void prevented++ });
+  assert.equal(runs, 1, 'the command runs');
+  assert.equal(prevented, 1, 'and the key stays cancelled');
+});
+
 // What a failing command leaves behind: the warnings it wrote and the rejections nobody handled.
 async function pressAndWatch(run: () => void | Promise<void>): Promise<{ warnings: unknown[][]; unhandled: unknown[] }> {
   const registry = createRegistry();
@@ -361,9 +395,11 @@ test('match does not look at the layers: it answers for the key alone', () => {
   close();
 });
 
-test('commands.ts may import layers.ts: layers.ts imports no module, so there is no cycle', () => {
-  const layers = readFileSync(new URL('../ts/ui/layers.ts', import.meta.url), 'utf8');
-  assert.deepEqual(layers.match(/^\s*(?:import|export)\b.*\bfrom\s+['"][^'"]+['"]/gm) ?? [], []);
+test('commands.ts may import layers.ts: layers.ts imports only key-claim.ts, which imports nothing, so there is no cycle', () => {
+  const imports = (file: string): string[] =>
+    [...readFileSync(new URL(`../ts/ui/${file}`, import.meta.url), 'utf8').matchAll(/^\s*(?:import|export)\b.*\bfrom\s+['"]([^'"]+)['"]/gm)].map((found) => found[1]);
+  assert.deepEqual(imports('layers.ts'), ['./key-claim.ts']);
+  assert.deepEqual(imports('key-claim.ts'), []);
 });
 
 test('isTextTarget is true for input, textarea, select and contenteditable only', () => {

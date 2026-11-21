@@ -1,3 +1,4 @@
+import { claimKey } from './key-claim.ts';
 import { escapeHtml } from './markup.ts';
 import { checkboxOptionHtml, type CheckboxMarkupOptions } from './form-markup.ts';
 import { stepProgressHtml } from './progress.ts';
@@ -81,6 +82,7 @@ export function stepNavigationKey<T extends string>(event: KeyboardEvent, option
   const next = nextStepId(ids, tab.dataset.id as T, event.key);
   if (next === null) return false;
   event.preventDefault();
+  claimKey(event); // the steps answered the key: no command bound to it also runs
   buttons.find(button => button.dataset.id === next)?.focus();
   options.onSelect(next);
   return true;

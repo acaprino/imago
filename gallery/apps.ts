@@ -1,6 +1,7 @@
 // The five apps' sample content, ported from docs/reference/toolkit-preview.html: the live shell of the gallery is
 // drawn from here. The markup uses the classes of css/primitives.css (regions) and css/controls.css (controls);
 // nothing in this file styles anything.
+import type { AppearanceOptions, FooterEntry } from '../ts/ui/app.ts';
 import { brandInitial, noteHtml } from '../ts/ui/shell-markup.ts';
 
 export type AppId = 'xiox' | 'mukade' | 'shinatama' | 'muro' | 'daodan';
@@ -70,12 +71,19 @@ type Strings = {
   /** The words `mountApp` takes as its labels: the search command, and the palette's field and empty list. */
   search: string; palettePlaceholder: string; paletteEmpty: string;
   skip: string;
+  /** The words of the five look and theme commands, for an app in another language; left out, the package's own. */
+  appearance?: AppearanceOptions['labels'];
 };
 type App = {
   name: string; tabs: string[]; on?: number;
   primary: { text: string; keys?: string; icon?: string; act?: string };
   secondary: { text: string; keys?: string; icon?: string };
   status: [string, Tone, string, string]; footer: string; keys: [string, string][];
+  /**
+   * The footer's key list written by `footerKeys` from the registry (gallery/main.ts, once the app is mounted), in place
+   * of `keys`. The ids are those of gallery/mount/surfaces.ts.
+   */
+  footerKeys?: FooterEntry[];
   side: { title: string; n: number; rows: Row[] } | null;
   content: () => string; inspector: () => string;
   strings: Strings;
@@ -89,7 +97,7 @@ const EN: Strings = {
 
 export const APPS: Record<AppId, App> = {
   xiox: {
-    name: 'Xiox', tabs: ['Cleanup', 'Registry', 'Services & RAM', 'Developers'],
+    name: 'Xiox', tabs: ['Cleanup', 'Registry', 'Developers'],
     primary: { text: 'Clean 8 items', keys: '↵', act: 'kill' }, secondary: { text: 'Analyze', keys: 'a', icon: 'reload' },
     status: ['Analysis done', 'ok', '13.48 GB to delete · 46,999 files', 'administrator · RAM 32 GB'],
     footer: 'Winapp2 260915 loaded · 70 items', keys: [['↑↓', 'move'], ['space', 'toggle'], ['↵', 'clean']],
@@ -128,7 +136,7 @@ export const APPS: Record<AppId, App> = {
     name: 'Shinatama', tabs: ['Workspace', 'Sessions', 'Overview', 'Files', 'Leftovers'],
     primary: { text: 'New session', keys: 'Ctrl ⇧ T', icon: 'plus' }, secondary: { text: 'Projects' },
     status: ['Local runtime', 'ok', 'resources available', '4 terminals'],
-    footer: 'Local runtime · 4 terminals · 268 MiB', keys: [['Ctrl ⇧ T', 'new session'], ['F6', 'next region']],
+    footer: 'Local runtime · 4 terminals · 268 MiB', keys: [], footerKeys: ['action:primary', { keys: 'F6', title: 'Next region' }],
     side: { title: 'Threads', n: 9, rows: [
       { dot: 'ok', t: 'PowerShell', s: '4 sessions · 4 running', m: 'now', sel: true }, { dot: 'warn', t: 'Webhook signature check', s: '1 session · needs you', m: '2m' },
       { dot: 'ok', t: 'Tax rounding bug', s: '1 session · running', m: 'now' }, { t: 'Dunning emails', s: '1 session', m: '6m' },
@@ -186,6 +194,7 @@ I will hand the tasks to implementer, and keep reviewer for the diff:
       cancel: 'Annulla', undo: 'Ripristina', commands: 'Comandi', views: 'Viste', collapse: 'Comprimi la colonna laterale', expand: 'Espandi la colonna laterale',
       search: 'Cerca in questa vista', palettePlaceholder: 'Digita un comando', paletteEmpty: 'Nessun comando corrisponde',
       skip: 'Vai al contenuto',
+      appearance: { group: 'Aspetto', smooth: 'Aspetto Smooth', oni: 'Aspetto ONI', system: 'Segui Windows', light: 'Tema chiaro', dark: 'Tema scuro' },
     },
   },
 };
