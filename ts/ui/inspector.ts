@@ -93,10 +93,12 @@ export function inspector(shell: HTMLElement): Inspector {
     }
   }
 
+  // Escape in the region is the inspector's: it takes the key, so no command of the app also runs on it
+  // (`registry.attach` skips a key whose default is prevented). A held key closes one view, as it closes one layer.
   region.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
-    close();
+    if (!event.repeat) close();
   });
 
   function close(): void {

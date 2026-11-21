@@ -1,11 +1,15 @@
 import '../css/imago.css';
 import './gallery.css';
-import { createRegistry, mountApp, type Registry } from '../ts/ui/index.ts';
+import { resolveTheme, windowThemeFor } from '../ts/shell/index.ts';
+import { createRegistry, footerKeys, mountApp, type Registry } from '../ts/ui/index.ts';
 import { APP_HUES, APP_IDS, APPS, shellMarkup, type AppId } from './apps.ts';
 
 export type Look = 'smooth' | 'oni';
+/** The theme the page draws. */
 export type Theme = 'dark' | 'light';
-export type GalleryState = { app: AppId; look: Look; theme: Theme; glass: boolean; width: number };
+/** The theme chosen, as an app keeps it: `system` follows Windows (the browser's colour scheme here). */
+export type ThemeChoice = Theme | 'system';
+export type GalleryState = { app: AppId; look: Look; theme: ThemeChoice; glass: boolean; width: number };
 
 /** What every module of `gallery/mount/` receives each time the page redraws. */
 export type MountContext = {
@@ -15,6 +19,7 @@ export type MountContext = {
   root: HTMLElement;
   app: AppId;
   look: Look;
+  /** The theme drawn: the choice, or for `system` the one Windows has. */
   theme: Theme;
   /** An empty element under the window where a module may add its own sections of the gallery page. */
   sections: HTMLElement;
@@ -48,7 +53,7 @@ const rules = $<HTMLElement>('#g-rules');
 const PICKERS: { name: 'app' | 'look' | 'theme' | 'glass'; options: { value: string; label: string; hue?: number }[] }[] = [
   { name: 'app', options: APP_IDS.map((id) => ({ value: id, label: APPS[id].name, hue: APP_HUES[id] })) },
   { name: 'look', options: [{ value: 'smooth', label: 'Smooth' }, { value: 'oni', label: 'ONI' }] },
-  { name: 'theme', options: [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }] },
+  { name: 'theme', options: [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }, { value: 'system', label: 'Windows' }] },
   { name: 'glass', options: [{ value: 'off', label: 'Off' }, { value: 'on', label: 'Simulated' }] },
 ];
 const pickValue = (name: string): string => (name === 'glass' ? (state.glass ? 'on' : 'off') : String(state[name as 'app' | 'look' | 'theme']));
@@ -74,6 +79,16 @@ let cleanups: (() => void)[] = [];
 // The choice to fold the sidebar into its rail outlives a redraw of the gallery, as an app would store it.
 let sidebarCollapsed = false;
 
+// The theme the page draws, as applyLook resolves it: ONI follows Windows in its dark theme, Smooth in the one Windows has.
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+function drawnTheme(): Theme {
+  const theme = windowThemeFor(state.look, state.theme);
+  return theme === 'system' ? resolveTheme('system', systemTheme.matches) : theme;
+}
+systemTheme.addEventListener('change', () => {
+  if (state.theme === 'system') redraw();
+});
+
 function describeWidth(width: number, hasSidebar: boolean): string[] {
   return [
     width >= 1000 ? 'Inspector docked at the right' : 'Inspector over the content',
@@ -84,12 +99,13 @@ function describeWidth(width: number, hasSidebar: boolean): string[] {
 
 /** Everything that follows the state without redrawing the shell: attributes, pickers, width, the explanation line. */
 function applyFrame(): void {
+  const theme = drawnTheme();
   root.dataset.imApp = state.app;
   root.dataset.imLook = state.look;
-  root.dataset.imTheme = state.theme;
+  root.dataset.imTheme = theme;
   root.classList.toggle('im-glass', state.glass);
   root.dataset.gGlass = state.glass ? 'on' : 'off';
-  stage.dataset.gWall = state.theme === 'dark' ? 'night' : 'day';
+  stage.dataset.gWall = theme === 'dark' ? 'night' : 'day';
   root.style.width = `${state.width}px`;
   slider.value = String(state.width);
   sliderOut.textContent = `${state.width} px`;
@@ -108,7 +124,7 @@ function redraw(): void {
   const shell = root.querySelector<HTMLElement>('.im-shell');
   if (!shell) throw new Error('shellMarkup() drew no .im-shell');
   const registry = createRegistry();
-  const ctx: MountContext = { shell, root, app: state.app, look: state.look, theme: state.theme, sections, registry };
+  const ctx: MountContext = { shell, root, app: state.app, look: state.look, theme: drawnTheme(), sections, registry };
   for (const [path, module] of Object.entries(mounts).sort(([a], [b]) => a.localeCompare(b))) {
     try {
       const cleanup = module.default?.(ctx);
@@ -119,22 +135,32 @@ function redraw(): void {
   }
 
   // The app is mounted like any app: once its commands are registered, with its words. Mounted last, so undone first.
-  const strings = APPS[state.app].strings;
-  cleanups.unshift(
-    mountApp(shell, registry, {
-      search: () => {
-        window.__imago.searches++;
-        shell.querySelector<HTMLInputElement>('.im-panel-tools input')?.focus(); // the view's search field, where it has one
-      },
-      labels: { palette: strings.commands, search: strings.search, palettePlaceholder: strings.palettePlaceholder, paletteEmpty: strings.paletteEmpty },
-      sidebar: { collapsed: sidebarCollapsed, onChange: (value) => (sidebarCollapsed = value) },
-    }),
-  );
+  // The look and the theme are the gallery's choice, kept in `state`: the five commands and the pickers above both call
+  // `set`. A mount that fails is reported as a module that fails is, and the page stays.
+  const { strings, footerKeys: entries } = APPS[state.app];
+  try {
+    cleanups.unshift(
+      mountApp(shell, registry, {
+        search: () => {
+          window.__imago.searches++;
+          shell.querySelector<HTMLInputElement>('.im-panel-tools input')?.focus(); // the view's search field, where it has one
+        },
+        labels: { palette: strings.commands, search: strings.search, palettePlaceholder: strings.palettePlaceholder, paletteEmpty: strings.paletteEmpty },
+        sidebar: { collapsed: sidebarCollapsed, onChange: (value) => (sidebarCollapsed = value) },
+        appearance: { get: () => ({ look: state.look, theme: state.theme }), set: (next) => set(next), labels: strings.appearance },
+      }),
+    );
+    // One footer's key list comes from the registry, now that every command is in it.
+    if (entries) shell.querySelector('.im-footer .im-footer-keys')?.replaceWith(footerKeys(document, registry, entries));
+  } catch (error) {
+    console.error(`gallery/main.ts could not mount the app: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
- * Changes the state. The width only resizes the window; any other change draws the shell again, because the
- * mount modules read the app, the look and the theme from the context.
+ * Changes the state: the pickers, the look and theme commands of the palette and the tests all come here. The width
+ * only resizes the window; any other change draws the shell again, because the mount modules read the app, the look
+ * and the theme from the context.
  */
 function set(partial: Partial<GalleryState>): void {
   const before = { ...state };

@@ -246,6 +246,24 @@ test('attach runs a matching command once and prevents the default action', () =
   assert.equal(prevented, 1, 'an event that matches nothing keeps its default action');
 });
 
+test('attach runs no command for a key another handler already took, and leaves that key as it is', () => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('clear', 'Escape', { run: () => void runs++ }));
+  const target = fakeTarget();
+  registry.attach(target);
+
+  // Escape that closed the inspector, the sidebar drawer or a layer: the handler that took it prevented its default.
+  let prevented = 0;
+  target.dispatch('keydown', { ...press('Escape'), defaultPrevented: true, preventDefault: () => void prevented++ });
+  assert.equal(runs, 0, 'a key is answered once, by the handler that took it');
+  assert.equal(prevented, 0);
+
+  target.dispatch('keydown', { ...press('Escape'), defaultPrevented: false, preventDefault: () => void prevented++ });
+  assert.equal(runs, 1, 'an Escape that nothing took runs the command');
+  assert.equal(prevented, 1);
+});
+
 // What a failing command leaves behind: the warnings it wrote and the rejections nobody handled.
 async function pressAndWatch(run: () => void | Promise<void>): Promise<{ warnings: unknown[][]; unhandled: unknown[] }> {
   const registry = createRegistry();

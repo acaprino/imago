@@ -89,6 +89,20 @@ test('Escape with no layer is left alone', () => {
   detach();
 });
 
+test('an Escape another handler already took closes no layer, and goes on as it was', () => {
+  const { shell, press } = fakeShell();
+  const detach = attachLayers(shell);
+  const layer = fakeLayer('menu');
+  // A handler before the stack's (on the window, while capturing) answered the key: cancelling a drag, say.
+  const taken = press('Escape', { defaultPrevented: true });
+  assert.equal(layer.state.closed, 0, 'a key is answered once');
+  assert.equal(taken.stopped, false, 'the stack does not stop a key it did not act on');
+  press('Escape');
+  assert.equal(layer.state.closed, 1, 'the next Escape closes the layer');
+  detach();
+  emptyStack();
+});
+
 test('Escape belongs to the IME while it composes, and a held key closes one layer only', () => {
   const { shell, press } = fakeShell();
   const detach = attachLayers(shell);

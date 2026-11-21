@@ -2,7 +2,20 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRegistry } from '../ts/ui/commands.ts';
 import type { Command, KeyEventLike, Registry } from '../ts/ui/commands.ts';
-import { footerKeys, mountApp, PALETTE_COMMAND, SEARCH_COMMAND, standardCommands } from '../ts/ui/app.ts';
+import {
+  footerKeys,
+  LOOK_ONI,
+  LOOK_SMOOTH,
+  mountApp,
+  PALETTE_COMMAND,
+  SEARCH_COMMAND,
+  standardCommands,
+  THEME_DARK,
+  THEME_LIGHT,
+  THEME_SYSTEM,
+  type AppearanceOptions,
+} from '../ts/ui/app.ts';
+import { inspector } from '../ts/ui/inspector.ts';
 import { pushLayer, type LayerKind } from '../ts/ui/layers.ts';
 
 // Plain objects stand in for the document and the shell, as in commands.test.ts and layers.test.ts: the modules
@@ -35,10 +48,16 @@ function listening() {
       const at = active.findIndex((entry) => entry.type === type && entry.listener === listener && entry.capture === wanted);
       if (at !== -1) active.splice(at, 1);
     },
-    // Capturing listeners run before the others, as in a browser.
-    dispatch(type: string, event: unknown) {
+    // Capturing listeners run before the others, as in a browser; `phase` runs only one of the two. A listener that
+    // stops the event (`stopImmediatePropagation`) is the last to see it.
+    dispatch(type: string, event: unknown, phase: 'capture' | 'bubble' | 'both' = 'both') {
       const ours = active.filter((entry) => entry.type === type);
-      for (const entry of [...ours.filter((e) => e.capture), ...ours.filter((e) => !e.capture)]) (entry.listener as (event: unknown) => void)(event);
+      const capturing = phase === 'bubble' ? [] : ours.filter((e) => e.capture);
+      const bubbling = phase === 'capture' ? [] : ours.filter((e) => !e.capture);
+      for (const entry of [...capturing, ...bubbling]) {
+        if ((event as { stopped?: boolean }).stopped) return;
+        (entry.listener as (event: unknown) => void)(event);
+      }
     },
   };
 }
@@ -87,7 +106,7 @@ const asDocument = (doc: FakeDocument): Document => doc as unknown as Document;
 // A sidebar with the two buttons of the shell markup: the title-bar toggle and the fold button of its header.
 function sidebarParts() {
   const sidebar = { contains: () => false, querySelectorAll: () => [] };
-  const toggle = { ...listening(), setAttribute() {} };
+  const toggle = { ...listening(), setAttribute() {}, focus() {} };
   const collapse = {
     ...listening(),
     dataset: {} as Record<string, string | undefined>,
@@ -98,18 +117,77 @@ function sidebarParts() {
   return { sidebar, toggle, collapse, parts: { '.im-sidebar': sidebar, '.im-sidebar-toggle': toggle, '.im-sidebar-collapse': collapse } };
 }
 
+// A key event as a browser gives it: `preventDefault` sets `defaultPrevented`, `stopImmediatePropagation` ends the
+// dispatch. `prevented` counts the calls of `preventDefault`.
+const keyEvent = (key: string, extra: Partial<KeyEventLike> & { repeat?: boolean } = {}) => ({
+  ...press(key, extra),
+  defaultPrevented: false,
+  stopped: false,
+  prevented: 0,
+  preventDefault() {
+    this.defaultPrevented = true;
+    this.prevented++;
+  },
+  stopImmediatePropagation() {
+    this.stopped = true;
+  },
+});
+
+// A key pressed where nothing of the shell listens: the document's listeners only. Returns how often its default was prevented.
 const keydown = (doc: FakeDocument, key: string, extra: Partial<KeyEventLike> = {}) => {
-  let prevented = 0;
-  doc.dispatch('keydown', { ...press(key, extra), preventDefault: () => void prevented++ });
-  return prevented;
+  const event = keyEvent(key, extra);
+  doc.dispatch('keydown', event);
+  return event.prevented;
 };
 
-// A layer of this kind on the stack, as a surface would push it. Returns the function that removes it.
-const openLayer = (kind: LayerKind, close: () => void = () => pop()): (() => void) => {
+// A key pressed on something inside `region`: the document's capturing listeners, then the region's, then the
+// document's own as the key bubbles up, as in a browser.
+function keydownIn(doc: FakeDocument, region: { dispatch: FakeDocument['dispatch'] }, key: string, extra: Partial<KeyEventLike> & { repeat?: boolean } = {}) {
+  const event = keyEvent(key, extra);
+  doc.dispatch('keydown', event, 'capture');
+  region.dispatch('keydown', event);
+  doc.dispatch('keydown', event, 'bubble');
+  return event;
+}
+
+// A layer of this kind on the stack, as a surface would push it. Returns the function that removes it; the layer's
+// `close` is that function too, unless the test gives its own.
+const openLayer = (kind: LayerKind, close?: () => void): (() => void) => {
   let pop = (): void => {};
-  pop = pushLayer({ el: {} as unknown as HTMLElement, kind, close }, null);
+  pop = pushLayer({ el: {} as unknown as HTMLElement, kind, close: close ?? (() => pop()) }, null);
   return pop;
 };
+
+// The inspector's region, `.im-inspector`: enough of an element for `inspector(shell)` to open and close it.
+function inspectorRegion(doc: FakeDocument) {
+  return {
+    ...listening(),
+    hidden: true,
+    childNodes: [] as unknown[],
+    ownerDocument: doc,
+    append(node: unknown) {
+      this.childNodes.push(node);
+    },
+    contains: () => false,
+    hasAttribute: () => false,
+  };
+}
+
+// The look and the theme an app keeps: `get` reads them, `set` writes them and records the call.
+function keptAppearance(look: 'smooth' | 'oni' = 'smooth', theme: 'system' | 'light' | 'dark' = 'system') {
+  const choice = { look, theme };
+  const calls: { look: string; theme: string }[] = [];
+  const appearance: AppearanceOptions = {
+    get: () => ({ ...choice }),
+    set: (next) => {
+      calls.push(next);
+      Object.assign(choice, next);
+    },
+  };
+  return { choice, calls, appearance };
+}
+
+const APPEARANCE = [LOOK_SMOOTH, LOOK_ONI, THEME_SYSTEM, THEME_LIGHT, THEME_DARK];
 
 // The registry, with what the app asked of it written down.
 function loggedRegistry(log: string[], options: { detachThrows?: boolean } = {}): Registry {
@@ -187,10 +265,14 @@ test('the palette command is not offered while the palette is open, so the palet
   standardCommands(registry, asShell(fakeShell(fakeDocument())), { search: () => {} });
   assert.deepEqual(registry.list().map((c) => c.id), [PALETTE_COMMAND, SEARCH_COMMAND]);
 
+  // The layer is removed whatever the assertions say: one left on the stack would make every later test modal.
   const close = openLayer('palette');
-  assert.deepEqual(registry.list().map((c) => c.id), [SEARCH_COMMAND]);
-  assert.equal(registry.match(press('k', { ctrlKey: true })), undefined);
-  close();
+  try {
+    assert.deepEqual(registry.list().map((c) => c.id), [SEARCH_COMMAND]);
+    assert.equal(registry.match(press('k', { ctrlKey: true })), undefined);
+  } finally {
+    close();
+  }
   assert.deepEqual(registry.list().map((c) => c.id), [PALETTE_COMMAND, SEARCH_COMMAND]);
 });
 
@@ -266,6 +348,35 @@ test('footerKeys follows the order of the ids, skips an id that is not registere
   assert.equal(html([]), '<span class="im-footer-keys"></span>');
 });
 
+test('footerKeys also lists the keys of a list, which are not commands: { keys, title }, beside the ids, in their order', () => {
+  const registry = createRegistry();
+  registry.register(command('clean', 'Ctrl+Enter', { title: 'Clean' }));
+  const doc = asDocument(fakeDocument());
+
+  const html = (footerKeys(doc, registry, [
+    { keys: 'ArrowUp ArrowDown', title: 'Move' },
+    { keys: 'Space', title: 'Toggle' },
+    'clean',
+    { keys: 'Enter', title: 'Open' },
+  ]) as unknown as FakeElement).html;
+  assert.equal(
+    html,
+    '<span class="im-footer-keys">' +
+      '<span><kbd class="im-key">↑</kbd><kbd class="im-key">↓</kbd>Move</span>' +
+      '<span><kbd class="im-key">Space</kbd>Toggle</span>' +
+      '<span><kbd class="im-key">Ctrl</kbd><kbd class="im-key">↵</kbd>Clean</span>' +
+      '<span><kbd class="im-key">↵</kbd>Open</span>' +
+      '</span>',
+    'several bindings of one entry are separated by a space; each is written as keyCaps writes it',
+  );
+});
+
+test('the keys of a list are in the grammar of a command\'s keys: keys that cannot match throw', () => {
+  const doc = asDocument(fakeDocument());
+  assert.throws(() => footerKeys(doc, createRegistry(), [{ keys: 'Ctrl+', title: 'Broken' }]), /Invalid keys "Ctrl\+"/);
+  assert.throws(() => footerKeys(doc, createRegistry(), [{ keys: 'ArrowUp Up+Down', title: 'Move' }]), /Invalid keys "Up\+Down"/);
+});
+
 // ---------- mountApp ----------
 
 test('mountApp makes the calls of an app: Ctrl+F reaches search through the document, and the standard commands are there', () => {
@@ -287,6 +398,188 @@ test('mountApp calls the registry before the commands exist, and its undo goes t
   log.length = 0;
   undo();
   assert.deepEqual(log, ['unregister imago.search', 'unregister imago.palette', 'detach']);
+});
+
+// ---------- a key is answered once ----------
+
+test('Escape that closes the inspector runs no command of the app; the next Escape, which nothing takes, runs it', () => {
+  const doc = fakeDocument();
+  const region = inspectorRegion(doc);
+  const shell = asShell(fakeShell(doc, { '.im-inspector': region }));
+  const registry = createRegistry();
+  let escapes = 0;
+  registry.register(command('clear', 'Escape', { run: () => void escapes++ }));
+  mountApp(shell, registry, { search: () => {} });
+  const details = inspector(shell);
+  details.open({ remove() {} } as unknown as HTMLElement);
+  assert.equal(details.isOpen(), true);
+
+  const first = keydownIn(doc, region, 'Escape');
+  assert.equal(details.isOpen(), false, 'the first Escape closes the inspector');
+  assert.equal(first.defaultPrevented, true, 'the inspector took the key');
+  assert.equal(escapes, 0, 'so the command bound to Escape does not also run');
+
+  keydown(doc, 'Escape'); // focus went back to where it was, outside the inspector
+  assert.equal(escapes, 1, 'the second Escape runs the command');
+});
+
+test('a held Escape closes one view of the inspector, and its repeats run no command while focus is in it', () => {
+  const doc = fakeDocument();
+  const region = inspectorRegion(doc);
+  const shell = asShell(fakeShell(doc, { '.im-inspector': region }));
+  const registry = createRegistry();
+  let escapes = 0;
+  registry.register(command('clear', 'Escape', { run: () => void escapes++ }));
+  mountApp(shell, registry, { search: () => {} });
+  const details = inspector(shell);
+  details.open({ remove() {} } as unknown as HTMLElement);
+
+  const held = keydownIn(doc, region, 'Escape', { repeat: true });
+  assert.equal(details.isOpen(), true, 'a repeat of a key pressed before closes nothing');
+  assert.equal(held.defaultPrevented, true, 'and is still the inspector\'s');
+  assert.equal(escapes, 0);
+  keydownIn(doc, region, 'Escape');
+  assert.equal(details.isOpen(), false);
+  assert.equal(escapes, 0);
+});
+
+test('Escape that closes the sidebar drawer runs no command of the app: mountApp attaches the drawer before the registry', () => {
+  const doc = fakeDocument();
+  const { parts } = sidebarParts();
+  const shell = fakeShell(doc, parts);
+  const registry = createRegistry();
+  let escapes = 0;
+  registry.register(command('clear', 'Escape', { run: () => void escapes++ }));
+  mountApp(asShell(shell), registry, { search: () => {} });
+  shell.dataset.imSidebarOpen = 'true'; // the drawer is open: below 620, from its title-bar button
+
+  assert.equal(keydown(doc, 'Escape'), 1, 'the key is taken once');
+  assert.equal(shell.dataset.imSidebarOpen, undefined, 'the first Escape closes the drawer');
+  assert.equal(escapes, 0, 'and runs no command');
+  keydown(doc, 'Escape');
+  assert.equal(escapes, 1, 'the second Escape runs the command');
+});
+
+test('Escape that closes a layer runs no command of the app: mountApp attaches the layers before the registry', () => {
+  const doc = fakeDocument();
+  const registry = createRegistry();
+  let escapes = 0;
+  registry.register(command('clear', 'Escape', { run: () => void escapes++ }));
+  const undo = mountApp(asShell(fakeShell(doc)), registry, { search: () => {} });
+  let closed = 0;
+  const pop = openLayer('menu', () => {
+    closed++;
+    pop();
+  });
+  try {
+    keydown(doc, 'Escape');
+    assert.equal(closed, 1, 'the first Escape closes the menu');
+    assert.equal(escapes, 0, 'and runs no command');
+    keydown(doc, 'Escape');
+    assert.equal(escapes, 1, 'the second Escape runs the command');
+  } finally {
+    pop();
+    undo();
+  }
+});
+
+// ---------- the look and the theme ----------
+
+test('with appearance, mountApp registers the five look and theme commands alike in every app: same ids, group, no keys', () => {
+  assert.deepEqual(APPEARANCE, ['imago.look.smooth', 'imago.look.oni', 'imago.theme.system', 'imago.theme.light', 'imago.theme.dark']);
+  const registry = createRegistry();
+  mountApp(asShell(fakeShell(fakeDocument())), registry, { search: () => {}, appearance: keptAppearance().appearance });
+
+  const five = APPEARANCE.map((id) => registry.get(id));
+  assert.deepEqual(five.map((c) => c?.title), ['Smooth look', 'ONI look', 'Follow Windows', 'Light theme', 'Dark theme']);
+  assert.deepEqual(five.map((c) => c?.group), ['Appearance', 'Appearance', 'Appearance', 'Appearance', 'Appearance']);
+  assert.deepEqual(five.map((c) => c?.keys), [undefined, undefined, undefined, undefined, undefined], 'no key is bound');
+
+  const without = createRegistry();
+  mountApp(asShell(fakeShell(fakeDocument())), without, { search: () => {} });
+  assert.deepEqual(APPEARANCE.map((id) => without.get(id)), [undefined, undefined, undefined, undefined, undefined], 'without appearance there are none');
+});
+
+test('the command of the current choice is not available, so the palette offers the other choices', () => {
+  const { choice, appearance } = keptAppearance('smooth', 'system');
+  const registry = createRegistry();
+  mountApp(asShell(fakeShell(fakeDocument())), registry, { search: () => {}, appearance });
+  const offered = (): string[] => registry.list().map((c) => c.id).filter((id) => APPEARANCE.includes(id));
+
+  assert.deepEqual(offered(), [LOOK_ONI, THEME_LIGHT, THEME_DARK]);
+  // The app changed its choice by its own control: what is offered follows, because it reads get() each time.
+  choice.look = 'oni';
+  choice.theme = 'dark';
+  assert.deepEqual(offered(), [LOOK_SMOOTH, THEME_SYSTEM, THEME_LIGHT]);
+});
+
+test('each command calls set with its own half and the other half of get() unchanged; the package keeps nothing', () => {
+  const choice = { look: 'smooth' as const, theme: 'dark' as 'system' | 'light' | 'dark' };
+  const calls: unknown[] = [];
+  const registry = createRegistry();
+  // This app's set does not change its choice yet (it would save it first, say): the package does not change it either.
+  mountApp(asShell(fakeShell(fakeDocument())), registry, { search: () => {}, appearance: { get: () => ({ ...choice }), set: (next) => void calls.push(next) } });
+
+  void registry.get(LOOK_ONI)?.run();
+  void registry.get(THEME_SYSTEM)?.run();
+  void registry.get(THEME_LIGHT)?.run();
+  assert.deepEqual(calls, [{ look: 'oni', theme: 'dark' }, { look: 'smooth', theme: 'system' }, { look: 'smooth', theme: 'light' }]);
+  assert.equal(registry.get(LOOK_SMOOTH)?.when?.(), false, 'the choice is still the app\'s');
+  assert.equal(registry.get(THEME_DARK)?.when?.(), false);
+
+  choice.theme = 'light';
+  void registry.get(LOOK_ONI)?.run();
+  assert.deepEqual(calls.at(-1), { look: 'oni', theme: 'light' }, 'get() is read at each run');
+});
+
+test('the titles and the group are the app\'s words; a word left out keeps its default', () => {
+  const registry = createRegistry();
+  mountApp(asShell(fakeShell(fakeDocument())), registry, {
+    search: () => {},
+    appearance: {
+      ...keptAppearance().appearance,
+      labels: { group: 'Aspetto', smooth: 'Aspetto Smooth', oni: 'Aspetto ONI', system: 'Segui Windows', light: 'Tema chiaro', dark: undefined },
+    },
+  });
+  const five = APPEARANCE.map((id) => registry.get(id));
+  assert.deepEqual(five.map((c) => c?.title), ['Aspetto Smooth', 'Aspetto ONI', 'Segui Windows', 'Tema chiaro', 'Dark theme']);
+  assert.deepEqual(new Set(five.map((c) => c?.group)), new Set(['Aspetto']));
+});
+
+test('the appearance commands come after the standard ones, and the undo of mountApp removes them first', () => {
+  const log: string[] = [];
+  const undo = mountApp(asShell(fakeShell(fakeDocument())), loggedRegistry(log), { search: () => {}, appearance: keptAppearance().appearance });
+  assert.deepEqual(log, ['attach', 'register imago.palette', 'register imago.search', ...APPEARANCE.map((id) => `register ${id}`)]);
+  log.length = 0;
+  undo();
+  assert.deepEqual(log, [...[...APPEARANCE].reverse().map((id) => `unregister ${id}`), 'unregister imago.search', 'unregister imago.palette', 'detach']);
+});
+
+// ---------- the errors of mountApp ----------
+
+test('mountApp\'s errors start with "mountApp: " and name the id or the key of the app that is in the way', () => {
+  const shell = () => asShell(fakeShell(fakeDocument()));
+  const startsWith = (pattern: RegExp) => (error: unknown): boolean => error instanceof Error && error.message.startsWith('mountApp: ') && pattern.test(error.message);
+
+  const id = createRegistry();
+  id.register(command(SEARCH_COMMAND));
+  assert.throws(() => mountApp(shell(), id, { search: () => {} }), startsWith(/"imago\.search"/));
+
+  const keys = createRegistry();
+  keys.register(command('open', 'Ctrl+K'));
+  assert.throws(() => mountApp(shell(), keys, { search: () => {} }), startsWith(/"Ctrl\+K".*"open"/));
+
+  const look = createRegistry();
+  look.register(command(LOOK_ONI));
+  assert.throws(() => mountApp(shell(), look, { search: () => {}, appearance: keptAppearance().appearance }), startsWith(/"imago\.look\.oni"/));
+  assert.deepEqual(look.list().map((c) => c.id), [LOOK_ONI], 'what mountApp had registered is gone again');
+
+  // Given from plain JavaScript without set: refused when the app mounts, not when the user picks a look.
+  const half = { get: keptAppearance().appearance.get } as unknown as AppearanceOptions;
+  assert.throws(() => mountApp(shell(), createRegistry(), { search: () => {}, appearance: half }), startsWith(/appearance/));
+  const mounted = shell();
+  mountApp(mounted, createRegistry(), { search: () => {} });
+  assert.throws(() => mountApp(mounted, createRegistry(), { search: () => {} }), startsWith(/already mounted/));
 });
 
 test('the function mountApp returns removes every listener, the commands and the keys, and may be called twice', () => {
@@ -374,7 +667,7 @@ test('when the standard commands cannot be registered, mountApp undoes what it d
   const own = command(PALETTE_COMMAND, 'Ctrl+Shift+P');
   registry.register(own);
 
-  assert.throws(() => mountApp(shell, registry, { search: () => {} }), /"imago\.palette" is already registered/);
+  assert.throws(() => mountApp(shell, registry, { search: () => {} }), /^Error: mountApp: Command "imago\.palette" is already registered/);
   assert.equal(doc.active.length, 0, 'no listener is left on the document');
   assert.equal(toggle.active.length + collapse.active.length, 0, 'or on the sidebar');
   assert.deepEqual(registry.list(), [own]);

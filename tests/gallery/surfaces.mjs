@@ -515,6 +515,22 @@ async function inspectors(page, look, theme) {
   assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), false, where('Escape closes the inspector'));
   assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, where('and returns focus'));
 
+  // A key is answered once: with a command of the app bound to Escape, the Escape that closes the inspector does not
+  // also run it; the next Escape, pressed where focus went back, does.
+  await build();
+  await page.evaluate((s) => {
+    window.__escapes = 0;
+    window.__unbindEscape = window.__imagoSurfaces.registry.register({ id: 'test:escape', title: 'Clear the selection', keys: 'Escape', run: () => void window.__escapes++ });
+    window.__imagoSurfaces.inspector.open(window.__inspectorContent, document.querySelector(s));
+  }, opener);
+  assert.equal((await active(page)).id, 'name', where('focus is in the inspector'));
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => window.__imagoSurfaces.inspector.isOpen()), false, where('one Escape closes the inspector'));
+  assert.equal(await page.evaluate(() => window.__escapes), 0, where('and does not run the command bound to Escape'));
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(() => window.__escapes), 1, where('a second Escape runs it'));
+  await page.evaluate(() => window.__unbindEscape());
+
   await build();
   await page.evaluate((s) => {
     window.__asked = 0;
@@ -576,7 +592,7 @@ async function palettes(page, look, theme) {
   await show(page, { app: 'xiox', look, theme, width: 1160 });
   const opener = '.im-actions .im-btn:not(.im-btn--primary)';
   const commands = await page.evaluate(() => window.__imagoSurfaces.registry.list().map((c) => c.title));
-  assert.deepEqual(commands.slice(0, 4), ['Views: Cleanup', 'Views: Registry', 'Views: Services & RAM', 'Views: Developers'], where('one Views command per title-bar tab'));
+  assert.deepEqual(commands.slice(0, 3), ['Views: Cleanup', 'Views: Registry', 'Views: Developers'], where('one Views command per title-bar tab: the three Xiox has'));
   assert.ok(commands.includes('Clean 8 items') && commands.includes('Analyze'), where('the primary and secondary actions are commands'));
 
   // Ctrl+K opens it, over the title bar's layer, with focus in the field; it lists the registry.
@@ -633,7 +649,7 @@ async function palettes(page, look, theme) {
   await page.fill('.im-palette-input', 'reg');
   await press(page, 'Enter');
   assert.equal(await count(page, '.im-palette'), 0, where('Enter closes the palette'));
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,true,false,false', where('Enter ran the first match: the Registry view'));
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,true,false', where('Enter ran the first match: the Registry view'));
   assert.equal(await page.evaluate(() => document.querySelector('.im-notice')?.textContent ?? ''), 'Ran: Views: Registry', where('and the command said so'));
   assert.equal(await count(page, '[inert]'), 0, where('the page is released'));
   assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, where('focus is back where it was'));
@@ -648,12 +664,23 @@ async function palettes(page, look, theme) {
   assert.equal(await count(page, '.im-palette'), 0, where('a press on the page behind closes it'));
   assert.equal(await count(page, '[inert]'), 0, where('and releases the page'));
 
-  // A click runs a command too; the title bar's own command button opens the palette.
+  // A click runs a command too; the title bar's own command button runs the palette command that mountApp registered,
+  // the same one Ctrl+K runs (so the palette has the words given to mountApp, and no second copy of them).
+  await page.evaluate(() => {
+    const palette = window.__imagoSurfaces.registry.get('imago.palette');
+    const run = palette.run;
+    window.__paletteRuns = 0;
+    palette.run = () => {
+      window.__paletteRuns++;
+      return run();
+    };
+  });
   await page.click('.im-titlebar-command');
   assert.equal(await count(page, '.im-palette'), 1, where('the title bar button opens the palette'));
+  assert.equal(await page.evaluate(() => window.__paletteRuns), 1, where('through the registered command'));
   await page.locator('.im-palette-list [role="option"]', { hasText: 'Developers' }).click();
   assert.equal(await count(page, '.im-palette'), 0, where('a click on a command closes the palette'));
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,false,false,true', where('and runs it'));
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,false,true', where('and runs it'));
 
   // A menu or a sheet open under Ctrl+K is closed, not left behind.
   await anchor(page);
