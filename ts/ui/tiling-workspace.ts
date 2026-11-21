@@ -63,7 +63,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: strin
   const node = document.createElement(tag); node.className = className; if (text !== undefined) node.textContent = text; return node;
 }
 function control(label: string, key: string, run: () => void): HTMLButtonElement {
-  const button = element('button', 'wm-control', label); button.type = 'button'; button.dataset.wmKey = key; button.addEventListener('click', run); return button;
+  const button = element('button', 'im-control', label); button.type = 'button'; button.dataset.imTileKey = key; button.addEventListener('click', run); return button;
 }
 /** Reparent the original view element; never clone, clear, dispose or reopen it. */
 export function placeWorkspaceBinding(parent: HTMLElement, binding: HTMLElement, visible: boolean): void {
@@ -95,13 +95,13 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
   const EDGE_WORDS = { columns: { before: 'left', after: 'right' }, rows: { before: 'top', after: 'bottom' } } as const;
   interface ResizeState { readonly gesture: L; readonly split: SplitNode; readonly boundary: number; readonly start: number; readonly free: number; readonly firstFree: number; readonly handle: HTMLElement; readonly pointerId: number; action: TilingAction | null }
 
-  const canvas = element('div', 'wm-canvas'); const parking = element('div', 'wm-parking'); parking.hidden = true; parking.setAttribute('aria-hidden', 'true');
-  const preview = element('div', 'wm-drop-preview'); preview.hidden = true; preview.setAttribute('aria-hidden', 'true');
-  const previewLabel = element('span', 'wm-drop-label'); preview.appendChild(previewLabel);
-  const marker = element('div', 'wm-drop-marker'); marker.hidden = true; marker.setAttribute('aria-hidden', 'true');
-  const ghost = element('div', 'wm-drag-ghost'); ghost.hidden = true; ghost.setAttribute('aria-hidden', 'true');
-  const status = element('div', 'wm-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  options.host.classList.add('wm-host'); options.host.append(canvas, parking, status, ghost); canvas.append(preview, marker);
+  const canvas = element('div', 'im-tile-canvas'); const parking = element('div', 'im-parking'); parking.hidden = true; parking.setAttribute('aria-hidden', 'true');
+  const preview = element('div', 'im-drop-preview'); preview.hidden = true; preview.setAttribute('aria-hidden', 'true');
+  const previewLabel = element('span', 'im-drop-label'); preview.appendChild(previewLabel);
+  const marker = element('div', 'im-drop-marker'); marker.hidden = true; marker.setAttribute('aria-hidden', 'true');
+  const ghost = element('div', 'im-drag-ghost'); ghost.hidden = true; ghost.setAttribute('aria-hidden', 'true');
+  const status = element('div', 'im-tile-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  options.host.classList.add('im-host'); options.host.append(canvas, parking, status, ghost); canvas.append(preview, marker);
   const groups = new Map<string, GroupDom>(); const splitters = new Map<string, HTMLElement>(); const visibility = new Map<string, { visible: boolean; groupId: string | null }>();
   const namespace = `wm-${crypto.randomUUID()}`;
   let current: L | null = null; let drag: DragState | null = null; let resize: ResizeState | null = null;
@@ -114,7 +114,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
   const focusView = (viewId: string | null): void => { if (viewId !== null && !blocked()) options.onFocusView?.(viewId); };
   const focusChrome = (groupId: string, key: string): void => { queueMicrotask(() => {
     if (disposed || blocked()) return;
-    groups.get(groupId)?.element.querySelectorAll<HTMLElement>('[data-wm-key]').forEach(node => { if (node.dataset.wmKey === key) node.focus({ preventScroll: true }); });
+    groups.get(groupId)?.element.querySelectorAll<HTMLElement>('[data-im-tile-key]').forEach(node => { if (node.dataset.imTileKey === key) node.focus({ preventScroll: true }); });
   }); };
   const markVisibility = (viewId: string, visible: boolean, groupId: string | null): void => {
     const previous = visibility.get(viewId);
@@ -127,10 +127,10 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
       const held = drag; drag = null;
       window.removeEventListener('pointermove', moveTab, true); window.removeEventListener('pointerup', dropTab, true);
       window.removeEventListener('pointercancel', cancelGesture, true); window.removeEventListener('keydown', escapeDrag, true);
-      held.tab.classList.remove('wm-tab-dragging'); if (held.tab.hasPointerCapture(held.pointerId)) held.tab.releasePointerCapture(held.pointerId);
+      held.tab.classList.remove('im-tile-tab-dragging'); if (held.tab.hasPointerCapture(held.pointerId)) held.tab.releasePointerCapture(held.pointerId);
     }
     if (resize) { const previous = resize; resize = null; if (previous.handle.hasPointerCapture(previous.pointerId)) previous.handle.releasePointerCapture(previous.pointerId); }
-    preview.hidden = true; marker.hidden = true; ghost.hidden = true; options.host.classList.remove('wm-changing', 'wm-dragging');
+    preview.hidden = true; marker.hidden = true; ghost.hidden = true; options.host.classList.remove('im-changing', 'im-dragging');
     if (current && !disposed) drawGeometry(current);
   }
   function commitGesture(gesture: L, action: TilingAction | null): void {
@@ -148,8 +148,8 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
     if (!drag || !current) return null;
     const dom = groups.get(target.id); if (!dom) return null;
     const source = tabGroups(current.root).find(group => group.tabs.includes(drag?.viewId ?? ''));
-    if (hit.closest('.wm-header')) {
-      const before = [...dom.tabs.querySelectorAll<HTMLElement>('.wm-tab')].find(tab => { const box = tab.getBoundingClientRect(); return x < box.left + box.width / 2; }) ?? null;
+    if (hit.closest('.im-header')) {
+      const before = [...dom.tabs.querySelectorAll<HTMLElement>('.im-tile-tab')].find(tab => { const box = tab.getBoundingClientRect(); return x < box.left + box.width / 2; }) ?? null;
       let index = before?.dataset.viewId ? target.tabs.indexOf(before.dataset.viewId) : target.tabs.length;
       if (source?.id === target.id && source.tabs.indexOf(drag.viewId) < index) index -= 1;
       if (source?.id === target.id && source.tabs.indexOf(drag.viewId) === index) return null;
@@ -167,7 +167,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
     const dom = groups.get(target.id); if (!dom) return;
     const origin = canvas.getBoundingClientRect();
     if (action.index !== undefined) {
-      const strip = dom.tabs.getBoundingClientRect(); const last = dom.tabs.querySelector<HTMLElement>('.wm-tabwrap:last-of-type');
+      const strip = dom.tabs.getBoundingClientRect(); const last = dom.tabs.querySelector<HTMLElement>('.im-tile-tabwrap:last-of-type');
       const at = before ? before.getBoundingClientRect().left : last ? last.getBoundingClientRect().right : strip.left;
       Object.assign(marker.style, { left: `${at - origin.left - 1}px`, top: `${strip.top - origin.top}px`, height: `${strip.height}px` }); marker.hidden = false; return;
     }
@@ -191,13 +191,13 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
     if (blocked() || !drag.tab.isConnected) { cancelGesture(); return; }
     if (!drag.gesture) {
       if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < DRAG_THRESHOLD) return;
-      drag.gesture = current; drag.tab.setPointerCapture(event.pointerId); drag.tab.classList.add('wm-tab-dragging');
-      ghost.textContent = drag.tab.textContent ?? ''; ghost.hidden = false; options.host.classList.add('wm-changing', 'wm-dragging');
+      drag.gesture = current; drag.tab.setPointerCapture(event.pointerId); drag.tab.classList.add('im-tile-tab-dragging');
+      ghost.textContent = drag.tab.textContent ?? ''; ghost.hidden = false; options.host.classList.add('im-changing', 'im-dragging');
     }
     event.preventDefault();
     ghost.style.transform = `translate(${event.clientX + 14}px, ${event.clientY + 12}px)`;
     drag.action = null; preview.hidden = true; marker.hidden = true;
-    const hit = document.elementFromPoint(event.clientX, event.clientY); const paneNode = hit?.closest<HTMLElement>('.wm-pane');
+    const hit = document.elementFromPoint(event.clientX, event.clientY); const paneNode = hit?.closest<HTMLElement>('.im-pane');
     const group = hit && paneNode && canvas.contains(paneNode) ? tabGroups(current.root).find(group => group.id === paneNode.dataset.groupId) : undefined;
     if (!hit || !group || group.collapsed) return;
     const drop = dropAction(event.clientX, event.clientY, hit, group);
@@ -216,25 +216,25 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
   function escapeDrag(event: KeyboardEvent): void { if (event.key === 'Escape' && drag) { event.preventDefault(); claimKey(event); event.stopPropagation(); cancelGesture(); } }
 
   function makeGroup(groupId: string): GroupDom {
-    const pane = element('section', 'wm-pane'); pane.dataset.groupId = groupId; pane.setAttribute('aria-label', 'Workspace pane');
-    const header = element('div', 'wm-header wm-chrome');
+    const pane = element('section', 'im-pane'); pane.dataset.groupId = groupId; pane.setAttribute('aria-label', 'Workspace pane');
+    const header = element('div', 'im-header im-chrome');
     const focus = control('Pane', 'pane-focus', () => { const group = current && tabGroups(current.root).find(group => group.id === groupId); if (group) { emit({ type: 'focus', groupId }); focusView(group.activeTabId); } });
-    focus.classList.add('wm-pane-focus'); focus.title = 'Arrow keys focus adjacent panes. Enter focuses the active view.';
-    const tabs = element('div', 'wm-tabs wm-chrome'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Pane tabs');
+    focus.classList.add('im-pane-focus'); focus.title = 'Arrow keys focus adjacent panes. Enter focuses the active view.';
+    const tabs = element('div', 'im-tile-tabs im-chrome'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Pane tabs');
     const collapse = control('−', 'collapse', () => { const group = current && tabGroups(current.root).find(group => group.id === groupId); if (group) emit({ type: 'collapse', groupId, collapsed: !group.collapsed }); });
     const maximize = control('□', 'maximize', () => emit({ type: 'maximize', groupId: current?.maximizedGroupId === groupId ? null : groupId }));
-    const add = control('+', 'new-tab', () => !blocked() && options.onNewTab?.(groupId)); add.classList.add('wm-add'); add.title = options.newTabLabel ?? 'New tab in this pane'; add.setAttribute('aria-label', add.title);
-    collapse.classList.add('wm-pane-tools');
+    const add = control('+', 'new-tab', () => !blocked() && options.onNewTab?.(groupId)); add.classList.add('im-add'); add.title = options.newTabLabel ?? 'New tab in this pane'; add.setAttribute('aria-label', add.title);
+    collapse.classList.add('im-pane-tools');
     header.append(focus, tabs, add, collapse, maximize);
-    const body = element('div', 'wm-body'); body.id = `${namespace}-panel-${groupId}`; body.setAttribute('role', 'tabpanel');
+    const body = element('div', 'im-tile-body'); body.id = `${namespace}-panel-${groupId}`; body.setAttribute('role', 'tabpanel');
     pane.append(header, body); canvas.appendChild(pane);
     pane.addEventListener('pointerdown', event => {
-      if (blocked() || (event.target instanceof Element && event.target.closest('.wm-chrome'))) return;
+      if (blocked() || (event.target instanceof Element && event.target.closest('.im-chrome'))) return;
       const group = current && tabGroups(current.root).find(group => group.id === groupId);
       if (group?.activeTabId && !group.collapsed && current?.focusedGroupId !== groupId) emit({ type: 'focus', groupId });
     });
     pane.addEventListener('focusin', event => {
-      if (event.target instanceof Element && event.target.closest('.wm-chrome')) return;
+      if (event.target instanceof Element && event.target.closest('.im-chrome')) return;
       const group = current && tabGroups(current.root).find(group => group.id === groupId);
       if (!blocked() && group?.activeTabId && !group.collapsed && current?.focusedGroupId !== groupId) emit({ type: 'focus', groupId });
     });
@@ -243,7 +243,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
 
   function buildChrome(group: TabGroup, index: number, dom: GroupDom): void {
     if (!current) return;
-    dom.element.classList.toggle('wm-collapsed', group.collapsed); dom.element.classList.toggle('wm-focused', current.focusedGroupId === group.id);
+    dom.element.classList.toggle('im-collapsed', group.collapsed); dom.element.classList.toggle('im-focused', current.focusedGroupId === group.id);
     dom.focus.textContent = `Pane ${index + 1}`; dom.focus.hidden = tabGroups(current.root).length < 2; dom.collapse.hidden = dom.maximize.hidden = tabGroups(current.root).length < 2; dom.collapse.setAttribute('aria-label', group.collapsed ? 'Restore pane' : 'Collapse pane');
     dom.collapse.title = group.collapsed ? 'Restore pane' : 'Collapse pane'; dom.collapse.textContent = group.collapsed ? '+' : '−';
     dom.maximize.setAttribute('aria-label', current.maximizedGroupId === group.id ? 'Restore layout' : 'Maximize pane'); dom.maximize.title = dom.maximize.getAttribute('aria-label') ?? '';
@@ -274,22 +274,22 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
         if (current?.focusedGroupId !== group.id) emit({ type: 'focus', groupId: group.id });
         emit({ type: 'activate', groupId: group.id, viewId: view.id }); focusView(view.id);
       });
-      tab.classList.add('wm-tab'); tab.dataset.viewId = view.id; tab.setAttribute('role', 'tab');
+      tab.classList.add('im-tile-tab'); tab.dataset.viewId = view.id; tab.setAttribute('role', 'tab');
       tab.id = `${namespace}-tab-${view.id}`; if (group.activeTabId === view.id) activeTabElement = tab; tab.setAttribute('aria-controls', dom.body.id);
       tab.setAttribute('aria-selected', String(group.activeTabId === view.id)); tab.tabIndex = tabbable === view.id ? 0 : -1;
       tab.title = `${name} · drag to another pane or to a side to split; Alt+Shift+arrow does the same from the keyboard, Delete closes it`;
       // Mouse drag, not HTML drag and drop: on Windows the window's native file drop takes those events.
       tab.addEventListener('pointerdown', event => holdTab(event, view.id, tab));
-      const wrap = element('span', 'wm-tabwrap'); wrap.classList.toggle('wm-tabwrap-active', group.activeTabId === view.id);
-      const close = control('×', `close:${view.id}`, () => !blocked() && options.onCloseView?.(view.id)); close.classList.add('wm-tab-close');
+      const wrap = element('span', 'im-tile-tabwrap'); wrap.classList.toggle('im-tile-tabwrap-active', group.activeTabId === view.id);
+      const close = control('×', `close:${view.id}`, () => !blocked() && options.onCloseView?.(view.id)); close.classList.add('im-tile-tab-close');
       close.title = `Close ${name}`; close.setAttribute('aria-label', `Close ${name}`); close.tabIndex = -1;
-      wrap.classList.toggle('wm-tab-toned', tone !== null); if (tone) wrap.style.setProperty('--tab-tone', tone);
+      wrap.classList.toggle('im-tile-tab-toned', tone !== null); if (tone) wrap.style.setProperty('--im-tile-tone', tone);
       wrap.append(tab, close); tabs.push(wrap);
     }
     // Every tab of this pane is filtered out: say so instead of an empty strip.
     const empty = filter !== null && filteredOut && tabs.length === 0;
-    if (empty) tabs.push(element('span', 'wm-tabs-filtered', `No ${filter.label} tabs here`));
-    dom.element.classList.toggle('wm-filtered-out', empty);
+    if (empty) tabs.push(element('span', 'im-tile-tabs-filtered', `No ${filter.label} tabs here`));
+    dom.element.classList.toggle('im-filtered-out', empty);
     dom.tabs.replaceChildren(...tabs);
     if (activeTabElement) { dom.body.setAttribute('aria-labelledby', activeTabElement.id); dom.body.removeAttribute('aria-label'); }
     else { dom.body.removeAttribute('aria-labelledby'); dom.body.setAttribute('aria-label', `Pane ${index + 1}`); }
@@ -307,7 +307,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
       for (let index = 0; index < node.children.length - 1; index += 1) {
         const key = `${node.id}:${index}`; used.add(key); let handle = splitters.get(key);
         if (!handle) {
-          handle = element('div', 'wm-splitter wm-chrome'); handle.tabIndex = 0; handle.setAttribute('role', 'separator'); handle.dataset.splitId = node.id; handle.dataset.boundary = String(index); handle.dataset.wmKey = `split:${key}`;
+          handle = element('div', 'im-tile-splitter im-chrome'); handle.tabIndex = 0; handle.setAttribute('role', 'separator'); handle.dataset.splitId = node.id; handle.dataset.boundary = String(index); handle.dataset.imTileKey = `split:${key}`;
           handle.addEventListener('pointerdown', event => startResize(event, key));
           handle.addEventListener('pointermove', updateResize);
           handle.addEventListener('pointerup', finishResize);
@@ -338,7 +338,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
     const firstFree = (columns ? first.width - firstMinimum.width : first.height - firstMinimum.height);
     const free = firstFree + (columns ? second.width - secondMinimum.width : second.height - secondMinimum.height);
     resize = { gesture: current, split, boundary, start: columns ? event.clientX : event.clientY, free, firstFree, handle, pointerId: event.pointerId, action: null };
-    handle.setPointerCapture(event.pointerId); options.host.classList.add('wm-changing');
+    handle.setPointerCapture(event.pointerId); options.host.classList.add('im-changing');
   }
   function updateResize(event: PointerEvent): void {
     if (!resize || !current || event.pointerId !== resize.pointerId || resize.free <= 0) return;
@@ -353,16 +353,16 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
 
   function onKey(event: KeyboardEvent): void {
     if (blocked() || !current || event.isComposing || !(event.target instanceof HTMLElement)) return;
-    const target = event.target; if (!target.closest('.wm-chrome') || !canvas.contains(target)) return;
+    const target = event.target; if (!target.closest('.im-chrome') || !canvas.contains(target)) return;
     if (event.key === 'Escape' && (drag || resize)) { event.preventDefault(); claimKey(event); cancelGesture(); return; }
-    const pane = target.closest<HTMLElement>('.wm-pane'); const group = pane && tabGroups(current.root).find(group => group.id === pane.dataset.groupId);
-    if (target.classList.contains('wm-pane-focus') && group && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+    const pane = target.closest<HTMLElement>('.im-pane'); const group = pane && tabGroups(current.root).find(group => group.id === pane.dataset.groupId);
+    if (target.classList.contains('im-pane-focus') && group && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault(); claimKey(event); const direction: Direction = event.key === 'ArrowLeft' ? 'left' : event.key === 'ArrowRight' ? 'right' : event.key === 'ArrowUp' ? 'up' : 'down';
       const neighbor = keyboardNeighbor(current, group.id, direction, viewport()); if (neighbor) { emit({ type: 'focus', groupId: neighbor }); focusChrome(neighbor, 'pane-focus'); } return;
     }
     // The keyboard twin of a tab's "×", which stays out of the Tab order.
-    if (target.classList.contains('wm-tab') && event.key === 'Delete' && target.dataset.viewId) { event.preventDefault(); claimKey(event); options.onCloseView?.(target.dataset.viewId); return; }
-    if (target.classList.contains('wm-tab') && group && event.altKey && event.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+    if (target.classList.contains('im-tile-tab') && event.key === 'Delete' && target.dataset.viewId) { event.preventDefault(); claimKey(event); options.onCloseView?.(target.dataset.viewId); return; }
+    if (target.classList.contains('im-tile-tab') && group && event.altKey && event.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault(); claimKey(event); const viewId = target.dataset.viewId; if (!viewId) return;
       const direction: Direction = event.key === 'ArrowLeft' ? 'left' : event.key === 'ArrowRight' ? 'right' : event.key === 'ArrowUp' ? 'up' : 'down';
       const axis = direction === 'left' || direction === 'right' ? 'columns' as const : 'rows' as const;
@@ -372,14 +372,14 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
       else { const neighbor = keyboardNeighbor(current, group.id, direction, viewport()); if (!neighbor) return; emit({ type: 'move', viewId, groupId: neighbor }); }
       focusView(viewId); return;
     }
-    if (target.classList.contains('wm-tab') && group && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+    if (target.classList.contains('im-tile-tab') && group && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); claimKey(event); const filter = options.tabFilter?.() ?? null;
       const visible = group.tabs.filter(viewId => { const view = current?.views.find(view => view.id === viewId); return !!view && !view.hidden && (!filter || filter.shows(view)); }); const viewId = target.dataset.viewId; const index = visible.indexOf(viewId ?? '');
       if (event.shiftKey && viewId && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) emit({ type: 'move', viewId, groupId: group.id, index: Math.max(0, Math.min(group.tabs.length - 1, group.tabs.indexOf(viewId) + (event.key === 'ArrowLeft' ? -1 : 1))) });
       else { const next = event.key === 'Home' ? visible[0] : event.key === 'End' ? visible.at(-1) : visible[(index + (event.key === 'ArrowLeft' ? -1 : 1) + visible.length) % visible.length]; if (next) { emit({ type: 'activate', groupId: group.id, viewId: next }); focusChrome(group.id, `tab:${next}`); } }
       return;
     }
-    if (target.classList.contains('wm-splitter')) {
+    if (target.classList.contains('im-tile-splitter')) {
       const split = findSplit(current.root, target.dataset.splitId ?? ''); const boundary = Number(target.dataset.boundary); if (!split) return;
       const negative = split.axis === 'columns' ? 'ArrowLeft' : 'ArrowUp'; const positive = split.axis === 'columns' ? 'ArrowRight' : 'ArrowDown';
       if (![negative, positive, 'Home'].includes(event.key)) return; event.preventDefault(); claimKey(event); const weights = [...split.weights]; const total = weights[boundary] + weights[boundary + 1];
@@ -410,7 +410,7 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
     try {
       const previous = current; current = layout; if ((drag || resize) && previous !== layout) cancelGesture();
       const oldFocus = document.activeElement instanceof HTMLElement && canvas.contains(document.activeElement) ? document.activeElement : null;
-      const focusKey = oldFocus?.dataset.wmKey; const focusGroup = oldFocus?.closest<HTMLElement>('.wm-pane')?.dataset.groupId;
+      const focusKey = oldFocus?.dataset.imTileKey; const focusGroup = oldFocus?.closest<HTMLElement>('.im-pane')?.dataset.groupId;
       const leaves = tabGroups(parsed.value.root); const liveGroups = new Set(leaves.map(group => group.id)); const liveViews = new Map(parsed.value.views.map(view => [view.id, view]));
       for (const group of leaves) {
         if (!groups.has(group.id)) groups.set(group.id, makeGroup(group.id));
@@ -434,8 +434,8 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
         } else {
           const custom = selected && options.placeholderFor?.(selected);
           if (custom) { dom.body.replaceChildren(custom); return; }
-          const placeholder = element('div', 'wm-placeholder', selected ? (options.unavailableLabel?.(selected) ?? 'This view is unavailable.') : 'Nothing open in this pane.');
-          if (!selected) { const start = element('button', 'wm-empty-start', options.emptyActionLabel ?? '+ New tab'); start.type = 'button'; start.addEventListener('click', () => !blocked() && options.onNewTab?.(group.id)); placeholder.append(start); }
+          const placeholder = element('div', 'im-placeholder', selected ? (options.unavailableLabel?.(selected) ?? 'This view is unavailable.') : 'Nothing open in this pane.');
+          if (!selected) { const start = element('button', 'im-tile-empty-start', options.emptyActionLabel ?? '+ New tab'); start.type = 'button'; start.addEventListener('click', () => !blocked() && options.onNewTab?.(group.id)); placeholder.append(start); }
           dom.body.replaceChildren(placeholder);
         }
       });
@@ -448,6 +448,6 @@ export function createTilingWorkspace<V extends TilingView, L extends TilingLayo
   return { render, destroy(): void {
     if (disposed) return; cancelGesture(); disposed = true; observer.disconnect(); options.host.removeEventListener('keydown', onKey); if (sizeFrame) cancelAnimationFrame(sizeFrame);
     for (const [viewId, binding] of options.bindings) { markVisibility(viewId, false, null); placeWorkspaceBinding(options.host, binding, false); }
-    canvas.remove(); parking.remove(); status.remove(); ghost.remove(); options.host.classList.remove('wm-host', 'wm-changing'); groups.clear(); splitters.clear();
+    canvas.remove(); parking.remove(); status.remove(); ghost.remove(); options.host.classList.remove('im-host', 'im-changing'); groups.clear(); splitters.clear();
   } };
 }

@@ -26,7 +26,7 @@ export default async function (page) {
     const fixture = page.locator('#dialog-repaint-fixture');
     assert.ok(await fixture.evaluate(el => getComputedStyle(el).getPropertyValue('--im-font-head').trim()), 'the standalone fixture provides Imago font tokens');
     assert.equal(await fixture.locator('.im-file-list').evaluate(el => getComputedStyle(el).paddingTop), '12px', 'document resets leave file-list component padding');
-    assert.equal(await fixture.locator('.im-settings h2').evaluate(el => getComputedStyle(el).paddingTop), '14px', 'document resets leave settings heading padding');
+    assert.equal(await fixture.locator('.im-settings h2').evaluate(el => getComputedStyle(el).paddingTop), '12px', 'document resets leave settings heading padding');
     assert.equal(await fixture.locator('.im-note--block ul').evaluate(el => getComputedStyle(el).listStyleType), 'disc', 'document resets leave the bullets of a note');
     assert.equal(await fixture.locator('.im-note--block ul').evaluate(el => getComputedStyle(el).paddingLeft), '16px', 'document resets leave the indentation of a note');
 

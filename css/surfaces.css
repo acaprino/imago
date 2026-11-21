@@ -31,12 +31,12 @@
 .im-menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--im-s-2);
   box-sizing: border-box;
   width: 100%;
   min-height: var(--im-h-row);
   margin: 0;
-  padding: 0 10px;
+  padding: 0 var(--im-s-2);
   font: inherit;
   text-align: start;
   color: var(--im-text);
@@ -96,7 +96,7 @@
   max-width: calc(100% - 16px);
   padding: var(--im-s-3);
   display: grid;
-  gap: 10px;
+  gap: var(--im-s-2);
   overflow: auto;
 }
 
@@ -118,7 +118,7 @@
 
 .im-scrim--top {
   place-items: start center;
-  padding-top: 56px;
+  padding-top: 56px; /* imago-check: allow literal-space — a place, not a space: the palette stands 56px under the title bar, where the approved design puts it */
   background: transparent;
 }
 
@@ -127,16 +127,16 @@
   position: static;
   width: min(420px, calc(100% - 32px));
   max-height: calc(100% - 32px);
-  padding: 20px;
+  padding: var(--im-s-4);
   display: grid;
-  gap: 10px;
+  gap: var(--im-s-2);
   overflow: auto;
   border-radius: calc(var(--im-r-sheet) + 2px);
 }
 
 .im-dialog-title {
   margin: 0;
-  font: 600 18px/1.25 var(--im-font-head);
+  font: 600 var(--im-fs-display)/1.25 var(--im-font-head);
   letter-spacing: var(--im-track);
   color: var(--im-text-hi);
 }
@@ -161,7 +161,7 @@
 .im-palette {
   position: static;
   width: min(460px, calc(100% - 32px));
-  padding: 6px;
+  padding: var(--im-s-1);
   display: grid;
   gap: var(--im-s-1);
 }
@@ -172,7 +172,7 @@
   gap: var(--im-s-2);
   box-sizing: border-box;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 var(--im-s-2);
   color: var(--im-muted);
   border-radius: var(--im-r-control);
 }
@@ -219,7 +219,7 @@
 }
 
 .im-palette-empty {
-  padding: 12px 10px;
+  padding: var(--im-s-3) var(--im-s-2);
   color: var(--im-muted);
 }
 
@@ -239,9 +239,9 @@
   position: static;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--im-s-3);
   max-width: min(560px, calc(100% - 24px));
-  padding: var(--im-s-2) var(--im-s-2) var(--im-s-2) 14px;
+  padding: var(--im-s-2) var(--im-s-2) var(--im-s-2) var(--im-s-3);
   pointer-events: auto;
 }
 
@@ -284,12 +284,12 @@
   align-items: center;
   gap: var(--im-s-2);
   margin: 0;
-  padding: 12px 20px;
+  padding: var(--im-s-3) var(--im-s-4);
 }
 .im-form-dialog-head { border-bottom: 1px solid var(--im-line); }
 .im-form-dialog-head > button { margin-inline-start: auto; }
 .im-form-dialog-subtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--im-text-2); }
-.im-form-dialog-body { min-height: 0; overflow: auto; padding: 18px 20px; }
+.im-form-dialog-body { min-height: 0; overflow: auto; padding: var(--im-s-4); }
 .im-form-dialog-foot { border-top: 1px solid var(--im-line); }
 .im-form-dialog[aria-busy="true"] .im-form-dialog-body { opacity: .65; }
 

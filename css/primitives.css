@@ -66,7 +66,7 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font: 600 15px/1 var(--im-font-head);
+  font: 600 var(--im-fs-title)/1 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-text-hi);
@@ -101,11 +101,11 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   align-items: center;
   gap: var(--im-s-2);
   block-size: var(--im-h-control-sm);
-  padding: 0 6px 0 var(--im-s-2);
+  padding: 0 var(--im-s-1) 0 var(--im-s-2);
   border: 1px solid var(--im-line);
   border-radius: var(--im-r-control);
   color: var(--im-muted);
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   white-space: nowrap;
 }
 .im-titlebar-command b { font-weight: 500; }
@@ -188,12 +188,12 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   overflow: hidden;
   border-top: 1px solid var(--im-line-soft);
   color: var(--im-muted);
-  font-size: 12px;
+  font-size: var(--im-fs-meta);
   white-space: nowrap;
 }
 .im-footer-text { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
 .im-footer-keys { display: flex; flex: none; gap: var(--im-s-3); }
-.im-footer-keys > span { display: inline-flex; align-items: center; gap: 6px; }
+.im-footer-keys > span { display: inline-flex; align-items: center; gap: var(--im-s-1); }
 
 /* ---------- the panel: header, tools, body, foot ---------- */
 .im-panel {
@@ -213,13 +213,13 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   padding-inline: var(--im-pane-pad);
 }
 .im-panel-title {
-  font: var(--im-head-w) 14px/1.15 var(--im-font-head);
+  font: var(--im-head-w) var(--im-fs-title)/1.15 var(--im-font-head);
   letter-spacing: var(--im-track);
   text-transform: var(--im-case);
   color: var(--im-head-c);
   white-space: nowrap;
 }
-.im-panel-sub { min-inline-size: 0; overflow: hidden; color: var(--im-muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.im-panel-sub { min-inline-size: 0; overflow: hidden; color: var(--im-muted); font-size: var(--im-fs-meta); text-overflow: ellipsis; white-space: nowrap; }
 .im-panel-tools { display: flex; flex: none; align-items: center; gap: var(--im-s-2); min-inline-size: 0; padding: 0 var(--im-pane-pad) var(--im-s-3); }
 .im-panel-tools > * { min-inline-size: 0; }
 .im-panel-tools > .im-note { flex: 1 1 auto; }
@@ -270,13 +270,13 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   --im-head-c: var(--im-text-2);
   --im-head-w: 700;
   --im-pane-clip: polygon(0 var(--im-cut-lg), var(--im-cut-lg) 0, calc(100% - var(--im-cut-lg)) 0, 100% var(--im-cut-lg), 100% calc(100% - var(--im-cut-lg)), calc(100% - var(--im-cut-lg)) 100%, var(--im-cut-lg) 100%, 0 calc(100% - var(--im-cut-lg)));
-  /* the ground carries the blue grid of ONI */
-  --im-grid: #2A4A8018;
+  /* the ground carries the blue grid of ONI; in the light theme it is ONI's line at 11% */
+  --im-grid: #2A4A8018; /* imago-check: allow literal-color — the grid of ONI's dark ground, #2A4A80 at 9%: a blue of the approved ONI that no token draws (the line, the button or the hover mixed with transparent land a level off, on the ground or under glass) */
   background-image: linear-gradient(90deg, var(--im-grid) 1px, transparent 1px), linear-gradient(0deg, var(--im-grid) 1px, transparent 1px);
   background-size: 22px 22px;
 }
-[data-im-look="oni"][data-im-theme="light"] .im-shell { --im-grid: #3F6FB51C; }
-[data-im-look="oni"] .im-wordmark { font: 700 20px/1 var(--im-font-display); letter-spacing: 0.12em; color: var(--im-accent-text); }
+[data-im-look="oni"][data-im-theme="light"] .im-shell { --im-grid: color-mix(in srgb, var(--im-line) 11%, transparent); }
+[data-im-look="oni"] .im-wordmark { font: 700 var(--im-fs-display)/1 var(--im-font-display); letter-spacing: 0.12em; color: var(--im-accent-text); }
 [data-im-look="oni"] .im-titlebar .im-tab { block-size: 26px; border: 1px solid transparent; color: var(--im-accent-text); }
 [data-im-look="oni"] .im-titlebar .im-tab::after { display: none; }
 [data-im-look="oni"] .im-titlebar .im-tab[aria-selected="true"] { background: var(--im-selected); border-color: var(--im-line-strong); color: var(--im-accent-hi); }
@@ -391,7 +391,7 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   .im-sidebar .im-row:is([aria-selected="true"], [aria-current]:not([aria-current="false"]), [aria-pressed="true"]) > :is(.im-avatar, .im-check).im-rail-item {
     box-shadow: 0 0 0 2px var(--im-rail-fill), 0 0 0 2px var(--im-rail-ground), 0 0 0 4px var(--im-accent-text);
   }
-  .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); }
+  .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); } /* imago-check: allow literal-space — the rail's geometry, not a space: 6px each side of the 56px rail leave rows 44 wide, as wide as a two-line row is tall in Smooth */
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
 }
 
@@ -407,7 +407,7 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   .im-status > .im-status-end { display: none; }
   .im-titlebar .im-views-menu { display: inline-flex; }
   .im-titlebar .im-sidebar-toggle { display: inline-grid; }
-  .im-titlebar-command { padding: 0 6px; border-color: transparent; }
+  .im-titlebar-command { padding: 0 var(--im-s-1); border-color: transparent; }
   [data-im-look="smooth"] .im-work,
   [data-im-look="smooth"] .im-shell[data-im-sidebar="off"] .im-work { margin-inline-start: 0; border-left: 0; border-radius: 0; }
   .im-shell[data-im-sidebar-open="true"] .im-sidebar {
