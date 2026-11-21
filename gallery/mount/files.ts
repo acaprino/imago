@@ -23,6 +23,11 @@ export default function mount({ root, sections }: MountContext): () => void {
   // A browser cannot return a native absolute path. Demonstrate the host callback with a sample.
   const path = pathField(input, { buttonLabel: 'Choose sample path', choose: async () => 'src/index.ts',
     onError: error => { output.value = String(error); } });
+  // With commit the choice is acted on at once (here: opened) and the field keeps what was typed.
+  const folderInput = document.createElement('input');
+  folderInput.setAttribute('aria-label', 'Folder to open');
+  const openFolder = pathField(folderInput, { buttonLabel: 'Open sample folder…', choose: async () => 'examples/demo',
+    commit: folder => { output.value = `Opened ${folder}`; }, onError: error => { output.value = String(error); } });
   const titles = ['Select', 'Review', 'Import'];
   const steps = stepProgress(document, 'Import steps', titles);
   let current = 0;
@@ -35,7 +40,7 @@ export default function mount({ root, sections }: MountContext): () => void {
     steps.setCurrent(current);
     next.textContent = current === titles.length ? 'Start again' : 'Next step';
   };
-  section.append(heading, tree, output, upload, path, steps.element, next, loader(document, 'Reading files…'));
+  section.append(heading, tree, output, upload, path, openFolder, steps.element, next, loader(document, 'Reading files…'));
   sections.append(section);
   return () => section.remove();
 }
