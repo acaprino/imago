@@ -47,15 +47,17 @@ and this file differ, this file wins.
 | Every control in every state, both looks, both themes, each app's accent | the gallery: `npm run gallery` |
 
 The gallery is the acceptance surface. A control is done when its row is complete and its contrast test passes. Every
-class `css/` defines is shown there. The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
+class `css/` defines is shown there, but those `tests/gallery/coverage.mjs` lists as pending removal (today `im-path`). The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
 `focus`): it is the gallery's, never an app's. The names these documents write are checked against the code by
 `tests/docs.test.ts`.
 
 ## Names
 
-Every class of the package starts with `im-`, every custom property with `--im-`, every attribute it reads or styles
-with `data-im-`. The `data-action`, `data-id`, `data-close` and `data-setting` that the string renderers write from
-their arguments are the app's own, for its handlers ([html-composition.md](html-composition.md)). An app's own classes
+Every class of the package starts with `im-`, every custom property with `--im-`, every attribute it keeps for itself
+with `data-im-`. The `data-action` and `data-id` that the string renderers write from their arguments are the app's
+values: the app's handlers read them, and the package reads them too, to know a control again after a repaint
+(`focusKey`) and to move between steps (`stepNavigationKey`). `data-close` and `data-setting` are written for the app's
+handlers only ([html-composition.md](html-composition.md)). An app's own classes
 and custom properties carry the app's own prefix (`mk-`, `--mk-`), never `im-`. A name the package
 removed is removed, not kept as an alias: the table "Moving from 0.1.4" in [using-imago.md](using-imago.md#11-moving-from-014)
 says what replaces each.
@@ -661,7 +663,8 @@ of the second for itself: an app never writes or styles them.
 | `data-im-key` | A control | Its identity across a repaint, for focus and dialogs (`captureDomState`) |
 | `data-im-scroll` | A region that scrolls | Its scroll is kept across a repaint (`captureDomState`) |
 | `data-im-rail-detail` | Anything inside the sidebar | Hidden in the rail |
-| `data-im-align` | An item of a toolbar | `end`: pushed to the end, as `im-end` does; an app writes `im-end` |
+
+`data-im-align="end"` draws what the class `im-end` draws: an app writes `im-end`, not the attribute.
 
 | Attribute | Written by | What it says |
 |---|---|---|

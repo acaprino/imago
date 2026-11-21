@@ -25,7 +25,9 @@
 - A new rule, class, attribute, token or export is written in the documents: the rule in `docs/design-file.md`, the
   calls in the document `docs/design-file.md` names for them. `tests/docs.test.ts` fails on a name of the code that no
   document writes, and on a name a document writes that the code does not have.
-- The gallery shows every class `css/` defines, in both looks and both themes, and its contrast test covers it.
+- The gallery shows every class `css/` defines, in both looks and both themes, and its contrast test covers it; a class
+  nothing uses is listed, with its reason, as pending removal in `tests/gallery/coverage.mjs` until it is removed (with
+  its row and its entry).
 
 ## Rust is built and tested on GitHub only
 

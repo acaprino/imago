@@ -26,8 +26,11 @@ const name = textFieldHtml('Name', 'name', item.name, {
   same and the attributes of a native control (`name`, `value`, `type`, `disabled`, `checked`, `required` and their kin).
   Anything else, an event handler included, throws; so does an attribute that would override a structural one (a
   button's `data-action`).
-- `data-action` and `data-id`, which a renderer writes from its `action` and `id` arguments, are the app's: the action of
-  the element and the thing it is about, for the app's own click handler. The renderers do not parse or run HTML.
+- `data-action` and `data-id`, which a renderer writes from its `action` and `id` arguments, are the app's values: the
+  action of the element and the thing it is about, for the app's own click handler. The package reads them too: a repaint
+  knows a control again by them (`focusKey`), and `stepNavigationKey` finds its tabs by them. `data-close` (the close and
+  Cancel buttons of `formHeaderHtml` and `formFooterHtml`) and `data-setting` (the input of `settingInputHtml`) are for
+  the app's handlers only. The renderers do not parse or run HTML.
 
 ## The shell frame
 

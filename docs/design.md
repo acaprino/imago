@@ -326,7 +326,8 @@ Each app depends on a tag: `"@acaprino/imago": "github:acaprino/imago#v<x>"` and
 
 The gallery is a page in the package that shows every control in every state, in both looks and
 themes, for each app's accent. It is the acceptance surface: a control is done when its row in the
-gallery is complete and its contrast test passes. Every class the package defines is shown there.
+gallery is complete and its contrast test passes. Every class the package defines is shown there, but those its
+coverage test lists as pending removal.
 
 A rule is checked by a program wherever a program can check it *(call)*: `imago-check`, a program of the package, runs
 in each app's CI and on the package's own stylesheets, and fails, with the file and the line, on what the design file
