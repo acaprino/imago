@@ -48,6 +48,28 @@ export default async function (page) {
     await page.evaluate(() => document.querySelector('#frame-focus [data-action="open"][data-id="a"]').focus());
     await page.evaluate(() => window.__frameFocus.paint('<p>More</p>'));
     assert.deepEqual((await active()).id, 'a', 'also when the content changes');
+
+    // roving bound to an element a repaint keeps (the title bar) still moves the tab stop after it; one bound to what it
+    // replaces (the title bar's .im-tabs) would be left on a detached element.
+    const tabs = '<nav class="im-tabs" role="tablist" aria-label="Views"><button type="button" role="tab" class="im-tab" aria-selected="true">One</button><button type="button" role="tab" class="im-tab" aria-selected="false">Two</button></nav>';
+    const withTabs = () => page.evaluate((tabs) => {
+      const api = window.__imagoSurfaces;
+      const { shell } = window.__frameFocus;
+      api.renderShellFrame(shell, api.shellFrameHtml({
+        titlebarHtml: api.titlebarHtml({ brand: { name: 'Frame' }, navigationHtml: tabs }),
+        contentHtml: api.pageContentHtml('<p>Page</p>'), contentLabel: 'Page', skipLabel: 'Skip to content', inspectorLabel: 'Details',
+      }));
+    }, tabs);
+    await withTabs();
+    await page.evaluate(() => {
+      const titlebar = document.querySelector('#frame-focus .im-titlebar');
+      window.__stops = [window.__imagoSurfaces.roving(titlebar, { item: '.im-tab', orientation: 'horizontal', onSelect: (tab) => tab.click() })];
+    });
+    await withTabs();
+    await page.evaluate(() => document.querySelector('#frame-focus .im-tab').focus());
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('#frame-focus .im-tab')].indexOf(document.activeElement)), 1, 'roving bound to the title bar still moves after a repaint');
+    await page.evaluate(() => window.__stops.forEach((stop) => stop()));
   } finally {
     await page.evaluate(() => {
       window.__frameFocus.shell.remove();
