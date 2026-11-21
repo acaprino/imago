@@ -259,7 +259,7 @@
 
 **Interfaces:**
 - `docs.test.ts`: the name checks (`--im-*`, `im-` classes, `data-im-*`, imported and called exports) run over every `docs/*.md`; a new test asserts `design-file.md` links every other `docs/*.md`; a new test asserts no document contains a name of the mapping table's "old" column outside that table.
-- `design-file.md` gains: the document table; "One frame" (what the removed frames were, in one line, for readers who meet them in an old app); the control table with native and ARIA forms; "Page patterns" with every class of Task 10; the type and categorical tokens; "Selected" by any of the four attributes; `mountApp`; "What a program checks" with the rule ids of `imago-check`; "What a person checks" (wording of destructive buttons, one primary action, Undo bound, the real window); the React exception.
+- `design-file.md` gains: where Settings live (the last view tab of the title bar, when an app has settings; they save themselves) and the five look and theme commands every app has through `mountApp` (Task 17); the mark and the icon of the executables; the categorical colour and the badge of a row (Task 16); the document table; "One frame" (what the removed frames were, in one line, for readers who meet them in an old app); the control table with native and ARIA forms; "Page patterns" with every class of Task 10; the type and categorical tokens; "Selected" by any of the four attributes; `mountApp`; "What a program checks" with the rule ids of `imago-check`; "What a person checks" (wording of destructive buttons, one primary action, Undo bound, the real window); the React exception.
 - `using-imago.md` gains "Moving from 0.1.4" (the whole mapping table), section 6 rewritten round `mountApp`, section 9's lines extended with `Run npx imago-check before you say UI work is done.` and the `"imago"` block for `package.json`.
 
 - [ ] **Step 1:** Extend `docs.test.ts`; it fails on the topic documents.
@@ -302,6 +302,101 @@
 - [ ] **Step 1:** Tests: each app has the files above; every PNG's header gives its size; `icon.ico` holds the six sizes and `favicon.ico` the three; each SVG holds the right letter, the fill and the ink of that app's tokens; the contrast of the ink on the fill is 4.5:1 or more for the five; the check rule finds a changed file and passes an equal one.
 - [ ] **Step 2:** Run; they fail.
 - [ ] **Step 3:** Write the script, run it, commit what it wrote.
+- [ ] **Step 4:** `npm test`, `npm run build`, `node tests/gallery/run.mjs` pass.
+- [ ] **Step 5:** Commit.
+
+### Task 15: `imago-check` sees what the five app plans showed it misses (independent; any time)
+
+The planners of the five apps ran the check on a copy of each app and listed what it let through. Source of each item: the ledger's entries F6, F7, F8, F10, F11, F20, and the minors parked by the reviews of Tasks 2 and 14.
+
+**Files:**
+- Modify: `scripts/check/cli.mjs`, `scripts/check/rules.mjs`, `scripts/check/css.mjs`, `scripts/check/source.mjs`, `scripts/check/names.mjs`, `scripts/check/allowed.mjs`, `scripts/icons.mjs`
+- Create: `scripts/check/removed.mjs` (the names the canon removed, each with what replaces it), `scripts/check/values.mjs` (the attributes that take a closed set of values)
+- Test: `tests/check.test.ts`, `tests/icons.test.ts`
+
+**Interfaces:**
+- New rules, app mode:
+  - `removed-name`: a name of `scripts/check/removed.mjs` (a class with or without the `im-` prefix, a `data-im-` attribute, a `--im-` custom property, an export of the package) anywhere in the app's CSS, markup or script, tests included. The message gives the replacement. The file starts with the rows of `docs/superpowers/moving-from-0.1.4.md` and `docs/superpowers/moving/*.md` as they are on the branch, as `export const REMOVED = [{ old, kind, now }]`; a test asserts every "old" name of those tables is in it.
+  - `unknown-value`: a value outside the set, for the attributes of `scripts/check/values.mjs`: `data-im-tone` (`ok`, `warn`, `err`, `info`, `accent`), `data-im-look` (`smooth`, `oni`), `data-im-theme` (`dark`, `light`), `data-im-app` (the five ids), `data-im-sidebar` (`on`, `off`), `data-im-inspector` (`wide`), `data-im-surface` (`ground`, `sheet`, `dense`, `float`), `data-im-step` (`done`, `now`, `todo`). A value built at run time (a template with a substitution) is not judged.
+  - `own-keydown`: `addEventListener('keydown' | 'keyup' | 'keypress', …)` on `document`, `window` or `document.body`, and `onkeydown =` on them. An app's widget that runs its own keys (a terminal) carries the exception comment.
+  - `literal-case`: `text-transform` other than `none` or `var(--im-case)`, and `letter-spacing` other than `0`, `normal` or `var(--im-track)`, in the app's CSS and in style written from script.
+- Changed rules:
+  - `media-width` also reports `matchMedia(` whose query holds `width`, in script.
+  - `literal-font-size`, `literal-space` and `literal-color` resolve the app's own custom properties where they are used: `font-size: var(--x)` is judged by the value the app's CSS gives `--x` (through as many `var()` steps as it takes; a property the app never defines is not judged). The finding is on the line that uses it and names the line that defines it.
+  - `literal-color` in script judges style-shaped places only: a `style` attribute, a `.style.x =` assignment, `setProperty`, `cssText`, the values of a React `style={{ … }}` object, and a `<meta name="theme-color">`. A string such as `'Issue #123'` or `location.hash = '#bad'` is not a finding. Colour words are judged only in properties that take a colour.
+  - `literal-space`, `literal-font-size` and `cursor-pointer` also read a React `style={{ … }}` object.
+  - `mount-app` requires that the entry or a file it imports imports `mountApp` from `@acaprino/imago/ui` and calls that binding; an app's own function of the same name does not pass.
+  - `agent-rules`: the path written in each agent file, resolved against the folder of that file and against the root, must exist. The `"imago"` block gains `"package"` (where the package is installed, default `node_modules/@acaprino/imago`), used here and wherever the installed package is read.
+  - `app`: validated against the list of folders of the package's `icons/`, exactly (no `..`, no other case).
+- The scanner: a custom property whose value holds `{ … }` no longer breaks the rules after it; a declaration without a final `;` ends on its own last line.
+- Errors: an entry whose `stat` or read fails is skipped with a note; any other system error is one line on stderr and exit 2, never a stack and never exit 1.
+- `scripts/check/allowed.mjs` is the one place for what is allowed: `rules.mjs` holds no list of its own.
+- `scripts/icons.mjs`: `--check` also verifies, without drawing, that each PNG's header gives the size of its name and that each `.ico` equals the container built from the folder's PNGs; an unknown argument is exit 2; drawing refuses, with a message, off Windows or when the font `Segoe UI Variable Display` is not found. `tests/icons.test.ts`: the centring tolerance is 1.5%.
+- Revert the stray whitespace change at `scripts/check/rules.mjs` (`const EXCEPTION =/…` back to `= /…`).
+
+- [ ] **Step 1:** Tests: each new and changed rule with one string that must be found and one that must not, taken from what the planners saw: `--fs-md: 13.5px` then `font-size: var(--fs-md)`; `wm-drop-preview` in a test file; `data-im-tone="good"`; an app's own `function mountApp()`; `document.addEventListener('keydown', …)`; `matchMedia('(max-width: 899px)')`; `text-transform: uppercase`; `'Issue #123 closed'`; `animation: red 1s`; `style={{ padding: '12px' }}`; a dangling symlink in `src`; an agent file whose path does not exist; `"app": ".."`.
+- [ ] **Step 2:** Run; they fail.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** `npm test` and `npm run build` pass; `node scripts/check/cli.mjs --package` still runs and its count of findings is reported.
+- [ ] **Step 5:** Commit.
+
+### Task 16: The frame and the rows hold what the apps need (after Tasks 4, 5 and 13 are merged)
+
+Source: the ledger's entries F1, F2, F3, F4, F13, F14, F19, F21, F22, and the minors parked by the reviews of Tasks 3 and 9.
+
+**Files:**
+- Modify: `css/primitives.css`, `css/content.css`, `css/controls.css`, `ts/ui/shell-markup.ts`, `ts/ui/shell-frame.ts`, `ts/ui/inspector.ts`, `react/index.js`, `react/index.d.ts`, `gallery/apps.ts`, `tokens/imago.tokens.json`, `docs/superpowers/moving/task-16.md`
+- Test: `tests/shell-markup.test.ts`, `tests/react.test.ts`, `tests/tokens.test.ts`, `tests/gallery/layout.mjs`, `tests/gallery/controls.mjs`, `tests/gallery/workspace-integration.mjs`
+
+**Interfaces:**
+- A shell fills the window wherever it is mounted: `html` and `body` take the window's height when they hold an `im-shell` at any depth, and a wrapper between `body` and the shell carries `im-root` (`block-size: 100%`). The React `Shell` is documented as mounted in a root that carries `im-root`. Test: a shell inside `<div id="app" class="im-root">` is as tall as the viewport and its content region is not 0 pixels tall.
+- Page content is content: text inside `im-page-content` can be selected; the controls in it (buttons, tabs, the chrome of rows) cannot, as everywhere. Test with `getComputedStyle(…).userSelect` on a paragraph, a `code`, a button.
+- A categorical colour: `data-im-cat="1"` … `"8"` on an `im-row`, an `im-rail-item`, an `im-avatar`, an `im-dot` or an `im-chip` sets `--im-item-color` to `--im-cat-n`. A row draws it as a 3px mark at its start edge; an avatar, a rail item and a dot take it as their fill, with `--im-cat-on` for text; a chip takes it as its tone. The mark is beside, never instead of, the selection mark. Contrast 4.5:1 in both looks, both themes, on a row at rest, hovered and selected.
+- A badge: `data-im-badge` on a row shows a dot at the corner of its `im-rail-item` in the rail and at the row's end otherwise; its tone is the row's `data-im-tone` (default `warn`). The row's accessible name must say what the badge says: the test asserts the gallery's badged row has it in its text.
+- A row whose control is a check shows the check in the rail: `im-check im-rail-item` is ticked there as in the full sidebar.
+- `sidebarHtml` gains `count?: number` (an `im-count` in the header) and `footHtml?: string` (an `im-panel-foot` under the list), both repainted by `renderShellFrame`.
+- `inspector(shell).open(content, opener?)`: `content` may be one element or a fragment whose children are an `im-panel-header`, an `im-panel-body` and an `im-panel-foot`; the inspector lays them out as a panel. Documented in the function's comment and tested with both shapes.
+- React: `Workbench` gains `status`, `actions` and `footer` (the children of `im-status`, `im-actions` and `im-footer`), and `contentId` and `sidebarId` (defaults `main` and `sidebar`); `skipLabel` on `Shell` and `aria-label` on `Workbench` are required in the types. `ListAction` gains `tooltip` (the HTML `title`) and `rail` (the children of a `span.im-rail-item`). A test compares the exported names of `react/index.js` with those `react/index.d.ts` declares.
+- `renderShellFrame`: a kept control or region that held focus holds it after the repaint; the sidebar's list keeps its scroll; the fold button's `aria-expanded` follows the shell's state as its label does. The comment of `takeAttributes` says an attribute the markup drops is not removed.
+- `--im-w-inspector-wide: 360px` is a token (in `tokens/imago.tokens.json`), used by `data-im-inspector="wide"`.
+
+- [ ] **Step 1:** Tests for each line above.
+- [ ] **Step 2:** Run; they fail.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** `npm test`, `npm run build`, `node tests/gallery/run.mjs` pass.
+- [ ] **Step 5:** Commit.
+
+### Task 17: The same keys, look, theme and tooltips in every app (after Task 8 is merged; in parallel with Task 16)
+
+Source: the ledger's entries F9, F12, F15, F16, F18, and the minors parked by the review of Task 8.
+
+**Files:**
+- Modify: `ts/ui/app.ts`, `ts/ui/commands.ts`, `ts/ui/layers.ts`, `ts/ui/inspector.ts` (only its Escape handling), `ts/ui/shell-markup.ts` (`windowButtonsHtml`), `ts/ui/form-markup.ts` (`formHeaderHtml`), `gallery/apps.ts`, `gallery/mount/surfaces.ts`, `gallery/main.ts`, `docs/superpowers/moving/task-17.md`
+- Test: `tests/app.test.ts`, `tests/commands.test.ts`, `tests/layers.test.ts`, `tests/shell-markup.test.ts`, `tests/form-markup.test.ts`, `tests/gallery/keys.mjs`, `tests/gallery/surfaces.mjs`
+
+**Interfaces:**
+- A key is answered once. A handler of the package that acts on a key (Escape that closes a surface, the inspector or the sidebar drawer) calls `preventDefault()`; `registry.attach` does not run a command for an event whose default is already prevented. `mountApp` attaches the layers before the registry, so the order holds. Test: with the inspector open and a command bound to Escape, one Escape closes the inspector and the command does not run; a second Escape runs it.
+- The look and the theme, alike in every app:
+  ```ts
+  export const LOOK_SMOOTH = 'imago.look.smooth'; export const LOOK_ONI = 'imago.look.oni';
+  export const THEME_SYSTEM = 'imago.theme.system'; export const THEME_LIGHT = 'imago.theme.light'; export const THEME_DARK = 'imago.theme.dark';
+  export interface AppearanceOptions {
+    get: () => { look: 'smooth' | 'oni'; theme: 'system' | 'light' | 'dark' };
+    set: (next: { look: 'smooth' | 'oni'; theme: 'system' | 'light' | 'dark' }) => void;
+    labels?: Partial<Record<'smooth' | 'oni' | 'system' | 'light' | 'dark' | 'group', string>>;
+  }
+  // AppOptions gains: appearance?: AppearanceOptions
+  ```
+  With `appearance`, `mountApp` registers the five commands in the group `labels.group` (default `Appearance`; default titles `Smooth look`, `ONI look`, `Follow Windows`, `Light theme`, `Dark theme`); each calls `set` with the other half of `get()` unchanged. The command of the current choice is not available (`when`). The app keeps the choice and calls `applyLook`; the package stores nothing. No key is bound.
+- `footerKeys(doc, registry, entries)`: an entry is a command id or `{ keys: string; title: string }`, for the keys of a list that are not commands (arrows, Space, Enter).
+- `windowButtonsHtml` writes `title` on each button (`Minimize`, `Maximize`, `Close` by default, beside the accessible names it has; the labels object gains the three titles); `formHeaderHtml` takes the close button's label and writes it as `aria-label` and `title`.
+- `mountApp`'s errors start with `mountApp: ` and, when the cause is a key or an id the app registered itself, say which.
+- The gallery: the title bar's command button runs the registered command (`registry.get(PALETTE_COMMAND)`), one footer is written by `footerKeys` from the registry, each fixture passes `appearance` and the gallery's own look and theme controls call the same `set`; the Xiox fixture's tabs are the three Xiox has today (read `git -C D:/Projects/xiox show develop:apps/desktop/index.html`, the element `#sections`; read-only).
+- `tests/app.test.ts`: the `openLayer` helper's default `close` no longer refers to a body binding; the palette test closes its layer in a `finally`.
+
+- [ ] **Step 1:** Tests for each line above.
+- [ ] **Step 2:** Run; they fail.
+- [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `npm test`, `npm run build`, `node tests/gallery/run.mjs` pass.
 - [ ] **Step 5:** Commit.
 
