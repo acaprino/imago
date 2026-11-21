@@ -81,7 +81,7 @@ export default async function (page) {
       assert.ok(!['rgba(0, 0, 0, 0)', 'transparent'].includes(hues.none.fill), where(`its primary button has a fill (${hues.none.fill})`));
       assert.equal(hues.app.hue, '75', where("an app keeps its own hue (xiox's)"));
 
-      // A field's label is one drawing: the bare span a renderer writes (textFieldHtml) and `im-field-label` look the same.
+      // A field's label is one drawing, `im-field-label`: the renderers write the class, so a field's box is not bold with it.
       const labels = await page.evaluate(() => {
         const host = document.querySelector('#g-window .im-shell');
         const wrap = document.createElement('div');
@@ -95,7 +95,6 @@ export default async function (page) {
         wrap.remove();
         return { bare, classed, input };
       });
-      assert.equal(labels.bare, labels.classed, where('a bare span label is drawn as im-field-label'));
       assert.equal(labels.input, '400', where('the box of a field is not bold'));
 
       // The thumb of a scrollbar is a mark: at least 3:1 on the surface it is on.
