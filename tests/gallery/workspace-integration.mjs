@@ -360,9 +360,100 @@ async function nativeForms(page) {
   assert.equal(await page.evaluate(() => ui.topLayer()), undefined);
 }
 
+// The app repaints its whole frame from strings while a dialog is open and the inspector holds a form the person typed in:
+// the dialog stays and still answers, the inspector and its values stay, a region that went is removed and comes back,
+// and what sidebarDrawer, sidebarCollapse and sidebarResize wired keeps working.
+async function frame(page) {
+  await page.evaluate(() => {
+    const shell = document.createElement('div');
+    shell.className = 'im-shell';
+    shell.style.cssText = 'width:1100px;height:600px';
+    root.append(shell);
+    const paint = (n, options = {}) => ui.shellFrameHtml({
+      titlebarHtml: ui.titlebarHtml({ brand: { name: 'App ' + n }, navigationHtml: '<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="side">T</button>', windowControls: true }),
+      sidebarHtml: options.sidebar === false ? undefined : ui.sidebarHtml({ id: 'side', label: 'Threads', rowsHtml: `<div class="im-row" role="option" tabindex="0" aria-selected="true" title="Row ${n}"><span class="im-avatar im-rail-item" aria-hidden="true">R</span><span class="im-row-text"><span class="im-row-title">Row ${n}</span></span></div>`, collapse: { collapse: 'Collapse sidebar', expand: 'Expand sidebar' } }),
+      statusHtml: options.status === false ? undefined : `<span class="im-status-text">Status ${n}</span>`,
+      contentHtml: `<button type="button" id="opener">Delete item ${n}</button>`,
+      contentLabel: 'Items', skipLabel: 'Skip to content', inspectorLabel: 'Details',
+      actionsHtml: '<button type="button" class="im-btn im-btn--primary">Apply</button>', footerHtml: `<span class="im-footer-text">Footer ${n}</span>`,
+    });
+    ui.renderShellFrame(shell, paint(1));
+    const stops = [ui.attachLayers(shell), ui.sidebarDrawer(shell), ui.sidebarCollapse(shell), ui.sidebarResize(shell, { label: 'Sidebar width' })];
+    const form = document.createElement('form');
+    form.innerHTML = '<label class="im-field"><span class="im-field-label">Name</span><span class="im-input"><input name="name" aria-label="Name"></span></label>';
+    ui.inspector(shell).open(form);
+    window.frameTest = { shell, paint, stops, form, inspector: shell.querySelector('.im-inspector'), sidebar: shell.querySelector('.im-sidebar') };
+  });
+  await page.getByRole('textbox', { name: 'Name' }).fill('Typed before the repaint');
+  await page.evaluate(() => {
+    frameTest.answer = ui.confirm(frameTest.shell, { title: 'Delete item?', body: 'This cannot be undone.', confirm: 'Delete item', cancel: 'Cancel', danger: true });
+  });
+  const during = await page.evaluate(() => {
+    const { shell, paint } = frameTest;
+    ui.renderShellFrame(shell, paint(2, { status: false }));
+    return {
+      dialog: !!shell.querySelector('[role="alertdialog"]'), bodyInert: shell.querySelector('.im-body').inert,
+      inspector: shell.querySelector('.im-inspector') === frameTest.inspector, open: !frameTest.inspector.hidden,
+      form: frameTest.inspector.contains(frameTest.form), value: frameTest.form.elements.name.value,
+      status: shell.querySelector('.im-status'), content: shell.querySelector('.im-content').textContent, sidebar: shell.dataset.imSidebar,
+    };
+  });
+  assert.deepEqual(during, {
+    dialog: true, bodyInert: true, inspector: true, open: true, form: true, value: 'Typed before the repaint',
+    status: null, content: 'Delete item 2', sidebar: 'on',
+  }, 'a repaint under a dialog keeps the dialog, the inert body and the inspector with what was typed');
+  await page.getByRole('alertdialog', { name: 'Delete item?' }).getByRole('button', { name: 'Cancel' }).click();
+  assert.equal(await page.evaluate(() => frameTest.answer), false, 'the dialog still answers after the repaint');
+  assert.equal(await page.evaluate(() => frameTest.shell.querySelector('.im-body').inert), false, 'closing it releases the body');
+
+  // The status row comes back above the columns; the sidebar goes and comes back before the work area.
+  const regions = await page.evaluate(() => {
+    const { shell, paint } = frameTest;
+    ui.renderShellFrame(shell, paint(3));
+    const work = [...shell.querySelector('.im-work').children].map(el => el.className);
+    ui.renderShellFrame(shell, paint(4, { sidebar: false }));
+    const without = { sidebar: shell.querySelector('.im-sidebar'), off: shell.dataset.imSidebar };
+    ui.renderShellFrame(shell, paint(5));
+    return { work, without, body: [...shell.querySelector('.im-body').children].map(el => el.className), on: shell.dataset.imSidebar };
+  });
+  assert.deepEqual(regions, {
+    work: ['im-status', 'im-columns', 'im-actions', 'im-footer'], without: { sidebar: null, off: 'off' },
+    body: ['im-panel im-sidebar', 'im-work'], on: 'on',
+  });
+  // The sidebar that came back is a new one: the app wires it again, as it does after any first paint.
+  await page.evaluate(() => {
+    for (const stop of frameTest.stops.splice(1)) stop();
+    const { shell } = frameTest;
+    frameTest.stops.push(ui.sidebarDrawer(shell), ui.sidebarCollapse(shell), ui.sidebarResize(shell, { label: 'Sidebar width' }));
+    frameTest.sidebar = shell.querySelector('.im-sidebar');
+    ui.renderShellFrame(shell, frameTest.paint(6));
+  });
+  assert.equal(await page.evaluate(() => frameTest.shell.querySelector('.im-sidebar') === frameTest.sidebar), true, 'a repaint keeps the sidebar element');
+  const fold = page.getByRole('button', { name: 'Collapse sidebar' });
+  await fold.click();
+  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarCollapsed), 'true', 'the fold button still folds after a repaint');
+  await page.evaluate(() => ui.renderShellFrame(frameTest.shell, frameTest.paint(7)));
+  assert.equal(await page.getByRole('button', { name: 'Expand sidebar' }).getAttribute('aria-expanded'), 'false', 'a repaint keeps the folded state of the button');
+  await page.getByRole('button', { name: 'Expand sidebar' }).click();
+  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarCollapsed), undefined, 'and it unfolds');
+  const splitter = page.getByRole('separator', { name: 'Sidebar width' });
+  await splitter.press('ArrowRight');
+  assert.equal(await page.evaluate(() => frameTest.shell.style.getPropertyValue('--im-w-sidebar')), '240px', 'the splitter still resizes after a repaint');
+  await page.evaluate(() => { frameTest.shell.style.width = '600px'; });
+  await page.getByRole('button', { name: 'Threads' }).click();
+  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), 'true', 'the sidebar button still opens the drawer after a repaint');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(() => frameTest.shell.dataset.imSidebarOpen), undefined, 'and Escape closes it');
+  await page.evaluate(() => {
+    for (const stop of frameTest.stops) stop();
+    frameTest.shell.remove();
+    delete window.frameTest;
+  });
+}
+
 export default async function workspaceIntegration(page, url) {
   const reset = await fixture(page, url);
-  for (const scenario of [inspector, docking, picker, tree, splits, breadcrumbs, nativeForms]) {
+  for (const scenario of [inspector, docking, picker, tree, splits, breadcrumbs, nativeForms, frame]) {
     await reset();
     await scenario(page);
   }

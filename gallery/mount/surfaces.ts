@@ -11,6 +11,10 @@ import {
   createContentDialog,
   runFormOperation,
   renderShellFrame,
+  shellFrameHtml,
+  sidebarHtml,
+  titlebarHtml,
+  pageContentHtml,
   openFormDialog,
   openMenu,
   openPalette,
@@ -35,6 +39,11 @@ declare global {
       createContentDialog: typeof createContentDialog;
       runFormOperation: typeof runFormOperation;
       renderShellFrame: typeof renderShellFrame;
+      /** The frame's string renderers, for the tests that build a frame beside the gallery's window. */
+      shellFrameHtml: typeof shellFrameHtml;
+      sidebarHtml: typeof sidebarHtml;
+      titlebarHtml: typeof titlebarHtml;
+      pageContentHtml: typeof pageContentHtml;
       clearNotices: typeof clearNotices;
       openFormDialog: typeof openFormDialog;
       openMenu: typeof openMenu;
@@ -145,7 +154,7 @@ export default function mount({ shell, app }: MountContext): () => void {
   const detachLayers = attachLayers(shell);
   const detachKeys = registry.attach(document);
 
-  window.__imagoSurfaces = { openContentDialog, createContentDialog, runFormOperation, renderShellFrame, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
+  window.__imagoSurfaces = { openContentDialog, createContentDialog, runFormOperation, renderShellFrame, shellFrameHtml, sidebarHtml, titlebarHtml, pageContentHtml, clearNotices, openFormDialog, openMenu, openSheet, confirm, notify, inspector: inspector(shell), openPalette, registry };
 
   return () => {
     shell.removeEventListener('click', onClick);

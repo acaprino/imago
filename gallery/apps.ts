@@ -206,7 +206,7 @@ export function shellMarkup(id: AppId): string {
     <div class="im-work">
       <div class="im-status">${chip(a.status[0], a.status[1])}<span class="im-status-text">${a.status[2]}</span>${spacer}<span class="im-status-end">${a.status[3]}</span></div>
       <div class="im-columns">
-        <section class="im-panel im-content" aria-label="${a.tabs[on]}">${a.content()}</section>
+        <main class="im-panel im-content" id="g-content" tabindex="-1" aria-label="${a.tabs[on]}">${a.content()}</main>
         <section class="im-panel im-inspector" aria-label="Inspector">${a.inspector()}</section>
       </div>
       <div class="im-actions">${button(a.secondary.text, a.secondary)}${button(a.primary.text, { ...a.primary, primary: true })}</div>

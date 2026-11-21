@@ -5,6 +5,9 @@
    They are written as ranges, so no fractional width falls between two blocks. */
 
 /* ---------- the shell ---------- */
+/* A shell put directly in the page's body fills the window: the page has no margin of its own. */
+html:has(> body > .im-shell),
+body:has(> .im-shell) { block-size: 100%; margin: 0; }
 .im-shell {
   --im-pane-pad: var(--im-s-4);
   --im-rail-icon: 20px;
@@ -103,13 +106,19 @@
 }
 .im-shell[data-im-sidebar="off"] .im-body { grid-template-columns: minmax(0, 1fr); }
 
+/* The work area: status row, columns, action bar, footer. Each has its own row, so a region an app leaves out leaves no
+   gap and the columns take its room. */
 .im-work {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto var(--im-h-footer);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   min-inline-size: 0;
   min-block-size: 0;
 }
+.im-work > .im-status { grid-row: 1; }
+.im-work > .im-columns { grid-row: 2; }
+.im-work > .im-actions { grid-row: 3; }
+.im-work > .im-footer { grid-row: 4; block-size: var(--im-h-footer); }
 .im-status {
   display: flex;
   align-items: center;
@@ -129,6 +138,10 @@
   grid-template-columns: minmax(0, 1fr) var(--im-w-inspector);
   min-block-size: 0;
 }
+/* The content region takes focus from the skip link (tabindex -1) without a ring round the whole region. */
+.im-columns > main[tabindex="-1"]:focus { outline: 0; }
+/* data-im-inspector="wide" on the shell: the inspector is 360, the top of the range the design allows. */
+.im-shell[data-im-inspector="wide"] { --im-w-inspector: 360px; }
 .im-actions {
   display: flex;
   align-items: center;
@@ -244,8 +257,17 @@
 [data-im-look="oni"] .im-surface[data-im-surface="float"] { border-width: 2px; }
 
 /* ---------- breakpoints, measured on the shell ---------- */
-/* Below 1000 the inspector covers the content's right edge as a drawer; from 1000 it is docked and pushes the content. */
+/* Below 1000 the inspector covers the content's right edge as a drawer; from 1000 it is docked and pushes the content.
+   A wide inspector (360) beside the 232 sidebar leaves the content its 420 only from 1012 (232 + 420 + 360), so such a
+   shell keeps the drawer up to there. Each of the two only sets --im-drawer on the work area; the drawer is written
+   once, in the style query that follows. */
 @container im-shell (width < 1000px) {
+  .im-work { --im-drawer: 1; }
+}
+@container im-shell (1000px <= width < 1012px) {
+  .im-shell[data-im-inspector="wide"]:not([data-im-sidebar="off"]) .im-work { --im-drawer: 1; }
+}
+@container style(--im-drawer: 1) {
   .im-columns { grid-template-columns: minmax(0, 1fr); }
   .im-columns > .im-inspector {
     position: absolute;
@@ -256,6 +278,7 @@
     background: var(--im-float);
     box-shadow: -18px 0 40px var(--im-shadow);
   }
+  .im-shell[data-im-inspector="wide"] .im-columns > .im-inspector { inline-size: min(var(--im-w-inspector), 88%); }
 }
 
 /* The rail: the sidebar is 56px wide and a row shows one icon (its initials in the small avatar when the app gave it no

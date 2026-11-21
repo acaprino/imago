@@ -35,4 +35,4 @@
 .im-stack-list { list-style:none; margin:0; padding:0; }
 .im-stack-list>li.im-list-link>button.im-btn { width:auto; flex:none; margin-inline-end:var(--im-s-3); }
 .im-stack-list>li.im-list-link>button:not(.im-btn) { flex:1; min-width:0; }
-@media (max-width:760px) { .im-setting-row { flex-wrap:wrap; } }
+@container im-shell (width < 850px) { .im-setting-row { flex-wrap:wrap; } }

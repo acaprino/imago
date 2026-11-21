@@ -44,7 +44,7 @@ async function controllerContract(page) {
     shell.className = 'im-shell im-native-controls';
     Object.assign(shell.style, { position: 'fixed', inset: '0', zIndex: '100' });
     document.body.append(shell);
-    const frame = () => '<header class="im-titlebar"><button id="controller-titlebar">Window action</button></header><div class="im-body"><main id="controller-main" tabindex="-1"><button id="controller-opener">Edit record</button></main></div>';
+    const frame = () => api.shellFrameHtml({ titlebarHtml: '<header class="im-titlebar"><button id="controller-titlebar">Window action</button></header>', contentHtml: '<button id="controller-opener">Edit record</button>', contentId: 'controller-main', contentLabel: 'Record', skipLabel: 'Skip to content', inspectorLabel: 'Details' });
     api.renderShellFrame(shell, frame());
     const state = { shell, focusOnClose: '', operation: null, resolve: null, controller: null };
     state.controller = api.createContentDialog(shell, {

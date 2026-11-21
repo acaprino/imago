@@ -25,6 +25,208 @@ const visible = (page, selector) => page.evaluate((s) => {
 const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) <= 0.5, `${label}: expected ${expected}, got ${actual}`);
 const token = (page, name) => page.evaluate((n) => parseFloat(getComputedStyle(document.querySelector('.im-shell')).getPropertyValue(n)), name);
 
+// The frames 0.1.2 to 0.1.4 added beside im-shell, and their parts (docs/superpowers/moving-from-0.1.4.md): none is drawn.
+const REMOVED = [
+  'im-app-layout', 'im-main', 'im-desktop-frame', 'im-desktop-content', 'im-page', 'im-skip-link', 'im-page-frame', 'im-page-view',
+  'im-workbench', 'im-work-column', 'im-work-area', 'im-workspace-area', 'im-navigation-panel', 'im-resizable-nav', 'im-nav-rail',
+  'im-nav-entry', 'im-nav-line', 'im-nav-mark', 'im-nav-detail', 'im-signal', 'im-docked-inspector', 'im-inspection-rail',
+  'im-detail-panel', 'im-document', 'im-toolbar', 'im-panel-strip', 'im-master-detail',
+];
+/** Every element of the gallery page that carries a removed class or data-im-badge. */
+const stale = (page) => page.evaluate((names) => [...document.querySelectorAll('[class], [data-im-badge]')]
+  .flatMap((el) => [...el.classList].filter((name) => names.includes(name)).concat(el.hasAttribute('data-im-badge') ? ['data-im-badge'] : [])), REMOVED);
+
+// The regions of a shell, as a list: tag, region classes, and what the frame's markup gives each (a name, the content's id
+// and tabindex). Only regions are walked, so what an app puts inside a region is its own.
+const skeleton = (page, selector, markup) => page.evaluate(({ selector, markup }) => {
+  const REGION = ['im-titlebar', 'im-body', 'im-sidebar', 'im-work', 'im-status', 'im-columns', 'im-content', 'im-inspector', 'im-actions', 'im-footer'];
+  let shell = selector ? document.querySelector(selector) : null;
+  if (markup) {
+    shell = document.createElement('div');
+    shell.innerHTML = markup;
+  }
+  const out = [];
+  const walk = (parent, depth) => {
+    for (const child of parent.children) {
+      const region = REGION.find((name) => child.classList.contains(name));
+      if (!region) continue;
+      const classes = [...child.classList].filter((name) => name === 'im-panel' || REGION.includes(name)).join('.');
+      const extra = (child.hasAttribute('aria-label') ? '[aria-label]' : '') + (region === 'im-content' ? `${child.id ? '[id]' : ''}[tabindex=${child.getAttribute('tabindex')}]` : '');
+      out.push(`${'  '.repeat(depth)}${child.localName}.${classes}${extra}`);
+      walk(child, depth + 1);
+    }
+  };
+  walk(shell, 0);
+  return out;
+}, { selector, markup });
+
+/** The boxes of the regions of a shell, null for one that is not on screen. */
+const regionBoxes = (page, selector) => page.evaluate((s) => {
+  const shell = document.querySelector(s);
+  const rect = (el) => {
+    if (!el || !el.getClientRects().length || el.closest('[hidden]')) return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+  };
+  const one = (q) => rect(shell.querySelector(q));
+  return {
+    shell: rect(shell), sidebar: one('.im-sidebar'), work: one('.im-work'), status: one('.im-status'), columns: one('.im-columns'),
+    content: one('.im-content'), inspector: one('.im-inspector'), actions: one('.im-actions'), footer: one('.im-footer'),
+    primary: one('.im-actions .im-btn--primary'), toggle: one('.im-sidebar-toggle'),
+    windowButtons: [...shell.querySelectorAll('.im-window-button')].map(rect),
+    scroll: shell.scrollWidth, client: shell.clientWidth, sidebarOff: shell.dataset.imSidebar === 'off',
+  };
+}, selector);
+
+/** Where the regions are at one width: the sidebar, the rail or the drawer; the inspector docked or over the content. */
+function checkRegions(r, width, label, { dockFrom = 1000, inspectorWidth = 300, minContent = 420 } = {}) {
+  const inside = (box) => box && box.left >= r.shell.left - 0.5 && box.right <= r.shell.right + 0.5 && box.top >= r.shell.top - 0.5 && box.bottom <= r.shell.bottom + 0.5;
+  near(r.shell.width, width, `${label}: shell width`);
+  assert.ok(r.scroll <= r.client, `${label}: nothing is pushed out sideways (${r.scroll} > ${r.client})`);
+  assert.equal(r.windowButtons.length, 3, `${label}: three window buttons`);
+  for (const button of r.windowButtons) assert.ok(inside(button) && button.width >= 44 - 0.5, `${label}: a window button is outside the shell or narrow (${JSON.stringify(button)})`);
+  assert.ok(inside(r.primary), `${label}: the primary action is inside the shell (${JSON.stringify(r.primary)})`);
+  if (!r.sidebarOff) {
+    if (width >= 850) near(r.sidebar.width, 232, `${label}: the whole sidebar`);
+    else if (width >= 620) near(r.sidebar.width, 56, `${label}: the rail`);
+    else {
+      assert.equal(r.sidebar, null, `${label}: no sidebar in the layout`);
+      assert.ok(inside(r.toggle), `${label}: the sidebar button is in the title bar`);
+    }
+  } else assert.equal(r.sidebar, null, `${label}: no sidebar`);
+  if (width >= dockFrom) {
+    assert.ok(r.inspector.left >= r.content.right - 0.5, `${label}: the inspector is docked at the right of the content`);
+    near(r.inspector.width, inspectorWidth, `${label}: inspector width`);
+    assert.ok(r.content.width >= minContent - 0.5, `${label}: the content is ${r.content.width} wide`);
+  } else {
+    assert.ok(r.inspector.left > r.content.left && r.inspector.left < r.content.right, `${label}: the inspector covers the content's right edge`);
+    near(r.content.right, r.work.right, `${label}: the content reaches the work area's right edge under the drawer`);
+  }
+  if (r.status) assert.ok(r.status.bottom <= r.columns.top + 0.5, `${label}: the status row is above the columns`);
+  if (r.actions) assert.ok(r.columns.bottom <= r.actions.top + 0.5, `${label}: the action bar is under the columns`);
+  if (r.footer) {
+    assert.ok((r.actions ?? r.columns).bottom <= r.footer.top + 0.5, `${label}: the footer is under the action bar`);
+    near(r.footer.bottom, r.shell.bottom, `${label}: the footer is the window's last row`);
+  }
+}
+
+// Muro, Shinatama and Daodan had their own frames until 0.1.4; their fixtures are the frame shellFrameHtml writes, and the
+// regions are where the design file says at 1160, 900, 700, 500 and 250.
+async function canonicalFixtures(page, look, theme) {
+  for (const app of ['muro', 'shinatama', 'daodan']) {
+    await show(page, { app, look, theme, glass: false, width: 1160 });
+    const hasSidebar = await page.evaluate(() => !!document.querySelector('#g-window .im-sidebar'));
+    const markup = await page.evaluate((sidebar) => {
+      const api = window.__imagoSurfaces;
+      return api.shellFrameHtml({
+        titlebarHtml: '<header class="im-titlebar"></header>', contentHtml: '', contentLabel: 'View', skipLabel: 'Skip', inspectorLabel: 'Inspector',
+        sidebarHtml: sidebar ? api.sidebarHtml({ id: 'probe', label: 'Probe', rowsHtml: '' }) : undefined, statusHtml: '', actionsHtml: '', footerHtml: '',
+      });
+    }, hasSidebar);
+    assert.deepEqual(await skeleton(page, '#g-window .im-shell'), await skeleton(page, null, markup), `${look} ${theme}: ${app}'s fixture is the canonical frame`);
+    for (const width of [1160, 900, 700, 500, 250]) {
+      await show(page, { app, look, theme, glass: false, width });
+      checkRegions(await regionBoxes(page, '#g-window .im-shell'), width, `${look} ${theme}: ${app} at ${width}`);
+    }
+  }
+}
+
+// A frame written by shellFrameHtml and mounted by renderShellFrame, beside the gallery's window: every region, a sidebar
+// and an open inspector, page content with its three headings.
+const FRAME = '#frame-host .im-shell';
+const buildFrame = (page, width, options = {}) => page.evaluate(({ width, options }) => {
+  document.getElementById('frame-host')?.remove();
+  const api = window.__imagoSurfaces;
+  const host = document.createElement('div');
+  host.id = 'frame-host';
+  for (const { name, value } of document.querySelector('#g-window').attributes) if (name.startsWith('data-im-')) host.setAttribute(name, value);
+  host.style.cssText = `position:relative;width:${width}px;height:640px`;
+  const shell = document.createElement('div');
+  shell.className = 'im-shell';
+  if (options.wide) shell.dataset.imInspector = 'wide';
+  host.append(shell);
+  document.querySelector('#g-sections').append(host);
+  const row = (text) => `<div class="im-row im-row--1" role="option" aria-selected="false" title="${text}"><span class="im-avatar im-rail-item" aria-hidden="true">${text.slice(0, 2)}</span><span class="im-row-text"><span class="im-row-title">${text}</span></span></div>`;
+  const nav = '<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="Threads" title="Threads" aria-expanded="false" aria-controls="frame-side">T</button>'
+    + '<nav class="im-tabs" role="tablist" aria-label="Views"><button type="button" role="tab" class="im-tab" aria-selected="true">First</button><button type="button" role="tab" class="im-tab" aria-selected="false">Second</button></nav>';
+  api.renderShellFrame(shell, api.shellFrameHtml({
+    titlebarHtml: api.titlebarHtml({ brand: { name: 'Frame' }, navigationHtml: nav, views: { label: 'Views', action: 'views' }, commands: { label: 'Commands', action: 'palette', shortcut: 'Ctrl K' }, windowControls: true }),
+    sidebarHtml: options.sidebar === false ? undefined : api.sidebarHtml({ id: 'frame-side', label: 'Threads', rowsHtml: ['Alpha', 'Beta', 'Gamma'].map(row).join(''), collapse: { collapse: 'Collapse sidebar', expand: 'Expand sidebar' } }),
+    statusHtml: options.bare ? undefined : '<span class="im-chip" data-im-tone="ok">Ready</span><span class="im-status-text">Summary</span><span class="im-spacer"></span><span class="im-status-end">Info</span>',
+    contentHtml: api.pageContentHtml('<h1>Page title</h1><h2>Section</h2><h3>Group</h3><p>Body text</p><ul><li>Item</li></ul>'),
+    contentLabel: 'First', contentId: 'frame-main', skipLabel: 'Skip to content', inspectorLabel: 'Details',
+    actionsHtml: options.bare ? undefined : '<button type="button" class="im-btn"><span>Check</span></button><button type="button" class="im-btn im-btn--primary"><span>Apply</span></button>',
+    footerHtml: options.bare ? undefined : '<span class="im-dot" data-im-tone="ok"></span><span class="im-footer-text">State</span><span class="im-spacer"></span><span class="im-footer-keys"><span><kbd class="im-key">F6</kbd>next region</span></span>',
+  }));
+  const inspector = shell.querySelector('.im-inspector');
+  inspector.innerHTML = '<header class="im-panel-header"><h4 class="im-panel-title">Details</h4></header><div class="im-panel-body">Facts</div>';
+  inspector.hidden = false;
+}, { width, options });
+
+async function builtFrame(page, look) {
+  const where = (text) => `${look}: the frame of shellFrameHtml ${text}`;
+  try {
+    for (const width of [1160, 900, 700, 500, 250]) {
+      await buildFrame(page, width);
+      checkRegions(await regionBoxes(page, FRAME), width, where(`at ${width}`));
+      // Page content has the content region's padding, and its headings are the page's: sentence case in both looks.
+      const page_ = await page.evaluate((s) => {
+        const shell = document.querySelector(s);
+        const content = shell.querySelector('.im-page-content');
+        const probe = (property, value) => {
+          const el = document.createElement('span');
+          el.style.setProperty(property, value);
+          content.append(el);
+          const result = getComputedStyle(el).getPropertyValue(property);
+          el.remove();
+          return result;
+        };
+        const heading = (tag) => {
+          const style = getComputedStyle(content.querySelector(tag));
+          return { size: style.fontSize, weight: style.fontWeight, transform: style.textTransform, color: style.color, family: style.fontFamily, margin: style.marginTop };
+        };
+        return {
+          padding: getComputedStyle(content).paddingTop, scrolls: getComputedStyle(content.parentElement).overflowY,
+          h1: heading('h1'), h2: heading('h2'), h3: heading('h3'),
+          hi: probe('color', 'var(--im-text-hi)'), head: probe('font-family', 'var(--im-font-head)'),
+          p: getComputedStyle(content.querySelector('p')).marginTop, list: getComputedStyle(content.querySelector('ul')).listStyleType,
+        };
+      }, FRAME);
+      assert.equal(page_.padding, width >= 620 ? '24px' : '16px', where(`page padding at ${width}`));
+      assert.equal(page_.scrolls, 'auto', where('the content panel body scrolls'));
+      for (const [tag, size] of [['h1', '18px'], ['h2', '14px'], ['h3', '13px']]) {
+        const h = page_[tag];
+        assert.deepEqual([h.size, h.weight, h.transform, h.margin], [size, '600', 'none', '0px'], where(`${tag} at ${width}`));
+        assert.equal(h.color, page_.hi, where(`${tag} is in --im-text-hi`));
+        assert.equal(h.family, page_.head, where(`${tag} is in --im-font-head`));
+      }
+      assert.deepEqual([page_.p, page_.list], ['0px', 'none'], where('the document resets apply in the shell'));
+    }
+    // The wide inspector: 360, docked from 1012 beside the sidebar, from 1000 without one.
+    await buildFrame(page, 1160, { wide: true });
+    checkRegions(await regionBoxes(page, FRAME), 1160, where('wide at 1160'), { inspectorWidth: 360 });
+    // (1012 is 232 + 420 + 360; the gaps of ONI's panes come out of the content, so its 420 is not asserted here)
+    await buildFrame(page, 1012, { wide: true });
+    checkRegions(await regionBoxes(page, FRAME), 1012, where('wide at 1012'), { dockFrom: 1012, inspectorWidth: 360, minContent: 0 });
+    await buildFrame(page, 1011, { wide: true });
+    checkRegions(await regionBoxes(page, FRAME), 1011, where('wide at 1011'), { dockFrom: 1012 });
+    near((await regionBoxes(page, FRAME)).inspector.width, 360, where('the wide drawer is 360'));
+    await buildFrame(page, 1000, { wide: true, sidebar: false });
+    checkRegions(await regionBoxes(page, FRAME), 1000, where('wide without a sidebar at 1000'), { inspectorWidth: 360 });
+    await buildFrame(page, 999, { wide: true, sidebar: false });
+    checkRegions(await regionBoxes(page, FRAME), 999, where('wide without a sidebar at 999'));
+    // A frame without a status row, an action bar or a footer: the columns take the whole work area, no empty band.
+    await buildFrame(page, 1160, { bare: true });
+    const bare = await regionBoxes(page, FRAME);
+    assert.deepEqual([bare.status, bare.actions, bare.footer], [null, null, null], where('bare has no status, actions or footer'));
+    // (Smooth's work area has a 1px top edge)
+    assert.ok(Math.abs(bare.columns.top - bare.work.top) <= 1.5, where(`bare: the columns start at the top of the work area (${bare.columns.top} for ${bare.work.top})`));
+    near(bare.columns.bottom, bare.work.bottom, where('bare: the columns reach the bottom of the work area'));
+  } finally {
+    await page.evaluate(() => document.getElementById('frame-host')?.remove());
+  }
+}
+
 /** A tools row and a foot, as a sidebar may have: shown while it is whole, not in a rail. */
 const addSidebarParts = (page) =>
   page.evaluate(() => {
@@ -437,6 +639,7 @@ export default async (page, url) => {
           assert.equal(await visible(page, '.im-titlebar .im-wordmark'), true, where(`${app} name at ${width}`));
           assert.equal((await page.locator('.im-titlebar .im-wordmark').innerText()).trim().toLowerCase(), NAMES[app].toLowerCase(), where(`${app} name text at ${width}`));
           assert.ok((await box(page, '.im-titlebar .im-wordmark')).right <= (await box(page, '.im-titlebar')).right, where(`${app} name is inside the title bar at ${width}`));
+          if (width === 1160) assert.deepEqual(await stale(page), [], where(`${app}: no element of the gallery carries a removed class`));
         }
       }
 
@@ -455,6 +658,13 @@ export default async (page, url) => {
         assert.equal(await paint('.im-sidebar'), 'rgba(0, 0, 0, 0)', where('the sidebar paints nothing'));
         assert.notEqual(await paint('.im-work'), 'rgba(0, 0, 0, 0)', where('the work area is one sheet'));
         assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.im-work')).borderTopLeftRadius), '10px', where('sheet corner'));
+      }
+
+      // One frame: the fixtures of the apps that had their own, and the frame the package writes.
+      await canonicalFixtures(page, look, theme);
+      if (theme === 'dark') {
+        await show(page, { app: 'shinatama', look, theme, glass: false, width: 1160 });
+        await builtFrame(page, look);
       }
     }
   }

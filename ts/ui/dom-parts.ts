@@ -16,7 +16,7 @@ export function componentElement<T extends HTMLElement = HTMLElement>(componentH
 const parts = {
   stack: ['div', 'im-stack'], row: ['div', 'im-inline-row'], toolbar: ['div', 'im-content-toolbar'],
   actions: ['div', 'im-action-row'], panel: ['section', 'im-panel im-surface'], region: ['section', 'im-region'],
-  main: ['main', 'im-main'], aside: ['aside', 'im-aside'], header: ['header', 'im-section-heading'],
+  main: ['main', ''], aside: ['aside', 'im-aside'], header: ['header', 'im-section-heading'],
   footer: ['footer', 'im-footer'], form: ['form', 'im-form'], field: ['label', 'im-field'], label: ['label', 'im-label'],
   title: ['h1', 'im-title'], heading: ['h2', 'im-heading'], subheading: ['h3', 'im-heading'], minorHeading: ['h4', 'im-heading'],
   text: ['span', 'im-text'], strong: ['strong', 'im-strong'], hint: ['small', 'im-muted'], paragraph: ['p', 'im-paragraph'],

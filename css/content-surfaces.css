@@ -37,19 +37,3 @@ dialog.im-content-drawer {
   align-items: start;
 }
 .im-native-controls [role="status"][data-state="error"] { color: var(--im-err); }
-
-/* Persistent inspection rail beside an editable workspace. */
-.im-inspection-rail {
-  flex: 0 1 clamp(12rem, 26vw, 19rem);
-  display: flex;
-  flex-direction: column;
-  gap: var(--im-s-2);
-  min-width: 0;
-  min-height: 0;
-  padding: var(--im-s-3);
-  border-inline-start: 1px solid var(--im-line);
-  background: var(--im-sheet-solid);
-  overflow-wrap: anywhere;
-}
-.im-inspection-rail > .im-section-heading { margin: 0; justify-content: space-between; }
-.im-inspection-rail > .im-scroll { flex: 1; }

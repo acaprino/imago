@@ -1,21 +1,20 @@
-/* Opt-in application-shell content. These names are separate from inspection.css:
-   its page/document/toolbar/timeline primitives also work inside this shell. */
-html:has(.im-app-layout), body:has(.im-app-layout) { height: 100%; margin: 0; }
-.im-app-layout { height: 100%; }
-.im-app-layout > .im-body { display: block; overflow: hidden; }
-.im-app-layout [hidden] { display: none !important; }
-/* Document defaults must not override the spacing or typography of a component. */
-:where(.im-app-layout) :where(h1,h2,h3,p,ul,ol,dl,dd,fieldset) { margin: 0; padding: 0; }
-:where(.im-app-layout) fieldset { border: 0; min-width: 0; }
-:where(.im-app-layout) :where(ul,ol) { list-style: none; }
-/* One class beats host-page element rules. Equal-specificity component classes
-   load later, while inspection headings retain their more specific selectors. */
-.im-app-layout :where(h1,h2,h3) { font-family: var(--im-font-head); line-height: 1.45; }
-.im-app-layout :where(h1) { font-size: 22px; font-weight: 600; letter-spacing: -.2px; }
-.im-app-layout :where(h2) { font-size: 15px; font-weight: 600; }
-.im-app-layout :where(h3) { font-size: 13px; font-weight: 600; }
-:where(.im-app-layout) small { font-size: 12px; color: var(--im-muted); }
-:where(.im-app-layout) code, .im-mono { font: 12px/1.5 var(--im-font-code); }
+/* The content of the shell: the document defaults of every im-shell, the page that sits in the content region
+   (im-page-content) with its headings and helpers, and the patterns of application content. */
+/* Document defaults must not override the spacing or typography of a component: they have no specificity. */
+:where(.im-shell) [hidden] { display: none !important; }
+:where(.im-shell) :where(h1, h2, h3, p, ul, ol, dl, dd, fieldset) { margin: 0; padding: 0; }
+:where(.im-shell) fieldset { border: 0; min-inline-size: 0; }
+:where(.im-shell) :where(ul, ol) { list-style: none; }
+/* The headings of a page: 18, 14 and 13, in the head font, in sentence case in both looks (no --im-case). In page
+   content one class beats a host page's element rules; elsewhere in the shell (a form, a dialog) the same headings have
+   no specificity, under any component's own. */
+.im-page-content :where(h1, h2, h3),
+:where(.im-shell) :where(h1, h2, h3) { font-family: var(--im-font-head); font-weight: 600; line-height: 1.45; color: var(--im-text-hi); }
+.im-page-content :where(h1), :where(.im-shell) :where(h1) { font-size: var(--im-fs-display); }
+.im-page-content :where(h2), :where(.im-shell) :where(h2) { font-size: var(--im-fs-title); }
+.im-page-content :where(h3), :where(.im-shell) :where(h3) { font-size: var(--im-fs-body); }
+:where(.im-shell) small { font-size: var(--im-fs-meta); color: var(--im-muted); }
+:where(.im-shell) code, .im-mono { font: var(--im-fs-meta)/1.5 var(--im-font-code); }
 .im-muted { color: var(--im-muted); }
 .im-grow { flex: 1; min-width: 0; }
 .im-nowrap { white-space: nowrap; }
@@ -30,9 +29,8 @@ html:has(.im-app-layout), body:has(.im-app-layout) { height: 100%; margin: 0; }
 .im-shell-skip-link { position: absolute; top: -100px; left: 8px; }
 .im-shell-skip-link:focus { top: 8px; z-index: 50; padding: 8px 12px; background: var(--im-sheet); border: 1px solid var(--im-line); border-radius: var(--im-r-control); }
 .im-brand-image { height: 28px; max-width: 84px; object-fit: contain; flex: none; }
-.im-main { height: 100%; overflow: auto; padding: 24px 28px 28px; min-width: 0; }
-.im-main:focus { outline: 0; }
-.im-page-content { max-width: 1180px; margin: 0 auto; }
+/* A page in the content region's panel body, which scrolls: the measure and the padding of the region. */
+.im-page-content { max-width: 1180px; margin: 0 auto; padding: var(--im-s-5); }
 .im-page-content--narrow { max-width: 860px; }
 .im-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .im-page-heading p { color: var(--im-muted); margin-top: 2px; }
@@ -41,6 +39,7 @@ html:has(.im-app-layout), body:has(.im-app-layout) { height: 100%; margin: 0; }
 .im-section-description { margin: -4px 0 10px; }
 .im-content-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .im-content-toolbar :is(.im-seg,select), .im-settings .im-seg { max-width: 100%; flex-wrap: wrap; }
+.im-content-toolbar :is(.im-input, .im-select) { max-inline-size: 100%; }
 .im-table-scroll { overflow-x: auto; }
 .im-table th .im-avatar { margin-right: 8px; vertical-align: middle; }
 .im-table td.im-none { padding: 22px 14px; }
@@ -66,7 +65,7 @@ html:has(.im-app-layout), body:has(.im-app-layout) { height: 100%; margin: 0; }
 .im-choice-rows label > span:last-child { display: grid; min-width: 0; }
 .im-choice-rows label:has(input:disabled) strong { color: var(--im-muted); }
 .im-wizard-actions { display: flex; justify-content: space-between; gap: 8px; position: sticky; bottom: 0; z-index: 1; padding: 12px 0; background: var(--im-sheet-solid); border-top: 1px solid var(--im-line); }
-.im-main:has(.im-wizard) { scroll-padding-bottom: 84px; }
+.im-panel-body:has(.im-wizard) { scroll-padding-bottom: 84px; }
 .im-operation-list h3 { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .im-operation-list li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--im-line); }
 .im-operation-list li div { display: grid; flex: 1; min-width: 0; }
@@ -123,25 +122,26 @@ html:has(.im-app-layout), body:has(.im-app-layout) { height: 100%; margin: 0; }
 .im-numbered-result ol li { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--im-line); }
 .im-numbered-result ol li > div { min-width: 0; overflow-wrap: anywhere; }
 .im-numbered-result ol b { width: 20px; height: 20px; border-radius: 50%; background: var(--im-accent); color: var(--im-accent-on); font-size: 11px; line-height: 20px; text-align: center; }
-.im-app-layout .im-bullet-list { display: grid; gap: 4px; padding-left: 18px; list-style: disc; overflow-wrap: anywhere; }
+.im-bullet-list { display: grid; gap: 4px; padding-left: 18px; list-style: disc; overflow-wrap: anywhere; }
 .im-choice-list { max-height: 420px; overflow: auto; }
 .im-choice-list button { display: grid; gap: 1px; width: 100%; padding: 9px 12px; border-bottom: 1px solid var(--im-line); }
 .im-choice-list li:last-child button { border-bottom: 0; }
 .im-choice-list button:hover { background: var(--im-hover); }
 .im-choice-list button[aria-pressed="true"] { background: var(--im-chip); box-shadow: inset 2px 0 0 var(--im-accent-text); }
 .im-choice-list small { overflow-wrap: anywhere; }
-@container im-shell (max-width: 980px) {
+@container im-shell (width < 1000px) {
   .im-aside-layout { grid-template-columns: minmax(0,1fr); }
   .im-step-nav { grid-template-columns: repeat(2,1fr); }
   .im-file-list li { grid-template-columns: 1fr; gap: 2px; }
 }
-@container im-shell (max-width: 760px) {
+@container im-shell (width < 850px) {
   .im-titlebar-status span { display: none; }
-  .im-main { padding: 18px 16px; }
-  .im-setting-row { flex-wrap: wrap; }
   .im-path { display: none; }
   .im-repeat-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 30px; }
   .im-repeat-row > label:nth-child(2) { grid-column: 1/-1; order: -1; }
+}
+@container im-shell (width < 620px) {
+  .im-page-content { padding: var(--im-s-4); }
 }
 @media (forced-colors: active) {
   .im-step-nav button[aria-selected="true"] { outline: 2px solid Highlight; }

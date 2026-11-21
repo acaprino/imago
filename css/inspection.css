@@ -1,13 +1,4 @@
-/* Document and inspection workspaces can occupy a whole page or an embedded region. */
-.im-page { margin: 0; background: var(--im-ground); color: var(--im-text); font: 400 14px/1.45 var(--im-font-text); }
-.im-page :where(h1,h2,h3) { color: var(--im-text-hi); font-family: var(--im-font-head); line-height: 1.2; }
-.im-page h1 { font-size: clamp(1.55rem, 3vw, 2.2rem); }
-.im-page h2 { font-size: 1.1rem; } .im-page h3 { font-size: .95rem; }
-.im-page :where(code,pre) { font-family: var(--im-font-code); overflow-wrap: anywhere; }
-.im-page :where(p) { margin-block: var(--im-s-1); }
-.im-page [hidden] { display: none !important; }
-.im-page .im-skip-link { position: absolute; z-index: 10; inset-block-start: 0; transform: translateY(-120%); padding: var(--im-s-2); background: var(--im-sheet-solid); color: var(--im-text); }
-.im-page .im-skip-link:focus { transform: none; }
+/* Inspection content: what a page or a document in the content region of the shell is made of. */
 .im-visually-hidden, .im-seg--choice input { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 .im-seg--choice { min-inline-size: 0; margin: 0; }
 .im-seg--choice label { position: relative; display: inline-flex; align-items: center; padding: var(--im-s-1) var(--im-s-3); border-radius: var(--im-r-control); }
@@ -15,20 +6,8 @@
 .im-seg--choice label:has(:focus-visible) { outline: 2px solid var(--im-accent-text); outline-offset: -2px; }
 .im-seg--choice label:has(:disabled) { color: var(--im-muted); opacity: .65; }
 .im-seg--choice label:has(:enabled):hover { background: var(--im-hover); }
-.im-page-frame { block-size: 100dvh; min-inline-size: 0; display: flex; flex-direction: column; }
-.im-page-view, .im-canvas-panel { display: flex; flex: 1; flex-direction: column; min-block-size: 0; min-inline-size: 0; }
-.im-work-column { display: grid; grid-template-rows: auto minmax(0,1fr); min-inline-size: 0; min-block-size: 0; }
-.im-document { padding: clamp(var(--im-s-3),2.5vw,2.5rem); }
-.im-document > * { max-inline-size: 100rem; margin-inline: auto; }
-.im-document > * + *, .im-section + .im-section { margin-block-start: var(--im-s-4); }
-.im-master-detail { display: grid; grid-template-columns: minmax(0,2fr) minmax(15rem,1fr); align-items: start; gap: var(--im-s-4); }
-.im-workbench { flex: 1; display: grid; grid-template-columns: minmax(12rem,18%) minmax(0,1fr) minmax(14rem,22%); min-block-size: 0; }
-.im-navigation-panel, .im-detail-panel { min-inline-size: 0; overflow: auto; overflow-wrap: anywhere; background: var(--im-sheet-solid); padding: var(--im-s-3); }
-.im-workbench > .im-navigation-panel { border-inline-end: 1px solid var(--im-line); }
-.im-workbench > .im-detail-panel { border-inline-start: 1px solid var(--im-line); }
-.im-toolbar, .im-panel-strip { padding: var(--im-s-2) var(--im-s-3); background: var(--im-sheet-solid); border-block-end: 1px solid var(--im-line); }
-.im-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--im-s-2); }
-.im-toolbar :is(.im-input,.im-select) { max-inline-size: 100%; }
+.im-canvas-panel { display: flex; flex: 1; flex-direction: column; min-block-size: 0; min-inline-size: 0; }
+.im-section + .im-section { margin-block-start: var(--im-s-4); }
 .im-note--block { display: block; overflow-wrap: anywhere; }
 @container style(--im-rail: 1) { .im-sidebar [data-im-rail-detail] { display: none; } }
 .im-end, [data-im-align="end"] { margin-inline-start: auto; }
@@ -59,13 +38,9 @@
 .im-readout { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 .im-inline-mark { inline-size: 1rem; block-size: 1rem; object-fit: contain; vertical-align: middle; }
 .im-zero-state { max-inline-size: 48rem; margin-inline: auto; padding: var(--im-s-5); }
-@media (max-width: 61.25rem) { .im-master-detail { grid-template-columns: minmax(0,1fr); } }
-@media (max-width: 56.2rem) {
-  .im-page-view:has(.im-workbench), .im-workbench { flex: none; }
-  .im-workbench { display: flex; flex-direction: column; }
-  .im-workbench > .im-canvas-panel { order: -1; min-block-size: 60vh; }
-  .im-workbench > :is(.im-detail-panel,.im-navigation-panel) { border-inline: 0; border-block-start: 1px solid var(--im-line); }
-  .im-toolbar .im-end, [data-im-align="end"] { margin-inline-start: 0; }
+/* A toolbar that wraps keeps what it pushed to its end on the left. */
+@container im-shell (width < 850px) {
+  .im-content-toolbar .im-end, [data-im-align="end"] { margin-inline-start: 0; }
 }
 @media (forced-colors: active) {
   .im-seg--choice label:has(:checked), .im-row[aria-pressed="true"] { outline: 1px solid SelectedItem; }

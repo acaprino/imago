@@ -79,13 +79,60 @@ export function pageContentHtml(contentHtml: string, width: 'normal' | 'narrow' 
 
 export interface ShellFrameOptions {
   titlebarHtml: string;
-  mainHtml: string;
-  mainId?: string;
+  /** What the content region shows: its panel body's children. */
+  contentHtml: string;
+  /** The accessible name of the content region. */
+  contentLabel: string;
+  /** The id of the content region, which the skip link goes to. Default `main`. */
+  contentId?: string;
   skipLabel: string;
+  /** The accessible name of the inspector, which the frame writes empty and hidden. */
+  inspectorLabel: string;
   busy?: boolean;
+  /** The sidebar, from `sidebarHtml()`. Without it the shell has none (`data-im-sidebar="off"`). */
+  sidebarHtml?: string;
+  /** The children of the status row (`.im-status`). */
+  statusHtml?: string;
+  /** The children of the action bar (`.im-actions`). */
+  actionsHtml?: string;
+  /** The children of the footer (`.im-footer`). */
+  footerHtml?: string;
 }
-/** Contents of an `.im-shell` root. Keep the titlebar/body elements stable when replacing their children. */
+
+/**
+ * Contents of an `.im-shell` root: the window's seven regions, in the order of docs/using-imago.md section 4. A region
+ * that is not given (undefined) is left out; the content and the inspector are always there, the inspector empty and
+ * hidden until `inspector(shell).open()`. Repaint a mounted frame with `renderShellFrame`.
+ */
 export function shellFrameHtml(options: ShellFrameOptions): string {
-  const id = options.mainId ?? 'main';
-  return `<a class="im-shell-skip-link" href="#${escapeHtml(id)}">${escapeHtml(options.skipLabel)}</a>${options.titlebarHtml}<div class="im-body"><main id="${escapeHtml(id)}" class="im-main im-content" tabindex="-1" aria-busy="${!!options.busy}">${options.mainHtml}</main></div>`;
+  const id = escapeHtml(options.contentId ?? 'main');
+  const region = (html: string | undefined, open: string, close: string): string => (html === undefined ? '' : open + html + close);
+  return `<a class="im-shell-skip-link" href="#${id}">${escapeHtml(options.skipLabel)}</a>${options.titlebarHtml}`
+    + `<div class="im-body">${options.sidebarHtml ?? ''}<div class="im-work">`
+    + region(options.statusHtml, '<div class="im-status">', '</div>')
+    + `<div class="im-columns"><main id="${id}" class="im-panel im-content" tabindex="-1" aria-label="${escapeHtml(options.contentLabel)}" aria-busy="${!!options.busy}"><div class="im-panel-body">${options.contentHtml}</div></main>`
+    + `<section class="im-panel im-inspector" aria-label="${escapeHtml(options.inspectorLabel)}" hidden></section></div>`
+    + region(options.actionsHtml, '<div class="im-actions">', '</div>')
+    + region(options.footerHtml, '<footer class="im-footer">', '</footer>')
+    + '</div></div>';
+}
+
+export interface SidebarOptions {
+  id: string;
+  /** The sidebar's title, and the name of the sidebar and of its list. */
+  label: string;
+  /** The rows of the list: `im-row` elements with `role="option"`, each with its `im-rail-item`. */
+  rowsHtml: string;
+  /** The two names of the header's fold button (`sidebarCollapse`). Without them the header has no fold button. */
+  collapse?: { collapse: string; expand: string };
+}
+/** The sidebar region: a titled panel whose body is a listbox of rows, with the button that folds it into the rail. */
+export function sidebarHtml(options: SidebarOptions): string {
+  const id = escapeHtml(options.id);
+  const label = escapeHtml(options.label);
+  const fold = options.collapse
+    ? `<button type="button" class="im-icon-btn im-sidebar-collapse" aria-label="${escapeHtml(options.collapse.collapse)}" title="${escapeHtml(options.collapse.collapse)}" aria-expanded="true" aria-controls="${id}" data-im-label-collapse="${escapeHtml(options.collapse.collapse)}" data-im-label-expand="${escapeHtml(options.collapse.expand)}">${iconHtml('sidebar')}</button>`
+    : '';
+  return `<section class="im-panel im-sidebar" id="${id}" aria-label="${label}"><header class="im-panel-header"><h4 class="im-panel-title">${label}</h4><span class="im-spacer"></span>${fold}</header>`
+    + `<div class="im-panel-body im-list" role="listbox" aria-label="${label}">${options.rowsHtml}</div></section>`;
 }

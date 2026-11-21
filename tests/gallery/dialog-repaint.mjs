@@ -4,7 +4,7 @@ export default async function (page) {
   await page.evaluate(() => {
     const shell = document.createElement('section');
     shell.id = 'dialog-repaint-fixture';
-    shell.className = 'im-shell im-app-layout';
+    shell.className = 'im-shell';
     // This fixture sits outside the gallery's themed window. Establish the token
     // scope a real app supplies; otherwise var(--im-font-head) is undefined.
     Object.assign(shell.dataset, { imApp: 'muro', imLook: 'smooth', imTheme: 'light' });
