@@ -10,6 +10,7 @@ html:has(.im-app-layout), body:has(.im-app-layout) { height: 100%; margin: 0; }
 :where(.im-app-layout) :where(ul,ol) { list-style: none; }
 /* One class beats host-page element rules. Equal-specificity component classes
    load later, while inspection headings retain their more specific selectors. */
+.im-app-layout :where(h1,h2,h3) { font-family: var(--im-font-head); line-height: 1.45; }
 .im-app-layout :where(h1) { font-size: 22px; font-weight: 600; letter-spacing: -.2px; }
 .im-app-layout :where(h2) { font-size: 15px; font-weight: 600; }
 .im-app-layout :where(h3) { font-size: 13px; font-weight: 600; }

@@ -29,6 +29,8 @@ export default async function (page) {
         shellPadding: getComputedStyle(fixture.querySelector('.im-shell')).paddingTop,
         shellBodyMargin: getComputedStyle(fixture.querySelector('.im-body')).marginTop,
         compactHeading: style('content-heading').fontSize,
+        compactFont: style('content-heading').fontFamily,
+        shellFont: getComputedStyle(fixture.querySelector('.im-shell')).fontFamily,
         readingHeading: style('reading-heading').fontSize,
         readingPadding: parseFloat(style('reading-surface').paddingTop),
         inlinePadding: style('content-toolbar').paddingTop,
@@ -43,6 +45,7 @@ export default async function (page) {
     assert.equal(result.shellPadding, '0px');
     assert.equal(result.shellBodyMargin, '0px');
     assert.equal(result.compactHeading, '22px');
+    assert.equal(result.compactFont, result.shellFont, 'Smooth headings keep the Imago font rather than the host page display font');
     assert.notEqual(result.readingHeading, result.compactHeading);
     assert.ok(result.readingPadding > 0);
     assert.equal(result.inlinePadding, '0px');
