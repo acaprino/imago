@@ -225,6 +225,13 @@
   --im-btn-fg: var(--im-text-2);
 }
 
+/* A secondary action with the app accent; the primary remains the only filled accent. */
+.im-btn--accent {
+  --im-btn-bg: transparent;
+  --im-btn-border: color-mix(in srgb, var(--im-accent-text) 55%, var(--im-line));
+  --im-btn-fg: var(--im-accent-text);
+}
+
 /* Outlined at rest: red text and an edge of it, no fill. */
 .im-btn--danger {
   --im-btn-bg: transparent;
@@ -1246,3 +1253,4 @@ textarea.im-input { height: auto; display: block; padding-block: var(--im-s-2); 
 @media (prefers-reduced-motion: reduce) {
   .im-loader .im-spinner { animation: none; }
 }
+

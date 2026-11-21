@@ -6,6 +6,9 @@ export interface GraphBox extends GraphPoint { width: number; height: number }
 export interface GraphNode extends GraphBox {
   id: string;
   label: string;
+  /** Accessible name and tooltip when the visible label is deliberately compact. */
+  ariaLabel?: string;
+  title?: string;
   detail?: string;
   count?: number;
   content?: Node;
@@ -23,13 +26,20 @@ export interface GraphEdge {
   showLabel?: boolean;
   points?: readonly GraphPoint[] | null;
   dashed?: boolean;
-  tone?: 'accent' | 'warn';
+  dotted?: boolean;
+  /** False for a symmetric relationship such as mutual exclusion. */
+  directed?: boolean;
+  tone?: 'accent' | 'warn' | 'err';
   dimmed?: boolean;
 }
 export interface GraphScene { nodes: readonly GraphNode[]; edges: readonly GraphEdge[]; groups?: readonly GraphGroup[] }
 export interface GraphCamera { x: number; y: number; k: number }
+/** Camera plus whether resizing or changing the scene should fit it automatically. */
+export interface GraphViewport extends GraphCamera { fitted: boolean }
 export interface GraphOptions {
   label: string;
+  /** Stable identity across remounts; defaults to the accessible region label. */
+  key?: string;
   controls: { zoomIn: string; zoomOut: string; fit: string };
   onSelect?: (id: string) => void;
   onOpen?: (id: string) => void;
@@ -65,6 +75,8 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
   const svg = <K extends keyof SVGElementTagNameMap>(tag: K) => doc.createElementNS('http://www.w3.org/2000/svg', tag);
   const root = html('div', 'im-graph');
   const pane = html('div', 'im-graph-pane');
+  const focusKey = (part: string, id = '') => JSON.stringify(['graph', options.key ?? options.label, part, id]);
+  pane.dataset.imKey = focusKey('viewport');
   pane.tabIndex = 0;
   pane.setAttribute('role', 'region');
   pane.setAttribute('aria-label', options.label);
@@ -117,7 +129,14 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
     fitted = false;
     selection.call(behavior.transform, zoomIdentity.translate(x, y).scale(k));
   }
+  function viewport(): GraphViewport { return { ...camera(), fitted }; }
+  function restoreViewport(snapshot: GraphViewport) {
+    restore(snapshot);
+    if (snapshot.fitted) fit();
+  }
   function fit() {
+    // Keep the intention even while hidden or before the first scene is drawn.
+    fitted = true;
     if (!bounds || !pane.clientWidth || !pane.clientHeight) return;
     const k = Math.min(1.1, Math.max(.01, Math.min(pane.clientWidth / (bounds.width + 48), pane.clientHeight / (bounds.height + 48))));
     restore({ x: (pane.clientWidth - bounds.width * k) / 2 - bounds.x * k,
@@ -128,6 +147,7 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
   function tool(text: string, label: string, action: () => void) {
     const b = html('button', 'im-btn im-btn--sm');
     b.type = 'button'; b.textContent = text; b.title = label; b.setAttribute('aria-label', label);
+    b.dataset.imKey = focusKey('tool', label);
     b.addEventListener('click', action); controls.append(b);
   }
   tool('−', options.controls.zoomOut, () => scale(.8));
@@ -166,8 +186,14 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       case 'End': next = ids.at(-1); break;
       case 'ArrowDown': next = ids[Math.min(ids.length - 1, ids.indexOf(current ?? '') + 1)]; break;
       case 'ArrowUp': next = ids[Math.max(0, ids.indexOf(current ?? '') - 1)]; break;
-      case 'ArrowRight': next = edges.find(e => e.source === current && entries.has(e.target))?.target; break;
-      case 'ArrowLeft': next = edges.find(e => e.target === current && entries.has(e.source))?.source; break;
+      case 'ArrowRight': {
+        const edge = edges.find(e => e.source === current && entries.has(e.target) || e.directed === false && e.target === current && entries.has(e.source));
+        next = edge && (edge.source === current ? edge.target : edge.source); break;
+      }
+      case 'ArrowLeft': {
+        const edge = edges.find(e => e.target === current && entries.has(e.source) || e.directed === false && e.source === current && entries.has(e.target));
+        next = edge && (edge.target === current ? edge.source : edge.target); break;
+      }
       default: return;
     }
     event.preventDefault();
@@ -202,8 +228,9 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       if (edge.tone) g.dataset.imTone = edge.tone;
       if (edge.dimmed) g.dataset.imDimmed = 'true';
       path.setAttribute('d', points.map((p, i) => { include(p.x, p.y); return (i ? 'L' : 'M') + p.x + ',' + p.y; }).join(' '));
-      path.setAttribute('marker-end', 'url(#' + marker.id + ')');
-      if (edge.dashed) path.setAttribute('stroke-dasharray', '5 4');
+      if (edge.directed !== false) path.setAttribute('marker-end', 'url(#' + marker.id + ')');
+      if (edge.dotted) { path.setAttribute('stroke-dasharray', '1 4'); path.setAttribute('stroke-linecap', 'round'); }
+      else if (edge.dashed) path.setAttribute('stroke-dasharray', '5 4');
       g.append(path);
       if (edge.label) {
         const title = svg('title'); title.textContent = edge.label; g.append(title);
@@ -230,7 +257,10 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       const button = previous.get(node.id) ?? html('button', 'im-graph-node');
       button.tabIndex = -1;
       button.replaceChildren();
-      button.type = 'button'; button.title = node.label;
+      button.type = 'button'; button.title = node.title ?? node.label;
+      button.dataset.imKey = focusKey('select', node.id);
+      if (node.ariaLabel) button.setAttribute('aria-label', node.ariaLabel);
+      else button.removeAttribute('aria-label');
       button.setAttribute('aria-pressed', String(!!node.selected));
       if (node.content) button.append(node.content);
       else {
@@ -246,6 +276,7 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       if (node.openLabel && options.onOpen) {
         const open = html('button', 'im-icon-btn im-graph-open');
         open.tabIndex = -1;
+        open.dataset.imKey = focusKey('open', node.id);
         open.type = 'button'; open.textContent = '›'; open.title = node.openLabel; open.setAttribute('aria-label', node.openLabel);
         open.onclick = () => options.onOpen?.(node.id);
         card.append(open);
@@ -262,5 +293,5 @@ export function graphView(host: HTMLElement, options: GraphOptions) {
       ((activeOpen && button?.nextElementSibling instanceof HTMLElement ? button.nextElementSibling : button) ?? pane).focus({ preventScroll: true });
     }
   }
-  return { draw, fit, camera, restore, dispose() { observer.disconnect(); selection.on('.zoom', null); root.remove(); } };
+  return { draw, fit, camera, restore, viewport, restoreViewport, dispose() { observer.disconnect(); selection.on('.zoom', null); root.remove(); } };
 }

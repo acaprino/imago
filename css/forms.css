@@ -1,0 +1,49 @@
+/* Native form controls retain browser validation, FormData and keyboard behaviour. */
+:is(.im-native-input, .im-native-controls input:not([type=checkbox],[type=radio])), :is(.im-native-select, .im-native-controls select), :is(.im-native-textarea, .im-native-controls textarea) {
+  box-sizing: border-box; min-width: 0; height: var(--im-h-control); padding: 0 var(--im-s-3);
+  font: inherit; color: var(--im-text); background: var(--im-field);
+  border: 1px solid var(--im-line-strong); border-radius: var(--im-r-control);
+}
+:is(.im-native-textarea, .im-native-controls textarea) { height: auto; width: 100%; padding-block: var(--im-s-2); resize: vertical; }
+:is(:is(.im-native-input, .im-native-controls input:not([type=checkbox],[type=radio])), :is(.im-native-select, .im-native-controls select), :is(.im-native-textarea, .im-native-controls textarea)):focus-visible { border-color: var(--im-accent-text); outline-offset: 1px; }
+:is(:is(.im-native-input, .im-native-controls input:not([type=checkbox],[type=radio])), :is(.im-native-select, .im-native-controls select), :is(.im-native-textarea, .im-native-controls textarea))[aria-invalid="true"] { border-color: var(--im-err); }
+:is(:is(.im-native-input, .im-native-controls input:not([type=checkbox],[type=radio])), :is(.im-native-select, .im-native-controls select), :is(.im-native-textarea, .im-native-controls textarea)):disabled { color: var(--im-muted); border-style: dashed; }
+:is(:is(.im-native-input, .im-native-controls input:not([type=checkbox],[type=radio])), :is(.im-native-textarea, .im-native-controls textarea))::placeholder { color: var(--im-muted); }
+.im-native-check, .im-native-radio, .im-native-controls input:is([type=checkbox],[type=radio]) { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--im-accent); }
+.im-seg--native { flex-wrap: wrap; }
+.im-seg--native > label { position: relative; display: flex; min-width: 0; }
+.im-seg--native > label > input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.im-seg--native > label > span { display: block; min-height: var(--im-h-control-sm); padding: var(--im-s-1) var(--im-s-3); color: var(--im-text-2); border-radius: var(--im-r-control); font: 500 13px/1.45 var(--im-font-head); letter-spacing: var(--im-track); text-transform: var(--im-case); }
+.im-seg--native > label:hover > span { background: var(--im-hover); }
+.im-seg--native input:checked + span { color: var(--im-text); background: var(--im-selected); font-weight: 600; box-shadow: inset 0 -2px var(--im-accent-text); }
+.im-seg--native input:focus-visible + span { outline: 2px solid var(--im-accent-text); outline-offset: -2px; }
+.im-seg--native input:disabled + span { color: var(--im-muted); border: 1px dashed var(--im-line-strong); }
+.im-form { display: flex; flex-direction: column; gap: var(--im-s-3); min-height: 0; margin: 0; padding: var(--im-s-5); overflow: auto; }
+.im-form-head { display: flex; align-items: flex-start; gap: var(--im-s-2); }
+.im-form-head > div { display: grid; gap: var(--im-s-1); flex: 1; min-width: 0; }
+.im-form > footer { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--im-s-2); margin-top: auto; }
+.im-field > span:first-child { font-weight: 600; }
+.im-field em { font-style: normal; font-weight: 400; color: var(--im-muted); margin-inline-start: var(--im-s-1); }
+.im-field-error:empty { display: none; }
+.im-option > span:last-child { min-width: 0; }
+.im-step-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--im-s-2); }
+.im-step-nav > button { min-width: 0; display: flex; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3); color: var(--im-text-2); border: 1px solid var(--im-line); border-radius: var(--im-r-control); }
+.im-step-nav > button:hover { background: var(--im-hover); }
+.im-step-nav > button[aria-selected="true"] { color: var(--im-text); border-color: var(--im-accent-text); box-shadow: inset 0 -2px var(--im-accent-text); }
+.im-step-nav .im-step-index { flex: none; }
+.im-step-nav .im-step-text { min-width: 0; display: grid; }
+@media (forced-colors: active) {
+  .im-seg--native input:checked + span { border-bottom: 2px solid Highlight; }
+  .im-step-nav > button[aria-selected="true"] { border-color: Highlight; }
+}
+
+.im-empty { display:grid; justify-items:center; gap:var(--im-s-2); padding:var(--im-s-5); text-align:center; color:var(--im-muted); }
+.im-empty > strong { color:var(--im-text); font:600 15px/1.45 var(--im-font-head); }
+
+/* An input wrapper owns the border and padding; opting native controls into a
+   shell must not give its inner input a second field frame. */
+.im-native-controls .im-input > input {
+  border: 0; border-radius: 0; background: transparent; padding: 0;
+  height: auto; min-width: 0; outline: none; box-shadow: none;
+}
+.im-native-controls input[type="hidden"] { display: none; }

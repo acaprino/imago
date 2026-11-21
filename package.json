@@ -14,6 +14,7 @@
     "./tokens": "./tokens/imago.tokens.json",
     "./tauri": "./lib/tauri.js",
     "./graph": "./lib/graph.js",
+    "./graph-layout": "./lib/graph-layout.js",
     "./react": "./react/index.js"
   },
   "scripts": {
@@ -66,3 +67,4 @@
     "d3-zoom": "3.0.1"
   }
 }
+

@@ -12,6 +12,10 @@ window. Mukade desktop uses it on its develop branch. The version is set by the 
 
 ## The documents
 
+Native HTML form controls, reusable page patterns and app-owned content dialogs
+are documented in [docs/native-forms.md](docs/native-forms.md). The dialog and
+notice lifecycles share the existing layer stack and support explicit disposal.
+
 | Document | What it is |
 |---|---|
 | [docs/design-file.md](docs/design-file.md) | The design file, for people and coding agents: looks, colour, type, measures, layout, controls and their states, surfaces, behaviour, what is common and what an app's own. Read it before UI work. It is not called `DESIGN.md` because on Windows that name is the same file as `design.md` |

@@ -1,3 +1,16 @@
+import { escapeHtml } from './markup.ts';
+
+function validateStep(current: number, length: number): void {
+  if (!Number.isInteger(current) || current < 0 || current > length) throw new RangeError('Invalid step index');
+}
+
+/** String-rendered counterpart to stepProgress, including its completion announcement. */
+export function stepProgressHtml(label: string, steps: readonly string[], current = 0, completeLabel = 'All steps complete'): string {
+  validateStep(current, steps.length);
+  const status = `<span class="im-step-status" role="status">${current === steps.length ? escapeHtml(completeLabel) : ''}</span>`;
+  return `<ol class="im-steps" aria-label="${escapeHtml(label)}">${steps.map((text, index) => `<li data-im-step="${index < current ? 'done' : index === current ? 'now' : 'todo'}"${index === current ? ' aria-current="step"' : ''}><span class="im-step-index" aria-hidden="true">${index < current ? '\u2713' : index + 1}</span><span class="im-step-text">${escapeHtml(text)}</span>${index === steps.length - 1 ? status : ''}</li>`).join('')}</ol>`;
+}
+
 export type ProcessStep = {
   label: string;
   detail?: string;
@@ -68,7 +81,7 @@ export function stepProgress(doc: Document, label: string, steps: readonly strin
   status.setAttribute('role', 'status');
   items.at(-1)?.item.append(status);
   function setCurrent(value: number): void {
-    if (!Number.isInteger(value) || value < 0 || value > steps.length) throw new RangeError('Invalid step index');
+    validateStep(value, steps.length);
     const message = value === steps.length ? completeLabel : '';
     if (status.textContent !== message) status.textContent = message;
     items.forEach((row, i) => row.setState(i < value ? 'done' : i === value ? 'now' : 'todo', i === value));
@@ -88,3 +101,4 @@ export function loader(doc: Document, label: string): HTMLElement {
   status.append(spinner, label);
   return status;
 }
+

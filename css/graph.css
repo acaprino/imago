@@ -1,4 +1,11 @@
 /* Positions come from the caller's layout. The viewport and all states follow the active Imago look. */
+.im-graph-host { block-size: clamp(320px, 60vh, 760px); min-inline-size: 0; }
+.im-graph-panel { padding: var(--im-s-3); min-inline-size: 0; }
+.im-graph-legend { display: flex; gap: var(--im-s-3); flex-wrap: wrap; margin-block-end: var(--im-s-2); font-size: 12px; color: var(--im-muted); }
+.im-graph-legend i { display: inline-block; inline-size: 22px; margin-inline-end: 6px; vertical-align: middle; border-block-start: 2px solid var(--im-tone, var(--im-line-strong)); }
+.im-graph-legend [data-im-stroke="dashed"] { border-block-start-style: dashed; }
+.im-graph-legend [data-im-stroke="dotted"] { border-block-start-style: dotted; }
+.im-graph-summary { margin-inline-start: auto; }
 .im-graph, .im-graph-pane { position: relative; inline-size: 100%; block-size: 100%; min-inline-size: 0; min-block-size: 0; }
 .im-graph-pane {
   overflow: clip;

@@ -23,11 +23,24 @@ const shapes = {
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
   shield: '<path d="m12 3 8 3v6c0 4-8 9-8 9s-8-5-8-9V6z"/><path d="m8 12 3 3 5-6"/>',
   warning: '<path d="m12 3 10 18H2zM12 9v5m0 3h.01"/>',
+  box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/>',
+  sync: '<path d="M20 11a8 8 0 0 0-14.9-3M4 5v3.5h3.5M4 13a8 8 0 0 0 14.9 3M20 19v-3.5h-3.5"/>',
+  sliders: '<path d="M4 7h8M16 7h4M4 12h3M11 12h9M4 17h10M18 17h2"/><circle cx="14" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="16" cy="17" r="2"/>',
+  folder: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  spark: '<path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5L9 9M15 15l2.5 2.5M17.5 6.5L15 9M9 15l-2.5 2.5"/>',
+  back: '<path d="M15 6l-6 6 6 6"/>',
 } as const;
 
-export type IconName = keyof typeof shapes | 'spinner';
+// Keep the original string-composition names as aliases of the shared symbol set.
+const aliases = { x: 'close', alert: 'warning', chev: 'chevron' } as const;
+export type IconName = keyof typeof shapes | keyof typeof aliases | 'spinner';
+export function isIconName(name: string): name is IconName {
+  return name === 'spinner' || Object.hasOwn(shapes, name) || Object.hasOwn(aliases, name);
+}
 export function iconMarkup(name: IconName): string {
   if (name === 'spinner') return '<span class="im-spinner" aria-hidden="true"></span>';
-  const shape = Object.hasOwn(shapes, name) ? shapes[name] : '';
+  const key = Object.hasOwn(aliases, name) ? aliases[name as keyof typeof aliases] : name;
+  const shape = Object.hasOwn(shapes, key) ? shapes[key as keyof typeof shapes] : '';
   return '<svg class="im-icon" viewBox="0 0 24 24" aria-hidden="true">' + shape + '</svg>';
 }
+
