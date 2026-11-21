@@ -2,10 +2,29 @@
 
 The design rules of the suite: Shinatama, Xiox, Mukade, Muro and Daodan. Read this file before any UI work in
 an app that uses Imago. It says what every app does the same way, what an app may do on its own, and which name in
-the code stands for each rule.
+the code stands for each rule. For each need it gives one way: where the package serves two markups with one drawing,
+it says when each is used.
 
-Where this file and [design.md](design.md) differ, this file wins: `design.md` is the approved design with its
-reasons, and its "Corrections after the build" section lists what changed when the code was built.
+This file is the canon. Every rule is here; the other documents hold the calls, the markup and the techniques, and none
+of them states a rule this file does not. Where another document and this file differ, this file wins.
+
+## The documents
+
+| Document | What it is for |
+|---|---|
+| [design-file.md](design-file.md) | This file: every rule, and the name in the code that stands for it |
+| [using-imago.md](using-imago.md) | How an app adopts the package: the dependency, the imports, the shell markup, the calls, `mountApp`, the lines for its agents, and the table "Moving from 0.1.4" of what was removed |
+| [desktop-shell.md](desktop-shell.md) | The window on Windows 11: the glass, the window techniques, the crate `imago-shell`, the wiring of an app in order, WebView2 recovery |
+| [verification.md](verification.md) | What has been run on a real window, and what has not |
+| [html-composition.md](html-composition.md) | The string renderers: what is escaped, the shell frame as a string, the atoms, and how a repaint keeps focus and scroll |
+| [content-composition.md](content-composition.md) | The content of the content region: the renderers and DOM builders of the page patterns, and the workspace, project and file controls |
+| [native-forms.md](native-forms.md) | Forms with native controls, their renderers and validation, the dialogs, and the wizard |
+| [inspection.md](inspection.md) | Inspection content (a single choice, metrics, process stages, progress, notes) and the React binding |
+| [graphs.md](graphs.md) | Directed graphs: the view, the grouped layout and the editor |
+| [design.md](design.md) | The approved design with its reasons, and its "Corrections after the build" |
+
+`design.md` is the approved design with its reasons; its corrections say what changed when the code was built. Where it
+and this file differ, this file wins.
 
 ## Where each thing lives
 
@@ -13,15 +32,31 @@ reasons, and its "Corrections after the build" section lists what changed when t
 |---|---|
 | Every value (colour, size, font, motion) | `tokens/imago.tokens.json`, the single source |
 | The same values as CSS custom properties `--im-*` | `css/tokens.css`, generated: change the JSON, run `npm run tokens` |
+| The whole stylesheet, in order | `css/imago.css`, which imports every file below |
 | The window layout and its breakpoints | `css/primitives.css` |
 | The controls and their states | `css/controls.css`, and `css/looks/oni.css` for what ONI draws differently |
 | The floating surfaces (menu, sheet, dialog, notice, palette) | `css/surfaces.css` |
-| Behaviour: commands, keys, surfaces, panel states | `ts/ui/` (import `@acaprino/imago/ui`) |
-| The desktop window: look, theme, zoom, buttons, guard | `ts/shell/` (import `@acaprino/imago/shell`) and the crate `imago-shell` |
+| The page in the content region and its patterns | `css/content.css`, `css/patterns.css`, `css/inspection.css`, `css/navigation-panels.css`, `css/content-surfaces.css`, `css/forms.css`, `css/dom-parts.css` |
+| The workspace and file controls, the graph | `css/workspace.css`, `css/tiling-workspace.css`, `css/file-workspace.css`, `css/file-tree-detail.css`, `css/graph.css` |
+| Behaviour: commands, keys, surfaces, panel states, the renderers | `ts/ui/` (import `@acaprino/imago/ui`) |
+| The desktop window: look, theme, zoom, buttons, guard | `ts/shell/` (import `@acaprino/imago/shell`), `ts/tauri.ts` (`@acaprino/imago/tauri`) and the crate `imago-shell` |
+| The graph | `ts/graph.ts` and `ts/graph-layout.ts` (`@acaprino/imago/graph`, `@acaprino/imago/graph-layout`) |
+| The React binding | `react/` (`@acaprino/imago/react`) |
+| The icons of the executables | `icons/<app>/` (`@acaprino/imago/icons/*`), made by `npm run icons` |
+| The check of an app against these rules | `scripts/check/` (the program `imago-check`) |
 | Every control in every state, both looks, both themes, each app's accent | the gallery: `npm run gallery` |
 
-The gallery is the acceptance surface. A control is done when its row is complete and its contrast test passes.
-Class names and custom property names in these documents are checked against the code by `tests/docs.test.ts`.
+The gallery is the acceptance surface. A control is done when its row is complete and its contrast test passes. Every
+class `css/` defines is shown there. The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
+`focus`): it is the gallery's, never an app's. The names these documents write are checked against the code by
+`tests/docs.test.ts`.
+
+## Names
+
+Every class of the package starts with `im-`, every custom property with `--im-`, every attribute with `data-im-`. An
+app's own classes and custom properties carry the app's own prefix (`mk-`, `--mk-`), never `im-`. A name the package
+removed is removed, not kept as an alias: the table "Moving from 0.1.4" in [using-imago.md](using-imago.md#11-moving-from-014)
+says what replaces each.
 
 ## Looks and themes
 
@@ -38,14 +73,39 @@ Two looks, each with a dark and a light theme, set by three attributes on the ro
   square panes with cut corners on a grid ground, the head font Bahnschrift. ONI has a dark and a light theme.
 - The theme the user picks is `dark`, `light` or `system` (follow Windows). The page always draws `dark` or
   `light`; `applyLook` resolves `system`. ONI with `system` is dark.
+- `applyLook` writes the three attributes and the class `im-glass`; an app never writes them by hand. `data-im-app` and
+  `data-im-theme` are on the same element as `data-im-look`, because the accent reads the hue of the app and the
+  lightness of the theme from that element.
 - A look or theme a user stored keeps working: `parseLook` and `parseTheme` take a stale or corrupt value for the
   default (Smooth, follow Windows).
 - In Smooth light the sidebar is not a dark column. It sits on the ground in both themes.
 - Shinatama's four ONI skins stay in Shinatama, as overrides of tokens. They are not part of the package.
 - The root class `im-glass` is set only in the desktop app. Under it the ground and the sheets are translucent and
   show the Windows acrylic. Without it every surface is opaque (a browser preview, a test).
-- `data-im-app` and `data-im-theme` go on the same element as `data-im-look`, because the accent reads the hue of
-  the app and the lightness of the theme from that element.
+
+### How the user picks them
+
+The look and the theme are picked with five commands of the palette, the same in every app. `mountApp` registers them
+when the app gives it `appearance` (`AppearanceOptions`):
+
+| Id | Constant | Title |
+|---|---|---|
+| `imago.look.smooth` | `LOOK_SMOOTH` | Smooth look |
+| `imago.look.oni` | `LOOK_ONI` | ONI look |
+| `imago.theme.system` | `THEME_SYSTEM` | Follow Windows |
+| `imago.theme.light` | `THEME_LIGHT` | Light theme |
+| `imago.theme.dark` | `THEME_DARK` | Dark theme |
+
+They are in the group `Appearance`; an app in another language gives its words in `labels`. No key is bound to them.
+The command of the current choice is not offered. The app keeps the choice where it keeps it: `get` gives it back, and
+`set` stores the new one and calls `applyLook`. The package stores nothing. These commands are the one place where the
+look and the theme are picked: no app has a control or a command of its own for them.
+
+### Where Settings live
+
+An app that has settings of its own shows them in a Settings view, the last view tab of the title bar. Settings save
+themselves when they change and show "Saved"; a Settings view has no Save button. It does not repeat the look and the
+theme, which are the five commands above.
 
 ## Colour
 
@@ -103,16 +163,63 @@ No two apps share a hue. Where the browser does not know `oklch()`, `css/tokens.
 hex for each app, clipped into sRGB.
 
 The accent goes on four things only: the one primary action, the selection mark, the focus ring, and data. Not on
-bars, not on every button, not on navigation backgrounds. ONI also takes the accent as the text of short labels.
+bars, not on every button, not on navigation backgrounds. ONI also takes the accent as the text of short labels. On
+data, the accent is the tone `accent` of a chip, a dot or a summary, and the class `im-text-accent` on a short label or a
+key figure. The button modifier `im-btn--accent` (the `accent` option of `buttonHtml`) puts the accent on a secondary
+action, which this rule does not allow: an app does not use it.
 
 ### Status
 
-The tones are `ok`, `warn`, `err` and `info`, set with `data-im-tone` on a chip, a dot, a note or a notice. A tone
-always comes with a word, or an icon that has a name. Never the colour alone.
+The tones are `ok`, `warn`, `err` and `info`, set with `data-im-tone` (in code, `Tone`). A tone always comes with a word,
+or an icon that has a name. Never the colour alone.
+
+| What | Takes | Code |
+|---|---|---|
+| A chip, a dot, a summary | A status tone, the accent (data, not a status), or none | `ChipTone`: `''`, a `Tone` or `'accent'` |
+| A note, a status text, a settings message | A status tone, or none | `Tone` |
+| A notice | Plain, or an error | `tone: 'err'` of `notify`, or none |
+| A menu item | Its `danger` option writes `data-im-tone="err"` | `MenuItem` |
+
+A value outside these sets draws nothing (`imago-check` reports it: rule `unknown-value`). In text, a tone is the class
+`im-text-ok`, `im-text-warn`, `im-text-err` or `im-text-info`, which `statusTextHtml` writes.
 
 A toned chip has a ground of its own: 14% of its tone over the sheet in Smooth, the sheet itself in ONI (where the chip
 is outlined). The fill of a row that is hovered, pressed or selected, which the chip sits on, therefore cannot take its
 text under 4.5:1.
+
+### Categorical colours
+
+A categorical colour tells one thing among others of its kind (a thread, a project) by a fixed hue, the same in every
+app. There are eight, at the accent's lightness and strength in each theme:
+
+| Token | Hue |
+|---|---|
+| `--im-cat-1` | 25 |
+| `--im-cat-2` | 75 |
+| `--im-cat-3` | 125 |
+| `--im-cat-4` | 170 |
+| `--im-cat-5` | 215 |
+| `--im-cat-6` | 255 |
+| `--im-cat-7` | 300 |
+| `--im-cat-8` | 345 |
+
+`--im-cat-on` is the text on them. The one way to give a thing its colour is `data-im-cat="1"` to `"8"` on its `im-row`,
+`im-rail-item`, `im-avatar`, `im-dot` or `im-chip`; the package draws it. An app never writes a categorical colour into a
+style itself.
+
+- A row draws it as a 3px mark at its start edge, beside its selection mark, never in its place.
+- An avatar, a rail item and a dot are filled with it, their text in `--im-cat-on`. A chip takes it as its tone.
+- In the rail a row shows only its rail item, and draws no mark: put `data-im-cat` on the rail item too, whose fill then
+  tells the category. A row whose rail item is its check shows no category in the rail.
+- A categorical colour is never the only thing that tells the things apart: each is named in words. As text it stands
+  only on a ground of its own (the chip's).
+
+### The badge of a row
+
+`data-im-badge` on an `im-row` says the row wants something: a dot at the end of the row, and on the corner of its
+`im-rail-item` in the rail. Its tone is the row's `data-im-tone`, `warn` when it has none. A dot alone is colour alone,
+so the row's text says the same (its `im-row-sub`: "needs you"), and its `title`, which is the rail's tooltip, carries the
+word too: `title="Webhook signature check · needs you"`.
 
 ## Type
 
@@ -125,9 +232,19 @@ All fonts are local Windows fonts. The app downloads nothing.
 | `--im-font-code` | Cascadia Mono, Cascadia Code, Consolas | Code, paths, IDs and key caps |
 | `--im-font-head` | Smooth: the text font. ONI: the display font | Titles, labels, buttons, chips |
 
-Sizes: 12 for meta text, 13 for body text, 14 for a panel title, 18 for a dialog title. Nothing is smaller than 11.
+Every size of text is one of five:
+
+| Token | px | Use |
+|---|---|---|
+| `--im-fs-micro` | 11 | The smallest text: key caps, counts. Nothing is smaller |
+| `--im-fs-meta` | 12 | Meta text, hints, the line under a field |
+| `--im-fs-body` | 13 | Body text, values, controls |
+| `--im-fs-title` | 14 | A panel title, a section title |
+| `--im-fs-display` | 18 | A page title, a dialog title |
+
 Numbers use tabular figures (`im-num`) and are right-aligned in columns. Smooth writes sentence case; ONI writes
-capitals with letter spacing on titles, tabs and buttons, through `--im-case` and `--im-track`.
+capitals with letter spacing on titles, tabs and buttons, through `--im-case` and `--im-track`. An app never sets a case
+or a spacing of its own (rule `literal-case`).
 
 ## Measures
 
@@ -154,19 +271,28 @@ The same in both looks:
 
 | Token | Measure | px | Note |
 |---|---|---|---|
-| `--im-w-sidebar` | Sidebar | 232 | |
+| `--im-w-sidebar` | Sidebar | 232 | `sidebarResize` lets the user drag it from 168 to 420 |
 | `--im-w-rail` | The sidebar as a rail | 56 | |
-| `--im-w-inspector` | Inspector | 300 | The design allows 300 to 360. The token is 300. A 360 inspector next to the 232 sidebar needs a window at least 1012 wide to leave the content its 420 |
+| `--im-w-inspector` | Inspector | 300 | The design allows 300 to 360 |
+| `--im-w-inspector-wide` | The wide inspector | 360 | `data-im-inspector="wide"` on the shell. Beside the 232 sidebar it needs a window at least 1012 wide to leave the content its 420, so such a shell keeps the drawer up to there |
 
 The content region is 420px or more. The minimum window width is 500.
 
-Spacing is `--im-s-1` to `--im-s-5`: 4, 8, 12, 16, 24. Motion is `--im-t-fast` (120ms, hover and press),
-`--im-t-base` (180ms, menus, sheets and the inspector) and `--im-ease` (`cubic-bezier(0.16, 1, 0.3, 1)`). With
-reduced motion, states change at once.
+Spacing is `--im-s-1` 4, `--im-s-2` 8, `--im-s-3` 12, `--im-s-4` 16 and `--im-s-5` 24. Motion is `--im-t-fast` (120ms,
+hover and press), `--im-t-base` (180ms, menus, sheets and the inspector) and `--im-ease`
+(`cubic-bezier(0.16, 1, 0.3, 1)`). With reduced motion, states change at once. Every size of text, every space, radius
+and colour an app writes is a token (rules `literal-font-size`, `literal-space`, `literal-color`); the few literals that
+are not findings, the 1px hairline and the 2px ring among them, are listed with their reasons in
+`scripts/check/allowed.mjs`.
 
 ## Layout
 
-One window layout for every app, with seven regions. An app fills in the regions it needs.
+### One frame
+
+One window layout for every app: `im-shell` with seven regions. An app fills in the regions it needs. Versions up to
+0.1.4 also had three other frames, made for Muro, Shinatama and Daodan, with their own sidebars, side panels and toolbars:
+they are removed, and the table [Moving from 0.1.4](using-imago.md#11-moving-from-014) names each of their classes and
+what replaces it.
 
 ```text
 ┌ title bar: mark, name · view tabs · command button · window buttons ┐
@@ -179,16 +305,36 @@ One window layout for every app, with seven regions. An app fills in the regions
 
 | Region | Class | What it is |
 |---|---|---|
-| Title bar | `im-titlebar` | The mark and name of the app (`im-brand`): the mark (`im-mark`) is the initial of the product's name in capitals, in the square of the app's accent, never a drawing or a logo, and the name (`im-wordmark`) is beside it. Then the view tabs, the command button (`Ctrl+K`), the three window buttons. It always names the product, in ONI too |
-| Status row | `im-status` | The last result as a chip, a summary, and info at the right |
-| Sidebar | `im-sidebar` | The list of the app's objects: threads, rooms, categories, projects. An app without one (Muro) sets `data-im-sidebar="off"` on the shell |
-| Content | `im-content` | What the app is for. The content of this region is the app's own |
+| Title bar | `im-titlebar` | The brand (`im-brand`, see "The mark" below), then the view tabs, the command button (`im-titlebar-command`, `Ctrl+K`), the three window buttons (`im-window-buttons`). It always names the product, in ONI too |
+| Status row | `im-status` | The last result as a chip, a summary (`im-status-text`), and info at the right (`im-status-end`) |
+| Sidebar | `im-sidebar` | The list of the app's objects: threads, rooms, categories, projects. An app without one (Muro) sets `data-im-sidebar="off"` on the shell and writes none |
+| Content | `im-content` | What the app is for, a panel whose body scrolls. The content of this region is the app's own |
 | Inspector | `im-inspector` | The details or the form of the selected object. Not modal; the rest of the window keeps working. It is closed with the `hidden` attribute, and the content takes its room |
 | Action bar | `im-actions` | At most one primary action per window, at the right, with its key on the button |
-| Footer | `im-footer` | Service state, counts, and the keys that work now |
+| Footer | `im-footer` | Service state (`im-footer-text`), counts, and the keys that work now (`im-footer-keys`) |
 
-The window is `im-shell`. It measures its own width (a container query), so the breakpoints follow the window and
-not the screen.
+The window is `im-shell`. Its body is `im-body` (the sidebar and the work area `im-work`, which holds the status row,
+the columns `im-columns` with the content and the inspector, the action bar and the footer); its first element is the
+skip link `im-shell-skip-link`. It measures its own width (a container query), so the breakpoints follow the window and
+not the screen. `shellFrameHtml` writes the frame, `renderShellFrame` repaints it, and the React `Shell` and `Workbench`
+write the same markup ([using-imago.md](using-imago.md), section 4).
+
+The shell fills the window: put it directly in `<body>`, or, when the app renders into a root of its own (React's
+`<div id="app">`), give that root, and every element between the body and the shell, the class `im-root`. Without it
+the shell is as tall as its title bar, and `checkShellFill` says so on the console.
+
+### The mark and the icons
+
+- The mark at the top left is `im-mark`: the 22px square in the app's accent (rounded in Smooth, cut in ONI) holding one
+  letter, the initial of the product's name in capitals, in the head font, weight 700, in `--im-accent-on`. No drawn
+  symbol and no image. The name, `im-wordmark`, is always beside it, and both are in `im-brand`. `titlebarHtml` writes
+  them from `brand.name` (the letter is `brandInitial(name)`). Mukade and Muro both show M: the hue and the name tell them
+  apart. `imago-check` reports a brand that is not this markup (rule `brand-mark`).
+- The app's logo is what Windows shows: the icon of its executables, which is the mark, a rounded square in the app's
+  dark accent holding the capital initial in its ink. One icon per app, for its window program, its command-line program
+  and a page of it served in a browser. The package makes the files (`icons/<app>/`, `npm run icons`) and an app copies
+  them, never draws or recolours its own (rule `app-icon`). Which file goes where is in [using-imago.md](using-imago.md),
+  "The icons of the executables".
 
 ### Breakpoints
 
@@ -202,52 +348,70 @@ not the screen.
 | Under 450 | The command button is gone from the title bar (`Ctrl+K` still opens the palette) and the gaps of the bar close up. The name of the product gives way before the window buttons: it ends in an ellipsis |
 | Under 340 | The mark and the name are gone, and the Views menu is its chevron alone (its label stays its accessible name) |
 
+Every breakpoint is a container query on the shell (`@container im-shell`) at 1000, 850 or 620; the narrower steps of
+the title bar follow the same container. Nothing is a `@media` on a width (rule `media-width`).
+
 The minimum window is 500 physical pixels, so at 200% page zoom the shell is 250 CSS pixels wide (341 for a window half-snapped
 on a 1366px screen). At 250 and at every width up to 500 the three window buttons, the sidebar button, the Views menu and
 the primary action are never pushed out of the shell. The gallery's width control goes down to 250 to show it.
 
-In the rail a row shows only its `im-rail-item`, so every sidebar row needs one. It is the row's own icon (an `im-icon`),
+### The rail
+
+In the rail a row shows only its `im-rail-item`, so every sidebar row has one. It is the row's own icon (an `im-icon`),
 or, when the app has no icon that tells its rows apart, the initials of the row in an avatar (`im-avatar` with
-`im-rail-item`). A row without one is blank in the rail. A row keeps its text in the rail, hidden, as its accessible
-name, and its `title` is its tooltip.
+`im-rail-item`). A row whose control is a check has the check as its rail item (`im-check im-rail-item`): it is shown in
+the whole sidebar and in the rail, ticked the same in both, with a 24 by 24 target in the rail. A row without a rail item
+is blank in the rail. A row keeps its text in the rail, hidden, as its accessible name, and its `title` is its tooltip.
+Every row of the rail is as tall as a two-line row. The header's count and the sidebar's foot are not shown in the rail.
 
 ### Panels and helpers
 
-A panel (`im-panel`) has a header (`im-panel-header`, with `im-panel-title`), tools (`im-panel-tools`), a body that
-scrolls (`im-panel-body`) and a foot (`im-panel-foot`). Helpers: `im-stack` (a column), `im-cluster` (a wrapping
-row), `im-split` (two groups at the two ends of a row), `im-scroll` (a region that scrolls), `im-spacer`. A surface
-(`im-surface`) is one of four materials, set with `data-im-surface`: `ground`, `sheet`, `dense`, `float`.
+A panel (`im-panel`) has a header (`im-panel-header`, with `im-panel-title` and, after it, an `im-count` or a subtitle
+`im-panel-sub`), tools (`im-panel-tools`), a body that scrolls (`im-panel-body`) and a foot (`im-panel-foot`). The
+content region and the inspector are panels; a sidebar is a panel whose body is a list (`im-list`). Helpers: `im-stack`
+(a column), `im-cluster` (a wrapping row), `im-split` (two groups at the two ends of a row), `im-scroll` (a region that
+scrolls), `im-spacer` (the space that pushes what follows to the end). A surface (`im-surface`) is one of four
+materials, set with `data-im-surface`: `ground`, `sheet`, `dense`, `float`.
 
 ## Controls
 
 The set, each with every state defined once. The markup each class expects is written at the top of
-`css/controls.css`.
+`css/controls.css`. A form control has one drawing, which serves the ARIA element and the native one. **In a `form`
+the control is the native element** with the class of its drawing (it keeps FormData, browser validation and its own
+keys); **outside a form it is the ARIA element** whose state the app sets.
 
-| Control | Class | Notes |
-|---|---|---|
-| Button | `im-btn` with `im-btn--primary`, `im-btn--ghost`, `im-btn--danger`, `im-btn--confirm-danger`, `im-btn--sm` | The neutral button is `im-btn` alone |
-| Icon button | `im-icon-btn` | Needs an accessible name and a tooltip |
-| Key cap | `im-key` | One cap per key, in the code font |
-| Count | `im-count` | A number in a pill |
-| Field | `im-field`, `im-field-label`, `im-input`, `im-field-hint`, `im-field-error` | The label sits above the field |
-| Search | `im-input` with an `im-icon` and an `im-key` | |
-| Select | `im-select` | A button that opens a list |
-| Checkbox, radio, switch | `im-check`, `im-radio`, `im-switch`, in an `im-option` | `aria-checked` is `true`, `false`, or `mixed` for a checkbox |
-| Tabs | `im-tabs`, `im-tab` | |
-| Segmented | `im-seg` | |
-| Menu | `im-menu`, `im-menu-item` | Opened by `openMenu` |
-| Tooltip | the `title` attribute | There is no tooltip element |
-| Row | `im-row`, `im-row-text`, `im-row-title`, `im-row-sub`, `im-row-meta` | One line (`im-row--1`) or two |
-| Table | `im-table`, `im-cell-title`, `im-cell-sub` | |
-| Facts | `im-facts` | A name and its value; the value is content and can be selected |
-| Tree | `im-tree`, `im-tree-item`, `im-tree-chevron`, `im-tree-label` | |
-| Avatar | `im-avatar` | |
-| Status chip | `im-chip` with `data-im-tone` | |
-| Note | `im-note` | A result or a warning that stays in the page |
-| Notice | `im-notice` | Shown by `notify` |
-| Progress | `im-progress` | Without `aria-valuenow` it is indeterminate |
-| Steps | `im-steps`, with `data-im-step` of `done`, `now` or `todo` on each item | |
-| Inspector, sheet, dialog | `im-inspector`, `im-sheet`, `im-dialog` | See the surfaces below |
+| Control | Class | ARIA form, outside a form | Native form, in a form |
+|---|---|---|---|
+| Button | `im-btn`, with `im-btn--primary`, `im-btn--ghost`, `im-btn--danger`, `im-btn--confirm-danger`, `im-btn--sm` | `button` | `button`: the neutral button is `im-btn` alone |
+| Icon button | `im-icon-btn` | `button` with an accessible name and a tooltip | the same |
+| Key cap | `im-key` | One cap per key, in the code font; `keyCaps` writes them in `im-keys` | |
+| Count | `im-count` | A number in a pill | |
+| Field | `im-field` with `im-field-label`, `im-field-hint`, `im-field-error`; the box `im-input` | | `<span class="im-input"><input></span>`, the box round the input when it holds an icon or a key cap (`im-input--code` for code); `input.im-input` otherwise |
+| Text area | `im-textarea` | | `textarea.im-textarea` |
+| Search | `im-input` with an `im-icon` and an `im-key` | | `<span class="im-input">` round the input |
+| Select | `im-select` | `button.im-select` that opens a menu of the choices (`openMenu`, items with `checked`) | `select.im-select` (`selectHtml`, `uiSelect`) |
+| Checkbox, radio, switch | `im-check`, `im-radio`, `im-switch`, in an `im-option` | `role="checkbox"`, `"radio"` or `"switch"` with `aria-checked` (`true`, `false`, `mixed` for a checkbox) | `input.im-check`, `input.im-radio`, `input.im-switch` with `role="switch"`: `:checked`, `:indeterminate`, `:disabled` |
+| Segmented | `im-seg` | Buttons with `aria-selected`, for a choice of view (`role="tablist"`) | Labels over native radios, `label > input[type=radio] + span` (`role="radiogroup"`), for a value (`segmentedHtml`, `segmentedControl`) |
+| Tabs | `im-tabs`, `im-tab` | `button role="tab"` with `aria-selected` | |
+| Menu | `im-menu`, `im-menu-item`, `im-menu-sep` | Opened by `openMenu` | |
+| Tooltip | the `title` attribute | There is no tooltip element | |
+| Row | `im-row`, `im-row-text`, `im-row-title`, `im-row-sub`, `im-row-meta`; one line `im-row--1`, or two | `role="option"` with `aria-selected` in a listbox; a native `button` with `aria-pressed` in the React binding (`im-row--detail`) | |
+| Table | `im-table`, `im-cell-title`, `im-cell-sub`, `im-col-check` (a column of checks), `im-num` | A row with `aria-selected` | |
+| Facts | `im-facts`, `im-facts-code` | A name and its value; the value is content and can be selected; a code value in the code font | |
+| Tree | `im-tree`, `im-tree-item`, `im-tree-chevron`, `im-tree-label` | `role="tree"`, items `role="treeitem"` with `aria-level` and `aria-expanded` | |
+| Avatar | `im-avatar` | Initials; decorative, its name beside it | |
+| Status chip | `im-chip` with `data-im-tone` | | |
+| Dot | `im-dot` with `data-im-tone` | A status said in words next to it | |
+| Missing value | `im-none` | A grey dash | |
+| Note | `im-note`, `im-note--block` | A result or a warning that stays in the page (`noteHtml`) | |
+| Notice | `im-notice` | Shown by `notify` | |
+| Progress | `im-progress`, with `im-progress-row` and `im-progress-value` for a bar with its value | `role="progressbar"`; without `aria-valuenow` it is indeterminate (`setProgress`) | |
+| Steps | `im-steps`, with `data-im-step` of `done`, `now`, `todo`, `failed` or `skipped` on each item; `im-step-index`, `im-step-text`, `im-step-sub`, `im-step-status` | A step that can be opened is a `button` inside its item | |
+| Spinner | `im-spinner` | The progress mark of a busy control, in the icon's place | |
+| Inspector, sheet, dialog | `im-inspector`, `im-sheet`, `im-dialog` | See the surfaces below | |
+
+An icon is `im-icon`, a 16px line drawing in the colour of its text. A text only for assistive technology is
+`im-visually-hidden`.
 
 ### States
 
@@ -258,15 +422,16 @@ The same for every control. They are real attributes and pseudo-classes, never e
 | Hover | A translucent wash; never a change of size | `:hover` |
 | Pressed | One step darker than hover | `:active` |
 | Focus | The focus ring, only from the keyboard. See the rule below | `:focus-visible` |
-| Selected | The selection fill plus a mark that is not colour: weight, an underline, a check. Hover, focus and selected can be told apart at a glance | `aria-selected="true"` |
-| Checked | A checkbox, radio or switch that is on | `aria-checked="true"`, or `"mixed"` |
-| Disabled | A dashed edge and the muted text colour, readable at 4.5:1. No hover. It says why in a tooltip or a line beside it. Never an opacity | `disabled` or `aria-disabled="true"` |
+| Selected | The selection fill plus a mark that is not colour: weight, an underline, a bar, a check. Hover, focus and selected can be told apart at a glance | Any of four, one drawing: `aria-selected="true"` (an item of a listbox, a tab strip, a tree or a table), `aria-current` that is not `"false"` (the current page or step), `aria-pressed="true"` (a toggle button), `:checked` (the radio of a segment) |
+| Checked | A checkbox, radio or switch that is on | `aria-checked="true"` or `:checked`; `"mixed"` or `:indeterminate` |
+| Disabled | A dashed edge and the muted text colour, readable at 4.5:1. No hover. It says why in a tooltip or a line beside it. Never an opacity | `disabled`, `:disabled` or `aria-disabled="true"` |
 | Busy | The label and the width stay; a progress mark (`im-spinner`) takes the icon's place; a second press does nothing | `aria-busy="true"` |
 | Invalid | The field's edge takes `--im-err`, with one sentence under the field that starts with the word "Error", tied by `aria-describedby`, shown after the field loses focus or on submit | `aria-invalid="true"` on the input |
 | Read-only | No field fill, no frame, text selectable, no caret | `readonly` on the input |
 
-A busy button ignores the pointer, not the keyboard: Enter or Space on a busy button still fires its click. The app
-ignores a second activation itself, or disables the button.
+A selected button (`aria-pressed`) takes the selection fill and a 2px bar inside its bottom edge in the accent text
+colour, and in Smooth the weight 600. A busy button ignores the pointer, not the keyboard: Enter or Space on a busy
+button still fires its click. The app ignores a second activation itself, or disables the button.
 
 ### The focus ring
 
@@ -276,7 +441,7 @@ it. How far it sits from the control depends on what surrounds the control:
 | What is focused | Where the ring is |
 |---|---|
 | A control that stands alone: button, icon button, select, checkbox, radio, switch | 2px outside |
-| A field: input, search. Its edge also turns to the accent | 1px outside |
+| A field: input, search, text area. Its edge also turns to the accent | 1px outside |
 | An item of a list, table, tree, menu, tab strip or segmented control. Their container scrolls and clips | 2px inside |
 | The field of the command palette (the ring is round the field while its input has focus), and the three window buttons of the title bar | 2px inside |
 | An ONI chamfered button. A clip-path would cut an outer ring | 5px inside |
@@ -294,6 +459,41 @@ it. How far it sits from the control depends on what surrounds the control:
 - Tables: no zebra, no header band, headers in sentence case, a missing value as a grey dash (`im-none`), a real
   zero printed as zero.
 - A switch changes at once; a checkbox waits for Save. A switch is never used inside a form with a Save button.
+- No control has a hand cursor (rule `cursor-pointer`).
+
+## Page patterns
+
+The content region holds what the app is for. Where that is a page (a list, a card, settings, a document), it is made of
+the package's page patterns, so an app may have no stylesheet of its own. A pattern with content has a renderer, which
+is the one way to write it; a class that only lays out the app's own elements (a grid of measures, the host of a graph)
+goes on them. The calls are in [content-composition.md](content-composition.md) and [native-forms.md](native-forms.md).
+
+| Pattern | Class | Written by |
+|---|---|---|
+| The page in the content region's body, its padding round a column of 1180, or 860 narrow | `im-page-content`, `im-page-content--narrow` | `pageContentHtml` |
+| The page's title, its line and its actions | `im-page-heading`, `im-action-row` | `pageHeadingHtml` |
+| A section's title | `im-section-heading` | `sectionHeadingHtml` |
+| A row of tools at the head of the page or of a section | `im-content-toolbar` | `toolbarHtml` |
+| A list of things with a title, a line and actions; as a timeline of events; as decisions | `im-stack-list`, `im-activity-list`, `im-decision-list`, `im-related-list` | `stackListHtml`, `stackRowHtml`, `timelineItemHtml` |
+| A table in its scrolling sheet; a log; a table of inputs | `im-table-scroll`, `im-log-table`, `im-input-list` | `tableHtml`, `tableRowHtml` |
+| A summary of a state: an icon, a title, metadata | `im-summary`, `im-summary-icon`, `im-summary-meta` | `summaryHtml` |
+| A card of a task that runs | `im-task-card`, `im-leading` | `taskCardHtml` |
+| A group of settings, and a setting with its control | `im-settings`, `im-setting-row` | `settingsGroupHtml`, `settingsRowHtml`, `settingsMessageHtml` |
+| A list of names and values | `im-definition-list` | `uiPart('descriptionList')` |
+| Code or literal text, selectable | `im-code-view` | `codeViewHtml`, `uiPart('pre')` |
+| A list of bullets; a quoted line; a title over a line | `im-bullet-list`, `im-wrap-text`, `im-text-stack` | `bulletListHtml`, `quoteHtml`, `textStackHtml` |
+| A first run in steps | `im-wizard-wrap`, `im-wizard`, `im-wizard-actions`, `im-choice-rows` | `wizardHtml`, `wizardActionsHtml`, `choiceRowsHtml` |
+| A form and its parts | `im-form`, `im-form-head`, `im-repeat-row` | `uiPart('form')`, `formHeaderHtml`, `formFooterHtml`, `repeatableFieldRowHtml` |
+| A measure: a value, its meaning and its context; measures side by side | `im-metric`, `im-metric-value`, `im-caption`; `im-metric-grid` round them | `metric`; the grid on the app's element |
+| A timeline of a React view | `im-timeline` | `Timeline` |
+| A panel that holds a canvas | `im-canvas-panel` | on the app's element |
+| A graph, its host and its key | `im-graph-host`, `im-graph-panel` round the graph; `im-graph-legend`, `im-graph-summary` | the host on the app's element, then `graphView`; `graphLegendHtml` |
+| A group that opens | `im-disclosure` | `uiPart('details')`, `Disclosure` |
+
+Text helpers, for content inside a pattern: `im-muted` (the muted colour), `im-mono` (the code font), `im-grow` (takes
+the room left), `im-text-accent` (the accent on data), `im-content-text` (content that can be selected outside a page:
+a message, a path, terminal output). A page's own headings are `h1` 18, `h2` 14 and `h3` 13, in the head font, in
+sentence case in both looks.
 
 ## Surfaces: which one for what
 
@@ -301,35 +501,58 @@ it. How far it sits from the control depends on what surrounds the control:
 |---|---|---|
 | A few commands | Menu | Under its control. Escape or a press outside closes it. Focus returns to the control |
 | A short choice tied to one control or pane | Sheet | Docked to its control or pane. One at a time. Tab stays inside it |
-| Details or a form for the selected object | Inspector | Not modal. The rest of the window keeps working |
+| Details or a form for the selected object | Inspector | Not modal. The rest of the window keeps working. Leaving it with unsaved changes asks once |
 | A decision about the whole window | Dialog | Everything under the title bar is inert. Focus is contained and starts on Cancel. Actions at the bottom right |
+| A form that must block the window while it saves | Dialog | `openFormDialog`, locked while it writes, or `createContentDialog` with `canDismiss`. Never the inspector, which is not modal |
 | A short result | Notice | Bottom centre, above the footer. It never takes focus. An error stays until dismissed and says "Error" in words |
 | A command by name | Command palette | Opened with `Ctrl+K`. Modal like a dialog |
 
-No surface uses `showModal()`: it makes the HTML title bar inert, and a borderless window cannot then be moved,
-minimized or closed. A dialog makes the regions under the title bar inert instead. Nothing opens a second OS window
-except what an app already has.
+The inspector is the only side panel: there is no drawer and no second detail box. Every dialog is one drawing,
+`im-dialog`, centred in the window: `confirm` for a decision, `openFormDialog` for a form the package lays out,
+`openContentDialog` or `createContentDialog` for a `dialog` element the app owns. The calls are in
+[native-forms.md](native-forms.md) and [using-imago.md](using-imago.md), section 5.
+
+No surface uses `showModal()` (rule `show-modal`): it makes the HTML title bar inert, and a borderless window cannot then
+be moved, minimized or closed. A dialog makes the regions under the title bar inert instead. Nothing opens a second OS
+window except what an app already has.
 
 Surfaces float inside the shell and are placed from the rectangle of their anchor. They stack from the bottom:
-sheet, dialog and palette, notice, menu. Escape closes the top surface only.
+sheet, dialog and palette, notice, menu. Escape closes the top surface only. An app's own floating surface goes through
+the same layer stack (`pushLayer`).
 
 ## Behaviour
 
+### One call: `mountApp`
+
+Every app calls `mountApp(shell, registry, options)` once for each shell (rule `mount-app`). It makes the calls every app
+makes, in one place, so none is forgotten: `attachLayers` (Escape and the press outside), `sidebarDrawer` and
+`sidebarCollapse` when the shell has a sidebar, `registry.attach` (the keys), `regions` (`F6`), `standardCommands`
+(`Ctrl+K` and `Ctrl+F`) and, with `appearance`, the five commands of the look and the theme. It returns the function that
+undoes them all. The options are in [using-imago.md](using-imago.md), section 6.
+
 ### Keyboard
 
-- One command registry per app. Key bindings, the key caps on buttons, the footer's key list, menus and the palette
-  all come from it.
-- `Ctrl+K` opens the command palette in every app. `Ctrl+F` is search inside the current view.
-- Tab moves between controls. Arrows move inside a list, a table, tabs or a menu, and each is one tab stop. `F6`
-  moves between the sidebar, the content and the inspector; `Shift+F6` goes back.
+- One command registry per app (`createRegistry`). Key bindings, the key caps on buttons, the footer's key list, menus
+  and the palette all come from it. The footer's key list is written by `footerKeys`, and every key cap by `keyCaps`.
+- `Ctrl+K` opens the command palette (`PALETTE_COMMAND`, `imago.palette`) and `Ctrl+F` searches the current view
+  (`SEARCH_COMMAND`, `imago.search`), with the same ids in every app.
+- Tab moves between controls. Arrows move inside a list, a table, tabs or a menu, and each is one tab stop (`roving`).
+  `F6` moves between the sidebar, the content and the inspector; `Shift+F6` goes back.
 - Enter runs the primary action of the focused surface. Escape closes the top surface only.
+- A key is answered once. A handler of the package that answers a key (Escape that closes a surface, the inspector or the
+  sidebar drawer; an arrow that moves a list) claims it, and the registry runs no command on a claimed key. A key that is
+  only refused to the browser (by `guardDesktop`, or the zoom keys) still runs the app's command.
+- An app's own key handler on the document (a terminal, an editor) is added before `mountApp`, so it runs before the
+  registry, and calls `claimKey(event)` when it answers a key; from a React handler, `claimKey(event.nativeEvent)`.
+  `imago-check` reports such a handler (rule `own-keydown`), and the app keeps it with an exception comment that says why.
+- No command is bound to Enter or Space: the focused control's own activation would also fire. A button's key cap may
+  show them. No command is bound to `F6` or `Shift+F6`, which are the regions'.
 - In a text field (an input, a textarea, a select or an editable element) a binding without Ctrl or Alt does not run,
   and does not cancel the key: the field keeps every key that types and every key that edits or moves in it (letters,
   Space, Delete, Backspace, Home, End, the arrows, Enter, Tab). Escape and F1 to F24 stay available there, and so does
   any binding with Ctrl or Alt. A key pressed while an input method composes text belongs to the input method.
-- A binding of Enter or Space is not made in the registry: the focused control's own activation would also fire.
-  A button's key cap may show it.
-- `Ctrl+=`, `Ctrl+-` and `Ctrl+0` zoom from 50 to 200%, in steps of 10, saved per machine.
+- No command runs while a dialog or the palette is open: a key never acts behind a pending decision.
+- `Ctrl+=`, `Ctrl+-` and `Ctrl+0` zoom from 50 to 200%, in steps of 10, saved per machine (`mountZoom`).
 
 ### Destructive actions
 
@@ -342,20 +565,26 @@ sheet, dialog and palette, notice, menu. Escape closes the top surface only.
 ### Saving
 
 One model per surface. Settings save themselves and show "Saved". A form in the inspector has Cancel and Save, and
-leaving it with changes asks once.
+leaving it with changes asks once (`inspector(shell).guard`). A form that must block the window while it saves is a
+dialog.
 
 ### Empty, loading, error
 
-- Empty: the panel keeps its header and frame, with one sentence and the first action where the data will be.
-- Loading: the final layout with flat grey bars at the real sizes, no shimmer, and nothing moves when the data
-  lands. Under 300ms show nothing.
-- Error: inside the panel that failed, one sentence on what failed and a Retry. Never a full-window banner for one
-  panel.
+- Empty: the panel keeps its header and frame, with one sentence and the first action where the data will be
+  (`im-empty`).
+- Loading: the final layout with flat grey bars at the real sizes (`im-skeleton`), no shimmer, and nothing moves when
+  the data lands. Under 300ms show nothing (`showAfter(LOADING_DELAY_MS, …)`).
+- Error: inside the panel that failed, one sentence on what failed and a Retry (`im-failure`). Never a full-window
+  banner for one panel.
+- A panel takes these states through `setPanelState`, or, painted from strings, `panelStateHtml`, which writes the same
+  layer. An operation that runs in the content, outside a panel that loads, is `loader` (`im-loader`, a line with its
+  label); a button that runs it is `aria-busy="true"`. Nothing loads in a corner of the window.
 
 ### Chrome and content
 
-Text in the chrome is not selectable and keeps the arrow cursor. Content (messages, paths, code, the values in
-facts, every field) is selectable. No control has a hand cursor.
+Text in the chrome is not selectable and keeps the arrow cursor. Content is selectable: messages, paths, code, the
+values in facts, every field, and the text of a page in `im-page-content`; elsewhere, content carries `im-content-text`.
+The controls on a page are chrome, as everywhere.
 
 ### Accessibility
 
@@ -368,13 +597,57 @@ Every app has the same layout structure, the same shapes and the same controls. 
 needs them.
 
 - **Common, never redefined by an app**: the seven regions and the breakpoints, the measures, the radii and cuts,
-  the control set with its states, the surfaces, the behaviour rules.
-- **An app's own**: the content of the regions, and the controls only that app needs. Shinatama's terminal panes
-  and team map, Mukade's graph and lanes, Muro's plugin by harness matrix, Daodan's pipeline.
+  the control set with its states, the page patterns, the surfaces, the behaviour rules.
+- **An app's own**: the content of the regions, and the content no other app has: Shinatama's terminal panes and team
+  map, Mukade's graph and lanes, Muro's plugin by harness matrix, Daodan's pipeline. A list, a card, a summary or a
+  settings group is a page pattern of the package from the start, not an app's own.
 - An app's own control is built from the package's tokens and primitives, never from literal colours or sizes. It
-  takes the common states and keys: the focus ring, disabled, selection, Escape, the arrows. It lives in the app's
-  repository, and moves into the package when a second app needs it. [using-imago.md](using-imago.md) shows how.
-- An app never restyles a common control. If the common one does not fit, the fix goes into the package.
+  takes the common states and keys: the focus ring, disabled, selection, Escape, the arrows. Its classes carry the app's
+  prefix. It lives in the app's repository, and moves into the package when a second app needs it.
+  [using-imago.md](using-imago.md) shows how.
+- An app never restyles a common control: no selector of the app names an `im-` class, and no declaration of the app
+  sets an `--im-` property (rule `im-selector`). If the common one does not fit, the fix goes into the package.
+
+## Attributes
+
+An app writes the attributes of the first table, in its markup or through a renderer. The package writes and reads those
+of the second for itself: an app never writes or styles them.
+
+| Attribute | On | What it says |
+|---|---|---|
+| `data-im-sidebar` | The shell | `on` or `off`: whether it has a sidebar |
+| `data-im-inspector` | The shell | `wide`: the inspector is 360 |
+| `data-im-surface` | An `im-surface` | `ground`, `sheet`, `dense` or `float` |
+| `data-im-tone` | A chip, a dot, a note, a summary, a row with a badge | The tone (see "Status") |
+| `data-im-cat` | A row, a rail item, an avatar, a dot, a chip | The categorical colour, `1` to `8` |
+| `data-im-badge` | A row | The row wants something |
+| `data-im-step` | An item of `im-steps` | `done`, `now`, `todo`, `failed` or `skipped` |
+| `data-im-window` | A window button | `minimize`, `maximize` or `close` |
+| `data-im-label-collapse`, `data-im-label-expand` | The fold button of the sidebar | Its two names |
+| `data-im-pane`, `data-im-dock-tab` | A pane and a tab of `dockTabs` | Their stable ids |
+| `data-im-key` | A control | Its identity across a repaint, for focus and dialogs (`captureDomState`) |
+| `data-im-scroll` | A region that scrolls | Its scroll is kept across a repaint (`captureDomState`) |
+| `data-im-rail-detail` | Anything inside the sidebar | Hidden in the rail |
+| `data-im-align` | An item of a toolbar | `end`: pushed to the end |
+
+| Attribute | Written by | What it says |
+|---|---|---|
+| `data-im-app`, `data-im-look`, `data-im-theme` | `applyLook`, on the root element | The app, the look and the theme |
+| `data-im-os`, `data-im-maximized` | `mountWindowControls` | The maximize button's hover and press from Windows, and the window's state |
+| `data-im-sidebar-collapsed` | `sidebarCollapse` | The sidebar is folded into the rail |
+| `data-im-sidebar-open` | `sidebarDrawer` | The sidebar is open as an overlay under 620 |
+| `data-im-layer`, `data-im-notices` | The layer stack, `notify` | A floating surface, the host of the notices |
+| `data-im-state-layer`, `data-im-state-hidden` | `setPanelState`, `panelStateHtml` | The state layer of a panel, and the content it hides |
+| `data-im-covered` | `inspector(shell).push` | A view of the inspector covered by a detail view |
+| `data-im-operation` | `runFormOperation` | A form operation runs |
+| `data-im-error-for` | `showFieldErrors` | The field an error is about |
+| `data-im-entry` | `createFileTree` | The id of a row of the tree |
+| `data-im-mark` | `searchPicker` | The mark action of a result |
+| `data-im-axis` | `splitView` | `columns` or `rows` |
+| `data-im-dock-target` | `dockTabs` | Where a dragged tab would land |
+| `data-im-node`, `data-im-external`, `data-im-dimmed` | `graphView` | A node's id; a node marked `external`, drawn with a dashed edge; a node or an edge marked `dimmed`, set back |
+| `data-im-stroke` | `graphLegendHtml` | `dashed` or `dotted`: the line of a key's sample |
+| `data-im-force` | The gallery | A forced pseudo-state of a cell |
 
 ## Glass
 
@@ -394,27 +667,73 @@ in [desktop-shell.md](desktop-shell.md). The rules:
   says which, in section 1.3. What the demo app captured on a real window is in [verification.md](verification.md). A
   look that file does not list is not measured on screen.
 
-## File controls and process status
+## Files, workspaces and processes
 
-Import these functions from `@acaprino/imago/ui`. Each uses the document supplied by the caller.
+- The app supplies every listing: Imago never reads a filesystem. A file tree (`createFileTree`) is the package's tree,
+  with its keys (arrows, Home and End, typing to search, Space to select, Enter to open); a path field (`pathField`)
+  hands the native chooser to the app; a native file input is `fileSelector`.
+- Panes share one accessible separator for rows, columns and the expanded sidebar (`splitter`). A drag shows its
+  destination on the pane edge, pane centre or neighbouring tab, and a keyboard move mode announces the same
+  destinations. The app supplies the view contents and owns their layout and their persistence.
+- A process in stages shows its stages as `im-steps`; an operation of known length is a progress bar; one of unknown
+  length in the content is `loader`.
 
-| Control | Contract |
-|---|---|
-| `fileTree(doc, entries, options)` | Each entry has a unique string ID, a name and optional children. Supply a label and optional initially expanded IDs. Arrows navigate and expand folders, Home and End jump, Space selects, and Enter opens a file. Use `onSelect` for selection and `onOpen` for activation. The app supplies the listing. |
-| `fileSelector(doc, options)` | Returns a native file input with a label, optional accept filter, multi-file selection or directory mode. Read its FileList on change. |
-| `pathField(input, options)` | Wraps an editable path and a browse button. Supply the native chooser through `choose`, a button label and an error callback. Cancel preserves the current input. A pending choice is discarded if the field is edited or removed. |
-| `stepProgress(doc, label, steps, current, completeLabel?)` | Append the returned element and call `setCurrent(index)` as work advances. Index zero indicates the first step. Passing the step count marks all complete and announces the completion label (default “All steps complete”). The application controls validation, navigation and retries. |
-| `loader(doc, label)` | Inline status message with a spinner. The label stays visible with reduced motion. Use a progress bar when the amount of work is known and panel skeletons when replacing rows. |
+The calls are in [content-composition.md](content-composition.md) and [inspection.md](inspection.md).
 
-A docked shell can opt into a resizable sidebar with `sidebarResize(shell, { label, width, onChange })`.
-Drag the separator, use Left or Right, or jump to either limit with Home or End. The app may store the reported
-width. The separator only appears in the expanded desktop sidebar. The compact icon rail and narrow drawer use
-their existing sizes. Call the returned cleanup function when unmounting the shell.
+## The React binding
 
-## Workspace controls
+The package has no UI framework, and an app needs none. There is one exception: `@acaprino/imago/react`, a binding for
+Daodan's viewer, which is written in React. Its components (`Shell`, `Workbench`, `ListAction`, `Timeline`, `TabList`,
+`Disclosure`) write the package's canonical markup and nothing of their own: `Shell` is `im-shell`, and `Workbench` its
+body, with the sidebar, the content region and the inspector. No other app uses React. The props are in
+[inspection.md](inspection.md).
 
-Panes share one accessible separator for rows, columns and the expanded sidebar. A drag shows its destination on the pane edge, pane centre or neighbouring tab. Keyboard move mode announces the same destinations. The application supplies the view contents and owns their layout and persistence.
+## What a program checks
 
-The file tree supports incremental folder reads and keyboard search. A breadcrumb reveals a parent folder. The project finder has distinct actions for opening the highlighted project and including it in a group. An inspector can cover its current detail with a child view while the workspace stays available.
+`imago-check` is a program of the package. An app runs `npx imago-check` before it says UI work is done, and in its CI;
+the package runs `npm run check` (the program with `--package`) on its own `css/`. It prints each finding as
+`file:line  rule  message` and exits 1 on any finding. It reads the `"imago"` block of the app's `package.json`
+([using-imago.md](using-imago.md), section 9).
 
-The calls, keyboard interactions and a file browser example are in [Using Imago](using-imago.md#workspaces-projects-and-files).
+| Rule | What it reports | Where |
+|---|---|---|
+| `im-selector` | A selector of the app that names an `im-` class, or a declaration that sets an `--im-` property | App |
+| `literal-color` | A colour that is not a token: a hex, `rgb()`, `oklch()` and their kin, a colour word | App, package |
+| `literal-font-size` | A size of text that is not one of the five type tokens | App, package |
+| `literal-space` | A padding, margin, gap or radius that is not a token or an allowed literal | App, package |
+| `literal-case` | A `text-transform` or a `letter-spacing` of the app's own | App |
+| `cursor-pointer` | A hand cursor | App, package |
+| `disabled-opacity` | An opacity on a disabled state | App, package |
+| `media-width` | A `@media` on a width, or a `matchMedia` of a width | App, package |
+| `show-modal` | A call of `showModal()` | App |
+| `own-keydown` | A key handler of the app on the document, the window or the body | App |
+| `unknown-name` | An `im-` class or a `data-im-` attribute the installed package does not define | App, its tests included |
+| `removed-name` | A name the canon removed (the table "Moving from 0.1.4"), with what replaces it | App, its tests included |
+| `unknown-value` | A value outside the set of an attribute that takes a closed set (`data-im-tone`, `data-im-cat`, the root attributes, and the others) | App |
+| `brand-mark` | A title bar brand that is not the mark and the name | App |
+| `app-icon` | An icon file that is not the package's, byte for byte | App |
+| `pin-mismatch` | The npm pin and the Cargo pin of Imago that are not the same tag or commit | App |
+| `agent-rules` | `AGENTS.md` or `CLAUDE.md` without the path of this file in the installed package | App |
+| `mount-app` | An entry that never calls `mountApp` | App |
+| `class-prefix` | A class of the package that does not start with `im-` | Package |
+
+An exception is a comment on the line or the line above, `imago-check: allow <rule> — <reason>`; without a reason it
+allows nothing. The program prints every exception it accepted. A check that only warns is not a check: every rule
+fails the run.
+
+## What a person checks
+
+A program cannot judge these. They are part of the review of every change to an app's UI:
+
+- The confirming button of a destructive action carries the verb and the object ("Delete 8 items"), and the dialog names
+  the object and the consequence.
+- At most one primary action per window, and it is not destructive without Undo or a dialog.
+- Undo is bound: the notice's button works, and so does the key the app gave it.
+- Every icon-only control has a name and a tooltip, every dot and every badge is said in words, and every category is
+  named in words.
+- The words are in the app's language: the labels the package takes (`labels`, `errorWord`, `dismissLabel`, the palette's
+  words, the confirm dialog's) are given.
+- Settings save themselves; a form in the inspector asks once before it is left with changes.
+- The real window, in both looks and both themes, over a dark and a bright window: a screenshot of the page cannot judge
+  the glass ([desktop-shell.md](desktop-shell.md), section 1.5). What has been seen so is in
+  [verification.md](verification.md).
