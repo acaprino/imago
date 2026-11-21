@@ -670,6 +670,8 @@ breakpoints of what stays follow the shell (`@container im-shell` at 1000, 850 a
 | `im-native-check` | `im-check` on the `input type="checkbox"` |
 | `im-native-radio` | `im-radio` on the `input type="radio"` |
 | `im-native-choice` | `im-check` or `im-radio` on the input: nothing is drawn with `accent-color` |
+| `im-btn--accent` | A plain `im-btn`: the accent goes on the one primary action (`im-btn--primary`), the selection, the focus and data, and a secondary action does not take it |
+| `buttonHtml(…, { accent: true })` | Drop `accent`: `ButtonMarkupOptions` has no such option |
 | `im-seg--native` | `im-seg` alone, over `label > input[type=radio] + span` |
 | `im-seg--choice` | `im-seg` alone; `segmentedControl` writes it, with the text of each choice in a `span` after its radio |
 | `im-switch-knob` | Nothing: `im-switch` draws its thumb itself; `switchHtml` writes an empty button |

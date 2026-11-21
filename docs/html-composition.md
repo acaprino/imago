@@ -66,7 +66,7 @@ changes.
 | `spinnerHtml` | The `im-spinner` of a busy control, decorative |
 | `avatarHtml(text)`, `initialsAvatarHtml(name)` | An `im-avatar`, decorative: the thing's name belongs beside it. A provider's abbreviation is the text of an avatar, not a new component |
 | `chipHtml(label, tone)` | An `im-chip`; `tone` is a `ChipTone`, and `''` is the neutral chip |
-| `buttonHtml(label, action, options)` | An `im-btn`. `options` is a `ButtonMarkupOptions`: `primary`, `danger`, `sm`, `busy` (the spinner in the icon's place), `icon`, `id`, `disabled`, `cls`, `attrs`. Its `accent` writes `im-btn--accent`, which an app does not use ([design-file.md](design-file.md), "One accent per app") |
+| `buttonHtml(label, action, options)` | An `im-btn`. `options` is a `ButtonMarkupOptions`: `primary`, `danger`, `sm`, `busy` (the spinner in the icon's place), `icon`, `id`, `disabled`, `cls`, `attrs`. The accent goes on the one `primary` button only ([design-file.md](design-file.md), "One accent per app") |
 | `iconButtonHtml(label, action, icon, options)` | An `im-icon-btn` whose `label` is its name and its tooltip |
 | `switchHtml(on, label, action, id, disabled)` | A switch that acts at once: a `button` with `role="switch"` and `im-switch`, never in a form with a Save button |
 | `segmentedHtml(name, value, options, label, config)` | A single choice in a form: an `im-seg` of labels over native radios, `role="radiogroup"`. FormData, the arrow keys and a form's reset stay the browser's |

@@ -60,6 +60,7 @@ export const REMOVED = [
   { old: 'im-native-check', kind: 'class', now: 'im-check on the input type="checkbox"' },
   { old: 'im-native-radio', kind: 'class', now: 'im-radio on the input type="radio"' },
   { old: 'im-native-choice', kind: 'class', now: 'im-check or im-radio on the input: nothing is drawn with accent-color' },
+  { old: 'im-btn--accent', kind: 'class', now: 'im-btn: the accent goes on the one primary action (im-btn--primary), the selection, the focus and data; a secondary action is a plain im-btn' },
   { old: 'im-seg--native', kind: 'class', now: 'im-seg alone, over label > input[type=radio] + span' },
   { old: 'im-seg--choice', kind: 'class', now: 'im-seg alone, as segmentedControl writes it' },
   { old: 'im-switch-knob', kind: 'class', now: 'nothing: im-switch draws its thumb; switchHtml writes an empty button' },

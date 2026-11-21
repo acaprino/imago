@@ -169,8 +169,7 @@ hex for each app, clipped into sRGB.
 The accent goes on four things only: the one primary action, the selection mark, the focus ring, and data. Not on
 bars, not on every button, not on navigation backgrounds. ONI also takes the accent as the text of short labels. On
 data, the accent is the tone `accent` of a chip, a dot or a summary, and the class `im-text-accent` on a short label or a
-key figure. The button modifier `im-btn--accent` (the `accent` option of `buttonHtml`) puts the accent on a secondary
-action, which this rule does not allow: an app does not use it.
+key figure. A secondary action is a plain `im-btn`: there is no accent button.
 
 ### Status
 
