@@ -244,15 +244,20 @@
     color var(--im-t-fast) var(--im-ease);
 }
 
-/* The label: a long one gets an ellipsis, not a taller or wider button. Its line box is the font's own (`normal`), not the
-   button's `/1`: the label clips what it overflows, and a line of one em is shorter than the glyphs' descenders. The
-   button has its own height, so this changes no size, and the text stays centred. */
+/* The label: a long one gets an ellipsis, not a taller or wider button. */
 .im-btn > span:not(.im-spinner) {
   min-width: 0;
   overflow: hidden;
-  line-height: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The label's line box is the font's own (`normal`), not the button's `/1`: the label clips what it overflows, and a line of
+   one em is shorter than the glyphs' descenders (Details, 37x14 in 37x12). The button has its own height, so this changes
+   no size, and the text stays centred. Zero specificity: a rule that sets a line height on a span of its own wins. The
+   buttons that grow with their content (a record, an editor's source, choice and inspector buttons) keep their lines. */
+:where(.im-btn:not(.im-record-button, .im-editor-source, .im-editor-choice, .im-editor-inspector .im-btn) > span:not(.im-spinner)) {
+  line-height: normal;
 }
 
 .im-btn > .im-key { margin-right: calc(var(--im-s-1) * -1); }

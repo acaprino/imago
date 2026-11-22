@@ -33,15 +33,18 @@ export default async function (page) {
               text: el.textContent,
               height: el.getBoundingClientRect().height,
               expected: parseFloat(tokens.getPropertyValue(sm ? '--im-h-control-sm' : '--im-h-control')),
+              // A label that is drawn (a visually hidden one is a pixel high and clipped on purpose).
               clipped: [...el.querySelectorAll(':scope > span:not(.im-spinner)')]
-                .filter((span) => span.scrollHeight > span.clientHeight)
+                .filter((span) => span.clientHeight > 1 && span.scrollHeight > span.clientHeight)
                 .map((span) => `${span.scrollWidth}x${span.scrollHeight} in ${span.clientWidth}x${span.clientHeight}`),
             };
           };
           const own = [...specimen.querySelectorAll('.im-btn')].map(read);
           specimen.remove();
-          // Every button of the page that is drawn: a label that clips is found wherever the gallery draws a button.
-          const drawn = [...document.querySelectorAll('.im-btn')].filter((el) => el.getClientRects().length).map(read);
+          // Every button of the page that is drawn: a label that clips is found wherever the gallery draws a button. The
+          // buttons that grow with their content keep the lines they had (a taller line would make them taller): css/controls.css.
+          const GROWS = '.im-record-button, .im-editor-source, .im-editor-choice, .im-editor-inspector .im-btn';
+          const drawn = [...document.querySelectorAll('.im-btn')].filter((el) => el.getClientRects().length && !el.matches(GROWS)).map(read);
           return { own, drawn };
         });
 
