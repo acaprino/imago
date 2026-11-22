@@ -831,18 +831,27 @@ const DESIGN_PATH = /[^\s`'"()<>[\]]*design-file\.md/g;
  * another design-file.md. A file that only imports another agent file of the list (`@AGENTS.md`) names what that file
  * names.
  * @param {{ file: string, text: string | null }[]} files `text` is null for a file that does not exist
- * @param {{ designFile: string, resolves: (file: string, path: string) => boolean }} installed `designFile` is the
- *   design file of the installed package from the root; `resolves` says whether a path written in a file exists, from
- *   its folder or from the root
+ * @param {{
+ *   designFile: string,
+ *   resolves: (file: string, path: string) => boolean,
+ *   same?: (file: string, path: string) => boolean,
+ *   from?: (file: string) => string,
+ * }} installed `designFile` is the design file of the installed package from the root; `resolves` says whether a path
+ *   written in a file exists, from its folder or from the root. A file outside the root of the app (`../AGENTS.md`, for
+ *   an app below the repository's agent files) has a path that string arithmetic on the two relative paths cannot
+ *   compare: `same` says whether a path written in a file, from its folder or from the root, is the design file, and
+ *   `from` gives the path of the design file from the folder of a file. Without them the paths are compared as written.
  * @returns {Finding[]}
  */
-export function agentRules(files, { designFile, resolves }) {
+export function agentRules(files, { designFile, resolves, same, from }) {
   const texts = new Map(files.map(({ file, text }) => [posix.normalize(file), text]));
   const writtenIn = (/** @type {string} */ text) => [...text.matchAll(DESIGN_PATH)].filter((match) => match[0].includes('/') && !match[0].includes('://'));
   // Whether a path written in `file` is the installed package's design file, and not another design-file.md that exists.
   const isDesignFile = (/** @type {string} */ file, /** @type {string} */ written) => {
     const path = written.replace(/^@/, '');
-    return resolves(file, path) && [posix.join(posix.dirname(file), path), path].some((candidate) => posix.normalize(candidate) === posix.normalize(designFile));
+    if (!resolves(file, path)) return false;
+    if (same) return same(file, path);
+    return [posix.join(posix.dirname(file), path), path].some((candidate) => posix.normalize(candidate) === posix.normalize(designFile));
   };
   // Whether a file, or one it imports with `@file` (to any depth), names the design file of the package.
   const names = (/** @type {string} */ file, /** @type {Set<string>} */ seen = new Set()) => {
@@ -854,7 +863,7 @@ export function agentRules(files, { designFile, resolves }) {
     return [...text.matchAll(/^[ \t]*@(?!\S*design-file\.md)(\S+)/gm)].some((match) => names(posix.join(posix.dirname(path), match[1]), seen));
   };
   return files.flatMap(({ file, text }) => {
-    const expected = posix.relative(posix.dirname(file), designFile) || designFile;
+    const expected = (from ? from(file) : posix.relative(posix.dirname(file), designFile)) || designFile;
     if (text === null) return [finding(file, 1, 'agent-rules', `${file} does not exist: it holds the lines of using-imago.md section 9, which name ${expected}`)];
     const written = writtenIn(text);
     if (!written.length) return names(file) ? [] : [finding(file, 1, 'agent-rules', `${file} does not name ${expected}: paste the lines of using-imago.md section 9`)];

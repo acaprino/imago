@@ -581,7 +581,11 @@ Run npx imago-check before you say UI work is done.
 
 `imago-check` reports an agent file that does not name the design file of the installed package by a path that exists
 (rule `agent-rules`). The path assumes npm installs the whole repository, as it does for a git dependency: if
-`node_modules` is out of reach of an agent's tools, copy the file in at install time and write that path.
+`node_modules` is out of reach of an agent's tools, copy the file in at install time and write that path. An app in a
+folder of the repository (`viewer/`) whose agent files sit at the root of the repository lists them in `agents`
+(`["../AGENTS.md", "../CLAUDE.md"]`) and writes the path from the folder of the agent file
+(`viewer/node_modules/@acaprino/imago/docs/design-file.md`), or from the app's root: the rule accepts both, and its
+message gives the path from the folder of the file it is about.
 
 `imago-check` reads the `"imago"` block of the app's `package.json`:
 

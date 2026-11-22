@@ -432,6 +432,10 @@ function checkApp(root, findings, exceptions, notes) {
   }), {
     designFile: `${packagePath}/docs/design-file.md`,
     resolves: (file, written) => [dirname(resolve(root, file)), root].some((dir) => isFile(resolve(dir, written))),
+    // An agent file may be outside the root of the app (`../AGENTS.md`, for an app in a folder of the repository): its
+    // paths are compared, and the expected one is written, from the real folders and not from two relative strings.
+    same: (file, written) => [dirname(resolve(root, file)), root].some((dir) => samePath(resolve(dir, written), resolve(root, packagePath, 'docs', 'design-file.md'))),
+    from: (file) => fromRoot(dirname(resolve(root, file)), resolve(root, packagePath, 'docs', 'design-file.md')),
   }));
 
   if (config.entry) {

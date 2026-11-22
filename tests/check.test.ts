@@ -1107,6 +1107,37 @@ describe('imago-check on an app', () => {
     assert.deepEqual(check({ root: dir, packageMode: false }).findings, []);
   });
 
+  test('Daodan: the app root is viewer/ and the agent files are at ../: the path the agent file writes from its folder is accepted, and the expected one is printed from that folder', () => {
+    const files: Record<string, string> = {};
+    for (const [path, text] of Object.entries(INSTALLED)) files[`viewer/${path}`] = text;
+    files['viewer/package.json'] = manifest({ src: ['src'], app: 'shinatama', agents: ['../AGENTS.md', '../CLAUDE.md'] });
+    files['viewer/src/app.css'] = '.dd-a { padding: var(--im-s-2); }\n';
+    files['AGENTS.md'] = 'Before UI work, read viewer/node_modules/@acaprino/imago/docs/design-file.md.\n';
+    files['CLAUDE.md'] = '@AGENTS.md\n';
+    const dir = folder(files);
+    const viewer = join(dir, 'viewer');
+    const lines = () => check({ root: viewer, packageMode: false }).findings.filter((f: Finding) => f.rule === 'agent-rules');
+    assert.deepEqual(lines(), [], 'viewer/node_modules/@acaprino/… from the repository root is the installed design file');
+
+    writeFileSync(join(dir, 'AGENTS.md'), 'Read node_modules/@acaprino/imago/docs/design-file.md.\n');
+    assert.deepEqual(lines(), [], 'a path from the root of the app is accepted too');
+
+    // Another design-file.md that exists beside the agent file: the finding names the right one, from the agent file's folder.
+    mkdirSync(join(dir, 'docs'), { recursive: true });
+    writeFileSync(join(dir, 'docs', 'design-file.md'), '# not the package\n');
+    writeFileSync(join(dir, 'AGENTS.md'), 'Read docs/design-file.md.\n');
+    const found = lines().filter((f: Finding) => f.file === '../AGENTS.md');
+    assert.deepEqual(found.map((f: Finding) => `${f.file}:${f.line}`), ['../AGENTS.md:1'], 'the file is named from the root of the app');
+    assert.match(found[0].message, /is not the design file of the installed/);
+    assert.ok(found[0].message.endsWith('it is viewer/node_modules/@acaprino/imago/docs/design-file.md'), found[0].message);
+    assert.ok(!found[0].message.includes('it is node_modules/'), 'not the path from the root of the app');
+
+    // A file that names nothing: the expected path is the one to write in that file.
+    writeFileSync(join(dir, 'AGENTS.md'), 'Be careful.\n');
+    const none = lines();
+    assert.ok(none.some((f: Finding) => f.file === '../AGENTS.md' && f.message.includes('viewer/node_modules/@acaprino/imago/docs/design-file.md')), none.map((f: Finding) => f.message).join('\n'));
+  });
+
   test('mount-app follows a re-export of the package\'s mountApp through the app\'s own files, to any depth', () => {
     const mounts = (files: Record<string, string>) => {
       const app = cleanApp();
