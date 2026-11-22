@@ -10,6 +10,7 @@
   `release:minor` or `release:major`; `npm run verify` is the build, on Windows; the tag `v<version>` and the
   GitHub Release (no installer and no assets: an app depends on the tag) are published, and `main` is merged
   back into `develop`. Nothing is published when `npm run verify` fails.
+- A release is the pull request develop → main, merged only when the Verify run on develop's tip is green: the release workflow builds and publishes, it does not run the tests again.
 - Never change the version or create release tags by hand: the workflow does it (`.github/release.json` lists
   the version files, `.github/scripts/release.mjs` writes them).
 

@@ -4,6 +4,8 @@ on:
   push:
     branches: [develop]
   pull_request:
+    branches: [develop]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,6 +24,8 @@ jobs:
         shell: pwsh
     env:
       CARGO_TERM_COLOR: always
+      # No incremental state: the cached target stays smaller, and the same for the same inputs.
+      CARGO_INCREMENTAL: '0'
 
     steps:
       - name: Check out sources
@@ -40,12 +44,59 @@ jobs:
       - name: Set up pinned Rust toolchain
         run: rustup show active-toolchain
 
+      # The key of the cargo cache has two parts. The compiler: the image moves stable Rust from time to time, every artifact of
+      # the old one is then useless, and a key without it would still hit and never be saved again. The dependencies: the source
+      # and checksum lines of Cargo.lock, not the whole file, which also holds the version of the workspace's own crates and
+      # which the release rewrites each time: the whole file would start a new cache after every release.
+      - name: Cargo cache key
+        id: cargo-key
+        run: |
+          $info = rustc -vV
+          if ($LASTEXITCODE) { exit 1 }
+          $release = ($info | Select-String '^release: (\S+)').Matches[0].Groups[1].Value
+          $commit = ($info | Select-String '^commit-hash: (\w{9})').Matches[0].Groups[1].Value
+          $pins = Select-String -Path Cargo.lock -Pattern '^(source|checksum) = ' | ForEach-Object Line
+          $lock = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pins -join "`n"))).Substring(0, 20).ToLower()
+          "toolchain=$release-$commit" >> $env:GITHUB_OUTPUT
+          "lock=$lock" >> $env:GITHUB_OUTPUT
+
+      # Clippy and the tests of `npm run verify` build into the same target, so one cache serves both. When the lock moves, the
+      # restore key starts from the last build and cargo compiles only what changed.
+      - name: Restore the compiled Rust dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-verify-${{ steps.cargo-key.outputs.toolchain }}-${{ steps.cargo-key.outputs.lock }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-verify-${{ steps.cargo-key.outputs.toolchain }}-
+
       - name: Install dependencies
         run: npm ci
+
+      # The browser Playwright downloads is kept between runs, keyed on the version of playwright-core. The install below still
+      # runs: it finds the restored browser and downloads only what the folder lacks. It is saved right after the install and
+      # not at the end of the job, because the steps after it can be red, and a cache saved only by a green job would never be made.
+      - name: Restore the browser
+        id: browser
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('node_modules/playwright-core/package.json') }}
 
       # The gallery test drives a browser.
       - name: Install the browser
         run: npx playwright install chromium
+
+      - name: Keep the browser
+        if: steps.browser.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ steps.browser.outputs.cache-primary-key }}
 
       # The toolchain file installs rustfmt and clippy. This is the only place Rust is formatted and linted: nobody
       # runs them on a developer's machine.
@@ -70,6 +121,8 @@ jobs:
         shell: pwsh
     env:
       CARGO_TERM_COLOR: always
+      # No incremental state: the cached target stays smaller, and the same for the same inputs.
+      CARGO_INCREMENTAL: '0'
 
     steps:
       - name: Check out sources
@@ -88,8 +141,39 @@ jobs:
       - name: Set up pinned Rust toolchain
         run: rustup show active-toolchain
 
+      # The key of the cargo cache: the compiler and the dependencies Cargo.lock pins, as in the job above.
+      - name: Cargo cache key
+        id: cargo-key
+        run: |
+          $info = rustc -vV
+          if ($LASTEXITCODE) { exit 1 }
+          $release = ($info | Select-String '^release: (\S+)').Matches[0].Groups[1].Value
+          $commit = ($info | Select-String '^commit-hash: (\w{9})').Matches[0].Groups[1].Value
+          $pins = Select-String -Path Cargo.lock -Pattern '^(source|checksum) = ' | ForEach-Object Line
+          $lock = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pins -join "`n"))).Substring(0, 20).ToLower()
+          "toolchain=$release-$commit" >> $env:GITHUB_OUTPUT
+          "lock=$lock" >> $env:GITHUB_OUTPUT
+
+      # Its own cache, apart from the Verify job's: this job builds the demo app (the feature custom-protocol, other features of
+      # Tauri and the crates under it) while the other one checks and tests, and the two run together.
+      - name: Restore the compiled Rust dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-demo-${{ steps.cargo-key.outputs.toolchain }}-${{ steps.cargo-key.outputs.lock }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-demo-${{ steps.cargo-key.outputs.toolchain }}-
+
       - name: Install dependencies
         run: npm ci
+
+      # The restored target holds the previous commit's program: a build that fails must not leave it to be kept as this commit's.
+      - name: Remove the previous build's files
+        run: Remove-Item target/debug/imago-demo.exe -Force -ErrorAction SilentlyContinue
 
       - name: Build the demo app
         run: npm run demo:build

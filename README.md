@@ -94,6 +94,5 @@ done. [docs/using-imago.md](docs/using-imago.md) has the rest.
 
 ## Releases
 
-Work happens on `develop`. A release is the pull request `develop` to `main`, merged by the owner; the workflow
-runs `npm run verify`, sets the version and the tag `v<version>`, and publishes a GitHub Release with no
+Work happens on `develop`. A release is the pull request develop → main, merged only when the Verify run on develop's tip is green: the release workflow builds and publishes, it does not run the tests again. Imago has no program to build, so the workflow's build is `npm run verify`; it then sets the version and the tag `v<version>`, and publishes a GitHub Release with no
 installer. See [AGENTS.md](AGENTS.md).
