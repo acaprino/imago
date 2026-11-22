@@ -85,6 +85,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+      # No incremental state: the cached target stays smaller and the same for the same inputs.
+      CARGO_INCREMENTAL: '0'
     defaults:
       run:
         shell: pwsh
@@ -97,6 +99,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Next version
         id: version
@@ -116,6 +120,39 @@ jobs:
       - name: Set up pinned Rust toolchain
         run: rustup show active-toolchain
 
+      # The compiled dependencies are kept from release to release, so that only what changed is compiled again. A run on
+      # main restores only caches main itself saved (the ones Verify saves on develop are not readable from here): the
+      # first release after this one was added builds everything and saves it, the next ones start from it. The key
+      # follows the toolchain and Cargo.lock, which the step above has just written the new version in; so each release
+      # has a key of its own, starts from the last release's build through the restore key (a new toolchain starts clean),
+      # and saves its own after the job, only when the job succeeds. GitHub drops the ones nobody restores.
+      - name: Restore the compiled Rust dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-${{ hashFiles('rust-toolchain.toml') }}-
+
+      # The browser Playwright downloads is the one of the Playwright version in package-lock.json.
+      - name: Find the Playwright version
+        id: playwright
+        run: |
+          $version = node -p "require('./package-lock.json').packages['node_modules/playwright'].version"
+          if ($LASTEXITCODE) { exit 1 }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore the browser
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
+
+      # When the cache gave the browser back, `playwright install` finds it installed and downloads nothing.
       - name: Install dependencies
         run: |
           npm ci
