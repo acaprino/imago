@@ -51,7 +51,7 @@ The npm package carries `docs/`, `css/`, `lib/`, `ts/`, `icons/`, `tokens/`, `re
 repository `acaprino/imago` only: an app that reads this file from `node_modules` finds them on GitHub, not on its disk.
 
 The gallery is the acceptance surface. A control is done when its row is complete and its contrast test passes. Every
-class `css/` defines is shown there, but those `tests/gallery/coverage.mjs` lists as pending removal (today `im-path`). The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
+class `css/` defines is shown there, but those `tests/gallery/coverage.mjs` lists as pending removal (today none). The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
 `focus`): it is the gallery's, never an app's. The names these documents write are checked against the code by
 `tests/docs.test.ts`.
 
@@ -544,9 +544,8 @@ Text helpers, for content inside a pattern: `im-muted` (the muted colour), `im-c
 (the code font), `im-grow` (takes the room left), `im-end` (pushed to the end of its row), `im-nowrap` (one line),
 `im-truncate` (one line, cut with an ellipsis), `im-text-accent` (the accent on data), `im-content-text` (content that
 can be selected outside a page: a message, a path, terminal output). `im-ellipsis` draws what `im-truncate` draws, and
-`data-im-align="end"` what `im-end` draws: an app writes `im-truncate` and `im-end`. `im-path`, a muted path on one
-line, is used by nothing and the gallery does not draw it: a file's location is `im-file-location` (`fileWorkspace`) and
-an editable path `im-path-field` (`pathField`). A page's own headings are `h1` 18,
+`data-im-align="end"` what `im-end` draws: an app writes `im-truncate` and `im-end`. There is no class for a path: a
+file's location is `im-file-location` (`fileWorkspace`) and an editable path `im-path-field` (`pathField`). A page's own headings are `h1` 18,
 `h2` 14 and `h3` 13, in the head font, in sentence case in both looks.
 
 ## Surfaces: which one for what
@@ -784,6 +783,11 @@ the package runs `npm run check` (the program with `--package`) on its own `css/
 | `agent-rules` | `AGENTS.md` or `CLAUDE.md` without the path of this file in the installed package | App |
 | `mount-app` | An entry that never calls `mountApp` | App |
 | `class-prefix` | A class of the package that does not start with `im-` | Package |
+
+The program reads what is written in a stylesheet, a page, a script's strings and JSX, and the style attributes and
+objects a script writes inline. It does not read a style kept in a variable (a constant that holds an object of
+declarations), in CSS-in-JS (a styled component, a template literal of CSS) or in a `.scss`, `.less`, `.vue` or
+`.svelte` file: those are a person's check.
 
 An exception is a comment on the line or the line above, `imago-check: allow <rule> — <reason>`; without a reason it
 allows nothing. The program prints every exception it accepted. A check that only warns is not a check: every rule

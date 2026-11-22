@@ -725,6 +725,7 @@ breakpoints of what stays follow the shell (`@container im-shell` at 1000, 850 a
 | `.im-row[aria-pressed="true"]`, `.im-row[aria-current="page"]`, `.im-btn[aria-pressed="true"]` in the accent colour | The selection of the row (its fill and a heavier title) and of the button (the selection fill, a 2px bar inside its bottom edge in the accent text colour, and in Smooth the weight 600), the same for `aria-selected="true"`, an `aria-current` that is not `"false"` and `aria-pressed="true"`, on `im-row`, `im-tab`, `im-tree-item`, `im-menu-item`, `im-btn` and the segments of `im-seg`. A primary and a confirming danger button keep their fill and take the bar in their text colour |
 | `.im-setting-row input` 260px wide | The field's box, `.im-setting-row .im-input`, is 260px: the box round the input as `settingInputHtml` writes it, or the input itself |
 | `.im-editor-inspector input, select, textarea` stretched to its width | Its fields are stretched (`im-input`, `im-select`, `im-textarea`); a checkbox and a radio keep their 16px |
+| `im-path` | `im-file-location` (`fileWorkspace`) for the location of a file, `im-path-field` (`pathField`) for a path the person types or picks; a muted line of text is `im-muted` with `im-truncate`. The class was a muted one-line path of 300px, hidden under 850, and nothing in the package wrote it |
 | A `select.im-select` that the browser autofills, losing its chevron | Nothing to do: it keeps its chevron |
 
 ### The tiling workspace
