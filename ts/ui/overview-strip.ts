@@ -6,7 +6,20 @@
 
 export type OverviewTarget = 'band' | 'frame' | 'track';
 
-export interface OverviewStripOptions {
+/**
+ * Where the strip sits in its host (a positioned element): its distance from the host's top, its end (right) edge and
+ * its bottom, and its width. A number is pixels, a string any CSS length (`var(--im-s-4)`). What is left out is the
+ * default: the whole height at the end edge, 20px wide. The strip writes the custom properties it reads from these;
+ * an app never sets a `--im-` property itself (`imago-check`, rule `im-selector`).
+ */
+export interface OverviewPlacement {
+  top?: number | string;
+  end?: number | string;
+  bottom?: number | string;
+  width?: number | string;
+}
+
+export interface OverviewStripOptions extends OverviewPlacement {
   /** A press `y` pixels from the top, on the band, the frame or the rest of the track. `true` holds it: the moves
    * that follow are drags until the release. */
   press(y: number, on: OverviewTarget): boolean;
@@ -26,13 +39,30 @@ export interface OverviewStrip {
   setFrame(top: number, height: number): void;
   /** The band of archived content at the top; 0 hides it. */
   setBand(height: number): void;
+  /** Moves or resizes the strip: the sides given are changed, the others stay. */
+  place(placement: OverviewPlacement): void;
   destroy(): void;
 }
+
+// The custom property of the stylesheet that each side of the placement is written to.
+const PLACED: readonly (readonly [keyof OverviewPlacement, string])[] = [
+  ['top', '--im-overview-top'],
+  ['end', '--im-overview-end'],
+  ['bottom', '--im-overview-bottom'],
+  ['width', '--im-overview-width'],
+];
 
 export function overviewStrip(options: OverviewStripOptions): OverviewStrip {
   const element = document.createElement('div');
   element.className = 'im-overview';
   element.setAttribute('aria-hidden', 'true');
+  const place = (placement: OverviewPlacement): void => {
+    for (const [side, property] of PLACED) {
+      const value = placement[side];
+      if (value !== undefined) element.style.setProperty(property, typeof value === 'number' ? `${value}px` : value);
+    }
+  };
+  place(options);
   const band = document.createElement('div');
   band.className = 'im-overview-band';
   band.hidden = true;
@@ -82,6 +112,7 @@ export function overviewStrip(options: OverviewStripOptions): OverviewStrip {
       frame.style.top = `${top}px`;
       frame.style.height = `${height}px`;
     },
+    place,
     setBand(height) {
       bandHeight = height;
       band.hidden = !height;

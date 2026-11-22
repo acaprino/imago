@@ -53,16 +53,24 @@ export class StubElement {
     // Inline style: a list of declarations kept in the order they are set, written back to the style attribute as a browser does.
     const declarations = (): [string, string][] => (this.attrs.get('style') ?? '').split(';').map((part) => part.trim()).filter(Boolean)
       .map((part) => [part.slice(0, part.indexOf(':')).trim(), part.slice(part.indexOf(':') + 1).trim()] as [string, string]);
+    const write =(key: string, value: unknown): void => {
+      const list = declarations();
+      const at = list.findIndex(([other]) => other === key);
+      if (value === '') { if (at >= 0) list.splice(at, 1); }
+      else if (at >= 0) list[at][1] = String(value);
+      else list.push([key, String(value)]);
+      this.attrs.set('style', list.map(([k, v]) => `${k}: ${v};`).join(' '));
+    };
     this.style = new Proxy({} as Record<string, string>, {
-      get: (_, name) => (typeof name === 'string' ? declarations().find(([key]) => key === kebab(name))?.[1] ?? '' : undefined),
+      get: (_, name) => {
+        if (typeof name !== 'string') return undefined;
+        // `style.x = …` cannot write a custom property (`--im-x`) in a browser: `setProperty` does.
+        if (name === 'setProperty') return (property: string, value: string): void => write(property, value);
+        if (name === 'getPropertyValue') return (property: string): string => declarations().find(([key]) => key === property)?.[1] ?? '';
+        return declarations().find(([key]) => key === kebab(name))?.[1] ?? '';
+      },
       set: (_, name, value) => {
-        const key = kebab(String(name));
-        const list = declarations();
-        const at = list.findIndex(([other]) => other === key);
-        if (value === '') { if (at >= 0) list.splice(at, 1); }
-        else if (at >= 0) list[at][1] = String(value);
-        else list.push([key, String(value)]);
-        this.attrs.set('style', list.map(([k, v]) => `${k}: ${v};`).join(' '));
+        write(kebab(String(name)), value);
         return true;
       },
     });

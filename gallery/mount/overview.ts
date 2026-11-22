@@ -35,6 +35,11 @@ export default function mount({ sections }: MountContext): () => void {
     list.scrollTop = (y - BAND - hold) / ratio;
   };
   const strip = overviewStrip({
+    // Where it sits is an option, not a custom property of the app's own: these are the default placement, written out.
+    top: 0,
+    end: 0,
+    bottom: 0,
+    width: 20,
     press(y, on) {
       events.push(`press:${on}`);
       if (on === 'band') return false;
