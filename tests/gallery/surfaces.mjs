@@ -233,6 +233,33 @@ async function formDialogPlacement(page, look, theme) {
     await assertCentred(page, '.im-form-dialog', where(`the ${name} form dialog`));
     assert.equal(await page.evaluate(() => /drawer/.test(document.querySelector('.im-form-dialog').className)), false, where('a form dialog is not a drawer'));
     assert.ok((await box(page, '.im-form-dialog')).height <= (await box(page, '.im-scrim')).height, where(`the ${name} form stays inside its layer`));
+    if (name === 'short') {
+      // Locked while it writes: drawn as a disabled control is (the muted text colour, a dashed edge), never faded.
+      const read = () => page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--im-muted)';
+        document.querySelector('.im-form-dialog').append(probe);
+        const muted = getComputedStyle(probe).color;
+        probe.remove();
+        const body = document.querySelector('.im-form-dialog-body');
+        const text = getComputedStyle(body.querySelector('p'));
+        const foot = getComputedStyle(document.querySelector('.im-form-dialog-foot'));
+        return {
+          busy: document.querySelector('.im-form-dialog').getAttribute('aria-busy'),
+          muted, text: text.color, opacity: getComputedStyle(body).opacity, footEdge: foot.borderTopStyle,
+        };
+      });
+      const rest = await read();
+      await page.evaluate(() => window.__placed.lock(true));
+      const locked = await read();
+      assert.equal(locked.busy, 'true', where('a locked form dialog is aria-busy'));
+      assert.equal(locked.text, locked.muted, where('its body text is the muted colour'));
+      assert.notEqual(rest.text, rest.muted, where('and the text of an unlocked dialog is not'));
+      assert.equal(locked.footEdge, 'dashed', where('its foot has the dashed edge'));
+      assert.equal(locked.opacity, '1', where('and its body is never faded'));
+      await page.evaluate(() => window.__placed.lock(false));
+      assert.equal((await read()).footEdge, 'solid', where('unlocked, the edge is solid again'));
+    }
     await page.evaluate(() => window.__placed.close());
     assert.equal(await count(page, '.im-scrim'), 0, where(`the ${name} form is gone`));
   }

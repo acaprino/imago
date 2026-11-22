@@ -771,7 +771,7 @@ the package runs `npm run check` (the program with `--package`) on its own `css/
 | `literal-space` | A padding, margin, gap or radius that is not a token or an allowed literal | App, package |
 | `literal-case` | A `text-transform` or a `letter-spacing` of the app's own | App |
 | `cursor-pointer` | A hand cursor | App, package |
-| `disabled-opacity` | An opacity on a disabled state | App, package |
+| `disabled-opacity` | An opacity on a disabled state, or on a busy one (`aria-busy`) | App, package |
 | `media-width` | A `@media` on a width, or a `matchMedia` of a width | App, package |
 | `show-modal` | A call of `showModal()` | App |
 | `own-keydown` | A key handler of the app on the document, the window or the body | App |

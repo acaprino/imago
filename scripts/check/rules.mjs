@@ -403,11 +403,12 @@ function withoutNot(/** @type {string} */ selector) {
   }
 }
 
-const DISABLED = /:disabled\b|\[\s*disabled\b|aria-disabled|\.(?:is-)?disabled(?![\w-])|\[\s*data-disabled\b/i;
+// A busy surface (`aria-busy`) is blocked like a disabled one: a form dialog that is locked while it writes.
+const DISABLED = /:disabled\b|\[\s*disabled\b|aria-disabled|aria-busy|\.(?:is-)?disabled(?![\w-])|\[\s*data-disabled\b/i;
 
 /**
- * An opacity in a rule whose selector, or a selector it is nested in, is a disabled state. Disabled is a dashed edge
- * and the muted text colour, never an opacity. An opacity that dims nothing (allowed.mjs) is not one.
+ * An opacity in a rule whose selector, or a selector it is nested in, is a disabled or a busy state. Disabled is a dashed
+ * edge and the muted text colour, never an opacity. An opacity that dims nothing (allowed.mjs) is not one.
  * @param {Source} source @returns {Finding[]}
  */
 export function disabledOpacity(source) {
@@ -419,7 +420,7 @@ export function disabledOpacity(source) {
     if (![rule.selector, ...rule.parents].some((selector) => DISABLED.test(withoutNot(selector)))) continue;
     for (const declaration of rule.declarations) {
       if (declaration.property !== 'opacity' || dimsNothing(declaration.value)) continue;
-      findings.push(finding(source.file, declaration.line, 'disabled-opacity', `opacity: ${declaration.value} on a disabled state: disabled is a dashed edge and the muted text colour, never an opacity`, declaration.endLine));
+      findings.push(finding(source.file, declaration.line, 'disabled-opacity', `opacity: ${declaration.value} on a disabled or busy state: disabled is a dashed edge and the muted text colour, never an opacity`, declaration.endLine));
     }
   }
   return findings;

@@ -426,6 +426,13 @@ describe('disabled-opacity', () => {
     assert.deepEqual(found(rules.disabledOpacity, '.a.disabled-note { opacity: .5; }\n.b.undisabled { opacity: .5; }\n'), []);
   });
 
+  test('finds an opacity on a busy state: a surface locked while it works is blocked like a disabled control (the busy form dialog)', () => {
+    const css = '.im-form-dialog[aria-busy="true"] .im-form-dialog-body { opacity: .65; }\n.a[aria-busy] { opacity: .5; }\n.b { &[aria-busy="true"] { opacity: .4; } }\n';
+    assert.deepEqual(found(rules.disabledOpacity, css), ['1 disabled-opacity', '2 disabled-opacity', '3 disabled-opacity']);
+    assert.match(rules.disabledOpacity(parseSource('a.css', css))[0].message, /busy/);
+    assert.deepEqual(found(rules.disabledOpacity, '.a[aria-busy="true"] { color: var(--im-muted); border-style: dashed; }\n.b:not([aria-busy]) { opacity: .8; }\n'), [], 'drawn without opacity, and a negated busy');
+  });
+
   test('leaves an opacity on another state, a negated disabled, and a disabled state drawn without opacity', () => {
     const css = '.a:hover { opacity: .8; }\n.b:not(:disabled):hover { opacity: .8; }\n.c:disabled { color: var(--im-muted); border-style: dashed; }\n.d:disabled { opacity: 1; }\n';
     assert.deepEqual(found(rules.disabledOpacity, css), []);
