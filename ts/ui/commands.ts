@@ -3,7 +3,7 @@
 // No DOM types and nothing touched at import time, so it also runs under plain Node.
 
 import { keyClaimed } from './key-claim.ts';
-import { hasModal } from './layers.ts';
+import { hasModal, holdsKeys } from './layers.ts';
 
 export type Command = {
   id: string;
@@ -54,7 +54,8 @@ export type Registry = {
   match(event: KeyEventLike): Command | undefined;
   /**
    * Runs the matching command on `keydown` and cancels the browser's own action, except while a dialog or the
-   * palette is open (see `AttachOptions`). A key is answered once: a key a handler of the package claimed
+   * palette is open (see `AttachOptions`), and except that a command bound to a key that types or moves (no Ctrl, no
+   * Alt, not Escape or F1 to F24) does not run while a menu or a sheet is open: that surface owns those keys. A key is answered once: a key a handler of the package claimed
    * (`claimKey`: Escape that closed a surface, the inspector or the sidebar drawer, an arrow that moved a list) runs no
    * command. A key that is only prevented still does: `guardDesktop` refuses Ctrl+F to the browser, not to the app.
    * (The zoom keys are not like it: `mountZoom` stops them at the document before the registry.)
@@ -93,6 +94,8 @@ const chordId = (chord: Chord): string =>
 // run in a field, and must not cancel the key there. Escape and F1 to F24 never type or edit: they stay available.
 const FIELD_FREE_KEY = /^(?:escape|f(?:[1-9]|1\d|2[0-4]))$/i;
 const belongsToField = (chord: Chord): boolean => !chord.ctrl && !chord.alt && !FIELD_FREE_KEY.test(chord.name);
+// The same keys belong to a menu or a sheet while it is open: it has the focus, and Space, the letters and the arrows are its own.
+const isPlainKey = (command: Command): boolean => command.keys !== undefined && belongsToField(parseKeys(command.keys));
 
 export function isTextTarget(target: unknown): boolean {
   if (typeof target !== 'object' || target === null) return false;
@@ -146,6 +149,7 @@ export function createRegistry(): Registry {
         if (!options.runUnderModal && hasModal()) return;
         const command = match(event);
         if (!command) return;
+        if (holdsKeys() && isPlainKey(command)) return; // a menu or a sheet is open: that key is its own
         event.preventDefault();
         // Reporting a failure is the app's job; it must not become an unhandled rejection (the palette does the same).
         const failed = (error: unknown): void => console.warn(`Command "${command.id}" failed`, error);

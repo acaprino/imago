@@ -611,6 +611,7 @@ undoes them all. The options are in [using-imago.md](using-imago.md), section 6.
   Space, Delete, Backspace, Home, End, the arrows, Enter, Tab). Escape and F1 to F24 stay available there, and so does
   any binding with Ctrl or Alt. A key pressed while an input method composes text belongs to the input method.
 - No command runs while a dialog or the palette is open: a key never acts behind a pending decision.
+- While a menu or a sheet is open, a binding without Ctrl or Alt that types or moves (a letter, Space, Delete, an arrow) does not run, and does not cancel the key: the open surface has the focus and owns those keys. Escape, F1 to F24 and any binding with Ctrl or Alt still run. (A drawer leaves the panels live, so it takes no key from them.)
 - `Ctrl+=`, `Ctrl+-` and `Ctrl+0` zoom from 50 to 200%, in steps of 10, saved per machine (`mountZoom`). The level in
   the code is a factor: `1.2` is 120%.
 
