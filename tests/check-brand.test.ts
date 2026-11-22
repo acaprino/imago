@@ -87,6 +87,31 @@ describe('brand-mark', () => {
     assert.deepEqual(found('.mk-logo { color: var(--im-text); }\n', 'src/app.css'), [], 'a stylesheet');
   });
 
+  test('reads the brand a React title bar writes in JSX: className, over lines, with a string in braces', () => {
+    const bar = (brand: string): string => `export const Bar = () => (\n  <header className="im-titlebar">\n${brand}\n  </header>\n);\n`;
+    const good = '    <div className="im-brand">\n      <span className="im-mark" aria-hidden="true">D</span>\n      <span className="im-wordmark">Daodan</span>\n    </div>';
+    assert.deepEqual(found(bar(good), 'src/Bar.tsx'), [], 'the brand of titlebarHtml, as JSX');
+    assert.deepEqual(found(bar(good.replaceAll('className="', "className={'").replaceAll('" aria', "'} aria").replace('im-brand"', "im-brand'}").replace('im-wordmark"', "im-wordmark'}")), 'src/Bar.tsx'), [], 'a string in braces is the same class');
+    assert.deepEqual(found(bar(good), 'src/Bar.jsx'), []);
+    assert.deepEqual(found(bar(good.replace('>D<', '>{initial}<').replace('>Daodan<', '>{name}<')), 'src/Bar.tsx'), [], 'a letter and a name built at run time');
+    assert.deepEqual(found(bar('    <div className="im-brand"><Logo /><span className="im-wordmark">Daodan</span></div>'), 'src/Bar.tsx'), [], 'a component is not markup the rule can read');
+    assert.deepEqual(found(bar('    <div className={cn(\'im-brand\', hidden)}><span className="im-wordmark">Daodan</span></div>'), 'src/Bar.tsx'), [], 'a class built by a call is not read');
+
+    assert.deepEqual(found(bar('    <div className="im-brand">\n      <span className="im-wordmark">Daodan</span>\n    </div>'), 'src/Bar.tsx'), ['3 brand-mark'], 'the name alone, on the line of the brand');
+    assert.match(messages(bar('    <div className="im-brand"><span className="im-wordmark">Daodan</span></div>'), 'src/Bar.tsx')[0], /no im-mark/);
+    assert.deepEqual(found(bar(good.replace('>D<', '>d.<')), 'src/Bar.tsx'), ['3 brand-mark'], 'a mark that is not one capital');
+    assert.match(messages(bar(good.replace('>D<', '>d.<')), 'src/Bar.tsx')[0], /"d\." in im-mark/);
+    assert.deepEqual(found(bar('    <div className="im-brand"><img className="im-brand-image" src={logo} alt="" /></div>'), 'src/Bar.tsx'), ['3 brand-mark'], 'an image, said once');
+    assert.deepEqual(found(bar('    <div className="im-brand"><svg viewBox="0 0 8 8"><path d="M0 0" /></svg><span className="im-wordmark">Daodan</span></div>'), 'src/Bar.tsx'), ['3 brand-mark']);
+    assert.deepEqual(found(bar('    <div className="im-brand"><i className="brand-mark" /><span className="im-wordmark">Daodan</span></div>'), 'src/Bar.tsx'), ['3 brand-mark'], 'an own class standing in for the mark');
+    assert.deepEqual(found(bar(good), 'src/bar.ts'), [], 'a .ts file holds no JSX: what looks like a tag there is a comparison');
+  });
+
+  test('says a brand in a string of a .tsx once, though the strings and the JSX both read it', () => {
+    const tsx = "export const bar = '<div class=\"im-brand\"><span class=\"im-wordmark\">Muro</span></div>';\n";
+    assert.deepEqual(found(tsx, 'src/bar.tsx'), ['1 brand-mark']);
+  });
+
   test('judges the capital of the mark without the locale of the machine', () => {
     const brand = written('Istanbul');
     const original = String.prototype.toLocaleUpperCase;

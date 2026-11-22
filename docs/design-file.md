@@ -341,7 +341,9 @@ the shell is as tall as its title bar, and `checkShellFill` says so on the conso
   letter, the initial of the product's name in capitals, in the head font, weight 700, in `--im-accent-on`. No drawn
   symbol and no image. The name, `im-wordmark`, is always beside it, and both are in `im-brand`. `titlebarHtml` writes
   them from `brand.name` (the letter is `brandInitial(name)`). Mukade and Muro both show M: the hue and the name tell them
-  apart. `imago-check` reports a brand that is not this markup (rule `brand-mark`).
+  apart. `imago-check` reports a brand that is not this markup (rule `brand-mark`), in a page, in the markup a script writes
+  and in JSX (`<span className="im-mark">`); a letter or a name written as `{…}`, a component and a class built by a
+  call are built at run time and are not judged.
 - The app's logo is what Windows shows: the icon of its executables, which is the mark, a rounded square in the app's
   dark accent holding the capital initial in its ink. One icon per app, for its window program, its command-line program
   and a page of it served in a browser. The package makes the files (`icons/<app>/`, `npm run icons`) and an app copies
