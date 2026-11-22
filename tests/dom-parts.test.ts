@@ -73,3 +73,12 @@ test('no part is a native progress: im-progress draws a div with role="progressb
   assert.doesNotMatch(source, /\['progress',/);
   assert.doesNotMatch(source, /progress:/);
 });
+
+test('the layout of a semantic part has no specificity: a trait or an app pattern on the same element wins', () => {
+  const css = readFileSync(new URL('../css/dom-parts.css', import.meta.url), 'utf8');
+  for (const name of ['im-fieldset', 'im-ordered-list', 'im-navigation']) {
+    const rule = css.split(String.fromCharCode(10)).find(line => line.includes('.' + name) && /display\s*:/.test(line));
+    assert.ok(rule, `${name} has a layout rule`);
+    assert.match(rule, /^:where\(/, `${name}'s layout is zero specificity, so \`uiTraits(uiPart('nav'), 'row')\` stays a row`);
+  }
+});
