@@ -14,7 +14,7 @@ import {
   bulletListHtml, codeNoteHtml, codeViewHtml, quoteHtml, sectionHeadingHtml, stackListHtml, stackRowHtml, summaryHtml, tableHtml, tableRowHtml,
   taskCardHtml, textStackHtml, timelineItemHtml, toolbarHtml,
 } from '../ts/ui/content-markup.ts';
-import { uiButton, uiPart } from '../ts/ui/dom-parts.ts';
+import { uiButton, uiInput, uiPart } from '../ts/ui/dom-parts.ts';
 import { createFileTree } from '../ts/ui/file-tree.ts';
 import { fileWorkspace } from '../ts/ui/file-workspace.ts';
 import {
@@ -23,9 +23,11 @@ import {
 } from '../ts/ui/form-markup.ts';
 import { graphLegendHtml } from '../ts/ui/graph-legend.ts';
 import { avatarHtml, buttonHtml, chipHtml, escapeHtml, iconButtonHtml, iconHtml, pageHeadingHtml, segmentedHtml, spinnerHtml, textFieldHtml } from '../ts/ui/markup.ts';
+import { listGroupHtml, rowActionsHtml } from '../ts/ui/list-markup.ts';
+import { sidebarHtml } from '../ts/ui/shell-markup.ts';
 import { portraitNotice } from '../ts/ui/portrait-notice.ts';
 import { metric, setProgress } from '../ts/ui/readout.ts';
-import { noteHtml, pageContentHtml, shellFrameHtml, statusButtonHtml } from '../ts/ui/shell-markup.ts';
+import { noteHtml, pageContentHtml, shellFrameHtml, statusButtonHtml, tabNavigationHtml, titlebarHtml } from '../ts/ui/shell-markup.ts';
 import { breadcrumbs } from '../ts/ui/breadcrumbs.ts';
 import { choiceRowsHtml, wizardActionsHtml, wizardHeadingHtml, wizardHtml } from '../ts/ui/wizard-markup.ts';
 import type { Tone } from '../ts/ui/tone.ts';
@@ -96,7 +98,42 @@ function listsHtml(): string {
   const detailRow = '<div role="listbox" aria-label="Sessions" class="im-list"><div class="im-row im-row--detail" role="option" aria-selected="false"><span class="im-row-text"><span class="im-row-title">billing-service · feature/retry-backoff</span><span class="im-row-sub">Claude Code, started 12 minutes ago, 4 terminals, 268 MiB of memory in use</span></span></div></div>';
   return block('stack-list', 'Stack list', sectionHeadingHtml('Plugins') + '<p class="im-section-description im-muted">Plugins Muro installs as their author ships them.</p>' + stackListHtml(rows) + link)
     + block('decisions', 'Decisions and activity', decisions + activity)
-    + block('detail-row', 'A row that wraps', detailRow);
+    + block('detail-row', 'A row that wraps', detailRow)
+    + block('list-groups', 'Groups, row actions and categories, in the sidebar and in the rail', listGroupsHtml());
+}
+
+/**
+ * A row of a sidebar for the groups' row: its rail item (the avatar of a category, else an icon), its two lines and its two
+ * actions. `state` forces a state on it (`data-im-force`, the gallery's), or selects it; the test reads it from `data-g-state`.
+ */
+function groupRow(name: string, sub: string, state: 'rest' | 'hover' | 'focus' | 'selected', cat?: number): string {
+  const category = cat ? ` data-im-cat="${cat}"` : '';
+  const rail = cat ? `<span class="im-avatar im-rail-item"${category} aria-hidden="true">${escapeHtml(name.slice(0, 2).toUpperCase())}</span>` : `<span class="im-rail-item" aria-hidden="true">${iconHtml('file')}</span>`;
+  const force = state === 'hover' || state === 'focus' ? ` data-im-force="${state}"` : '';
+  const actions = rowActionsHtml([{ label: `Rename ${name}`, action: 'g-rename', icon: 'sliders', id: name }, { label: `Close ${name}`, action: 'g-close', icon: 'x', id: name }]);
+  return `<div class="im-row" role="option" tabindex="-1" aria-selected="${state === 'selected'}" title="${escapeHtml(name)}"${category}${force} data-g-state="${state}" data-g-cat="${cat ? 'yes' : 'no'}">${rail}<span class="im-row-text"><span class="im-row-title">${escapeHtml(name)}</span><span class="im-row-sub">${escapeHtml(sub)}</span></span>${actions}</div>`;
+}
+
+/**
+ * A sidebar with its groups: a head that folds and is open (an icon and a count), one that is folded, and a head that is a
+ * label only (no icon: the rail does not draw it). The rows of an open group are in the `role="group"` its head names.
+ * `id` keeps the ids of two sidebars of the page apart.
+ */
+function groupsSidebarHtml(id: string): string {
+  const rows = (group: string, content: string): string => `<div role="group" aria-labelledby="${id}-${group}">${content}</div>`;
+  const list = listGroupHtml({ label: 'Shinatama', id: `${id}-a`, icon: 'folder', count: 4, fold: { expanded: true, action: 'g-fold', id: 'a' } })
+    + rows('a', groupRow('billing-service', 'Claude Code · 12 min', 'rest', 1) + groupRow('docs-site', 'Codex · 3 min', 'hover', 1)
+      + groupRow('api-gateway', 'Claude Code · 1 h', 'focus', 1) + groupRow('retry-backoff', 'Pi · now', 'selected', 1))
+    + listGroupHtml({ label: 'Mukade', id: `${id}-b`, icon: 'graph', count: 2, fold: { expanded: false, action: 'g-fold', id: 'b' } })
+    + listGroupHtml({ label: 'Loose threads', id: `${id}-c`, count: 2 })
+    + rows('c', groupRow('scratch', 'OpenCode · 2 d', 'rest') + groupRow('notes', 'Claude Code · 5 d', 'selected'));
+  return sidebarHtml({ id, label: 'Threads', rowsHtml: list, count: 8 });
+}
+
+/** The groups' sidebar at the width of the full sidebar (900) and of the rail (700): each in a shell of its own, which answers to its own width. */
+function listGroupsHtml(): string {
+  const shell = (width: number): string => `<div class="im-shell" style="inline-size: ${width}px; block-size: 520px; grid-template-rows: minmax(0, 1fr)" data-g-list-groups="${width}"><div class="im-body">${groupsSidebarHtml(`g-groups-${width}`)}<div class="im-work"></div></div></div>`;
+  return `<div class="im-cluster" style="align-items: flex-start">${shell(900)}${shell(700)}</div>`;
 }
 
 /** Tables: records with their states, a log, and a list of inputs. */
@@ -173,7 +210,31 @@ export function inspectionPageHtml(): string {
     + block('detail-list', 'Detail list and timeline', findings + timeline)
     + block('aside', 'An aside of items', '<div data-g-aside></div>')
     + block('auto-grid', 'Auto grid, inset and bounded scroll', cards)
-    + block('canvas', 'Canvas frame and its message', canvas + mark);
+    + block('canvas', 'Canvas frame and its message', canvas + mark)
+    + block('parts', 'The text and group parts of uiPart', '<div data-g-parts></div>')
+    + block('side-view', 'The composition of a side view', sideViewsHtml());
+}
+
+/**
+ * A side view: a header, a body that scrolls (`im-panel-body--inset`: a section with its facts, a list and a table that run to
+ * the edge, a form) and a foot with the actions, as the inspector's views are, at the inspector's two widths. The
+ * first panel is written without the modifier, as the body of the content region is: it has no padding of its own.
+ * The panels are `im-panel`s of the page, not the shell's `im-inspector`, which belongs to the shell of the window above.
+ */
+function sideViewsHtml(): string {
+  const member = (initials: string, name: string, role: string, tone: Tone | ''): string =>
+    `<div class="im-row" role="option" aria-selected="false">${avatarHtml(initials)}<span class="im-row-text"><span class="im-row-title">${name}</span><span class="im-row-sub">${role}</span></span>${chipHtml(tone === 'ok' ? 'Running' : 'Idle', tone)}</div>`;
+  const view = (width: number): string => `<section class="im-panel" aria-label="Session, ${width} wide" data-g-side-view="${width}" style="inline-size: ${width}px">`
+    + `<header class="im-panel-header"><h4 class="im-panel-title">Session</h4>${chipHtml('Running', 'ok')}<span class="im-spacer"></span>${iconButtonHtml('Close', 'g-side-close', 'x')}</header>`
+    + '<div class="im-panel-body im-panel-body--inset">'
+    + `<section class="im-section">${sectionHeadingHtml('Details')}<dl class="im-facts"><dt>Harness</dt><dd>Claude Code</dd><dt>Branch</dt><dd>feature/retry-backoff</dd><dt>Folder</dt><dd class="im-facts-code">C:\work\acme\billing-service</dd></dl></section>`
+    + `<section class="im-section">${sectionHeadingHtml('Members')}<div class="im-list" role="listbox" aria-label="Members">${member('CA', 'claude-a', 'lead · 11:55', 'ok')}${member('CB', 'codex-b', 'worker · 11:41', '')}</div></section>`
+    + `<section class="im-section">${sectionHeadingHtml('Files')}<table class="im-table" aria-label="Files"><thead><tr><th scope="col">File</th><th scope="col" class="im-num">Size</th></tr></thead><tbody><tr><td>retry.ts</td><td class="im-num">2.1 kB</td></tr><tr><td>backoff.test.ts</td><td class="im-num">880 B</td></tr></tbody></table></section>`
+    + `<section class="im-section">${sectionHeadingHtml('Settings')}<form class="im-form" data-g-side-form>${textFieldHtml('Name', `side-name-${width}`, 'billing-service', { id: `g-side-name-${width}` })}${checkboxOptionHtml({ name: `side-keep-${width}`, checked: true, label: 'Keep the session after it ends' })}</form></section>`
+    + `</div><footer class="im-panel-foot"><span class="im-spacer"></span>${buttonHtml('Cancel', 'g-side-cancel')}${buttonHtml('Save', 'g-side-save', { primary: true })}</footer></section>`;
+  const bare = '<section class="im-panel" aria-label="A body without the modifier" data-g-side-view="bare"><header class="im-panel-header"><h4 class="im-panel-title">Content region</h4></header>'
+    + '<div class="im-panel-body"><p class="im-caption">The body of the content region and of the sidebar has no padding of its own: the page, the list or the table gives it.</p></div></section>';
+  return `<div class="im-cluster" style="align-items: flex-start">${view(300)}${view(360)}${bare}</div>`;
 }
 
 // ---- forms ------------------------------------------------------------------------------------------------------
@@ -229,6 +290,31 @@ export function settingsPageHtml(): string {
 
 // ---- feedback ----------------------------------------------------------------------------------------------------
 
+/** The widths a title bar is drawn at: the window, and the steps of the shell's container queries (1000, 850, 620, 450, 340). */
+export const TITLEBAR_WIDTHS = [1100, 1000, 850, 620, 500, 400, 340, 250] as const;
+
+/**
+ * The title bar `titlebarHtml` writes for Shinatama's window (the brand, the sidebar button, four view tabs, the four tools with
+ * Overview pressed, the Views button, the action "New session", a status, the command button and the window buttons), at each
+ * width: every preview is its own container of the shell's name, so its container queries answer to its own width, as the
+ * title bar of a window of that width does.
+ */
+function titlebarPreviewsHtml(): string {
+  const bar = titlebarHtml({
+    brand: { name: 'Shinatama' },
+    sidebarToggle: { label: 'Threads', controls: 'g-sidebar' },
+    navigationHtml: tabNavigationHtml([{ id: 'threads', label: 'Threads' }, { id: 'team', label: 'Team' }, { id: 'activity', label: 'Activity' }, { id: 'settings', label: 'Settings' }], 'threads', { label: 'Views of the window', action: 'g-tb-view' }),
+    views: { label: 'Views', action: 'g-tb-views' },
+    tools: [{ label: 'Sessions', action: 'g-tb-tool', id: 'sessions' }, { label: 'Overview', action: 'g-tb-tool', id: 'overview', pressed: true }, { label: 'Files', action: 'g-tb-tool', id: 'files', pressed: false }, { label: 'Leftovers', action: 'g-tb-tool', id: 'leftovers', pressed: false }],
+    toolsLabel: 'Panels',
+    action: { label: 'New session', action: 'g-tb-new', icon: 'plus' },
+    statusHtml: statusButtonHtml({ label: 'Ready', accessibleLabel: 'Status: ready', action: 'g-tb-status', tone: 'ok' }),
+    commands: { label: 'Commands', action: 'g-tb-commands', shortcut: 'Ctrl K' },
+    windowControls: true,
+  });
+  return `<div class="im-stack">${TITLEBAR_WIDTHS.map((width) => `<div class="im-surface" data-im-surface="ground" data-g-titlebar="${width}" style="container: im-shell / inline-size; inline-size: ${width}px; block-size: var(--im-h-titlebar); display: grid; grid-template-rows: minmax(0, 1fr)" aria-label="Title bar, ${width} wide" role="group">${bar}</div>`).join('')}</div>`;
+}
+
 /** Notes in the four tones, the text helpers on the ground and on a sheet, a status in a title bar, a log. */
 export function feedbackPageHtml(): string {
   const notes = TONES.map((tone) => noteHtml({ icon: tone === 'ok' ? 'check' : tone === 'info' ? 'info' : 'warning', title: `A note in ${tone}`, message: 'It stays in the page until what it says changes.', tone })).join('');
@@ -240,6 +326,7 @@ export function feedbackPageHtml(): string {
   return block('notes', 'Notes in the four tones', notes)
     + block('text-helpers', 'Text helpers on the ground and on a sheet', helpers('ground') + helpers('sheet'))
     + block('titlebar-status', 'Status in the title bar', status)
+    + block('titlebar-tools', 'Tools and the action in the title bar, at the widths of the breakpoints', titlebarPreviewsHtml())
     + block('thread', 'A summary list and a log that scroll on their own', '<div class="g-thread" data-g-thread></div>')
     + block('viewport', 'A viewport with a banner at its foot', '<div class="g-viewport" data-g-viewport></div>')
     + block('portrait-notice', 'Portrait notice', '<div class="g-portrait" data-g-portrait></div>');
@@ -260,6 +347,8 @@ export const PATTERNS_CSS = `
 .g-fixture[data-g-fixture="wizard"] { height: 520px; }
 .g-fixture > .im-root > .im-shell { grid-template-rows: minmax(0, 1fr); }
 .g-pattern + .g-pattern { margin-top: var(--im-s-5); }
+/* The focus of a button that stands half out of a scroller scrolls it by the least, flush with the edge, which would cut the ring: the bars' buttons ask for room. */
+[data-g-titlebar] :is(button, a) { scroll-margin: var(--im-s-2); }
 .g-thread { display: flex; flex-direction: column; height: 240px; border: 1px solid var(--im-line); border-radius: var(--im-r-sheet); }
 .g-viewport { display: flex; height: 140px; border: 1px solid var(--im-line); border-radius: var(--im-r-sheet); }
 .g-portrait { position: relative; height: 260px; contain: layout paint; border: 1px dashed var(--im-line); border-radius: var(--im-r-sheet); }
@@ -298,6 +387,41 @@ function fillAside(root: ParentNode): void {
   }
   aside.append(uiPart('heading', 'Selected node'), list, uiPart('pre', 'import { charge } from "./charge";'));
   host.append(aside);
+}
+
+/** Every text and group part uiPart writes with a design of its own (dom-parts.ts: title, heading, label, strong, term, time, fieldset, legend, orderedList, nav, summary). */
+function fillParts(root: ParentNode): void {
+  const host = root.querySelector('[data-g-parts]');
+  if (!host) return;
+  const stack = uiPart('stack');
+  const check = (text: string, checked: boolean): HTMLElement => {
+    const box = uiInput('checkbox');
+    box.checked = checked;
+    const option = uiPart('label', undefined, 'im-option');
+    option.append(box, uiPart('text', text));
+    return option;
+  };
+  const fieldset = uiPart('fieldset');
+  fieldset.append(uiPart('legend', 'Install on'), check('Claude Code', true), check('Codex', false));
+  const facts = uiPart('descriptionList');
+  facts.append(uiPart('term', 'Started'), uiPart('definition', ''), uiPart('term', 'Branch'), uiPart('definition', 'develop'));
+  const started = uiPart('time', '14:02');
+  started.dateTime = '14:02';
+  facts.children[1]?.append(started);
+  const steps = uiPart('orderedList');
+  for (const text of ['Scan the project', 'Analyze each technology', 'Write the report']) steps.append(uiPart('item', text));
+  const nav = uiPart('nav');
+  nav.setAttribute('aria-label', 'Sections');
+  for (const text of ['Overview', 'Sessions']) nav.append(uiButton(text));
+  const details = uiPart('details');
+  details.append(uiPart('summary', 'More about this run'), uiPart('paragraph', 'Its output is kept until you close the tab.'));
+  const line = uiPart('paragraph');
+  line.append(uiPart('strong', 'billing-service'), ' ', uiPart('text', 'is running'));
+  stack.append(
+    uiPart('title', 'Title'), uiPart('heading', 'Heading'), uiPart('subheading', 'Subheading'), uiPart('minorHeading', 'Minor heading'),
+    uiPart('label', 'Label'), line, facts, fieldset, steps, nav, details,
+  );
+  host.append(stack);
 }
 
 /** A graph in the host of the aside page, with a group round two of its nodes. */
@@ -536,6 +660,7 @@ function fillGraphEditor(root: ParentNode): void {
 export function fillPatterns(root: ParentNode): () => void {
   fillMetrics(root);
   fillAside(root);
+  fillParts(root);
   fillFormGrid(root);
   fillThread(root);
   fillViewport(root);

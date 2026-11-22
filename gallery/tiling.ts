@@ -3,7 +3,7 @@
 // owns no layout: the model below validates nothing, applies each action to a copy of the layout, lays the panes out by
 // their weights and finds a pane's neighbour. An app's model is its own (Shinatama has one); this one is the gallery's.
 //
-// The layout: a pane with two tabs, the focused one, the second tab toned; beside it a pane with one tab over an empty
+// The layout: a pane with three tabs, the focused one, the second tab toned, the third with a label too long for its tab; beside it a pane with one tab over an empty
 // pane (its placeholder and the button that opens a tab); a collapsed pane; and a pane whose only tab the filter hides.
 // Dragging a tab to another pane or to a side moves it, as in an app.
 
@@ -27,6 +27,7 @@ const group = (id: string, tabs: string[], collapsed = false): Group => ({ kind:
 const VIEWS: View[] = [
   { id: 'console', hidden: false, label: 'billing-service', kind: 'terminal' },
   { id: 'review', hidden: false, label: 'reviewer', kind: 'terminal', tone: 'var(--im-cat-3)' },
+  { id: 'saved', hidden: false, label: 'Saved terminal · unavailable', kind: 'terminal' },
   { id: 'files', hidden: false, label: 'Files', kind: 'files' },
   { id: 'notes', hidden: false, label: 'Notes', kind: 'files' },
   { id: 'build', hidden: false, label: 'build.log', kind: 'log' },
@@ -37,7 +38,7 @@ function initialLayout(): Layout {
     root: {
       kind: 'split', id: 'g-split-main', axis: 'columns', weights: [1.4, 1, 0, 1],
       children: [
-        group('g-pane-console', ['console', 'review']),
+        group('g-pane-console', ['console', 'review', 'saved']),
         { kind: 'split', id: 'g-split-side', axis: 'rows', weights: [1, 1], children: [group('g-pane-files', ['files']), group('g-pane-empty', [])] },
         group('g-pane-notes', ['notes'], true),
         group('g-pane-build', ['build']),

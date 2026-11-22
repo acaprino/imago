@@ -165,13 +165,13 @@ async function liveShell(page) {
 
   // The rail (840) keeps its list; the window at 610 has no sidebar to enter.
   await width(page, 840);
-  assert.ok(await rendered(page, '.im-sidebar'), 'the rail is visible at 840');
+  assert.ok(await rendered(page, '#g-window .im-sidebar'), 'the rail is visible at 840');
   await page.focus(`${SIDEBAR_ROWS}[tabindex="0"]`);
   await press(page, 'Home', 'ArrowDown');
   assert.equal(await activeIndex(page, SIDEBAR_ROWS), 1, 'the arrows work in the rail');
 
   await width(page, 610);
-  assert.ok(!(await rendered(page, '.im-sidebar')), 'the sidebar is not visible at 610');
+  assert.ok(!(await rendered(page, '#g-window .im-sidebar')), 'the sidebar is not visible at 610');
   assert.ok(await rendered(page, '.im-inspector'), 'the inspector is visible at 610');
   await page.focus(`${TABLE_ROWS}[tabindex="0"]`);
   const seen = [];
@@ -196,7 +196,7 @@ async function otherApps(page) {
   // Muro has no sidebar: F6 goes between the content and the inspector, and the tabs still work.
   await page.evaluate(() => window.__imago.set({ app: 'muro', look: 'smooth', theme: 'dark' }));
   await width(page, 1160);
-  assert.equal(await total(page, '.im-sidebar'), 0);
+  assert.equal(await total(page, '#g-window .im-sidebar'), 0);
   await oneList(page, 'muro tabs', TABS, { forward: 'ArrowRight', back: 'ArrowLeft', across: 'ArrowUp' });
   await oneList(page, 'muro table', TABLE_ROWS, { forward: 'ArrowDown', back: 'ArrowUp', across: 'ArrowRight' });
   await cycle(page, { sidebar: false });

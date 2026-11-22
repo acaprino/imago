@@ -75,6 +75,9 @@
 
 [data-im-look="oni"] .im-row { padding-inline: var(--im-s-4); }
 
+/* The head of a group starts where the title of a row does. */
+[data-im-look="oni"] .im-list-group { padding-inline: var(--im-s-4); }
+
 [data-im-look="oni"] .im-row-title,
 [data-im-look="oni"] .im-tree-label { color: var(--im-accent-text); }
 

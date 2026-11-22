@@ -45,7 +45,7 @@ instead of strings.
 
 | Call | What it builds |
 |---|---|
-| `uiPart(kind, text, className)` | The element of a part of a page, with the package's class: a `UiPart`, such as `stack` (`im-stack`), `row` (`im-inline-row`), `toolbar` (`im-content-toolbar`), `actions` (`im-action-row`), `panel` (`im-panel im-surface`), `aside` (`im-aside`), `header` (`im-section-heading`), `form` (`im-form`), `field` (`im-field`), `hint` (`im-muted`), `paragraph` (`im-paragraph`), `status` (`im-status-text`, a status), `alert` (`im-field-error`, an alert), `list` (`im-stack-list`), `item` (`im-list-item`), `scroll` (`im-scroll`), `viewport` (`im-viewport`), `separator` (`im-rule`), `spacer` (`im-grow`), `dialog` (`im-content-dialog`), `details` (`im-disclosure`), `code` (`im-mono`), `pre` (`im-code-view`), `descriptionList` (`im-definition-list`), `definition` (`im-definition`), `table` (`im-table`), `mark` (`im-highlight`), and the plain elements of a table and a form. `text` is its text, escaped; `className` is added. Two kinds are not for a page: `footer` writes the class of the shell's footer region (`im-footer`, whose rules lay out a one-line bar), and `progress` writes a native `progress`, which `im-progress` does not draw; a progress bar is an element with `role="progressbar"` (`setProgress`, [inspection.md](inspection.md)) |
+| `uiPart(kind, text, className)` | The element of a part of a page, with the package's class: a `UiPart`, such as `stack` (`im-stack`), `row` (`im-inline-row`), `toolbar` (`im-content-toolbar`), `actions` (`im-action-row`), `panel` (`im-panel im-surface`), `aside` (`im-aside`), `header` (`im-section-heading`), `form` (`im-form`), `field` (`im-field`), `hint` (`im-muted`), `paragraph` (`im-paragraph`), `status` (`im-status-text`, a status), `alert` (`im-field-error`, an alert), `list` (`im-stack-list`), `item` (`im-list-item`), `scroll` (`im-scroll`), `viewport` (`im-viewport`), `separator` (`im-rule`), `spacer` (`im-grow`), `dialog` (`im-content-dialog`), `details` (`im-disclosure`), `code` (`im-mono`), `pre` (`im-code-view`), `descriptionList` (`im-definition-list`), `definition` (`im-definition`), `table` (`im-table`), `mark` (`im-highlight`), and the plain elements of a table and a form. `text` is its text, escaped; `className` is added. One kind is not for a page: `footer` writes the class of the shell's footer region (`im-footer`, whose rules lay out a one-line bar). There is no native `progress` part: a progress bar is an element with `role="progressbar"` (`setProgress`, [inspection.md](inspection.md)) |
 | `uiButton(label, options)` | A `button.im-btn`, with the options of `buttonHtml` and `{ title?, onClick? }` |
 | `uiInput(type)` | A native input with the class of its drawing: `im-check` on a checkbox, `im-radio` on a radio, `im-input` on any other type. A field with an icon or a key cap has the box round the input instead (`textFieldHtml`) |
 | `uiSelect(options, value)`, `uiOption(value, label)` | A native `select.im-select`, and an `option` of it |
@@ -62,6 +62,20 @@ role, and `UI_TRAITS` the classes that draw it. `uiTone(node, tone)` puts a text
 gives it its own colour back; the words still say the state. `uiEmphasis(button, emphasis)` makes a button the `primary`
 action or the armed `danger` one, and `null` makes it plain again. The app keeps its own classes for its own hooks;
 the classes Imago draws with stay Imago's.
+
+A part Imago offers is drawn by Imago, from the tokens, and its container gives the space: no part has a margin. The text
+parts are `title` (`im-title`, an `h1`, the display size), `heading`, `subheading` and `minorHeading` (`im-heading`, an `h2`
+in the title size, an `h3` and an `h4` in the body size, in the head font, in the case and with the letter spacing of the
+look), `label` (`im-label`, the body size), `strong` (`im-strong`, the heading colour; inside a disabled control it keeps
+the control's colour), `term` (`im-term`, meta text in the muted colour) and `time` (`im-time`, the same with tabular
+figures). The group parts are `fieldset` (`im-fieldset`, no border and no padding, a column with a small space between its
+items), `legend` (`im-legend`, a section title with a small space below), `orderedList` (`im-ordered-list`) and `nav`
+(`im-navigation`), both without list marks, with the smallest space between their items, and `summary`
+(`im-disclosure-title`, the title of a `details`, as `im-disclosure` draws it). Inside `im-form` a fieldset keeps the form's
+own tighter gap. Three parts are semantics only and are drawn by what holds them: `text` (a span that takes the size and the
+colour of its parent), `item` (the item of a list; `im-stack-list`, an aside and a dialog draw it) and `region`, `body` and
+`article` (the name of a region of a view, written also by `fileWorkspace`, which lay nothing out). `tests/dom-parts.test.ts`
+fails on a part whose class has no rule in `css/` and is not on its short list of the semantics-only ones, each with its reason.
 
 ## Workspaces, projects and files
 

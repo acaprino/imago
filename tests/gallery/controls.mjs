@@ -619,7 +619,9 @@ export default async (page) => {
             const holder = node.parentElement;
             if (!holder.getClientRects().length) continue;
             const size = parseFloat(getComputedStyle(holder).fontSize);
-            if (size < 11) found.push(`${size}px ${holder.className} "${node.textContent.trim().slice(0, 14)}"`);
+            // A size of 0 draws nothing: the text taken away from a control that shows its icon alone, as the Views menu does under 340 and
+            // the title bar's action under 620. The words stay in the markup, as the control's name.
+            if (size > 0 && size < 11) found.push(`${size}px ${holder.className} "${node.textContent.trim().slice(0, 14)}"`);
           }
         }
         return [...new Set(found)];

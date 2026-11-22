@@ -119,6 +119,12 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
 .im-titlebar-command b { font-weight: 500; }
 .im-titlebar-command:hover { background: var(--im-hover); color: var(--im-text); }
 
+/* The tools: the panel openers of the window, quiet text buttons (ghost) right after the view tabs. They are not tabs, so the
+   tabs' full-height underline is not theirs: each is a small button, vertically centred in the bar. */
+.im-titlebar-tools { display: flex; flex: 0 1 auto; align-items: center; gap: var(--im-s-1); min-inline-size: 0; white-space: nowrap; }
+/* The action: the window's one primary button, at the right, before the status and the command. */
+.im-titlebar .im-titlebar-action { flex: none; } /* the button's own `flex: 0 1 auto` comes later in the cascade: the bar's rule weighs more */
+
 /* The three window buttons are the page's own: the shell module wires them (data-im-window) and, on Windows 11,
    tells the native side where the maximize button is. */
 .im-window-buttons { display: flex; align-self: stretch; flex: none; }
@@ -232,6 +238,28 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
 .im-panel-tools > * { min-inline-size: 0; }
 .im-panel-tools > .im-note { flex: 1 1 auto; }
 .im-panel-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--im-line-strong) transparent; }
+/* A side view's body (the inspector's views, a sheet, a drawer). The plain body has no padding: it is also the body of the
+   content region and of the sidebar, whose page, list or table gives the space. The inset modifier gives it the pane's
+   padding, with s-3 above where the header ends. A list, a table or facts that are children of the body, or of one of its
+   sections, run to the edge and take the pane's padding in their rows and cells, so the text of every line starts where the
+   panel's title does. The first section heading has no margin above it: the padding is its space. */
+.im-panel-body--inset { padding: var(--im-s-3) var(--im-pane-pad) var(--im-pane-pad); }
+.im-panel-body--inset > :is(.im-list, .im-table, .im-table-scroll),
+.im-panel-body--inset > .im-section > :is(.im-list, .im-table, .im-table-scroll) { margin-inline: calc(var(--im-pane-pad) * -1); }
+.im-panel-body--inset > :is(.im-list, .im-table-scroll),
+.im-panel-body--inset > .im-section > :is(.im-list, .im-table-scroll) { padding: 0; }
+/* A row's own border is 1px, so its padding is the pane's less that one: its content starts at the pane's padding. */
+.im-panel-body--inset > :is(.im-list, .im-table-scroll) .im-row,
+.im-panel-body--inset > .im-section > :is(.im-list, .im-table-scroll) .im-row { padding-inline: calc(var(--im-pane-pad) - 1px); border-radius: 0; }
+.im-panel-body--inset > :is(.im-table, .im-table-scroll) :is(th, td):first-child,
+.im-panel-body--inset > .im-section > :is(.im-table, .im-table-scroll) :is(th, td):first-child { padding-inline-start: var(--im-pane-pad); }
+.im-panel-body--inset > :is(.im-table, .im-table-scroll) :is(th, td):last-child,
+.im-panel-body--inset > .im-section > :is(.im-table, .im-table-scroll) :is(th, td):last-child { padding-inline-end: var(--im-pane-pad); }
+/* Facts and a form carry a padding of their own for a page; in the body the body's is the one. */
+.im-panel-body--inset > :is(.im-facts, .im-form),
+.im-panel-body--inset > .im-section > :is(.im-facts, .im-form) { padding: 0; overflow: visible; }
+.im-panel-body--inset > .im-section-heading:first-child,
+.im-panel-body--inset > .im-section:first-child > .im-section-heading:first-child { margin-block-start: 0; }
 .im-panel-foot { display: flex; flex: none; align-items: center; gap: var(--im-s-2); padding: var(--im-s-3) var(--im-pane-pad); border-top: 1px solid var(--im-line-soft); }
 /* The inspector's content is a panel. Its header, body and foot are the inspector's own children (a fragment opened in
    it), or the children of the one element it shows (a form): that element is then laid out as the panel is, so the body
@@ -243,6 +271,8 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
 /* The button that folds the sidebar into the rail is shown from 850 up, where the rail is a choice and not a necessity. */
 .im-sidebar .im-sidebar-collapse { display: none; }
 .im-list { display: flex; flex-direction: column; gap: 1px; padding: 0 var(--im-list-pad) var(--im-s-2); }
+/* The rows of a group, in a role="group" that its head (im-list-group) names, keep the list's rhythm. */
+.im-list > [role="group"] { display: flex; flex-direction: column; gap: 1px; }
 
 /* ---------- helpers ---------- */
 .im-spacer { flex: 1 1 auto; }
@@ -390,6 +420,19 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
     clip-path: inset(50%);
     white-space: nowrap;
   }
+  /* The head of a group shows only its icon in the rail (its first child): a head without one is not drawn, and the label
+     stays, hidden, as the head's accessible name. The row's actions are hidden with the rest of the row's end, above. */
+  .im-sidebar .im-list-group { position: relative; justify-content: center; padding-inline: 0; }
+  .im-sidebar .im-list-group:not(:has(> .im-icon:first-child)) { display: none; }
+  .im-sidebar .im-list-group > .im-count { display: none; }
+  .im-sidebar .im-list-group > :not(.im-icon:first-child, .im-count) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   /* Every row of the rail is as tall as a two-line row: it shows one item whatever its lines, and the ring round a selected
      item stays a pixel or more inside the row's focus ring. */
   .im-sidebar .im-row { position: relative; justify-content: center; min-block-size: var(--im-h-row-2); padding-inline: 0; }
@@ -401,6 +444,18 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   }
   .im-sidebar .im-list { padding: var(--im-s-2) 6px; gap: var(--im-s-1); } /* imago-check: allow literal-space — the rail's geometry, not a space: 6px each side of the 56px rail leave rows 44 wide, as wide as a two-line row is tall in Smooth */
   [data-im-look="oni"] .im-sidebar { clip-path: none; }
+}
+
+/* Below 1000 the tools are not in the bar: the app lists them in its Views menu (each an item with `checked`), and the
+   Views button, which is only for the narrow bar otherwise, is shown whenever the bar has tools, so they stay reachable. */
+@container im-shell (width < 1000px) {
+  .im-titlebar-tools { display: none; }
+  .im-titlebar:has(.im-titlebar-tools) .im-views-menu { display: inline-flex; }
+}
+/* Under 850 a bar with tools has no room for its tabs as well as its action, its status and its command button (they shrank
+   to 18px each, under a pointer target): the tabs go into the Views menu a step earlier than the 620 of the other bars. */
+@container im-shell (width < 850px) {
+  .im-titlebar:has(.im-titlebar-tools) .im-tabs { display: none; }
 }
 
 /* Below 620 the view tabs become one "Views" menu and the sidebar leaves the layout: a title-bar button opens it as an
@@ -416,6 +471,9 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
   .im-titlebar .im-views-menu { display: inline-flex; }
   .im-titlebar .im-sidebar-toggle { display: inline-grid; }
   .im-titlebar-command { padding: 0 var(--im-s-1); border-color: transparent; }
+  /* The action keeps its icon and its name (the label stays its accessible name, as the Views menu's does): the label's
+     size goes, as the Views menu's does under 340. An action without an icon keeps its label. */
+  .im-titlebar-action:has(> .im-icon) { gap: 0; font-size: 0; }
   [data-im-look="smooth"] .im-work,
   [data-im-look="smooth"] .im-shell[data-im-sidebar="off"] .im-work { margin-inline-start: 0; border-left: 0; border-radius: 0; }
   .im-shell[data-im-sidebar-open="true"] .im-sidebar {
@@ -446,6 +504,11 @@ body:has(> :is(.im-shell, .im-root)) { block-size: 100%; margin: 0; }
 @container im-shell (width < 340px) {
   .im-brand { display: none; }
   .im-titlebar .im-views-menu { font-size: 0; }
+  /* A bar with the action keeps it at 250 (the toggle, the Views button, the action and the window buttons are 262 with
+     the gaps of 450, which does not fit): its gaps and its start close up again, and its status button, which only repeats
+     the status row's last result, gives its room to the action. */
+  .im-titlebar:has(.im-titlebar-action) { gap: var(--im-s-1); padding-inline-start: var(--im-s-1); }
+  .im-titlebar:has(.im-titlebar-action) .im-titlebar-status { display: none; }
 }
 
 @container im-shell (width >= 850px) {

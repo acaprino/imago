@@ -1,5 +1,5 @@
 import { isIconName } from './icon.ts';
-import { escapeHtml, iconHtml } from './markup.ts';
+import { buttonHtml, escapeHtml, iconHtml, type MarkupAttributes } from './markup.ts';
 import { chipToneAttribute, toneAttribute, type ChipTone, type Tone } from './tone.ts';
 
 /** String-rendered shell components. Text is escaped; named HTML slots contain trusted component output. */
@@ -34,6 +34,24 @@ export function windowButtonsHtml(labels: WindowButtonLabels = { minimize: 'Mini
   return `<div class="im-window-buttons">${(['minimize', 'maximize', 'close'] as const).map(name => `<button type="button" class="im-window-button" data-im-window="${name}" aria-label="${escapeHtml(labels[name])}" title="${escapeHtml(titles[name])}">${icons[name]}</button>`).join('')}</div>`;
 }
 
+/** A tool of the title bar: a quiet text button that opens a panel of the window. It is not a view, so it is not a tab. */
+export interface TitlebarTool {
+  label: string;
+  action: string;
+  id?: string;
+  /** `true` or `false` makes the tool a toggle (`aria-pressed`): the panel it opens is shown or not. Anything else writes no state. */
+  pressed?: boolean;
+  attrs?: MarkupAttributes;
+}
+/** The window's one primary action, in the title bar's action slot (`im-titlebar-action`). */
+export interface TitlebarAction {
+  label: string;
+  action: string;
+  id?: string;
+  /** An icon of the package (`IconName`), before the label; an unknown name writes none. Under 620 it is all the button shows. */
+  icon?: string;
+}
+
 export interface TitlebarOptions {
   /** The product's name: the title bar shows its initial in capitals in the accent's square (`im-mark`), then the name. */
   brand: { name: string };
@@ -41,6 +59,15 @@ export interface TitlebarOptions {
   sidebarToggle?: { label: string; controls: string };
   navigationHtml?: string;
   views?: { label: string; action: string };
+  /**
+   * The window's panel openers: ghost buttons in `im-titlebar-tools`, right after the navigation. From 1000 wide they are
+   * shown; under it the app lists them in its Views menu (`openMenu`, each an item with `checked`).
+   */
+  tools?: readonly TitlebarTool[];
+  /** The accessible name of the group of tools. */
+  toolsLabel?: string;
+  /** The window's one primary action, before the status and the command. A window has one: in this slot or in `im-actions`, never both. */
+  action?: TitlebarAction;
   statusHtml?: string;
   commands?: { label: string; action: string; shortcut?: string };
   windowControls?: boolean | WindowButtonLabels;
@@ -55,13 +82,21 @@ export function brandInitial(name: string): string {
   return letter ? Array.from(letter.toUpperCase())[0] : '';
 }
 
+function toolHtml(tool: TitlebarTool): string {
+  // aria-pressed only from a boolean, and ahead of the caller's own attributes: there is one.
+  const attrs = { ...tool.attrs, ...(typeof tool.pressed === 'boolean' ? { 'aria-pressed': String(tool.pressed) } : {}) };
+  return buttonHtml(tool.label, tool.action, { ghost: true, sm: true, id: tool.id, attrs });
+}
+
 export function titlebarHtml(options: TitlebarOptions): string {
-  const { brand, sidebarToggle, views, commands } = options;
+  const { brand, sidebarToggle, views, commands, tools, action } = options;
   const initial = brandInitial(brand.name);
   const markHtml = initial ? `<span class="im-mark" aria-hidden="true" data-tauri-drag-region>${escapeHtml(initial)}</span>` : '';
   const brandHtml = `${markHtml}<span class="im-wordmark" data-tauri-drag-region>${escapeHtml(brand.name)}</span>`;
   const toggleHtml = sidebarToggle ? `<button type="button" class="im-icon-btn im-sidebar-toggle" aria-label="${escapeHtml(sidebarToggle.label)}" title="${escapeHtml(sidebarToggle.label)}" aria-expanded="false" aria-controls="${escapeHtml(sidebarToggle.controls)}">${iconHtml('sidebar')}</button>` : '';
-  return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${toggleHtml}${options.navigationHtml ?? ''}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
+  const toolsHtml = tools?.length ? `<div class="im-titlebar-tools" role="group"${options.toolsLabel === undefined ? '' : ` aria-label="${escapeHtml(options.toolsLabel)}"`}>${tools.map(toolHtml).join('')}</div>` : '';
+  const actionHtml = action ? buttonHtml(action.label, action.action, { primary: true, sm: true, id: action.id, cls: 'im-titlebar-action', icon: action.icon && isIconName(action.icon) ? action.icon : undefined }) : '';
+  return `<header class="im-titlebar" data-tauri-drag-region><div class="im-brand" data-tauri-drag-region>${brandHtml}</div>${toggleHtml}${options.navigationHtml ?? ''}${toolsHtml}${views ? `<button type="button" class="im-btn im-btn--ghost im-views-menu" data-action="${escapeHtml(views.action)}">${escapeHtml(views.label)}</button>` : ''}<span class="im-spacer" data-tauri-drag-region></span>${actionHtml}${options.statusHtml ?? ''}${commands ? `<button type="button" class="im-titlebar-command" data-action="${escapeHtml(commands.action)}" aria-label="${escapeHtml(commands.label)}">${escapeHtml(commands.label)}${commands.shortcut ? ` <kbd class="im-key">${escapeHtml(commands.shortcut)}</kbd>` : ''}</button>` : ''}${options.windowControls ? windowButtonsHtml(typeof options.windowControls === 'object' ? options.windowControls : undefined) : ''}</header>`;
 }
 
 export interface StatusButtonOptions {
