@@ -187,7 +187,11 @@ write fewer parts of it ([inspection.md](inspection.md) says which). Notes:
   the window drags on a real window is in [verification.md](verification.md).
 - The inspector is closed with `hidden`; the content then takes its room. `inspector(shell).open(content)` opens it.
   `data-im-inspector="wide"` on the shell makes it 360px; beside the sidebar it is then docked from 1012 up.
-- A panel that shows an empty, loading or error state needs `im-panel-body`: `setPanelState` puts its layer there.
+- A panel that shows an empty, loading or error state needs `im-panel-body`: `setPanelState` puts its layer there, as the
+  first child of the body, and takes the other children of the body out of the layout until `ready`. In the sidebar
+  region the body is the listbox of rows (`role="listbox"`), and a listbox may hold only options: while a layer shows,
+  `setPanelState` makes the body a `group` (its name stays) and gives it its `listbox` back on `ready`. A body painted
+  from `panelStateHtml` is the app's own and keeps the role the app wrote.
 
 ### The window buttons
 
@@ -310,7 +314,7 @@ The calls an app makes itself. `mountApp` (section 6) makes several of them for 
 | `openPalette(shell, registry, options)` | The command palette over the shell: every available command of the registry, filtered as the user types. `options` is a `PaletteOptions`, `{ placeholder?, empty? }`. `mountApp` binds it to `Ctrl+K` |
 | `roving(container, options)` | One tab stop for a list, and the arrows, Home and End inside it. `options` is a `RovingOptions`, `{ item, orientation, onSelect? }` (`Orientation`: `vertical` or `horizontal`). This is how an app's own list takes the common keys. `nextIndex(current, count, key, orientation)` is its arithmetic, for a `NavKey`. The arrows stop at the first and the last item (they do not wrap); the tabs of `stepNavigationHtml`, which `nextStepId` moves, wrap round. Bind it to an element a repaint keeps (`.im-titlebar`, the sidebar's `.im-list`), with `item` for what is inside: `renderShellFrame` replaces what is inside the title bar, and a handler bound to its `.im-tabs` is lost at the first repaint |
 | `regions(shell)` | `F6` and `Shift+F6` move focus between the sidebar, the content and the inspector. `mountApp` calls it |
-| `setPanelState(panel, state)` | A panel is `ready`, `loading` with `rows`, `empty` with a sentence (and a title) and an action, or `error` with a sentence and a Retry (`PanelState`). The panel keeps its header and frame. Focus that was in the layer being replaced (a pressed Retry) moves to the new layer's button, or to the panel body when it has none |
+| `setPanelState(panel, state)` | A panel is `ready`, `loading` with `rows`, `empty` with a sentence (and a title) and an action, or `error` with a sentence and a Retry (`PanelState`). The panel keeps its header and frame. The layer is the first child of the panel's `im-panel-body` (a body with `role="listbox"`, the sidebar's, is a `group` while the layer shows). Focus that was in the layer being replaced (a pressed Retry) moves to the new layer's button, or to the panel body when it has none |
 | `panelStateHtml(state)` | The same layer as a string (`PanelStateMarkup`), for a panel body painted from strings: the action and the Retry are buttons the app writes and wires. The app sets `aria-busy="true"` on a loading panel itself. `setPanelState` replaces a layer written so as its own |
 | `showAfter(delayMs, show, timers?)` | Runs `show` after a delay and returns the function that cancels it (`Timers` is for a test). `showAfter(LOADING_DELAY_MS, …)` is how a loading state shows only after 300ms |
 | `sidebarDrawer(shell)` | Below 620 the title-bar toggle opens the sidebar as an overlay and moves focus into it. A second press of the toggle, or Escape, closes it and gives focus back to the toggle. A press outside, or focus moving elsewhere, closes it and leaves focus where it went. `mountApp` calls it |
