@@ -99,8 +99,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: package-lock.json
 
       - name: Next version
         id: version
@@ -188,3 +186,14 @@ jobs:
           git merge --no-edit -m "Merge $tag into develop" $tag
           if ($LASTEXITCODE) { Write-Error "main could not be merged into develop: merge $tag into develop by hand"; exit 1 }
           git push origin develop
+
+      # What is saved after the job is what the next run reuses, so this repository's own crates go out of it first: every
+      # checkout compiles them again, and the version, which every release changes, is in the hash in the names of their files, so
+      # each release would leave its own copies in the cache for good. Dependencies stay. A pattern that misses costs
+      # nothing but the trim, and one that hits too much costs a compile.
+      # Last step of the job, after the publishing, so that the cache the job saves is the trimmed one.
+      - name: Leave this repository's own crates out of the cache
+        run: |
+          foreach ($pattern in 'target/debug/imago*', 'target/debug/deps/*imago*', 'target/debug/.fingerprint/*imago*', 'target/debug/build/imago*') {
+            Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
+          }

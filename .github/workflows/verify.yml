@@ -96,6 +96,17 @@ jobs:
       - name: Verify
         run: npm run verify
 
+      # What is saved after the job is what the next run reuses, so this repository's own crates go out of it first: every
+      # checkout compiles them again, and the version, which every release changes, is in the hash in the names of their files, so
+      # each release would leave its own copies in the cache for good. Dependencies stay. A pattern that misses costs
+      # nothing but the trim, and one that hits too much costs a compile.
+      # Last step of the job, so that the cache the job saves is the trimmed one.
+      - name: Leave this repository's own crates out of the cache
+        run: |
+          foreach ($pattern in 'target/debug/imago*', 'target/debug/deps/*imago*', 'target/debug/.fingerprint/*imago*', 'target/debug/build/imago*') {
+            Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
   # The demo app is never built on a developer's machine: this job builds it, which is also the only place its Rust
   # is compiled, and keeps the program for the screen capture. `npm run demo:fetch` takes it from the latest successful
   # run on develop, never from a pull request's, and `npm run capture` photographs it.
@@ -158,3 +169,14 @@ jobs:
           path: target/debug/imago-demo.exe
           if-no-files-found: error
           retention-days: 30
+
+      # What is saved after the job is what the next run reuses, so this repository's own crates go out of it first: every
+      # checkout compiles them again, and the version, which every release changes, is in the hash in the names of their files, so
+      # each release would leave its own copies in the cache for good. Dependencies stay. A pattern that misses costs
+      # nothing but the trim, and one that hits too much costs a compile.
+      # After the upload, which takes the program from the target.
+      - name: Leave this repository's own crates out of the cache
+        run: |
+          foreach ($pattern in 'target/debug/imago*', 'target/debug/deps/*imago*', 'target/debug/.fingerprint/*imago*', 'target/debug/build/imago*') {
+            Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
+          }
