@@ -29,7 +29,9 @@ h2.im-heading { font-size: var(--im-fs-title); }
 .im-term, .im-time { font-size: var(--im-fs-meta); color: var(--im-muted); }
 .im-time { font-variant-numeric: tabular-nums; }
 /* A group of controls: a column, its legend a section title. */
-.im-fieldset { display: grid; gap: var(--im-s-2); margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+/* The layout of these parts has no specificity of its own (:where): a part is also given a role by a trait (`row`, `stack`, `toolbar`) or by
+   the app's pattern, and the one the app chose must win over the part's default. */
+:where(.im-fieldset) { display: grid; gap: var(--im-s-2); margin: 0; padding: 0; border: 0; min-inline-size: 0; }
 .im-legend { margin-block-end: var(--im-s-2); padding: 0; font-family: var(--im-font-head); font-size: var(--im-fs-title); font-weight: 600; color: var(--im-text-hi); }
-.im-ordered-list, .im-navigation, .im-navigation :is(ul, ol) { display: grid; gap: var(--im-s-1); margin: 0; padding: 0; list-style: none; }
+:where(.im-ordered-list, .im-navigation, .im-navigation :is(ul, ol)) { display: grid; gap: var(--im-s-1); margin: 0; padding: 0; list-style: none; }
 .im-disclosure-title { font-family: var(--im-font-head); font-size: var(--im-fs-body); color: var(--im-text-hi); border-radius: var(--im-r-control); }

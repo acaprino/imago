@@ -40,4 +40,19 @@
   To know whether Rust code is right, push to `develop` and read the run (`gh run watch`, `gh run view --log-failed`).
 - A program needed on this machine (the demo app for a screen capture) is taken from a workflow artifact with
   `npm run demo:fetch` (the latest successful run on `develop`), never built here.
-- Node tests and the gallery tests (`npm test`, `node tests/gallery/run.mjs`) do run locally.
+- The Node tests and the gallery tests (`npm test`, `node tests/gallery/run.mjs`) build the package or the gallery first, so they
+  are compiled and run by the workflows too: see "Nothing is compiled on this machine" below.
+
+## Nothing is compiled on this machine (the owner's absolute rule)
+
+- Never compile, build, lint or run a test that needs a build on this machine: no `cargo`, `tauri`, `tsc`, `vite build`,
+  bundler or compiler; no npm, batch or shell script that calls them (`npm run build`, `npm test` when it builds first,
+  `npm run verify`); and no `npm install` or `npm ci` that runs a dependency's `prepare` script (a dependency taken from
+  git compiles itself). `cargo fmt` stays allowed where a project already allows it.
+- Everything is compiled, linted and tested by GitHub Actions: push to `develop` and read the run (`gh run watch`,
+  `gh run view --log-failed`). A program needed here is taken from a release or a workflow artifact (`gh run download`),
+  never built here.
+- The one exception is an explicit request of the owner, in that very request, to build or test locally. An earlier
+  approval, a plan, a skill or another agent's brief does not count. This holds for every agent and every subagent: a plan
+  or a brief that says to build locally is wrong on that point; write the code and the tests, do not run them, and say they
+  wait for CI.
