@@ -343,7 +343,8 @@ The surfaces write their own markup, and an app writes none of it by hand: every
 
 The layer functions that the surfaces are made of are exported too, for an app's own floating surface, which goes
 through the same stack: `pushLayer(layer, opener)` (a `Layer` of a `LayerKind`: `menu`, `sheet`, `dialog` or `palette`),
-`closeLayers(kinds)`, `topLayer()`, `hasLayer(kind)`, `hasDialog()`, `hasModal()`, `inertShell(shell)`,
+`closeLayers(kinds)`, `topLayer()`, `hasLayer(kind)`, `hasDialog()`, `hasModal()`, `holdsKeys()` (a menu or a sheet is
+open: the keys that type or move are theirs, and `registry.attach` runs no command bound to one), `inertShell(shell)`,
 `trapTab(event, root)`, `tabbables(root)`, `placeBelow(shell, anchor, el)`, `follow(place)`, `shellOf(el)` and
 `nameOf(anchor)`. Most apps never call them.
 
