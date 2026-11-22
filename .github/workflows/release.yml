@@ -118,12 +118,27 @@ jobs:
       - name: Set up pinned Rust toolchain
         run: rustup show active-toolchain
 
-      # The compiled dependencies are kept from release to release, so that only what changed is compiled again. A run on
-      # main restores only caches main itself saved (the ones Verify saves on develop are not readable from here): the
-      # first release after this one was added builds everything and saves it, the next ones start from it. The key
-      # follows the toolchain and Cargo.lock, which the step above has just written the new version in; so each release
-      # has a key of its own, starts from the last release's build through the restore key (a new toolchain starts clean),
-      # and saves its own after the job, only when the job succeeds. GitHub drops the ones nobody restores.
+      # The compiled dependencies are kept from release to release, and cargo compiles only what changed (the crates of the
+      # workspace, whose version this run has just bumped). A run on main reads only the caches main itself saved: the ones
+      # Verify saves on develop are not visible here. So this run restores and saves its own: the first release after this was
+      # added builds everything and saves it, the next ones start from it. It is saved by a run that succeeds, when none of the
+      # exact key exists.
+      # The key has two parts. The compiler: the image moves stable Rust from time to time, every artifact of the old one is
+      # then useless, and a key without it would still hit and never be saved again. The dependencies: the source and checksum
+      # lines of Cargo.lock, not the whole file, which also holds the version of every crate of this workspace, and the step
+      # "Next version" has just rewritten it: the whole file would give every release a cache of its own.
+      - name: Cargo cache key
+        id: cargo-key
+        run: |
+          $info = rustc -vV
+          if ($LASTEXITCODE) { exit 1 }
+          $release = ($info | Select-String '^release: (\S+)').Matches[0].Groups[1].Value
+          $commit = ($info | Select-String '^commit-hash: (\w{9})').Matches[0].Groups[1].Value
+          $pins = Select-String -Path Cargo.lock -Pattern '^(source|checksum) = ' | ForEach-Object Line
+          $lock = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pins -join "`n"))).Substring(0, 20).ToLower()
+          "toolchain=$release-$commit" >> $env:GITHUB_OUTPUT
+          "lock=$lock" >> $env:GITHUB_OUTPUT
+
       - name: Restore the compiled Rust dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -132,31 +147,36 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-release-${{ steps.cargo-key.outputs.toolchain }}-${{ steps.cargo-key.outputs.lock }}
           restore-keys: |
-            ${{ runner.os }}-cargo-release-${{ hashFiles('rust-toolchain.toml') }}-
+            ${{ runner.os }}-cargo-release-${{ steps.cargo-key.outputs.toolchain }}-
 
-      # The browser Playwright downloads is the one of the Playwright version in package-lock.json.
-      - name: Find the Playwright version
-        id: playwright
-        run: |
-          $version = node -p "require('./package-lock.json').packages['node_modules/playwright'].version"
-          if ($LASTEXITCODE) { exit 1 }
-          "version=$version" >> $env:GITHUB_OUTPUT
-
-      - name: Restore the browser
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/AppData/Local/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
-
-      # When the cache gave the browser back, `playwright install` finds it installed and downloads nothing.
       - name: Install dependencies
         run: |
           npm ci
           if ($LASTEXITCODE) { exit 1 }
+
+      # The browser Playwright downloads is kept between runs, keyed on the version of playwright-core. The install below still
+      # runs: it finds the restored browser and downloads only what the folder lacks. It is saved right after the install and
+      # not at the end of the job, because the steps after it can be red, and a cache saved only by a green job would never be made.
+      - name: Restore the browser
+        id: browser
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('node_modules/playwright-core/package.json') }}
+
+      - name: Install the browser
+        run: |
           npx playwright install chromium
           if ($LASTEXITCODE) { exit 1 }
+
+      - name: Keep the browser
+        if: steps.browser.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ steps.browser.outputs.cache-primary-key }}
 
       - name: Verify
         run: |
@@ -186,14 +206,3 @@ jobs:
           git merge --no-edit -m "Merge $tag into develop" $tag
           if ($LASTEXITCODE) { Write-Error "main could not be merged into develop: merge $tag into develop by hand"; exit 1 }
           git push origin develop
-
-      # What is saved after the job is what the next run reuses, so this repository's own crates go out of it first: every
-      # checkout compiles them again, and the version, which every release changes, is in the hash in the names of their files, so
-      # each release would leave its own copies in the cache for good. Dependencies stay. A pattern that misses costs
-      # nothing but the trim, and one that hits too much costs a compile.
-      # Last step of the job, after the publishing, so that the cache the job saves is the trimmed one.
-      - name: Leave this repository's own crates out of the cache
-        run: |
-          foreach ($pattern in 'target/debug/imago*', 'target/debug/deps/*imago*', 'target/debug/.fingerprint/*imago*', 'target/debug/build/imago*') {
-            Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
-          }

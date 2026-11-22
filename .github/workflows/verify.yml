@@ -4,6 +4,8 @@ on:
   push:
     branches: [develop]
   pull_request:
+    branches: [develop]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,10 +17,6 @@ concurrency:
 jobs:
   verify:
     name: Verify (Windows x64)
-    # The release pull request (develop to main, from this repository) is the commit the push to develop has just
-    # verified, and the Release workflow verifies it again before it publishes: it is not verified a third time. Every
-    # other pull request, a fork's or a short branch's, is.
-    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'develop' || github.event.pull_request.head.repo.full_name != github.repository }}
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -26,7 +24,7 @@ jobs:
         shell: pwsh
     env:
       CARGO_TERM_COLOR: always
-      # No incremental state: the cached target stays smaller and the same for the same inputs.
+      # No incremental state: the cached target stays smaller, and the same for the same inputs.
       CARGO_INCREMENTAL: '0'
 
     steps:
@@ -46,12 +44,24 @@ jobs:
       - name: Set up pinned Rust toolchain
         run: rustup show active-toolchain
 
-      # The compiled dependencies are kept from run to run, so that only what changed is compiled again: the crate
-      # itself (its sources are new at every checkout) and whatever Cargo.lock moved. A run restores the cache of its own
-      # branch, then main's (a pull request: its own, then its base branch's). The key follows the toolchain and
-      # Cargo.lock: when Cargo.lock moves, the restore key starts from the last build and the new one is saved after the
-      # job; a new toolchain starts clean, since nothing of the old build could be used and it would only be carried along.
-      # Clippy and the `cargo test` of `npm run verify` build into the same target, so one cache serves both.
+      # The key of the cargo cache has two parts. The compiler: the image moves stable Rust from time to time, every artifact of
+      # the old one is then useless, and a key without it would still hit and never be saved again. The dependencies: the source
+      # and checksum lines of Cargo.lock, not the whole file, which also holds the version of the workspace's own crates and
+      # which the release rewrites each time: the whole file would start a new cache after every release.
+      - name: Cargo cache key
+        id: cargo-key
+        run: |
+          $info = rustc -vV
+          if ($LASTEXITCODE) { exit 1 }
+          $release = ($info | Select-String '^release: (\S+)').Matches[0].Groups[1].Value
+          $commit = ($info | Select-String '^commit-hash: (\w{9})').Matches[0].Groups[1].Value
+          $pins = Select-String -Path Cargo.lock -Pattern '^(source|checksum) = ' | ForEach-Object Line
+          $lock = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pins -join "`n"))).Substring(0, 20).ToLower()
+          "toolchain=$release-$commit" >> $env:GITHUB_OUTPUT
+          "lock=$lock" >> $env:GITHUB_OUTPUT
+
+      # Clippy and the tests of `npm run verify` build into the same target, so one cache serves both. When the lock moves, the
+      # restore key starts from the last build and cargo compiles only what changed.
       - name: Restore the compiled Rust dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -60,30 +70,33 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-verify-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-verify-${{ steps.cargo-key.outputs.toolchain }}-${{ steps.cargo-key.outputs.lock }}
           restore-keys: |
-            ${{ runner.os }}-cargo-verify-${{ hashFiles('rust-toolchain.toml') }}-
-
-      # The browser Playwright downloads is the one of the Playwright version in package-lock.json.
-      - name: Find the Playwright version
-        id: playwright
-        run: |
-          $version = node -p "require('./package-lock.json').packages['node_modules/playwright'].version"
-          if ($LASTEXITCODE) { exit 1 }
-          "version=$version" >> $env:GITHUB_OUTPUT
-
-      - name: Restore the browser
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/AppData/Local/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
+            ${{ runner.os }}-cargo-verify-${{ steps.cargo-key.outputs.toolchain }}-
 
       - name: Install dependencies
         run: npm ci
 
-      # The gallery test drives a browser. When the cache gave it back, this finds it installed and downloads nothing.
+      # The browser Playwright downloads is kept between runs, keyed on the version of playwright-core. The install below still
+      # runs: it finds the restored browser and downloads only what the folder lacks. It is saved right after the install and
+      # not at the end of the job, because the steps after it can be red, and a cache saved only by a green job would never be made.
+      - name: Restore the browser
+        id: browser
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('node_modules/playwright-core/package.json') }}
+
+      # The gallery test drives a browser.
       - name: Install the browser
         run: npx playwright install chromium
+
+      - name: Keep the browser
+        if: steps.browser.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ steps.browser.outputs.cache-primary-key }}
 
       # The toolchain file installs rustfmt and clippy. This is the only place Rust is formatted and linted: nobody
       # runs them on a developer's machine.
@@ -96,24 +109,11 @@ jobs:
       - name: Verify
         run: npm run verify
 
-      # What is saved after the job is what the next run reuses, so this repository's own crates go out of it first: every
-      # checkout compiles them again, and the version, which every release changes, is in the hash in the names of their files, so
-      # each release would leave its own copies in the cache for good. Dependencies stay. A pattern that misses costs
-      # nothing but the trim, and one that hits too much costs a compile.
-      # Last step of the job, so that the cache the job saves is the trimmed one.
-      - name: Leave this repository's own crates out of the cache
-        run: |
-          foreach ($pattern in 'target/debug/imago*', 'target/debug/deps/*imago*', 'target/debug/.fingerprint/*imago*', 'target/debug/build/imago*') {
-            Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
-          }
-
   # The demo app is never built on a developer's machine: this job builds it, which is also the only place its Rust
   # is compiled, and keeps the program for the screen capture. `npm run demo:fetch` takes it from the latest successful
   # run on develop, never from a pull request's, and `npm run capture` photographs it.
   demo:
     name: Demo app (Windows x64)
-    # Not for the release pull request either: see the Verify job.
-    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'develop' || github.event.pull_request.head.repo.full_name != github.repository }}
     runs-on: windows-latest
     timeout-minutes: 45
     defaults:
@@ -121,6 +121,7 @@ jobs:
         shell: pwsh
     env:
       CARGO_TERM_COLOR: always
+      # No incremental state: the cached target stays smaller, and the same for the same inputs.
       CARGO_INCREMENTAL: '0'
 
     steps:
@@ -140,10 +141,21 @@ jobs:
       - name: Set up pinned Rust toolchain
         run: rustup show active-toolchain
 
-      # Its own cache, apart from the Verify job's: this job builds the demo app with the feature custom-protocol, so
-      # Tauri and the crates under it are compiled with other features than the ones clippy and `cargo test` use, and the
-      # two jobs, which run together, would otherwise save the one key. The program itself is compiled again at every
-      # run: its sources are new at every checkout, so Cargo does not take it from the cache.
+      # The key of the cargo cache: the compiler and the dependencies Cargo.lock pins, as in the job above.
+      - name: Cargo cache key
+        id: cargo-key
+        run: |
+          $info = rustc -vV
+          if ($LASTEXITCODE) { exit 1 }
+          $release = ($info | Select-String '^release: (\S+)').Matches[0].Groups[1].Value
+          $commit = ($info | Select-String '^commit-hash: (\w{9})').Matches[0].Groups[1].Value
+          $pins = Select-String -Path Cargo.lock -Pattern '^(source|checksum) = ' | ForEach-Object Line
+          $lock = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($pins -join "`n"))).Substring(0, 20).ToLower()
+          "toolchain=$release-$commit" >> $env:GITHUB_OUTPUT
+          "lock=$lock" >> $env:GITHUB_OUTPUT
+
+      # Its own cache, apart from the Verify job's: this job builds the demo app (the feature custom-protocol, other features of
+      # Tauri and the crates under it) while the other one checks and tests, and the two run together.
       - name: Restore the compiled Rust dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -152,9 +164,9 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-demo-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-demo-${{ steps.cargo-key.outputs.toolchain }}-${{ steps.cargo-key.outputs.lock }}
           restore-keys: |
-            ${{ runner.os }}-cargo-demo-${{ hashFiles('rust-toolchain.toml') }}-
+            ${{ runner.os }}-cargo-demo-${{ steps.cargo-key.outputs.toolchain }}-
 
       - name: Install dependencies
         run: npm ci
@@ -169,14 +181,3 @@ jobs:
           path: target/debug/imago-demo.exe
           if-no-files-found: error
           retention-days: 30
-
-      # What is saved after the job is what the next run reuses, so this repository's own crates go out of it first: every
-      # checkout compiles them again, and the version, which every release changes, is in the hash in the names of their files, so
-      # each release would leave its own copies in the cache for good. Dependencies stay. A pattern that misses costs
-      # nothing but the trim, and one that hits too much costs a compile.
-      # After the upload, which takes the program from the target.
-      - name: Leave this repository's own crates out of the cache
-        run: |
-          foreach ($pattern in 'target/debug/imago*', 'target/debug/deps/*imago*', 'target/debug/.fingerprint/*imago*', 'target/debug/build/imago*') {
-            Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
-          }
