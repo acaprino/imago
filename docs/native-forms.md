@@ -82,7 +82,8 @@ uses `showModal()`.
 A form that must block the window while it saves:
 
 - with `openFormDialog`, calls `lock(true)` when the write starts and `lock(false)` when it ends. While locked, the close
-  button, Escape and a press outside do nothing, and the body and the foot are inert.
+  button, Escape and a press outside do nothing, and the body and the foot are inert. A locked dialog says so as a
+  disabled control does: `aria-busy="true"` on the dialog, the muted text colour and dashed edges, never a faded body.
 - with `openContentDialog` or `createContentDialog`, passes `canDismiss`, which says no while it saves; a
   `createContentDialog` also refuses to be dismissed while its form is `aria-busy="true"` or runs a `runFormOperation`.
   `close()` and `dispose()` end the dialog even then: they are for the app's own completed action. Both are idempotent,

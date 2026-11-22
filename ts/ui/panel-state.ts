@@ -164,11 +164,19 @@ function keepFocus(body: HTMLElement, layer?: HTMLElement): void {
   body.focus();
 }
 
+// The bodies whose `role="listbox"` was set aside while a layer shows: a listbox may hold only options, and the layer is a
+// message with a button. The body is a `group` meanwhile, and `ready` gives the listbox back.
+const setAsideListbox = new WeakSet<HTMLElement>();
+
 /**
  * Puts a panel into a state. It owns one element, the state layer, the first child of
  * `.im-panel-body`; the header, tools and footer are never touched. While a layer shows, the other
  * children of the body (the real content) are taken out of the layout, and `ready` puts them back. Focus that
  * was inside the layer it replaces moves to the new layer's first button, or to the panel body.
+ *
+ * In the sidebar region the body is the listbox of rows (`role="listbox"`), so the layer would be a child of a listbox
+ * that is not an option: while a layer shows, the body is a `group`, and `ready` gives it its `listbox` back. A layer an app
+ * wrote from a string (`panelStateHtml`) is the app's own body, and its role is the app's to set.
  */
 export function setPanelState(panel: HTMLElement, state: PanelState): void {
   const body = panel.querySelector<HTMLElement>(':scope > .im-panel-body');
@@ -183,6 +191,7 @@ export function setPanelState(panel: HTMLElement, state: PanelState): void {
   }
 
   if (state.kind === 'ready') {
+    if (setAsideListbox.delete(body)) body.setAttribute('role', 'listbox');
     panel.removeAttribute('aria-busy');
     if (holdsFocus) keepFocus(body);
     return;
@@ -193,6 +202,10 @@ export function setPanelState(panel: HTMLElement, state: PanelState): void {
     if (getComputedStyle(content).display === 'none') continue;
     content.setAttribute(HIDDEN_BY_STATE, content.style.display);
     content.style.display = 'none';
+  }
+  if (body.getAttribute('role') === 'listbox') {
+    setAsideListbox.add(body);
+    body.setAttribute('role', 'group');
   }
   const layer = buildLayer(panel.ownerDocument, state);
   layer.setAttribute(LAYER, state.kind);

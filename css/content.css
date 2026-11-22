@@ -64,7 +64,6 @@
 .im-record-button small, .im-input-list .im-text-stack small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
 .im-inline-cell { display: inline-flex; align-items: center; gap: var(--im-s-1); white-space: nowrap; }
 .im-inline-cell.im-tone-ok svg { color: var(--im-ok); }
-.im-path { color: var(--im-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
 .im-notes { margin-top: var(--im-s-2); }
 .im-file-lines { display: grid; gap: 2px; margin: var(--im-s-1) 0; }
 .im-activity-list li { align-items: flex-start; }
@@ -147,7 +146,6 @@
 }
 @container im-shell (width < 850px) {
   .im-titlebar-status span { display: none; }
-  .im-path { display: none; }
   .im-repeat-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 30px; }
   .im-repeat-row > label:nth-child(2) { grid-column: 1/-1; order: -1; }
 }

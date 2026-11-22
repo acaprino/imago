@@ -177,3 +177,46 @@ test('setPanelState finds, replaces and removes a layer an app wrote from a stri
   assert.equal(layersOf(element).length, 0, 'ready removes a layer that came from a string');
   assert.equal(element.getAttribute('aria-busy'), null);
 });
+
+test('the state layer is the first child of the body, before the content it hides', () => {
+  const element = panel();
+  set(element, { kind: 'empty', text: 'Nothing.' });
+  const body = bodyOf(element);
+  assert.equal(body.children[0].getAttribute('data-im-state-layer'), 'empty');
+  assert.deepEqual(body.children.slice(1).map((child) => child.style.display), ['none', 'none'], 'the rows are still there, out of the layout');
+});
+
+test('a body that is a listbox (the sidebar region) is a group while a layer shows, and a listbox again on ready', () => {
+  const element = panel();
+  const body = bodyOf(element);
+  body.setAttribute('role', 'listbox');
+  body.setAttribute('aria-label', 'Threads');
+
+  set(element, { kind: 'loading', rows: 2 });
+  assert.equal(body.getAttribute('role'), 'group', 'a listbox may hold only options: the layer is not one');
+  assert.equal(body.getAttribute('aria-label'), 'Threads', 'its name stays');
+  set(element, { kind: 'error', text: 'Failed.', retry: { label: 'Retry', run } });
+  assert.equal(body.getAttribute('role'), 'group', 'from one state to the next it stays a group');
+  set(element, { kind: 'empty', text: 'Nothing.' });
+  assert.equal(body.getAttribute('role'), 'group');
+
+  set(element, { kind: 'ready' });
+  assert.equal(body.getAttribute('role'), 'listbox');
+  set(element, { kind: 'ready' });
+  assert.equal(body.getAttribute('role'), 'listbox', 'ready twice changes nothing');
+});
+
+test('a body that has another role, or none, is left as it is', () => {
+  const element = panel();
+  const body = bodyOf(element);
+  set(element, { kind: 'empty', text: 'Nothing.' });
+  assert.equal(body.getAttribute('role'), null);
+  set(element, { kind: 'ready' });
+  assert.equal(body.getAttribute('role'), null, 'ready does not invent a listbox');
+
+  body.setAttribute('role', 'list');
+  set(element, { kind: 'loading', rows: 1 });
+  assert.equal(body.getAttribute('role'), 'list');
+  set(element, { kind: 'ready' });
+  assert.equal(body.getAttribute('role'), 'list');
+});

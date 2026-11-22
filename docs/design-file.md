@@ -51,7 +51,7 @@ The npm package carries `docs/`, `css/`, `lib/`, `ts/`, `icons/`, `tokens/`, `re
 repository `acaprino/imago` only: an app that reads this file from `node_modules` finds them on GitHub, not on its disk.
 
 The gallery is the acceptance surface. A control is done when its row is complete and its contrast test passes. Every
-class `css/` defines is shown there, but those `tests/gallery/coverage.mjs` lists as pending removal (today `im-path`). The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
+class `css/` defines is shown there, but those `tests/gallery/coverage.mjs` lists as pending removal (today none). The gallery forces a pseudo-state on a cell with `data-im-force` (`hover`, `press`,
 `focus`): it is the gallery's, never an app's. The names these documents write are checked against the code by
 `tests/docs.test.ts`.
 
@@ -341,7 +341,9 @@ the shell is as tall as its title bar, and `checkShellFill` says so on the conso
   letter, the initial of the product's name in capitals, in the head font, weight 700, in `--im-accent-on`. No drawn
   symbol and no image. The name, `im-wordmark`, is always beside it, and both are in `im-brand`. `titlebarHtml` writes
   them from `brand.name` (the letter is `brandInitial(name)`). Mukade and Muro both show M: the hue and the name tell them
-  apart. `imago-check` reports a brand that is not this markup (rule `brand-mark`).
+  apart. `imago-check` reports a brand that is not this markup (rule `brand-mark`), in a page, in the markup a script writes
+  and in JSX (`<span className="im-mark">`); a letter or a name written as `{…}`, a component and a class built by a
+  call are built at run time and are not judged.
 - The app's logo is what Windows shows: the icon of its executables, which is the mark, a rounded square in the app's
   dark accent holding the capital initial in its ink. One icon per app, for its window program, its command-line program
   and a page of it served in a browser. The package makes the files (`icons/<app>/`, `npm run icons`) and an app copies
@@ -542,9 +544,8 @@ Text helpers, for content inside a pattern: `im-muted` (the muted colour), `im-c
 (the code font), `im-grow` (takes the room left), `im-end` (pushed to the end of its row), `im-nowrap` (one line),
 `im-truncate` (one line, cut with an ellipsis), `im-text-accent` (the accent on data), `im-content-text` (content that
 can be selected outside a page: a message, a path, terminal output). `im-ellipsis` draws what `im-truncate` draws, and
-`data-im-align="end"` what `im-end` draws: an app writes `im-truncate` and `im-end`. `im-path`, a muted path on one
-line, is used by nothing and the gallery does not draw it: a file's location is `im-file-location` (`fileWorkspace`) and
-an editable path `im-path-field` (`pathField`). A page's own headings are `h1` 18,
+`data-im-align="end"` what `im-end` draws: an app writes `im-truncate` and `im-end`. There is no class for a path: a
+file's location is `im-file-location` (`fileWorkspace`) and an editable path `im-path-field` (`pathField`). A page's own headings are `h1` 18,
 `h2` 14 and `h3` 13, in the head font, in sentence case in both looks.
 
 ## Surfaces: which one for what
@@ -611,6 +612,7 @@ undoes them all. The options are in [using-imago.md](using-imago.md), section 6.
   Space, Delete, Backspace, Home, End, the arrows, Enter, Tab). Escape and F1 to F24 stay available there, and so does
   any binding with Ctrl or Alt. A key pressed while an input method composes text belongs to the input method.
 - No command runs while a dialog or the palette is open: a key never acts behind a pending decision.
+- While a menu or a sheet is open, a binding without Ctrl or Alt that types or moves (a letter, Space, Delete, an arrow) does not run, and does not cancel the key: the open surface has the focus and owns those keys. Escape, F1 to F24 and any binding with Ctrl or Alt still run. (A drawer leaves the panels live, so it takes no key from them.)
 - `Ctrl+=`, `Ctrl+-` and `Ctrl+0` zoom from 50 to 200%, in steps of 10, saved per machine (`mountZoom`). The level in
   the code is a factor: `1.2` is 120%.
 
@@ -768,7 +770,7 @@ the package runs `npm run check` (the program with `--package`) on its own `css/
 | `literal-space` | A padding, margin, gap or radius that is not a token or an allowed literal | App, package |
 | `literal-case` | A `text-transform` or a `letter-spacing` of the app's own | App |
 | `cursor-pointer` | A hand cursor | App, package |
-| `disabled-opacity` | An opacity on a disabled state | App, package |
+| `disabled-opacity` | An opacity on a disabled state, or on a busy one (`aria-busy`) | App, package |
 | `media-width` | A `@media` on a width, or a `matchMedia` of a width | App, package |
 | `show-modal` | A call of `showModal()` | App |
 | `own-keydown` | A key handler of the app on the document, the window or the body | App |
@@ -781,6 +783,11 @@ the package runs `npm run check` (the program with `--package`) on its own `css/
 | `agent-rules` | `AGENTS.md` or `CLAUDE.md` without the path of this file in the installed package | App |
 | `mount-app` | An entry that never calls `mountApp` | App |
 | `class-prefix` | A class of the package that does not start with `im-` | Package |
+
+The program reads what is written in a stylesheet, a page, a script's strings and JSX, and the style attributes and
+objects a script writes inline. It does not read a style kept in a variable (a constant that holds an object of
+declarations), in CSS-in-JS (a styled component, a template literal of CSS) or in a `.scss`, `.less`, `.vue` or
+`.svelte` file: those are a person's check.
 
 An exception is a comment on the line or the line above, `imago-check: allow <rule> — <reason>`; without a reason it
 allows nothing. The program prints every exception it accepted. A check that only warns is not a check: every rule

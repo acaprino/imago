@@ -426,6 +426,13 @@ describe('disabled-opacity', () => {
     assert.deepEqual(found(rules.disabledOpacity, '.a.disabled-note { opacity: .5; }\n.b.undisabled { opacity: .5; }\n'), []);
   });
 
+  test('finds an opacity on a busy state: a surface locked while it works is blocked like a disabled control (the busy form dialog)', () => {
+    const css = '.im-form-dialog[aria-busy="true"] .im-form-dialog-body { opacity: .65; }\n.a[aria-busy] { opacity: .5; }\n.b { &[aria-busy="true"] { opacity: .4; } }\n';
+    assert.deepEqual(found(rules.disabledOpacity, css), ['1 disabled-opacity', '2 disabled-opacity', '3 disabled-opacity']);
+    assert.match(rules.disabledOpacity(parseSource('a.css', css))[0].message, /busy/);
+    assert.deepEqual(found(rules.disabledOpacity, '.a[aria-busy="true"] { color: var(--im-muted); border-style: dashed; }\n.b:not([aria-busy]) { opacity: .8; }\n'), [], 'drawn without opacity, and a negated busy');
+  });
+
   test('leaves an opacity on another state, a negated disabled, and a disabled state drawn without opacity', () => {
     const css = '.a:hover { opacity: .8; }\n.b:not(:disabled):hover { opacity: .8; }\n.c:disabled { color: var(--im-muted); border-style: dashed; }\n.d:disabled { opacity: 1; }\n';
     assert.deepEqual(found(rules.disabledOpacity, css), []);
@@ -1105,6 +1112,37 @@ describe('imago-check on an app', () => {
     assert.ok(findings[0].message.includes('viewer/node_modules/@acaprino/imago/docs/design-file.md'), findings[0].message);
     writeFileSync(join(dir, 'AGENTS.md'), 'Before UI work, read viewer/node_modules/@acaprino/imago/docs/design-file.md.\n');
     assert.deepEqual(check({ root: dir, packageMode: false }).findings, []);
+  });
+
+  test('Daodan: the app root is viewer/ and the agent files are at ../: the path the agent file writes from its folder is accepted, and the expected one is printed from that folder', () => {
+    const files: Record<string, string> = {};
+    for (const [path, text] of Object.entries(INSTALLED)) files[`viewer/${path}`] = text;
+    files['viewer/package.json'] = manifest({ src: ['src'], app: 'shinatama', agents: ['../AGENTS.md', '../CLAUDE.md'] });
+    files['viewer/src/app.css'] = '.dd-a { padding: var(--im-s-2); }\n';
+    files['AGENTS.md'] = 'Before UI work, read viewer/node_modules/@acaprino/imago/docs/design-file.md.\n';
+    files['CLAUDE.md'] = '@AGENTS.md\n';
+    const dir = folder(files);
+    const viewer = join(dir, 'viewer');
+    const lines = () => check({ root: viewer, packageMode: false }).findings.filter((f: Finding) => f.rule === 'agent-rules');
+    assert.deepEqual(lines(), [], 'viewer/node_modules/@acaprino/… from the repository root is the installed design file');
+
+    writeFileSync(join(dir, 'AGENTS.md'), 'Read node_modules/@acaprino/imago/docs/design-file.md.\n');
+    assert.deepEqual(lines(), [], 'a path from the root of the app is accepted too');
+
+    // Another design-file.md that exists beside the agent file: the finding names the right one, from the agent file's folder.
+    mkdirSync(join(dir, 'docs'), { recursive: true });
+    writeFileSync(join(dir, 'docs', 'design-file.md'), '# not the package\n');
+    writeFileSync(join(dir, 'AGENTS.md'), 'Read docs/design-file.md.\n');
+    const found = lines().filter((f: Finding) => f.file === '../AGENTS.md');
+    assert.deepEqual(found.map((f: Finding) => `${f.file}:${f.line}`), ['../AGENTS.md:1'], 'the file is named from the root of the app');
+    assert.match(found[0].message, /is not the design file of the installed/);
+    assert.ok(found[0].message.endsWith('it is viewer/node_modules/@acaprino/imago/docs/design-file.md'), found[0].message);
+    assert.ok(!found[0].message.includes('it is node_modules/'), 'not the path from the root of the app');
+
+    // A file that names nothing: the expected path is the one to write in that file.
+    writeFileSync(join(dir, 'AGENTS.md'), 'Be careful.\n');
+    const none = lines();
+    assert.ok(none.some((f: Finding) => f.file === '../AGENTS.md' && f.message.includes('viewer/node_modules/@acaprino/imago/docs/design-file.md')), none.map((f: Finding) => f.message).join('\n'));
   });
 
   test('mount-app follows a re-export of the package\'s mountApp through the app\'s own files, to any depth', () => {

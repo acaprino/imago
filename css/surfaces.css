@@ -291,7 +291,13 @@
 .im-form-dialog-subtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--im-text-2); }
 .im-form-dialog-body { min-height: 0; overflow: auto; padding: var(--im-s-4); }
 .im-form-dialog-foot { border-top: 1px solid var(--im-line); }
-.im-form-dialog[aria-busy="true"] .im-form-dialog-body { opacity: .65; }
+/* Locked while it writes (its body and foot are inert): drawn like a disabled control, the muted text colour and a dashed
+   edge, never an opacity. */
+.im-form-dialog[aria-busy="true"] .im-form-dialog-body,
+.im-form-dialog[aria-busy="true"] .im-form-dialog-body :is(.im-field-label, .im-field-hint, .im-option, .im-input, .im-input > input, .im-select, .im-textarea) { color: var(--im-muted); }
+.im-form-dialog[aria-busy="true"] .im-form-dialog-head { border-bottom-style: dashed; }
+.im-form-dialog[aria-busy="true"] .im-form-dialog-foot { border-top-style: dashed; }
+.im-form-dialog[aria-busy="true"] :is(.im-input, .im-select, .im-textarea, .im-btn) { border-style: dashed; }
 
 /* An app-owned form, including native submission, in the same modal stack. */
 dialog.im-content-dialog { margin: 0; padding: 0; width: min(36rem, calc(100% - 32px)); }

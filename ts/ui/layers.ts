@@ -104,6 +104,14 @@ export function hasDialog(): boolean {
   return stack.some((entry) => entry.layer.kind === 'dialog');
 }
 
+/**
+ * Whether a menu or a sheet is open: the surfaces that take focus and keep it. The keys that type or move (letters,
+ * Space, arrows) belong to them, so a command bound to such a key must not run behind them.
+ */
+export function holdsKeys(): boolean {
+  return stack.some((entry) => entry.layer.kind === 'menu' || entry.layer.kind === 'sheet');
+}
+
 /** Whether a layer of this kind is open. */
 export function hasLayer(kind: LayerKind): boolean {
   return stack.some((entry) => entry.layer.kind === kind);

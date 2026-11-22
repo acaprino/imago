@@ -10,7 +10,8 @@ import { DYNAMIC, lineAt } from './source.mjs';
 /**
  * @typedef {import('./source.mjs').Source} Source
  * @typedef {{ file: string, line: number, rule: string, message: string }} Finding
- * @typedef {{ name: string, classes: string[], at: number, end: number, closed: boolean, children: Node[] }} Element
+ * @typedef {{ name: string, classes: string[], at: number, end: number, closed: boolean, children: Node[], component?: boolean }} Element
+ *   `component` is a tag written with a capital (`<Logo />`): in JSX a component, not an element of the page.
  * @typedef {{ text: string, at: number }} Text
  * @typedef {Element | Text} Node
  */
@@ -32,13 +33,15 @@ const isElement = (node) => 'name' in node;
  * @param {string} text
  * @returns {Element}
  */
-function parse(text) {
+function parse(text, jsx = false) {
   /** @type {Element} */
   const root = { name: '#root', classes: [], at: 0, end: text.length, closed: true, children: [] };
   const stack = [root];
   let last = 0;
+  // In JSX a `{…}` between tags is an expression built at run time, as a ${} is in a template literal.
+  const read = (/** @type {string} */ words) => (jsx ? words.replace(/\{[^{}]*\}|[{}]/g, DYNAMIC) : words);
   const addText = (/** @type {number} */ from, /** @type {number} */ to) => {
-    if (to > from) stack[stack.length - 1].children.push({ text: text.slice(from, to), at: from });
+    if (to > from) stack[stack.length - 1].children.push({ text: read(text.slice(from, to)), at: from });
   };
   for (const match of text.matchAll(TAG)) {
     const at = match.index ?? 0;
@@ -53,7 +56,7 @@ function parse(text) {
     const attributes = CLASS.exec(match[3]);
     const classes = (attributes?.[1] ?? attributes?.[2] ?? attributes?.[3] ?? '').split(/\s+/).filter(Boolean);
     /** @type {Element} */
-    const element = { name, classes, at, end: last, closed: false, children: [] };
+    const element = { name, classes, at, end: last, closed: false, children: [], component: /^[A-Z]/.test(match[2]) };
     stack[stack.length - 1].children.push(element);
     if (VOID.has(name) || match[4]) element.closed = true;
     else stack.push(element);
@@ -83,7 +86,7 @@ const tagOf = (element) => `<${element.name}${element.classes.length ? ` class="
  * @param {Element} brand
  * @returns {string[]}
  */
-function problemsOf(brand) {
+function problemsOf(brand, jsx = false) {
   /** @type {Set<string>} */
   const problems = new Set();
   const inside = [...elementsIn(brand)];
@@ -101,12 +104,22 @@ function problemsOf(brand) {
       continue;
     }
     if (child.text.includes(DYNAMIC)) complete = false;
+    // In JSX a tag the reading could not follow (`className={cn(…)}`) leaves its `<` or `>` in the text: not a text of the brand.
+    if (jsx && /[<>]/.test(child.text)) {
+      complete = false;
+      continue;
+    }
     const words = child.text.replaceAll(DYNAMIC, '').trim();
     if (words) problems.add(`the text "${words}" outside im-wordmark`);
   }
   const marks = kids.filter((kid) => kid.classes.includes('im-mark'));
   const names = kids.filter((kid) => kid.classes.includes('im-wordmark'));
-  for (const kid of kids) if (!marks.includes(kid) && !names.includes(kid) && !IMAGES.has(kid.name)) problems.add(tagOf(kid));
+  for (const kid of kids) {
+    if (marks.includes(kid) || names.includes(kid) || IMAGES.has(kid.name)) continue;
+    // A component (`<Logo />`) or a fragment is not markup the rule can read: only what is there is judged.
+    if (jsx && kid.component) complete = false;
+    else problems.add(tagOf(kid));
+  }
   if (complete) {
     if (!marks.length) problems.add('no im-mark');
     if (!names.length) problems.add('no im-wordmark');
@@ -140,6 +153,34 @@ function markupOf(source) {
     if (str.attribute === undefined) pieces.push({ text: str.text.replace(/\\(["'`])/g, ' $1').replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\n]/g, ' ')), line: str.line });
   }
   return pieces;
+}
+
+const JSX_FILE = /\.(?:tsx|jsx|js|mjs)$/i;
+
+/**
+ * The JSX of a script, as markup: its code with the content of each quoted string put back (the lexer blanks them), so
+ * that `<span className="im-mark">D</span>` reads like `<span class="im-mark">D</span>`. Only the files that can hold
+ * JSX (.tsx, .jsx, .js, .mjs; a .ts cannot). A template literal stays blank: its classes are built at run time.
+ * @param {Source} source
+ * @returns {{ text: string, line: number }[]}
+ */
+function jsxOf(source) {
+  if (source.kind !== 'script' || !JSX_FILE.test(source.file)) return [];
+  let first = 0;
+  return source.code.map((chunk) => {
+    const starts = stringStarts(chunk.text);
+    const strings = source.strings.slice(first, first + starts.length);
+    first += starts.length;
+    const code = chunk.text.split('');
+    for (const str of strings) {
+      // A string of markup (`'<div class="im-brand">' + html`) is read as a string already, and joined to what is built
+      // around it it is not a brand: only the values of attributes (a class never holds a `<` or a `>`) are put back.
+      if (str.template || str.at === undefined || /[<>]/.test(str.text)) continue;
+      for (let k = 0; k < str.text.length; k++) code[str.at + 1 + k] = str.text[k];
+    }
+    // `className={'im-mark'}` is `className="im-mark"`: the braces hold only a string.
+    return { text: code.join('').replace(/=\{[ \t]*(["'])([^"'{}\n]*)\1[ \t]*\}/g, '="$2"'), line: chunk.line };
+  });
 }
 
 /**
@@ -252,22 +293,36 @@ export function brandMark(source) {
   if (source.kind === 'css') return [];
   /** @type {Finding[]} */
   const findings = brandImageOption(source);
-  for (const piece of markupOf(source)) {
+  // The strings and the page, then the JSX: a brand in a string is read in both, and said once.
+  const pieces = [...markupOf(source).map((piece) => ({ ...piece, jsx: false })), ...jsxOf(source).map((piece) => ({ ...piece, jsx: true }))];
+  /** @type {Finding[]} */
+  const fromPieces = [];
+  const add = (/** @type {Finding} */ finding) => {
+    if (!fromPieces.some((said) => said.line === finding.line && said.message === finding.message)) fromPieces.push(finding);
+  };
+  for (const piece of pieces) {
     /** @type {[number, number][]} */
     const brands = [];
-    for (const element of elementsIn(parse(piece.text))) {
+    for (const element of elementsIn(parse(piece.text, piece.jsx))) {
       if (!element.classes.includes('im-brand')) continue;
       brands.push([element.at, element.end]);
-      const problems = problemsOf(element);
+      const problems = problemsOf(element, piece.jsx);
       if (problems.length) {
-        findings.push({ file: source.file, line: lineAt(piece.text, element.at, piece.line), rule: RULE, message: `im-brand holds ${problems.join(', ')}: ${SHAPE}` });
+        add({ file: source.file, line: lineAt(piece.text, element.at, piece.line), rule: RULE, message: `im-brand holds ${problems.join(', ')}: ${SHAPE}` });
       }
     }
     for (const match of piece.text.matchAll(BRAND_IMAGE)) {
       const at = match.index ?? 0;
       if (brands.some(([from, to]) => at >= from && at < to)) continue;
-      findings.push({ file: source.file, line: lineAt(piece.text, at, piece.line), rule: RULE, message: `im-brand-image is removed: ${SHAPE}` });
+      add({ file: source.file, line: lineAt(piece.text, at, piece.line), rule: RULE, message: `im-brand-image is removed: ${SHAPE}` });
     }
+  }
+  // The class im-brand-image seen as a string, and again as the class of the brand that holds it (JSX): the brand's
+  // finding says it, so the line has one.
+  const stray = (/** @type {Finding} */ finding) => finding.message.startsWith('im-brand-image');
+  for (const finding of fromPieces) {
+    if (stray(finding) && fromPieces.some((other) => other.line === finding.line && !stray(other))) continue;
+    findings.push(finding);
   }
   return findings.sort((a, b) => a.line - b.line);
 }

@@ -187,7 +187,11 @@ write fewer parts of it ([inspection.md](inspection.md) says which). Notes:
   the window drags on a real window is in [verification.md](verification.md).
 - The inspector is closed with `hidden`; the content then takes its room. `inspector(shell).open(content)` opens it.
   `data-im-inspector="wide"` on the shell makes it 360px; beside the sidebar it is then docked from 1012 up.
-- A panel that shows an empty, loading or error state needs `im-panel-body`: `setPanelState` puts its layer there.
+- A panel that shows an empty, loading or error state needs `im-panel-body`: `setPanelState` puts its layer there, as the
+  first child of the body, and takes the other children of the body out of the layout until `ready`. In the sidebar
+  region the body is the listbox of rows (`role="listbox"`), and a listbox may hold only options: while a layer shows,
+  `setPanelState` makes the body a `group` (its name stays) and gives it its `listbox` back on `ready`. A body painted
+  from `panelStateHtml` is the app's own and keeps the role the app wrote.
 
 ### The window buttons
 
@@ -296,7 +300,7 @@ The calls an app makes itself. `mountApp` (section 6) makes several of them for 
 
 | Call | What it does |
 |---|---|
-| `createRegistry()` | The command registry of the app, a `Registry`. `register(command)` takes a `Command`, `{ id, title, keys?, group?, when?, run }`, and returns the function that unregisters; it throws on an id or keys already taken. `list()`, `get(id)`, `match(event)` (a `KeyEventLike`); `attach(target, options)` (a `KeyEventTarget`, `AttachOptions`) runs the matching command on `keydown` and cancels the browser's own action. `keys` is any of `Ctrl`, `Shift` and `Alt`, then one key name, joined by `+`: `Ctrl+K`, `F6`, `Ctrl+=` (the key caps always show them as Ctrl, Shift, Alt). The key name is what `event.key` says, in either case, with the Shift flag kept apart: a key that types a character only with Shift is bound with `Shift+`, so write `Shift+?` and not `?` (a binding of `?` never matches), and `Ctrl+=` depends on the keyboard layout. In a text field (`isTextTarget`: an `input`, a `textarea`, a `select`, editable content) a key pressed without Ctrl or Alt belongs to the field, whether it types (`a`, Space) or edits and moves (Delete, Backspace, Home, End, the arrows, Enter, Tab): a binding of it does not run there and the key is not cancelled. Escape, `F1` to `F24` and every binding with Ctrl or Alt still run in a field. No command runs while a dialog or the palette is open, nor on a key a handler claimed (`claimKey`) |
+| `createRegistry()` | The command registry of the app, a `Registry`. `register(command)` takes a `Command`, `{ id, title, keys?, group?, when?, run }`, and returns the function that unregisters; it throws on an id or keys already taken. `list()`, `get(id)`, `match(event)` (a `KeyEventLike`); `attach(target, options)` (a `KeyEventTarget`, `AttachOptions`) runs the matching command on `keydown` and cancels the browser's own action. `keys` is any of `Ctrl`, `Shift` and `Alt`, then one key name, joined by `+`: `Ctrl+K`, `F6`, `Ctrl+=` (the key caps always show them as Ctrl, Shift, Alt). The key name is what `event.key` says, in either case, with the Shift flag kept apart: a key that types a character only with Shift is bound with `Shift+`, so write `Shift+?` and not `?` (a binding of `?` never matches), and `Ctrl+=` depends on the keyboard layout. In a text field (`isTextTarget`: an `input`, a `textarea`, a `select`, editable content) a key pressed without Ctrl or Alt belongs to the field, whether it types (`a`, Space) or edits and moves (Delete, Backspace, Home, End, the arrows, Enter, Tab): a binding of it does not run there and the key is not cancelled. Escape, `F1` to `F24` and every binding with Ctrl or Alt still run in a field. No command runs while a dialog or the palette is open (unless `runUnderModal`), nor on a key a handler claimed (`claimKey`). While a menu or a sheet is open, a binding without Ctrl or Alt that types or moves (a letter, Space, Delete, an arrow) does not run either, whatever `runUnderModal` says: the open surface owns those keys; Escape, `F1` to `F24` and bindings with Ctrl or Alt still run |
 | `formatKeys(keys)`, `keyCaps(document, keys)` | The key caps of a binding, as text and as `im-key` elements in an `im-keys` span. Every key cap of an app comes from them |
 | `claimKey(event)`, `keyClaimed(event)` | A handler that answers a key claims it, beside its `preventDefault()`, so the registry runs no command on it; `keyClaimed` says whether one did. A claimed Escape stays claimed until its keyup. From a React handler, `claimKey(event.nativeEvent)` |
 | `attachLayers(shell)` | Escape closes the top surface only, and a press outside closes a menu or a sheet (a drawer stays: its control closes it). `confirm` and `openPalette` rely on it for Escape. Its returned function also closes every open surface |
@@ -310,7 +314,7 @@ The calls an app makes itself. `mountApp` (section 6) makes several of them for 
 | `openPalette(shell, registry, options)` | The command palette over the shell: every available command of the registry, filtered as the user types. `options` is a `PaletteOptions`, `{ placeholder?, empty? }`. `mountApp` binds it to `Ctrl+K` |
 | `roving(container, options)` | One tab stop for a list, and the arrows, Home and End inside it. `options` is a `RovingOptions`, `{ item, orientation, onSelect? }` (`Orientation`: `vertical` or `horizontal`). This is how an app's own list takes the common keys. `nextIndex(current, count, key, orientation)` is its arithmetic, for a `NavKey`. The arrows stop at the first and the last item (they do not wrap); the tabs of `stepNavigationHtml`, which `nextStepId` moves, wrap round. Bind it to an element a repaint keeps (`.im-titlebar`, the sidebar's `.im-list`), with `item` for what is inside: `renderShellFrame` replaces what is inside the title bar, and a handler bound to its `.im-tabs` is lost at the first repaint |
 | `regions(shell)` | `F6` and `Shift+F6` move focus between the sidebar, the content and the inspector. `mountApp` calls it |
-| `setPanelState(panel, state)` | A panel is `ready`, `loading` with `rows`, `empty` with a sentence (and a title) and an action, or `error` with a sentence and a Retry (`PanelState`). The panel keeps its header and frame. Focus that was in the layer being replaced (a pressed Retry) moves to the new layer's button, or to the panel body when it has none |
+| `setPanelState(panel, state)` | A panel is `ready`, `loading` with `rows`, `empty` with a sentence (and a title) and an action, or `error` with a sentence and a Retry (`PanelState`). The panel keeps its header and frame. The layer is the first child of the panel's `im-panel-body` (a body with `role="listbox"`, the sidebar's, is a `group` while the layer shows). Focus that was in the layer being replaced (a pressed Retry) moves to the new layer's button, or to the panel body when it has none |
 | `panelStateHtml(state)` | The same layer as a string (`PanelStateMarkup`), for a panel body painted from strings: the action and the Retry are buttons the app writes and wires. The app sets `aria-busy="true"` on a loading panel itself. `setPanelState` replaces a layer written so as its own |
 | `showAfter(delayMs, show, timers?)` | Runs `show` after a delay and returns the function that cancels it (`Timers` is for a test). `showAfter(LOADING_DELAY_MS, …)` is how a loading state shows only after 300ms |
 | `sidebarDrawer(shell)` | Below 620 the title-bar toggle opens the sidebar as an overlay and moves focus into it. A second press of the toggle, or Escape, closes it and gives focus back to the toggle. A press outside, or focus moving elsewhere, closes it and leaves focus where it went. `mountApp` calls it |
@@ -339,7 +343,8 @@ The surfaces write their own markup, and an app writes none of it by hand: every
 
 The layer functions that the surfaces are made of are exported too, for an app's own floating surface, which goes
 through the same stack: `pushLayer(layer, opener)` (a `Layer` of a `LayerKind`: `menu`, `sheet`, `dialog` or `palette`),
-`closeLayers(kinds)`, `topLayer()`, `hasLayer(kind)`, `hasDialog()`, `hasModal()`, `inertShell(shell)`,
+`closeLayers(kinds)`, `topLayer()`, `hasLayer(kind)`, `hasDialog()`, `hasModal()`, `holdsKeys()` (a menu or a sheet is
+open: the keys that type or move are theirs, and `registry.attach` runs no command bound to one), `inertShell(shell)`,
 `trapTab(event, root)`, `tabbables(root)`, `placeBelow(shell, anchor, el)`, `follow(place)`, `shellOf(el)` and
 `nameOf(anchor)`. Most apps never call them.
 
@@ -577,7 +582,11 @@ Run npx imago-check before you say UI work is done.
 
 `imago-check` reports an agent file that does not name the design file of the installed package by a path that exists
 (rule `agent-rules`). The path assumes npm installs the whole repository, as it does for a git dependency: if
-`node_modules` is out of reach of an agent's tools, copy the file in at install time and write that path.
+`node_modules` is out of reach of an agent's tools, copy the file in at install time and write that path. An app in a
+folder of the repository (`viewer/`) whose agent files sit at the root of the repository lists them in `agents`
+(`["../AGENTS.md", "../CLAUDE.md"]`) and writes the path from the folder of the agent file
+(`viewer/node_modules/@acaprino/imago/docs/design-file.md`), or from the app's root: the rule accepts both, and its
+message gives the path from the folder of the file it is about.
 
 `imago-check` reads the `"imago"` block of the app's `package.json`:
 
@@ -717,6 +726,7 @@ breakpoints of what stays follow the shell (`@container im-shell` at 1000, 850 a
 | `.im-row[aria-pressed="true"]`, `.im-row[aria-current="page"]`, `.im-btn[aria-pressed="true"]` in the accent colour | The selection of the row (its fill and a heavier title) and of the button (the selection fill, a 2px bar inside its bottom edge in the accent text colour, and in Smooth the weight 600), the same for `aria-selected="true"`, an `aria-current` that is not `"false"` and `aria-pressed="true"`, on `im-row`, `im-tab`, `im-tree-item`, `im-menu-item`, `im-btn` and the segments of `im-seg`. A primary and a confirming danger button keep their fill and take the bar in their text colour |
 | `.im-setting-row input` 260px wide | The field's box, `.im-setting-row .im-input`, is 260px: the box round the input as `settingInputHtml` writes it, or the input itself |
 | `.im-editor-inspector input, select, textarea` stretched to its width | Its fields are stretched (`im-input`, `im-select`, `im-textarea`); a checkbox and a radio keep their 16px |
+| `im-path` | `im-file-location` (`fileWorkspace`) for the location of a file, `im-path-field` (`pathField`) for a path the person types or picks; a muted line of text is `im-muted` with `im-truncate`. The class was a muted one-line path of 300px, hidden under 850, and nothing in the package wrote it |
 | A `select.im-select` that the browser autofills, losing its chevron | Nothing to do: it keeps its chevron |
 
 ### The tiling workspace
@@ -806,7 +816,7 @@ In TypeScript a tone outside its set is a type error; from plain JavaScript it i
 | `im-content-drawer` | The class is the drawer's again, but the modal side panel it named is gone, and `openDialogDrawer` writes it: remove it from your markup. A panel for the selected object is `inspector(shell).open(content, opener?)`; an app-owned `dialog` beside live panels is `openDialogDrawer(dialog)`, not modal; the attribute that hid a covered drawer is `data-im-covered`, which the layer stack sets. A form that must block the window while it saves is a dialog instead: `openFormDialog`, locked while it writes, or `createContentDialog` with `canDismiss` |
 | `im-sectioned-drawer` | `inspector(shell).open(content, opener?)`; its sections, one under the other, are `im-section`, with 16px between two. A form that must block the window while it saves is a dialog, as above |
 | `im-padded-drawer` | `inspector(shell).open(content, opener?)`, or a dialog for a form that must block the window while it saves, as above |
-| `createContentDialog(shell, options).show(markup, 'drawer')` | `show(markup)`. The second argument is gone: a dialog is always the centred one. To open a side panel, use the inspector |
+| `createContentDialog(shell, options).show(markup, 'drawer')` | `show(markup)`. The second argument is gone: a dialog is always the centred one. For details beside the panels, use the inspector; for content the app owns that stays beside live panels, `openDialogDrawer` |
 | `dialog.im-content-dialog.im-native-controls` with a section heading | `dialog.im-content-dialog` with a section heading, which `uiPart('dialog')` writes |
 | A content dialog taller than the window, opened scrolled down to its first control (a Close button under a long text) | `openContentDialog` and `createContentDialog` open it at its top, with the focus on the dialog. A control that must take the focus when it opens carries `autofocus`: it takes it, as before |
 | `formHeaderHtml(title, subtitle, locked, id)`, its close button named `Close` with no tooltip | `formHeaderHtml(title, subtitle, locked, id, closeLabel)`: `closeLabel` (default `Close`) is the close button's `aria-label` and its `title`. An app in another language passes its word |

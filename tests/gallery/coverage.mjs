@@ -23,9 +23,7 @@ const APPS = ['xiox', 'mukade', 'shinatama', 'muro', 'daodan'];
  * They are to be removed from css/ (and added to the mapping table) once the rewrite of css/ is merged; until then the
  * test tolerates them and prints them.
  */
-export const UNUSED_PENDING_REMOVAL = new Map([
-  ['im-path', 'css/content.css: a muted one-line path of 300px, hidden under 850. Nothing writes it: the path of a file is im-file-location (fileWorkspace), of a field im-path-field (pathField).'],
-]);
+export const UNUSED_PENDING_REMOVAL = new Map([]);
 
 /**
  * Classes that are on an element only while something runs, which this test does not drive, each with its reason. A

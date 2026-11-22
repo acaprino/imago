@@ -64,6 +64,7 @@ export const REMOVED = [
   { old: 'im-seg--choice', kind: 'class', now: 'im-seg alone, as segmentedControl writes it' },
   { old: 'im-switch-knob', kind: 'class', now: 'nothing: im-switch draws its thumb; switchHtml writes an empty button' },
   { old: 'data-im-checked', kind: 'attribute', now: 'a span.im-check with role="checkbox" and aria-checked in the mark of a picker' },
+  { old: 'im-path', kind: 'class', now: 'im-file-location (fileWorkspace) for the location of a file, im-path-field (pathField) for a path the person types or picks; a muted line of text is im-muted with im-truncate' },
   // Messages, loading, empty and steps
   { old: 'bannerHtml', kind: 'export', now: 'noteHtml({ icon, title, message, items, actionsHtml, tone }), in the panel or page it is about' },
   { old: 'BannerOptions', kind: 'export', now: 'NoteOptions' },

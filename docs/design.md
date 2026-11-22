@@ -164,7 +164,9 @@ no second layout for a page, a document or a workbench.
 - **Sidebar**: the list of the app's objects (threads, rooms, categories, projects). Muro has none.
 - **Inspector**: the details or the form of the selected object. It replaces today's right drawers
   in Shinatama and Muro and Xiox's bottom detail box. It pushes the content; it never covers it at
-  1000px or more. It is the only side panel, 300 wide, or 360 when the app asks for the wide one, the top of the range.
+  1000px or more. It is the only panel for the selected object, 300 wide, or 360 when the app asks for the wide one, the top
+  of the range. (A drawer, not modal, also exists: a layer for content the app owns that stays beside live panels, not a
+  second inspector; see [design-file.md](design-file.md), "Surfaces: which one for what".)
 - **Action bar**: at most one primary action per window, at the right, with its key on the button.
 - Breakpoints (Shinatama's own), as ranges of the window's own width: under 1000 the inspector covers the
   content as a drawer; from 620 to under 850 the sidebar is a 56px rail of icons, each with a tooltip and a
@@ -414,8 +416,9 @@ and what replaces each, are in the table "Moving from 0.1.4" of [using-imago.md]
   file. The proposal is `reference/proposal.html`; the link to it named a file that is not there.
 - **2026-11-21, one frame.** Versions 0.1.2 to 0.1.4 added three frames beside the shell, made for Muro, Shinatama and
   Daodan, with their own sidebars, side panels and toolbars, and the design file did not name them. Muro followed them to
-  the letter and still broke the design. The seven regions are the only frame; the inspector is the only side panel, not
-  modal, and a form that must block the window while it saves is a dialog. Every breakpoint follows the shell, at 1000,
+  the letter and still broke the design. The seven regions are the only frame; the inspector is the only panel for the
+  selected object, not modal, and a form that must block the window while it saves is a dialog (a drawer, not modal, is
+  for content the app owns beside live panels, and never blocks). Every breakpoint follows the shell, at 1000,
   850 and 620.
 - **2026-11-21, one control for one need.** The package had two drawings of the checkbox and the radio (one on ARIA
   elements, one with the browser's own), three of the segmented control, three messages, four loading states and three

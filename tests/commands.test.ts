@@ -365,6 +365,59 @@ test('attach still runs a command under a menu or a sheet, which are not modal',
   assert.deepEqual(pressK(), { runs: 1, prevented: 1 });
 });
 
+// Presses a key on a registry that binds `keys` to a command; says whether it ran and whether the key was cancelled.
+const pressBound = (keys: string, event: KeyEventLike, open: LayerKind[] = []) => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('app', keys, { run: () => void runs++ }));
+  const target = fakeTarget();
+  const detach = registry.attach(target);
+  const pops = open.map(openLayer);
+  let prevented = 0;
+  target.dispatch('keydown', { ...event, preventDefault: () => void prevented++ });
+  pops.forEach((pop) => pop());
+  detach();
+  return { runs, prevented };
+};
+
+test('attach does not run a command bound to a key that types or moves while a menu or a sheet is open (a menu open, `h` opens no Hop)', () => {
+  for (const kind of ['menu', 'sheet'] as const) {
+    assert.deepEqual(pressBound('h', press('h'), [kind]), { runs: 0, prevented: 0 }, `${kind}: a letter`);
+    assert.deepEqual(pressBound('Shift+?', press('?', { shiftKey: true }), [kind]), { runs: 0, prevented: 0 }, `${kind}: Shift and a character`);
+    assert.deepEqual(pressBound('Delete', press('Delete'), [kind]), { runs: 0, prevented: 0 }, `${kind}: Delete`);
+    assert.deepEqual(pressBound('ArrowDown', press('ArrowDown'), [kind]), { runs: 0, prevented: 0 }, `${kind}: an arrow`);
+  }
+  assert.deepEqual(pressBound('h', press('h'), ['dialog', 'menu']), { runs: 0, prevented: 0 }, 'a menu over a dialog');
+});
+
+test('the same keys run when no menu or sheet is open, and under a drawer, which leaves the panels live', () => {
+  assert.deepEqual(pressBound('h', press('h')), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressBound('h', press('h'), ['drawer']), { runs: 1, prevented: 1 });
+});
+
+test('a menu or a sheet leaves the keys that never type: Ctrl or Alt chords, Escape and F1 to F24 still run', () => {
+  assert.deepEqual(pressBound('Ctrl+K', press('k', { ctrlKey: true }), ['menu']), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressBound('Alt+H', press('h', { altKey: true }), ['sheet']), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressBound('F2', press('F2'), ['menu']), { runs: 1, prevented: 1 });
+  assert.deepEqual(pressBound('Escape', press('Escape'), ['sheet']), { runs: 1, prevented: 1 });
+});
+
+test('a command bound to a plain key runs again once the menu has closed, and runUnderModal does not bring it back under a menu', () => {
+  const registry = createRegistry();
+  let runs = 0;
+  registry.register(command('hop', 'h', { run: () => void runs++ }));
+  const target = fakeTarget();
+  registry.attach(target, { runUnderModal: true });
+  const key = () => target.dispatch('keydown', { ...press('h'), preventDefault: () => {} });
+
+  const close = openLayer('menu');
+  key();
+  assert.equal(runs, 0, 'the menu owns the key');
+  close();
+  key();
+  assert.equal(runs, 1);
+});
+
 test('attach runs commands again once the modal layer has closed', () => {
   const registry = createRegistry();
   let runs = 0;
