@@ -244,10 +244,13 @@
     color var(--im-t-fast) var(--im-ease);
 }
 
-/* The label: a long one gets an ellipsis, not a taller or wider button. */
+/* The label: a long one gets an ellipsis, not a taller or wider button. Its line box is the font's own (`normal`), not the
+   button's `/1`: the label clips what it overflows, and a line of one em is shorter than the glyphs' descenders. The
+   button has its own height, so this changes no size, and the text stays centred. */
 .im-btn > span:not(.im-spinner) {
   min-width: 0;
   overflow: hidden;
+  line-height: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
