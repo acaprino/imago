@@ -173,7 +173,9 @@ function jsxOf(source) {
     first += starts.length;
     const code = chunk.text.split('');
     for (const str of strings) {
-      if (str.template || str.at === undefined) continue;
+      // A string of markup (`'<div class="im-brand">' + html`) is read as a string already, and joined to what is built
+      // around it it is not a brand: only the values of attributes (a class never holds a `<` or a `>`) are put back.
+      if (str.template || str.at === undefined || /[<>]/.test(str.text)) continue;
       for (let k = 0; k < str.text.length; k++) code[str.at + 1 + k] = str.text[k];
     }
     // `className={'im-mark'}` is `className="im-mark"`: the braces hold only a string.
@@ -293,12 +295,10 @@ export function brandMark(source) {
   const findings = brandImageOption(source);
   // The strings and the page, then the JSX: a brand in a string is read in both, and said once.
   const pieces = [...markupOf(source).map((piece) => ({ ...piece, jsx: false })), ...jsxOf(source).map((piece) => ({ ...piece, jsx: true }))];
-  const said = new Set();
+  /** @type {Finding[]} */
+  const fromPieces = [];
   const add = (/** @type {Finding} */ finding) => {
-    const key = `${finding.line}|${finding.message.startsWith('im-brand-image') ? 'image' : 'brand'}`;
-    if (said.has(key)) return;
-    said.add(key);
-    findings.push(finding);
+    if (!fromPieces.some((said) => said.line === finding.line && said.message === finding.message)) fromPieces.push(finding);
   };
   for (const piece of pieces) {
     /** @type {[number, number][]} */
@@ -316,6 +316,13 @@ export function brandMark(source) {
       if (brands.some(([from, to]) => at >= from && at < to)) continue;
       add({ file: source.file, line: lineAt(piece.text, at, piece.line), rule: RULE, message: `im-brand-image is removed: ${SHAPE}` });
     }
+  }
+  // The class im-brand-image seen as a string, and again as the class of the brand that holds it (JSX): the brand's
+  // finding says it, so the line has one.
+  const stray = (/** @type {Finding} */ finding) => finding.message.startsWith('im-brand-image');
+  for (const finding of fromPieces) {
+    if (stray(finding) && fromPieces.some((other) => other.line === finding.line && !stray(other))) continue;
+    findings.push(finding);
   }
   return findings.sort((a, b) => a.line - b.line);
 }

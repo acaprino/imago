@@ -112,6 +112,13 @@ describe('brand-mark', () => {
     assert.deepEqual(found(tsx, 'src/bar.tsx'), ['1 brand-mark']);
   });
 
+  test('markup built by concatenation is no brand in a file that can hold JSX either: only the attribute values of JSX are put back', () => {
+    const built = "const brand = '<div class=\"im-brand\">' + markHtml + '</div>';\n";
+    for (const file of ['src/brand.tsx', 'src/brand.jsx', 'src/brand.js', 'src/brand.mjs', 'src/brand.ts']) assert.deepEqual(found(built, file), [], file);
+    const jsx = "export const Bar = () => <div className=\"im-brand\">{markup}</div>;\n";
+    assert.deepEqual(found(jsx, 'src/Bar.tsx'), [], 'a child built at run time');
+  });
+
   test('judges the capital of the mark without the locale of the machine', () => {
     const brand = written('Istanbul');
     const original = String.prototype.toLocaleUpperCase;
