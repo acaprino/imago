@@ -109,7 +109,8 @@ writes `data-kind` on a line from the `kind` it is given.
 
 The details and the form of the selected node or connection go in the shell's inspector (`inspector(shell).open`).
 `graphInspector(label)` makes a panel inside the editor's stage (`im-editor-inspector`) instead, and Shinatama's team map
-also puts its saved arrangements in one (with `im-editor-popup`): it is a second side panel, which the package still
-exports and no new editor uses. An editor does not use it: the form of what is selected
-goes in the shell's inspector, the only side panel, and a short choice tied to a control (the saved arrangements) in a
+also puts its saved arrangements in one (with `im-editor-popup`): it is a second panel for the selected object, which the
+package still exports and no new editor uses. An editor does not use it: the form of what is selected
+goes in the shell's inspector, the only panel for the selected object (a drawer, not modal, is for content the app owns
+beside live panels, not for a node's form), and a short choice tied to a control (the saved arrangements) in a
 sheet (`openSheet`) ([design-file.md](design-file.md), "Surfaces: which one for what").

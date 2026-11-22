@@ -57,7 +57,7 @@ instead of strings.
 A part takes further roles by name, never by class: `uiTraits(node, ...traits)` adds layout roles (`stack`, `row`,
 `scroll`, `bounded`, `grow`, `truncate`, and `overlay`, `im-overlay`, a panel over the whole of its positioned host, its parts in a column), list roles
 (`choiceList`, `summaryList`, `conversation`) and the dialog role `fileDialog`. The regions of the window are not
-roles: they are the frame's (`shellFrameHtml`), and the side panel is the inspector. The `UiTrait` type lists every
+roles: they are the frame's (`shellFrameHtml`), and the panel for the selected object is the inspector. The `UiTrait` type lists every
 role, and `UI_TRAITS` the classes that draw it. `uiTone(node, tone)` puts a text in a `UiTone`, `ok`, `warn` or `err`, and `null`
 gives it its own colour back; the words still say the state. `uiEmphasis(button, emphasis)` makes a button the `primary`
 action or the armed `danger` one, and `null` makes it plain again. The app keeps its own classes for its own hooks;
