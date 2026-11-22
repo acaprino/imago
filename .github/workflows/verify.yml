@@ -171,6 +171,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The restored target holds the previous commit's program: a build that fails must not leave it to be kept as this commit's.
+      - name: Remove the previous build's files
+        run: Remove-Item target/debug/imago-demo.exe -Force -ErrorAction SilentlyContinue
+
       - name: Build the demo app
         run: npm run demo:build
 
