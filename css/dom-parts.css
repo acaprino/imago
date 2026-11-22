@@ -18,3 +18,18 @@
 /* A panel over the whole of its positioned host (uiTraits 'overlay'), its parts in a column. */
 .im-overlay { position: absolute; inset: 0; z-index: 8; }
 .im-overlay:not([hidden]) { display: flex; flex-direction: column; }
+/* The text parts of uiPart (ts/ui/dom-parts.ts), each drawn from the type tokens. The container gives the space: no part has a margin. */
+.im-title { margin: 0; font-family: var(--im-font-head); font-size: var(--im-fs-display); font-weight: 600; color: var(--im-text-hi); }
+.im-heading { margin: 0; font-family: var(--im-font-head); font-weight: 600; color: var(--im-text-hi); }
+h2.im-heading { font-size: var(--im-fs-title); }
+:is(h3, h4).im-heading { font-size: var(--im-fs-body); }
+.im-label { font-size: var(--im-fs-body); color: var(--im-text); }
+.im-strong { color: var(--im-text-hi); }
+:is(:disabled, [aria-disabled="true"]) .im-strong { color: inherit; }
+.im-term, .im-time { font-size: var(--im-fs-meta); color: var(--im-muted); }
+.im-time { font-variant-numeric: tabular-nums; }
+/* A group of controls: a column, its legend a section title. */
+.im-fieldset { display: grid; gap: var(--im-s-2); margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+.im-legend { margin-block-end: var(--im-s-2); padding: 0; font-family: var(--im-font-head); font-size: var(--im-fs-title); font-weight: 600; color: var(--im-text-hi); }
+.im-ordered-list, .im-navigation, .im-navigation :is(ul, ol) { display: grid; gap: var(--im-s-1); margin: 0; padding: 0; list-style: none; }
+.im-disclosure-title { font-family: var(--im-font-head); font-size: var(--im-fs-body); color: var(--im-text-hi); border-radius: var(--im-r-control); }

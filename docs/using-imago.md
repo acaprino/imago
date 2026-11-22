@@ -100,8 +100,12 @@ sidebar sets `data-im-sidebar="off"` and writes none.
       <button type="button" role="tab" class="im-tab" aria-selected="true">First view</button>
       <button type="button" role="tab" class="im-tab" aria-selected="false">Settings</button>
     </nav>
+    <div class="im-titlebar-tools" role="group" aria-label="Panels"><!-- optional: the window's panel openers -->
+      <button type="button" class="im-btn im-btn--ghost im-btn--sm" aria-pressed="false">Sessions</button>
+    </div>
     <button type="button" class="im-btn im-btn--ghost im-btn--sm im-views-menu" aria-haspopup="menu" aria-expanded="false">Views…chevron icon</button>
     <span class="im-spacer" data-tauri-drag-region></span>
+    <button type="button" class="im-btn im-btn--primary im-btn--sm im-titlebar-action"><!-- optional: the window's one primary action -->…plus icon<span>New session</span></button>
     <button type="button" class="im-titlebar-command" aria-label="Commands">…<b>Commands</b><kbd class="im-key">Ctrl K</kbd></button>
     <div class="im-window-buttons">
       <button type="button" class="im-window-button" data-im-window="minimize" aria-label="Minimize window" title="Minimize">…</button>
@@ -163,6 +167,23 @@ write fewer parts of it ([inspection.md](inspection.md) says which). Notes:
   of its views from it (`openMenu`, each tab an item with `checked`), or its user cannot change view in a narrow window
   (500 is the minimum). In the same way a sidebar needs its toggle: `sidebarDrawer` does nothing without the
   `im-sidebar-toggle` button (`titlebarHtml`'s `sidebarToggle`), and under 620 the sidebar can then not be opened.
+- The title bar's tools and action are written by `titlebarHtml` (the calls and their options are in
+  [html-composition.md](html-composition.md)):
+
+  ```ts
+  titlebarHtml({
+    brand: { name: 'Shinatama' }, navigationHtml, views: { label: 'Views', action: 'views' },
+    tools: [{ label: 'Sessions', action: 'tool', id: 'sessions' }, { label: 'Overview', action: 'tool', id: 'overview', pressed: true }],
+    toolsLabel: 'Panels', action: { label: 'New session', action: 'new', icon: 'plus' }, windowControls: true,
+  });
+  ```
+
+  The tools are ghost buttons, not tabs: they have no `role="tab"` and no `aria-selected`, and `aria-pressed` only when
+  `pressed` is a boolean. The app wires them as it wires the Views button: from 1000 wide they are in the bar and answer
+  `data-action="tool"` with their `data-id`; under 1000 they are not, so the app lists them in the menu it opens from
+  `.im-views-menu` (`openMenu`, an item with `checked` for each tool that is a toggle, run as the tool would be), and the Views
+  button is shown from 620 to 1000 as well, when the bar has tools. A window has one primary action, in the action slot or
+  in `im-actions`, never both. The ghost option of the buttons is `ghost: true` (`buttonHtml`, `uiButton`), `im-btn--ghost`.
 - The sample is the gallery's markup. `titlebarHtml` writes the command button as its label and its key cap, with no icon
   and no `b`, and the Views button as its label, with no chevron, no `aria-haspopup` and no `im-btn--sm`; the CSS steps
   of 620 (the word of the command button goes) and of 340 (the Views button is its chevron) are written for the sample's
@@ -179,6 +200,12 @@ write fewer parts of it ([inspection.md](inspection.md) says which). Notes:
   `data-im-badge`; its tone is the row's `data-im-tone`, and its `title` and its line carry the badge's word.
 - The sidebar's count and its foot are `sidebarHtml`'s `count` and `footHtml`: an `im-count` after the title and an
   `im-panel-foot` under the list, which the rail does not show.
+- A sidebar of groups writes into `rowsHtml` the head of each group, `listGroupHtml({ label, id, icon, count, fold })`,
+  and after it the group's rows in a `<div role="group" aria-labelledby="…">` with the head's `id`. `fold` makes the head a
+  button with `aria-expanded`: the app's handler on its `data-action` shows or hides the rows and repaints the head with
+  the new `expanded`. In the rail the head shows its `icon` alone, so give one to every head that should be there. The
+  actions at the end of a row are `rowActionsHtml([{ label, action, icon }])`, at most two, written last in the row;
+  `data-im-cat` is used as "Which things take a colour" in [design-file.md](design-file.md) says.
 - Tauri starts a window drag only when the pressed element itself carries `data-tauri-drag-region`, and nothing in
   `css/` changes what a child does with the pointer. Put the attribute on each element that should drag: the title
   bar, the spacer, and the brand with everything inside it (`im-brand`, `im-mark`, `im-wordmark`), as `titlebarHtml`
@@ -310,7 +337,7 @@ The calls an app makes itself. `mountApp` (section 6) makes several of them for 
 | `confirm(shell, options)` | A dialog for a decision. Resolves `true` on the confirming button, `false` on Cancel or Escape. `options` is a `ConfirmOptions`, `{ title, body, confirm, cancel, danger? }`; `danger` makes the confirming button the filled danger button |
 | `openFormDialog(shell, options)`, `openContentDialog(shell, dialog, options)`, `createContentDialog(shell, options)` | The other dialogs: a form the package lays out, and a `dialog` element the app owns. See [native-forms.md](native-forms.md) |
 | `notify(shell, text, options)` | A notice. `options` is a `NoticeOptions`, `{ tone?: 'err', action?: { label, run }, timeoutMs?, errorWord?, dismissLabel? }`. A plain notice goes after `timeoutMs` (6000) and a new one replaces it; an error stays until it is dismissed, up to three at once. Returns the function that closes it. `clearNotices(shell)` removes every notice and its timer when the app unmounts |
-| `inspector(shell)` | The inspector of the shell, an `Inspector`: `open(content, opener?)`, `push(content, opener?)` (a detail view over the current one; closing it returns to the one under it, with its fields, its scroll and its guard), `close()`, `isOpen()`, and `guard(isDirty, ask)`, which asks once before the content is closed or replaced while it has unsaved changes. `content` is one element, or a fragment whose children are an `im-panel-header`, an `im-panel-body` and an `im-panel-foot`, laid out as a panel whose body scrolls. Calls for the same shell share one controller |
+| `inspector(shell)` | The inspector of the shell, an `Inspector`: `open(content, opener?)`, `push(content, opener?)` (a detail view over the current one; closing it returns to the one under it, with its fields, its scroll and its guard), `close()`, `isOpen()`, and `guard(isDirty, ask)`, which asks once before the content is closed or replaced while it has unsaved changes. `content` is one element, or a fragment whose children are an `im-panel-header`, an `im-panel-body` and an `im-panel-foot`, laid out as a panel whose body scrolls. A view of the inspector writes its body as `im-panel-body im-panel-body--inset`, which pads it as its header and foot are padded (the composition of a side view is in [design-file.md](design-file.md), "Panels and helpers"): without the modifier the body touches the inspector's edges. Calls for the same shell share one controller |
 | `openPalette(shell, registry, options)` | The command palette over the shell: every available command of the registry, filtered as the user types. `options` is a `PaletteOptions`, `{ placeholder?, empty? }`. `mountApp` binds it to `Ctrl+K` |
 | `roving(container, options)` | One tab stop for a list, and the arrows, Home and End inside it. `options` is a `RovingOptions`, `{ item, orientation, onSelect? }` (`Orientation`: `vertical` or `horizontal`). This is how an app's own list takes the common keys. `nextIndex(current, count, key, orientation)` is its arithmetic, for a `NavKey`. The arrows stop at the first and the last item (they do not wrap); the tabs of `stepNavigationHtml`, which `nextStepId` moves, wrap round. Bind it to an element a repaint keeps (`.im-titlebar`, the sidebar's `.im-list`), with `item` for what is inside: `renderShellFrame` replaces what is inside the title bar, and a handler bound to its `.im-tabs` is lost at the first repaint |
 | `regions(shell)` | `F6` and `Shift+F6` move focus between the sidebar, the content and the inspector. `mountApp` calls it |
@@ -663,7 +690,7 @@ of this table it can match, with what replaces it (rule `removed-name`).
 | `data-im-compact` on `im-resizable-nav` | The rail: `sidebarCollapse` folds the sidebar and sets `data-im-sidebar-collapsed` on the shell |
 | `im-nav-rail` | The sidebar's rail: every row carries an `im-rail-item` (its icon, or an `im-avatar` with its initials) |
 | `im-nav-entry` | `im-row` with `role="option"` in the sidebar's `im-list`; the current one has `aria-selected="true"` |
-| `im-nav-line` | `im-row`, with `im-row-text` (`im-row-title`, `im-row-sub`) and `im-row-meta`; the row's other actions go in a menu (`openMenu`) or in the inspector |
+| `im-nav-line` | `im-row`, with `im-row-text` (`im-row-title`, `im-row-sub`) and `im-row-meta`; the row's quick actions are at most two in `im-row-actions` (`rowActionsHtml`), the others go in a menu (`openMenu`) or in the inspector |
 | `im-nav-mark` | `data-im-cat="1"` to `"8"` on the row (its 3px mark) and on its rail item, or an `im-dot` with `data-im-cat` in the row; a mark that turns on and off is an `im-check` |
 | `im-nav-detail` | `im-row-sub`, the row's second line; more goes in the inspector |
 | `im-signal` | `im-dot` with `data-im-tone`, and the word for the state beside it |

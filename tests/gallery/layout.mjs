@@ -432,7 +432,7 @@ async function builtFrame(page, look) {
 /** A tools row and a foot, as a sidebar may have: shown while it is whole, not in a rail. */
 const addSidebarParts = (page) =>
   page.evaluate(() => {
-    const sidebar = document.querySelector('.im-sidebar');
+    const sidebar = document.querySelector('#g-window .im-sidebar');
     for (const part of ['tools', 'foot']) {
       const el = document.createElement('div');
       el.className = `im-panel-${part}`;
@@ -441,15 +441,15 @@ const addSidebarParts = (page) =>
       sidebar.append(el);
     }
   });
-const removeSidebarParts = (page) => page.evaluate(() => document.querySelectorAll('.im-sidebar [data-test]').forEach((el) => el.remove()));
+const removeSidebarParts = (page) => page.evaluate(() => document.querySelectorAll('#g-window .im-sidebar [data-test]').forEach((el) => el.remove()));
 
 // What the sidebar is in the rail, whether the width forced it (840) or the user folded it (1160): the rail's width, an
 // icon, the initials or the row's check for every row, the row's text kept for the accessible name (the name is longer
 // than the title tooltip, which is what a name falls back to when the text is gone), the selection told by weight or
 // ring as well as by fill, and neither tools nor foot.
 async function checkRail(page, where, widths, label) {
-  near((await box(page, '.im-sidebar')).width, widths.rail, where(`${label}: rail width`));
-  const rows = page.locator('.im-sidebar [role="option"]');
+  near((await box(page, '#g-window .im-sidebar')).width, widths.rail, where(`${label}: rail width`));
+  const rows = page.locator('#g-window .im-sidebar [role="option"]');
   const total = await rows.count();
   assert.ok(total >= 3, where(`${label}: the sidebar has rows`));
   for (let i = 0; i < total; i++) {
@@ -467,7 +467,7 @@ async function checkRail(page, where, widths, label) {
     else assert.ok(((await item.innerText()) ?? '').trim(), where(`${label}: row ${i} shows its initials`));
   }
   const looks = await page.evaluate(() =>
-    [...document.querySelectorAll('.im-sidebar [role="option"]')].map((row) => {
+    [...document.querySelectorAll('#g-window .im-sidebar [role="option"]')].map((row) => {
       const item = row.querySelector('.im-rail-item');
       const style = getComputedStyle(item);
       const svg = item.querySelector('svg');
@@ -484,7 +484,7 @@ async function checkRail(page, where, widths, label) {
   // A sidebar whose selected row has no icon: an icon row, selected for the test, is drawn heavier too.
   if (!looks.some((l) => l.on && l.kind === 'icon') && looks.some((l) => l.kind === 'icon')) {
     const strokes = await page.evaluate(() => {
-      const row = [...document.querySelectorAll('.im-sidebar [role="option"]')].find((el) => el.querySelector(':scope > .im-rail-item svg'));
+      const row = [...document.querySelectorAll('#g-window .im-sidebar [role="option"]')].find((el) => el.querySelector(':scope > .im-rail-item svg'));
       const stroke = () => parseFloat(getComputedStyle(row.querySelector(':scope > .im-rail-item svg')).strokeWidth);
       const was = row.getAttribute('aria-selected');
       const rest = stroke();
@@ -497,11 +497,11 @@ async function checkRail(page, where, widths, label) {
   }
   assert.ok(looks.filter((l) => l.kind === 'icon').every((l) => l.box === 20), where(`${label}: an icon sits in the rail's 20px box`));
   assert.ok(looks.filter((l) => l.kind === 'check').every((l) => l.box === 16), where(`${label}: a check keeps its own 16px box`));
-  const rail = await box(page, '.im-sidebar');
-  const centres = await page.evaluate(() => [...document.querySelectorAll('.im-sidebar .im-rail-item')].filter((el) => el.getClientRects().length).map((el) => el.getBoundingClientRect()).map((r) => r.left + r.width / 2));
+  const rail = await box(page, '#g-window .im-sidebar');
+  const centres = await page.evaluate(() => [...document.querySelectorAll('#g-window .im-sidebar .im-rail-item')].filter((el) => el.getClientRects().length).map((el) => el.getBoundingClientRect()).map((r) => r.left + r.width / 2));
   assert.ok(centres.length >= 3 && centres.every((x) => Math.abs(x - (rail.left + rail.width / 2)) <= 1.5), where(`${label}: the rail items are centred in the rail`));
   // a tools row and a foot in the sidebar are not for a rail: the sidebar's own foot neither
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-sidebar > .im-panel-foot')].some((el) => el.getClientRects().length > 0)), false, where(`${label}: the sidebar's foot is not in the rail`));
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('#g-window .im-sidebar > .im-panel-foot')].some((el) => el.getClientRects().length > 0)), false, where(`${label}: the sidebar's foot is not in the rail`));
   await addSidebarParts(page);
   assert.equal(await visible(page, '[data-test="tools"]'), false, where(`${label}: no tools row`));
   assert.equal(await visible(page, '[data-test="foot"]'), false, where(`${label}: no foot`));
@@ -511,7 +511,7 @@ async function checkRail(page, where, widths, label) {
 // ---------- the rows of the sidebar: a check in the rail, a categorical colour, a badge ----------
 
 /** The checks that are the rail items of the sidebar's rows: how each is drawn, and whether a press at its centre reaches it. */
-const railChecks = (page) => page.evaluate(() => [...document.querySelectorAll('.im-sidebar [role="option"] > .im-check.im-rail-item')].map((check) => {
+const railChecks = (page) => page.evaluate(() => [...document.querySelectorAll('#g-window .im-sidebar [role="option"] > .im-check.im-rail-item')].map((check) => {
   check.scrollIntoView({ block: 'center' }); // clear of the gallery's sticky bar
   const s = getComputedStyle(check);
   const mark = getComputedStyle(check, '::after');
@@ -533,7 +533,7 @@ async function checksInRail(page, where, at) {
   const rail = await railChecks(page);
   assert.deepEqual(rail.map((check) => check.drawn), whole.map((check) => check.drawn), where('a check is drawn in the rail as in the whole sidebar'));
   assert.ok(rail.every((check) => check.hit), where('a press in the rail reaches the check'));
-  const check = page.locator('.im-sidebar [role="option"] > .im-check.im-rail-item[aria-checked="false"]').first();
+  const check = page.locator('#g-window .im-sidebar [role="option"] > .im-check.im-rail-item[aria-checked="false"]').first();
   await check.evaluate((el) => { el.dataset.test = 'tick'; el.addEventListener('click', () => el.setAttribute('aria-checked', 'true'), { once: true }); });
   await page.locator('[data-test="tick"]').click();
   assert.equal(await page.locator('[data-test="tick"]').getAttribute('aria-checked'), 'true', where('a check in the rail is ticked by a press'));
@@ -650,7 +650,7 @@ async function railRingPixels(page, where, at) {
   await at(840, 'shinatama');
   for (const title of ['PowerShell', 'Dunning emails']) {
     const geometry = await page.evaluate((title) => {
-      const rows = [...document.querySelectorAll('.im-sidebar .im-row')];
+      const rows = [...document.querySelectorAll('#g-window .im-sidebar .im-row')];
       for (const one of rows) { one.setAttribute('aria-selected', String(one.title.startsWith(title))); one.removeAttribute('data-im-force'); }
       const row = rows.find((one) => one.title.startsWith(title));
       row.setAttribute('data-im-force', 'focus');
@@ -725,7 +725,7 @@ async function checkRailMarks(page, where, at) {
 }
 
 /** What a categorised row of the sidebar draws: the mark at its start, and its rail item's fill. */
-const categories = (page) => page.evaluate(() => [...document.querySelectorAll('.im-sidebar .im-row[data-im-cat]')].map((row) => {
+const categories = (page) => page.evaluate(() => [...document.querySelectorAll('#g-window .im-sidebar .im-row[data-im-cat]')].map((row) => {
   const n = row.dataset.imCat;
   const probe = (value) => {
     const el = document.createElement('i');
@@ -745,14 +745,14 @@ const categories = (page) => page.evaluate(() => [...document.querySelectorAll('
 
 /** The selection of the sidebar's selected row, as the eye sees it: its fill, its inset line, the weight of its title. */
 const selection = (page) => page.evaluate(() => {
-  const row = document.querySelector('.im-sidebar .im-row[aria-selected="true"]');
+  const row = document.querySelector('#g-window .im-sidebar .im-row[aria-selected="true"]');
   const style = getComputedStyle(row);
   return { fill: style.backgroundColor, line: style.boxShadow, weight: getComputedStyle(row.querySelector('.im-row-title')).fontWeight };
 });
 
 /** The badge of the badged row: the dot at the row's end, the dot at its rail item's corner, and the colours of the tones. */
 const badge = (page) => page.evaluate(() => {
-  const row = document.querySelector('.im-sidebar .im-row[data-im-badge]');
+  const row = document.querySelector('#g-window .im-sidebar .im-row[data-im-badge]');
   const item = row.querySelector(':scope > .im-rail-item');
   const probe = (value) => {
     const el = document.createElement('i');
@@ -790,17 +790,17 @@ async function categoryAndBadge(page, where, at) {
   // a category.
   const marked = await selection(page);
   const n = await page.evaluate(() => {
-    const row = document.querySelector('.im-sidebar .im-row[aria-selected="true"]');
+    const row = document.querySelector('#g-window .im-sidebar .im-row[aria-selected="true"]');
     const value = row.dataset.imCat;
     delete row.dataset.imCat;
     return value;
   });
   assert.ok(n, where('the selected thread has a category'));
   assert.deepEqual(marked, await selection(page), where('a categorised row is selected as any row is'));
-  await page.evaluate((value) => { document.querySelector('.im-sidebar .im-row[aria-selected="true"]').dataset.imCat = value; }, n);
+  await page.evaluate((value) => { document.querySelector('#g-window .im-sidebar .im-row[aria-selected="true"]').dataset.imCat = value; }, n);
 
   // The badge: at the row's end, after its meta, in the tone of the row (warn by default), and said in the row's words.
-  const badged = page.locator('.im-sidebar .im-row[data-im-badge]');
+  const badged = page.locator('#g-window .im-sidebar .im-row[data-im-badge]');
   assert.equal(await badged.count(), 1, where('one thread waits for the person'));
   const name = /option "([^"]+)"/.exec(await badged.ariaSnapshot())?.[1] ?? '';
   assert.match(name, /needs you/, where(`the badged row says what its badge says (${name})`));
@@ -887,7 +887,7 @@ export default async (page, url) => {
       assert.equal(await token(page, '--im-w-inspector-wide'), 360, where('--im-w-inspector-wide, the top of the range'));
 
       // 1160: the sidebar, the docked inspector and a content of 420 or more, as the tokens say.
-      const side = await box(page, '.im-sidebar');
+      const side = await box(page, '#g-window .im-sidebar');
       const content = await box(page, '.im-content');
       const inspector = await box(page, '.im-inspector');
       near(side.width, widths.sidebar, where('sidebar width at 1160'));
@@ -896,9 +896,9 @@ export default async (page, url) => {
       assert.ok(content.width >= 420, where(`content width at 1160 is ${content.width}`));
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 1160'));
       // The whole sidebar has its count in the header and its foot under the list.
-      assert.equal(await visible(page, '.im-sidebar > .im-panel-header > .im-count'), true, where('the sidebar counts its rows in its header'));
-      assert.equal(await visible(page, '.im-sidebar > .im-panel-foot'), true, where('the sidebar has its foot under its list'));
-      assert.ok((await box(page, '.im-sidebar > .im-panel-foot')).top >= (await box(page, '.im-sidebar > .im-list')).bottom - 0.5, where('the foot is under the list'));
+      assert.equal(await visible(page, '#g-window .im-sidebar > .im-panel-header > .im-count'), true, where('the sidebar counts its rows in its header'));
+      assert.equal(await visible(page, '#g-window .im-sidebar > .im-panel-foot'), true, where('the sidebar has its foot under its list'));
+      assert.ok((await box(page, '#g-window .im-sidebar > .im-panel-foot')).top >= (await box(page, '#g-window .im-sidebar > .im-list')).bottom - 0.5, where('the foot is under the list'));
 
       // The breakpoints, pinned on both sides of each edge: 1000/999, 850/849, 620/619.
       await at(1000);
@@ -911,28 +911,28 @@ export default async (page, url) => {
       assert.ok(over.left > covered.left && over.left < covered.right, where('inspector overlaps the content at 999'));
 
       await at(850);
-      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('sidebar width at 850'));
+      near((await box(page, '#g-window .im-sidebar')).width, widths.sidebar, where('sidebar width at 850'));
       await at(849);
-      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 849'));
+      near((await box(page, '#g-window .im-sidebar')).width, widths.rail, where('rail width at 849'));
 
       await at(620);
-      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 620'));
+      near((await box(page, '#g-window .im-sidebar')).width, widths.rail, where('rail width at 620'));
       assert.equal(await visible(page, '.im-titlebar .im-tabs'), true, where('title-bar tabs at 620'));
       assert.equal(await visible(page, '.im-views-menu'), false, where('no Views menu at 620'));
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 620'));
       await at(619);
-      assert.equal(await visible(page, '.im-sidebar'), false, where('sidebar hidden at 619'));
+      assert.equal(await visible(page, '#g-window .im-sidebar'), false, where('sidebar hidden at 619'));
       assert.equal(await visible(page, '.im-titlebar .im-tabs'), false, where('title-bar tabs hidden at 619'));
       assert.equal(await visible(page, '.im-views-menu'), true, where('Views menu at 619'));
       assert.equal(await visible(page, '.im-sidebar-toggle'), true, where('sidebar button at 619'));
       // No fractional width falls between two blocks: the ranges are half-open.
       await at(619.5);
-      assert.equal(await visible(page, '.im-sidebar'), false, where('sidebar hidden at 619.5'));
+      assert.equal(await visible(page, '#g-window .im-sidebar'), false, where('sidebar hidden at 619.5'));
       assert.equal(await visible(page, '.im-titlebar .im-tabs'), false, where('title-bar tabs hidden at 619.5'));
       assert.equal(await visible(page, '.im-views-menu'), true, where('Views menu at 619.5'));
       assert.equal(await visible(page, '.im-sidebar-toggle'), true, where('sidebar button at 619.5'));
       await at(849.5);
-      near((await box(page, '.im-sidebar')).width, widths.rail, where('rail width at 849.5'));
+      near((await box(page, '#g-window .im-sidebar')).width, widths.rail, where('rail width at 849.5'));
       await at(999.5);
       const half = await box(page, '.im-content');
       const halfInspector = await box(page, '.im-inspector');
@@ -949,7 +949,7 @@ export default async (page, url) => {
       // 840: the sidebar is a 56px rail of icons; each row has a title and a name made of its text.
       await at(840);
       await checkRail(page, where, widths, 'forced rail at 840');
-      assert.equal(await visible(page, '.im-sidebar .im-panel-header'), false, where('the forced rail has no header'));
+      assert.equal(await visible(page, '#g-window .im-sidebar .im-panel-header'), false, where('the forced rail has no header'));
       assert.equal(await visible(page, '.im-views-menu'), false, where('no Views menu at 840'));
       assert.equal(await visible(page, '.im-sidebar-toggle'), false, where('no sidebar button at 840'));
       await checksInRail(page, where, at);
@@ -959,17 +959,17 @@ export default async (page, url) => {
 
       // 610: no sidebar, no tabs in the title bar, the Views menu instead (a menu button that is closed).
       await at(610);
-      assert.equal(await visible(page, '.im-sidebar'), false, where('sidebar hidden at 610'));
+      assert.equal(await visible(page, '#g-window .im-sidebar'), false, where('sidebar hidden at 610'));
       assert.equal(await visible(page, '.im-titlebar .im-tabs'), false, where('title-bar tabs hidden at 610'));
       assert.equal(await visible(page, '.im-views-menu'), true, where('Views menu shown at 610'));
-      assert.equal(await page.locator('.im-views-menu').getAttribute('aria-haspopup'), 'menu', where('Views menu announces a menu'));
-      assert.equal(await page.locator('.im-views-menu').getAttribute('aria-expanded'), 'false', where('Views menu is closed at rest'));
+      assert.equal(await page.locator('#g-window .im-views-menu').getAttribute('aria-haspopup'), 'menu', where('Views menu announces a menu'));
+      assert.equal(await page.locator('#g-window .im-views-menu').getAttribute('aria-expanded'), 'false', where('Views menu is closed at rest'));
 
       // 610: the sidebar's objects stay reachable. A title-bar button, named after the sidebar and a tab stop right
       // after the brand, opens it over the content; the keyboard and the pointer close it again.
-      const toggle = page.locator('.im-sidebar-toggle');
-      const sidebarName = await page.locator('.im-sidebar').getAttribute('aria-label');
-      const sidebarId = await page.locator('.im-sidebar').getAttribute('id');
+      const toggle = page.locator('#g-window .im-sidebar-toggle');
+      const sidebarName = await page.locator('#g-window .im-sidebar').getAttribute('aria-label');
+      const sidebarId = await page.locator('#g-window .im-sidebar').getAttribute('id');
       assert.equal(await visible(page, '.im-sidebar-toggle'), true, where('sidebar button at 610'));
       assert.equal(await toggle.getAttribute('aria-label'), sidebarName, where('the sidebar button is named after the sidebar'));
       assert.equal(await toggle.getAttribute('title'), sidebarName, where('the sidebar button has the same title'));
@@ -977,10 +977,10 @@ export default async (page, url) => {
       assert.ok(sidebarId && (await toggle.getAttribute('aria-controls')) === sidebarId, where('the sidebar button controls the sidebar'));
       const focused = () => page.evaluate(() => {
         const el = document.activeElement;
-        return { toggle: !!el?.classList.contains('im-sidebar-toggle'), inSidebar: !!el?.closest('.im-sidebar'), role: el?.getAttribute('role') ?? null };
+        return { toggle: !!el?.classList.contains('im-sidebar-toggle'), inSidebar: !!el?.closest('#g-window .im-sidebar'), role: el?.getAttribute('role') ?? null };
       });
       const closed = async (label) => {
-        assert.equal(await visible(page, '.im-sidebar'), false, where(`sidebar hidden ${label}`));
+        assert.equal(await visible(page, '#g-window .im-sidebar'), false, where(`sidebar hidden ${label}`));
         assert.equal(await toggle.getAttribute('aria-expanded'), 'false', where(`sidebar button closed ${label}`));
         assert.equal(await page.locator('#g-window > .im-shell').getAttribute('data-im-sidebar-open'), null, where(`shell not open ${label}`));
       };
@@ -991,11 +991,11 @@ export default async (page, url) => {
       await page.keyboard.press('Tab');
       assert.equal((await focused()).toggle, true, where('then the sidebar button, the first control of the title bar'));
       await page.keyboard.press('Enter');
-      assert.equal(await visible(page, '.im-sidebar'), true, where('Enter opens the sidebar'));
+      assert.equal(await visible(page, '#g-window .im-sidebar'), true, where('Enter opens the sidebar'));
       assert.equal(await toggle.getAttribute('aria-expanded'), 'true', where('the button says it is open'));
       const now = await focused();
       assert.ok(now.inSidebar && now.role === 'option', where('focus is on a row of the sidebar'));
-      const drawn = await box(page, '.im-sidebar');
+      const drawn = await box(page, '#g-window .im-sidebar');
       const shellBox = await box(page, '.im-shell');
       const barBox = await box(page, '.im-titlebar');
       near(drawn.left, shellBox.left, where('the sidebar starts at the left edge'));
@@ -1004,14 +1004,14 @@ export default async (page, url) => {
       const contentOpen = await box(page, '.im-content');
       near(contentOpen.left, contentBefore.left, where('the content does not move when the sidebar opens'));
       near(contentOpen.width, contentBefore.width, where('the content does not shrink when the sidebar opens'));
-      const onTop = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.im-sidebar'), { x: drawn.left + drawn.width / 2, y: drawn.top + drawn.height / 2 });
+      const onTop = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('#g-window .im-sidebar'), { x: drawn.left + drawn.width / 2, y: drawn.top + drawn.height / 2 });
       assert.equal(onTop, true, where('the sidebar is above the content'));
       await page.keyboard.press('Escape');
       await closed('after Escape');
       assert.equal((await focused()).toggle, true, where('Escape gives focus back to the button'));
 
       await toggle.click();
-      assert.equal(await visible(page, '.im-sidebar'), true, where('a click opens the sidebar'));
+      assert.equal(await visible(page, '#g-window .im-sidebar'), true, where('a click opens the sidebar'));
       await toggle.click();
       await closed('after a second click');
       assert.equal((await focused()).toggle, true, where('a second click leaves focus on the button'));
@@ -1033,9 +1033,9 @@ export default async (page, url) => {
       // With the focus in the content, a press on the button opens it again; Escape closes it from anywhere,
       // here with the focus on the page because the press landed on the sidebar's own chrome.
       await toggle.click();
-      assert.equal(await visible(page, '.im-sidebar'), true, where('the button reopens the sidebar'));
-      await page.locator('.im-sidebar .im-panel-title').click();
-      assert.equal(await visible(page, '.im-sidebar'), true, where('a press inside the sidebar keeps it open'));
+      assert.equal(await visible(page, '#g-window .im-sidebar'), true, where('the button reopens the sidebar'));
+      await page.locator('#g-window .im-sidebar .im-panel-title').click();
+      assert.equal(await visible(page, '#g-window .im-sidebar'), true, where('a press inside the sidebar keeps it open'));
       assert.equal(await page.evaluate(() => document.activeElement === document.body), true, where('the focus is on the page'));
       await page.keyboard.press('Escape');
       await closed('after Escape with the focus on the page');
@@ -1052,7 +1052,7 @@ export default async (page, url) => {
         document.querySelector('.im-shell').append(layer);
       });
       await page.click('#test-layer-item');
-      assert.equal(await visible(page, '.im-sidebar'), true, where('a press in a floating layer keeps the sidebar open'));
+      assert.equal(await visible(page, '#g-window .im-sidebar'), true, where('a press in a floating layer keeps the sidebar open'));
       assert.equal(await page.evaluate(() => document.activeElement?.id), 'test-layer-item', where('the layer keeps the focus'));
       await page.evaluate(() => document.getElementById('test-layer').remove());
       await page.keyboard.press('Escape');
@@ -1064,11 +1064,11 @@ export default async (page, url) => {
       assert.equal(await toggle.getAttribute('aria-expanded'), 'false', where('widening clears the open state'));
 
       // A width change never leaves the focus on what it hides: the sidebar when narrowing, the button when widening.
-      await page.focus('.im-sidebar [role="option"][tabindex="0"]');
+      await page.focus('#g-window .im-sidebar [role="option"][tabindex="0"]');
       await at(610);
       await page.waitForFunction(() => document.activeElement?.classList.contains('im-sidebar-toggle'));
       await at(700);
-      await page.waitForFunction(() => !!document.activeElement?.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0');
+      await page.waitForFunction(() => !!document.activeElement?.closest('#g-window .im-sidebar') && document.activeElement.getAttribute('tabindex') === '0');
       await at(610);
 
       // A narrowing the observer has not delivered yet must not take the focus from a drawer opened in the meantime:
@@ -1077,10 +1077,10 @@ export default async (page, url) => {
       await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))); // the observer has seen the wide shell
       const raced = await page.evaluate(async () => {
         window.__imago.set({ width: 610 });
-        document.querySelector('.im-sidebar-toggle').click(); // what Enter on the focused button does
+        document.querySelector('#g-window .im-sidebar-toggle').click(); // what Enter on the focused button does
         await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))); // the observer now delivers the narrowing
         const el = document.activeElement;
-        return { row: !!el?.closest('.im-sidebar') && el.getAttribute('role') === 'option', open: document.querySelector('.im-shell').dataset.imSidebarOpen };
+        return { row: !!el?.closest('#g-window .im-sidebar') && el.getAttribute('role') === 'option', open: document.querySelector('.im-shell').dataset.imSidebarOpen };
       });
       assert.deepEqual(raced, { row: true, open: 'true' }, where('a late narrowing does not take the focus from the open drawer'));
       await page.keyboard.press('Escape');
@@ -1092,7 +1092,7 @@ export default async (page, url) => {
       assert.equal(await fold.getAttribute('aria-expanded'), 'true', where('the sidebar is unfolded at rest'));
       const foldName = await fold.getAttribute('aria-label');
       assert.ok(foldName && (await fold.getAttribute('title')) === foldName, where('the fold button has a name and the same title'));
-      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('unfolded sidebar width'));
+      near((await box(page, '#g-window .im-sidebar')).width, widths.sidebar, where('unfolded sidebar width'));
       const unfolded = await box(page, '.im-content');
       await addSidebarParts(page); // shown while unfolded, so that their absence in the rail means something
       assert.equal(await visible(page, '[data-test="tools"]'), true, where('a tools row shows in the unfolded sidebar'));
@@ -1106,7 +1106,7 @@ export default async (page, url) => {
       assert.ok(unfoldName && unfoldName !== foldName, where('the button is renamed when folded'));
       assert.equal(await fold.getAttribute('title'), unfoldName, where('the title follows the name when folded'));
       assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('im-sidebar-collapse')), true, where('focus stays on the fold button'));
-      assert.equal(await visible(page, '.im-sidebar .im-panel-title'), false, where('only the button is left of the header'));
+      assert.equal(await visible(page, '#g-window .im-sidebar .im-panel-title'), false, where('only the button is left of the header'));
       assert.ok((await box(page, '.im-content')).width > unfolded.width, where('the content takes the room'));
       await checkRail(page, where, widths, 'folded');
       // the header keeps the button when it sits in a group
@@ -1123,20 +1123,20 @@ export default async (page, url) => {
       // the button is gone; below 620 the drawer is the whole sidebar.
       await show(page, { app: 'mukade', look, theme, glass: false, width: 1160 });
       await checkRail(page, where, widths, 'folded after a redraw, Mukade');
-      assert.equal(await page.locator('.im-sidebar [role="option"]').nth(0).locator('.im-avatar').innerText(), 'H', where('a row without an icon shows its initials'));
-      assert.equal(await page.locator('.im-sidebar [role="option"]').nth(2).locator('svg').count(), 1, where('a row with an icon shows it (the closed room keeps its lock)'));
+      assert.equal(await page.locator('#g-window .im-sidebar [role="option"]').nth(0).locator('.im-avatar').innerText(), 'H', where('a row without an icon shows its initials'));
+      assert.equal(await page.locator('#g-window .im-sidebar [role="option"]').nth(2).locator('svg').count(), 1, where('a row with an icon shows it (the closed room keeps its lock)'));
       await at(840, 'mukade');
       assert.equal(await visible(page, '.im-sidebar-collapse'), false, where('no fold button at 840'));
       await at(610, 'mukade');
       assert.equal(await visible(page, '.im-sidebar-collapse'), false, where('no fold button at 610'));
-      await page.locator('.im-sidebar-toggle').click();
-      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('the drawer shows the whole sidebar although it is folded'));
-      assert.equal(await visible(page, '.im-sidebar .im-panel-title'), true, where('the drawer has its title'));
-      assert.equal(await visible(page, '.im-sidebar .im-row-sub'), true, where('the drawer shows the rows whole'));
+      await page.locator('#g-window .im-sidebar-toggle').click();
+      near((await box(page, '#g-window .im-sidebar')).width, widths.sidebar, where('the drawer shows the whole sidebar although it is folded'));
+      assert.equal(await visible(page, '#g-window .im-sidebar .im-panel-title'), true, where('the drawer has its title'));
+      assert.equal(await visible(page, '#g-window .im-sidebar .im-row-sub'), true, where('the drawer shows the rows whole'));
       await page.keyboard.press('Escape');
       await at(1160, 'mukade');
       await page.locator('.im-sidebar-collapse').click();
-      near((await box(page, '.im-sidebar')).width, widths.sidebar, where('unfolded again'));
+      near((await box(page, '#g-window .im-sidebar')).width, widths.sidebar, where('unfolded again'));
       assert.equal(await page.locator('#g-window > .im-shell').getAttribute('data-im-sidebar-collapsed'), null, where('the shell is not folded'));
       assert.equal(await page.locator('.im-sidebar-collapse').getAttribute('aria-label'), foldName, where('the button has its first name back'));
       assert.equal(await page.locator('.im-sidebar-collapse').getAttribute('title'), foldName, where('and its first title'));
@@ -1145,7 +1145,7 @@ export default async (page, url) => {
       // drawer's button when the sidebar is off screen.
       await page.focus('.im-sidebar-collapse');
       await at(800, 'mukade');
-      await page.waitForFunction(() => !!document.activeElement?.closest('.im-sidebar') && document.activeElement.getAttribute('tabindex') === '0', null, { timeout: 5000 });
+      await page.waitForFunction(() => !!document.activeElement?.closest('#g-window .im-sidebar') && document.activeElement.getAttribute('tabindex') === '0', null, { timeout: 5000 });
       await at(1160, 'mukade');
       await page.focus('.im-sidebar-collapse');
       await at(610, 'mukade');
@@ -1201,8 +1201,8 @@ export default async (page, url) => {
 
       // Without a roving tab stop (and with the fold button off screen) the drawer puts focus on the sidebar itself.
       await at(610, 'mukade');
-      await page.evaluate(() => document.querySelectorAll('.im-sidebar [tabindex]').forEach((el) => el.removeAttribute('tabindex')));
-      await page.locator('.im-sidebar-toggle').click();
+      await page.evaluate(() => document.querySelectorAll('#g-window .im-sidebar [tabindex]').forEach((el) => el.removeAttribute('tabindex')));
+      await page.locator('#g-window .im-sidebar-toggle').click();
       assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('im-sidebar')), true, where('with no tab stop in it, focus goes to the sidebar, not to a hidden button'));
       await page.keyboard.press('Escape');
 
@@ -1210,8 +1210,8 @@ export default async (page, url) => {
       for (const width of [1160, 990, 840, 610, 500]) {
         await at(width, 'muro');
         assert.equal(await page.locator('#g-window > .im-shell').getAttribute('data-im-sidebar'), 'off');
-        assert.equal(await visible(page, '.im-sidebar'), false, where(`Muro has no sidebar at ${width}`));
-        assert.equal(await page.locator('.im-sidebar-toggle').count(), 0, where(`Muro has no sidebar button at ${width}`));
+        assert.equal(await visible(page, '#g-window .im-sidebar'), false, where(`Muro has no sidebar at ${width}`));
+        assert.equal(await page.locator('#g-window .im-sidebar-toggle').count(), 0, where(`Muro has no sidebar button at ${width}`));
         assert.equal(await page.locator('.im-sidebar-collapse').count(), 0, where(`Muro has no fold button at ${width}`));
         const offset = (await box(page, '.im-content')).left - (await box(page, '.im-work')).left;
         assert.ok(offset >= 0 && offset <= 2.5, where(`Muro's content starts at its work area at ${width} (offset ${offset})`));
@@ -1234,7 +1234,7 @@ export default async (page, url) => {
           await at(width, app);
           assert.equal(await visible(page, '.im-titlebar .im-mark'), true, where(`${app} mark at ${width}`));
           assert.equal(await visible(page, '.im-titlebar .im-wordmark'), true, where(`${app} name at ${width}`));
-          assert.equal((await page.locator('.im-titlebar .im-wordmark').innerText()).trim().toLowerCase(), NAMES[app].toLowerCase(), where(`${app} name text at ${width}`));
+          assert.equal((await page.locator('#g-window .im-titlebar .im-wordmark').innerText()).trim().toLowerCase(), NAMES[app].toLowerCase(), where(`${app} name text at ${width}`));
           assert.ok((await box(page, '.im-titlebar .im-wordmark')).right <= (await box(page, '.im-titlebar')).right, where(`${app} name is inside the title bar at ${width}`));
           if (width === 1160) assert.deepEqual(await stale(page), [], where(`${app}: no element of the gallery carries a removed class`));
         }
@@ -1264,7 +1264,7 @@ export default async (page, url) => {
       if (look === 'smooth') {
         const paint = (selector) => page.evaluate((s) => getComputedStyle(document.querySelector(s)).backgroundColor, selector);
         assert.equal(await paint('.im-titlebar'), 'rgba(0, 0, 0, 0)', where('the title bar paints nothing'));
-        assert.equal(await paint('.im-sidebar'), 'rgba(0, 0, 0, 0)', where('the sidebar paints nothing'));
+        assert.equal(await paint('#g-window .im-sidebar'), 'rgba(0, 0, 0, 0)', where('the sidebar paints nothing'));
         assert.notEqual(await paint('.im-work'), 'rgba(0, 0, 0, 0)', where('the work area is one sheet'));
         assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.im-work')).borderTopLeftRadius), '10px', where('sheet corner'));
       }
@@ -1302,9 +1302,9 @@ export default async (page, url) => {
               client: el.clientWidth,
               shell: rect(el),
               primary: rect(document.querySelector('.im-actions .im-btn--primary')),
-              views: rect(document.querySelector('.im-views-menu')),
-              toggle: document.querySelector('.im-sidebar-toggle') ? rect(document.querySelector('.im-sidebar-toggle')) : null,
-              windowButtons: [...document.querySelectorAll('.im-window-button')].map((button) => ({ name: button.dataset.imWindow, ...rect(button) })),
+              views: rect(document.querySelector('#g-window .im-views-menu')),
+              toggle: document.querySelector('#g-window .im-sidebar-toggle') ? rect(document.querySelector('#g-window .im-sidebar-toggle')) : null,
+              windowButtons: [...document.querySelectorAll('#g-window .im-window-button')].map((button) => ({ name: button.dataset.imWindow, ...rect(button) })),
             };
           });
           const label = `${look} ${app} at ${width}, zoom 2`;

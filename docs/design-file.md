@@ -173,7 +173,8 @@ hex for each app, clipped into sRGB.
 The accent goes on four things only: the one primary action, the selection mark, the focus ring, and data. Not on
 bars, not on every button, not on navigation backgrounds. ONI also takes the accent as the text of short labels. On
 data, the accent is the tone `accent` of a chip, a dot or a summary, and the class `im-text-accent` on a short label or a
-key figure. A secondary action is a plain `im-btn`: there is no accent button.
+key figure. A secondary action is a plain `im-btn`: there is no accent button. Where it repeats per item or sits in a row,
+it is `im-btn--ghost` or `im-icon-btn`, as the border rule under More rules says.
 
 ### Status
 
@@ -221,6 +222,24 @@ style itself.
 - A categorical colour is never the only thing that tells the things apart: each is named in words. As text it stands
   only on a ground of its own (the chip's).
 
+#### Which things take a colour
+
+On the items of a list, `data-im-cat` marks the thing the user must find again somewhere else, and nothing more.
+
+- The colour belongs to a thing that appears in more than one place (a thread whose terminal is in a tile, a project whose
+  rows are in several lists). Items that are alike, in a list that is the only place they are, take none, and so does a
+  group head (`im-list-group`), which is a label.
+- The same value goes everywhere the thing is: on its `im-row`, on its `im-rail-item` and, as an `im-dot` with
+  `data-im-cat`, in its tab.
+- The app assigns the value once, when the thing is made, and keeps it with the thing. It is never worked out from the
+  thing's place in a list, so sorting, filtering or closing another thing never changes it.
+- There are eight tints. Beyond the eighth the name tells the things apart: the app repeats a tint and does not
+  invent a ninth.
+- An app skips the tint equal to its own accent hue or within 15 degrees of it, so the selection and the focus ring are
+  never taken for a category: `--im-cat-2` (hue 75) in Xiox, `--im-cat-4` (170) in Muro, `--im-cat-7` (300) in Mukade
+  and `--im-cat-8` (345, ten degrees from 355) in Shinatama. Daodan's hue, 235, is 20 degrees from `--im-cat-5` and from
+  `--im-cat-6`, so it skips none. An app has seven tints, Daodan eight.
+
 ### The badge of a row
 
 `data-im-badge` on an `im-row` says the row wants something: a dot at the end of the row, and on the corner of its
@@ -248,6 +267,20 @@ Every size of text is one of five:
 | `--im-fs-body` | 13 | Body text, values, controls |
 | `--im-fs-title` | 14 | A panel title, a section title |
 | `--im-fs-display` | 18 | A page title, a dialog title |
+
+Each role has one size and one colour, in every app:
+
+| Role | Size | Colour |
+|---|---|---|
+| Page title, dialog title | `--im-fs-display` | `--im-text-hi` |
+| Panel title, section title | `--im-fs-title` | `--im-text-hi` |
+| Text, values, controls, the title of a row | `--im-fs-body` | `--im-text` |
+| The subtitle of a row, a hint, the label of a group, the tab of a tile (`im-tile-tab`) and the label of a pane (`im-pane-focus`) | `--im-fs-meta` | `--im-text-2`, or `--im-muted` for what is least important |
+| Counts, key caps | `--im-fs-micro` | `--im-muted` |
+
+A title, a label and a tab are in the head font (`--im-font-head`). The monospace font stays for code, paths, IDs and key
+caps: a tab or a pane label is chrome, so it is set in the head font, on one line, and a label longer than its room ends
+in an ellipsis with the whole label as the element's `title`.
 
 Numbers use tabular figures (`im-num`) and are right-aligned in columns. Smooth writes sentence case; ONI writes
 capitals with letter spacing on titles, tabs and buttons, through `--im-case` and `--im-track`. An app never sets a case
@@ -296,6 +329,19 @@ and colour an app writes is a token (rules `literal-font-size`, `literal-space`,
 are not findings, the 1px hairline and the 2px ring among them, are listed with their reasons in
 `scripts/check/allowed.mjs`.
 
+The space between two things follows how they relate, not where they are. The nearer the relation, the smaller the space:
+
+| Relation | Space |
+|---|---|
+| A label and its control; a title and its subtitle | `--im-s-1` |
+| The items of one group | `--im-s-2` |
+| The fields of a form; the groups inside a section | `--im-s-3` |
+| The sections in a side panel; the inner margin of a panel | `--im-s-4` |
+| The sections in a page; the margin of the page | `--im-s-5` |
+
+A space between two things is never smaller than the one that relates them more closely: the gap between two sections is
+larger than the gap between two fields inside one.
+
 ## Layout
 
 ### One frame
@@ -316,12 +362,12 @@ what replaces it.
 
 | Region | Class | What it is |
 |---|---|---|
-| Title bar | `im-titlebar` | The brand (`im-brand`, see "The mark" below), then the view tabs, the command button (`im-titlebar-command`, `Ctrl+K`), the three window buttons (`im-window-buttons`). It always names the product, in ONI too. A status that opens something (`statusButtonHtml`, `titlebarHtml`'s `statusHtml`) may stand in it, before the command button; the last result of the window is the status row's |
+| Title bar | `im-titlebar` | The brand (`im-brand`, see "The mark" below), then the view tabs, the window's tools (`im-titlebar-tools`), the window's one primary action (`im-titlebar-action`), the command button (`im-titlebar-command`, `Ctrl+K`), the three window buttons (`im-window-buttons`). It always names the product, in ONI too. A status that opens something (`statusButtonHtml`, `titlebarHtml`'s `statusHtml`) may stand in it, before the command button; the last result of the window is the status row's. The tools and the action are described under "The title bar's tools and action" below |
 | Status row | `im-status` | The last result as a chip, a summary (`im-status-text`), and info at the right (`im-status-end`) |
 | Sidebar | `im-sidebar` | The list of the app's objects: threads, rooms, categories, projects. An app without one (Muro) sets `data-im-sidebar="off"` on the shell and writes none |
 | Content | `im-content` | What the app is for, a panel whose body scrolls. The content of this region is the app's own |
 | Inspector | `im-inspector` | The details or the form of the selected object. Not modal; the rest of the window keeps working. It is closed with the `hidden` attribute, and the content takes its room |
-| Action bar | `im-actions` | At most one primary action per window, at the right, with its key on the button |
+| Action bar | `im-actions` | At most one primary action per window, at the right, with its key on the button. A window that puts its primary action in the title bar's action slot has no primary button here |
 | Footer | `im-footer` | Service state (`im-footer-text`), counts, and the keys that work now (`im-footer-keys`) |
 
 The window is `im-shell`. Its body is `im-body` (the sidebar and the work area `im-work`, which holds the status row,
@@ -330,6 +376,31 @@ skip link `im-shell-skip-link`. It measures its own width (a container query), s
 not the screen. `shellFrameHtml` writes the frame, `renderShellFrame` repaints it, and the React `Shell` and `Workbench`
 write the same regions with a smaller set of parts: the React sidebar has no fold button, no count and no foot, and the
 content panel has no header, tools or foot ([inspection.md](inspection.md) says what each writes).
+
+### The title bar's tools and action
+
+The window's controls live in the title bar, not in a row of tools above the content. Two kinds of control stand there
+besides the view tabs and the command button, and they are different things:
+
+- **Tools** (`im-titlebar-tools`, a group written by `titlebarHtml`'s `tools`, right after the view tabs): the openers of
+  the window's panels, such as Sessions, Overview, Files and Leftovers in Shinatama. A tool is a quiet text button, a small
+  `im-btn--ghost` (`im-btn--sm`). A tool is **not a tab**: it opens a panel beside the view, it does not change the view, so it
+  has no `role="tab"` and no `aria-selected`. A tool that is a toggle, because the panel it opens is shown or not, says so
+  with `aria-pressed`, written only when the app gives `pressed` a boolean; a tool that only opens something has no state. A
+  tool pressed is drawn as every pressed button is (the selection fill and the bar), and a tool is as quiet as a ghost button
+  is at rest: no fill, and in Smooth no edge (ONI draws the soft edge it gives every ghost button).
+- **The action** (`im-titlebar-action`, written by `titlebarHtml`'s `action`, at the right, before the status and the command
+  button): the window's one primary action, a small primary button with an icon and a label ("New session", with the icon
+  `plus`). A window has **at most one primary action, in `im-actions` or in this slot, never both**; this amends the rule
+  that put it only in the action bar.
+
+From 1000 wide the tools are in the bar. Under 1000 they are not: the app lists them in its Views menu, each an item with
+`checked` (`openMenu`, from `.im-views-menu`), and the Views button, which only stands for the view tabs under 620 otherwise,
+is shown from then on whenever the bar has tools, so that they stay reachable by pointer and keyboard. The action keeps its
+label to 620 and under it only its icon, the label staying its accessible name, as the Views menu's does; an action with no
+icon keeps its label. Down to 250 CSS pixels the three window buttons, the sidebar button, the Views menu and the action are
+never pushed out of the shell: under 340 a bar with an action also closes its gaps and gives its status button's room to the
+action (the status row still shows the last result).
 
 The shell fills the window: put it directly in `<body>`, or, when the app renders into a root of its own (React's
 `<div id="app">`), give that root, and every element between the body and the shell, the class `im-root`. Without it
@@ -355,14 +426,19 @@ the shell is as tall as its title bar, and `checkShellFill` says so on the conso
 | Window width | Layout |
 |---|---|
 | 1000 or more | The inspector is docked at the right and pushes the content. It never covers the content. A wide inspector (`data-im-inspector="wide"`) beside the 232 sidebar keeps the drawer up to 1012 |
-| Under 1000 | The inspector covers the right edge of the content as a drawer |
+| Under 1000 | The inspector covers the right edge of the content as a drawer. The title bar's tools are not in the bar: the app lists them in its Views menu, whose button is shown when the bar has tools |
 | 850 or more | The full sidebar, 232px. A button in its header (`im-sidebar-collapse`, written by `sidebarHtml`'s `collapse`) folds it into the rail; the user's choice is kept by the app |
 | 620 to under 850 | The sidebar is the 56px rail: one icon per row (`im-rail-item`), each with a tooltip and an accessible name. The width forces it; the user's choice does not matter |
-| Under 620 | The sidebar is not in the layout. A title-bar button (`im-sidebar-toggle`) opens it as an overlay from the left edge. The view tabs become one "Views" menu (`im-views-menu`). The command button shrinks to its icon |
+| Under 850 | A title bar with tools also has no view tabs: they are in the Views menu with the tools |
+| Under 620 | The sidebar is not in the layout. A title-bar button (`im-sidebar-toggle`) opens it as an overlay from the left edge. The view tabs become one "Views" menu (`im-views-menu`). The command button shrinks to its icon, and the title bar's action to its icon, with its label as its name |
 | Under 450 | The command button is gone from the title bar (`Ctrl+K` still opens the palette) and the gaps of the bar close up. The name of the product gives way before the window buttons: it ends in an ellipsis |
-| Under 340 | The mark and the name are gone, and the Views menu is its chevron alone (its label stays its accessible name) |
+| Under 340 | The mark and the name are gone, and the Views menu is its chevron alone (its label stays its accessible name). A bar with an action also closes its gaps up again and leaves out its status button |
 
-Three of these steps need the app's own wiring, which `mountApp` does not do. The sidebar toggle opens nothing unless
+Four of these steps need the app's own wiring, which `mountApp` does not do. The tools of the title bar, hidden under 1000, are
+in the app's Views menu as `checked` items (a tool that is a toggle is checked while its panel is shown), and the Views
+button opens that menu from 620 to 1000 as well as under 620, when the bar has tools; and a bar with tools folds its view tabs
+into that menu under 850 instead of 620 (its action, status and command button leave the tabs no room), so the menu then
+lists the views and the tools. The sidebar toggle opens nothing unless
 the title bar has it: an app with a sidebar writes `sidebarToggle` in `titlebarHtml`, or the button in its own markup, and
 under 620 it cannot otherwise open the sidebar. The Views button does nothing by itself: the app opens a menu of its views
 from `.im-views-menu` (`openMenu`, each tab an item with `checked`), and under 620, where the tabs are hidden, that menu is
@@ -387,6 +463,10 @@ the whole sidebar and in the rail, ticked the same in both, with a 24 by 24 targ
 is blank in the rail. A row keeps its text in the rail, hidden, as its accessible name, and its `title` is its tooltip.
 Every row of the rail is as tall as a two-line row. The header's count and the sidebar's foot are not shown in the rail.
 
+The head of a group (`im-list-group`) shows in the rail its icon alone, which is its first child, centred; its count and its
+chevron are not drawn, and its label stays, hidden, as its accessible name, with its `title` as the tooltip. A head
+without an icon is not drawn there. The actions of a row (`im-row-actions`) are not drawn in the rail.
+
 ### Panels and helpers
 
 A panel (`im-panel`) has a header (`im-panel-header`, with `im-panel-title` and, after it, an `im-count` or a subtitle
@@ -395,6 +475,22 @@ content region and the inspector are panels; a sidebar is a panel whose body is 
 (a column), `im-cluster` (a wrapping row), `im-split` (two groups at the two ends of a row), `im-scroll` (a region that
 scrolls), `im-spacer` (the space that pushes what follows to the end). A surface (`im-surface`) is one of four
 materials, set with `data-im-surface`: `ground`, `sheet`, `dense`, `float`.
+
+#### The composition of a side view
+
+A side view is the content of the inspector, of a sheet or of a drawer: one panel made of three parts, in this order. The
+header (`im-panel-header`) is fixed and carries the title (`im-panel-title`) and, at its end, a chip and the close
+button. The body (`im-panel-body im-panel-body--inset`) scrolls between the header and the foot. The foot
+(`im-panel-foot`) carries the actions at the right, Cancel then Save, and is fixed as the header is. The plain
+`im-panel-body` has no padding, because it is also the body of the content region and of the sidebar, whose page, list or
+table gives the space: a side view opts in with `im-panel-body--inset`. The modifier pads the body `--im-s-3` above and
+`--im-pane-pad` at the sides and below, which is the padding of the header and of the foot, so that the left edge of every
+line of the body is the left edge of the title. A list (`im-list`), a table (`im-table`) or facts (`im-facts`) that are
+children of the body, or of one of its sections, run to the edge and take `--im-pane-pad` in their rows and cells; a form
+(`im-form`) loses the padding it has on a page. `im-section` keeps `--im-s-4` between two, and the first
+`im-section-heading` has no margin above it: the padding is its space. Nothing comes nearer to the edge of the panel than
+`--im-pane-pad`, at the inspector's two widths, 300 and 360. The gallery's row "The composition of a side view" draws it,
+and `tests/gallery/side-view.mjs` measures it in both looks and both themes.
 
 ## Controls
 
@@ -421,6 +517,8 @@ keys); **outside a form it is the ARIA element** whose state the app sets.
 | Row | `im-row`, `im-row-text`, `im-row-title`, `im-row-sub`, `im-row-meta`; one line `im-row--1`, or two | `role="option"` with `aria-selected` in a listbox; a native `button` with `aria-pressed` in the React binding (`im-row--detail`), in a list that is a `role="group"`, not a listbox | |
 | Table | `im-table`, `im-cell-title`, `im-cell-sub`, `im-col-check` (a column of checks), `im-num` | A row with `aria-selected` | |
 | Facts | `im-facts`, `im-facts-code` | A name and its value; the value is content and can be selected; a code value in the code font | |
+| List group | `im-list-group`, holding an icon, its label and an `im-count`, in that order | A `div` with no role, or a `button` with `aria-expanded` when it folds (`listGroupHtml`) | |
+| Row actions | `im-row-actions`, at the end of an `im-row` | At most two `im-icon-btn` (`rowActionsHtml`) | |
 | Tree | `im-tree`, `im-tree-item`, `im-tree-chevron`, `im-tree-label` | `role="tree"`, items `role="treeitem"` with `aria-level` and `aria-expanded` | |
 | Avatar | `im-avatar` | Initials; decorative, its name beside it | |
 | Status chip | `im-chip` with `data-im-tone` | | |
@@ -435,6 +533,23 @@ keys); **outside a form it is the ARIA element** whose state the app sets.
 
 An icon is `im-icon`, a 16px line drawing in the colour of its text. A text only for assistive technology is
 `im-visually-hidden`.
+
+### Groups and row actions
+
+A list of things in groups (the sidebar's threads by project) tells a group from a thing by type and by space, never by
+a row that looks like the others.
+
+- The head of a group, `im-list-group`, is a label and not a row: the meta size (`--im-fs-meta`), `--im-muted`, the head
+  font with `--im-case` and `--im-track`, `--im-s-3` above it and `--im-s-1` under it, and its text starts where a row's
+  title does. It holds an optional icon first, then its label, then an optional `im-count`. It has no role and takes no
+  `data-im-cat`. It is cut with an ellipsis and carries its whole label as its `title`.
+- A head that folds is a `button` with `aria-expanded` (`true` while the rows are shown) and a chevron at its end that
+  turns down when the group is open. A head that does not fold has no `aria-expanded` and is not a button. The rows of
+  a group go in a `role="group"` named by the head (`aria-labelledby`, the head's `id`).
+- The actions of a row, `im-row-actions`, are at the end of the row: at most two `im-icon-btn`, each with its name and its
+  tooltip. They are hidden with `visibility`, so the row never changes size, and shown while the row is hovered, holds
+  focus (itself or one of its actions) or is selected (`aria-selected="true"`). A hidden action is out of the tab order, so
+  the row takes focus first and one Tab from it reaches the first action, then the second.
 
 ### States
 
@@ -483,6 +598,18 @@ it. How far it sits from the control depends on what surrounds the control:
   zero printed as zero.
 - A switch changes at once; a checkbox waits for Save. A switch is never used inside a form with a Save button.
 - No control has a hand cursor (rule `cursor-pointer`).
+- The border is a signal, and it is spent sparingly:
+  - One primary action per window: in `im-actions`, or in the action slot of the title bar (`im-titlebar-action`). Never both.
+  - `im-btn`, with its border, only in a closing group of actions (the foot of a panel, a form or a dialog) and as the first
+    action of an empty state (`im-empty`).
+  - Every action that repeats per item, every tool of a header and every action inside a row is `im-btn--ghost` or
+    `im-icon-btn`.
+  - A destructive action in a row is a menu item with `danger`.
+  - `im-btn--danger` is outlined, never filled, and only where the destructive action is the action of its section. The
+    filled `im-btn--confirm-danger` stays the button that confirms a dialog.
+  - ONI keeps its bordered buttons. The ghost is not used in ONI until it is checked there: until then only an icon button
+    (`im-icon-btn`) stays a ghost, and a text action per item keeps its border. The one text ghost checked there is the
+    title bar's tool (`im-titlebar-tools`), which ONI draws with its soft edge (`--im-line-soft`), chamfered as its buttons are.
 
 ## Page patterns
 
@@ -753,7 +880,9 @@ Daodan's viewer, which is written in React. Its components (`Shell`, `Workbench`
 `Disclosure`) write the package's canonical classes and nothing of their own: `Shell` is `im-shell`, and `Workbench` its
 body, with the sidebar, the content region and the inspector, in a smaller set of parts than `shellFrameHtml` (no fold
 button, no count and no foot in the sidebar; no header, tools or foot in the content panel). No other app uses React. The
-props, and what the binding leaves out, are in [inspection.md](inspection.md).
+props, and what the binding leaves out, are in [inspection.md](inspection.md). The binding writes no title bar (`Shell`
+takes `titlebar` as a node of the app's), so it has no slots for the title bar's tools and action: a React app writes the bar
+with `titlebarHtml` or with the markup of [using-imago.md](using-imago.md), section 4.
 
 ## What a program checks
 
@@ -799,7 +928,7 @@ A program cannot judge these. They are part of the review of every change to an 
 
 - The confirming button of a destructive action carries the verb and the object ("Delete 8 items"), and the dialog names
   the object and the consequence.
-- At most one primary action per window, and it is not destructive without Undo or a dialog.
+- At most one primary action per window, in the action bar or in the title bar's slot and not in both, and it is not destructive without Undo or a dialog.
 - Undo is bound: the notice's button works, and so does the key the app gave it.
 - Every icon-only control has a name and a tooltip, every dot and every badge is said in words, and every category is
   named in words.

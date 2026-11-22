@@ -48,6 +48,8 @@ function attributesHtml(attributes: MarkupAttributes | undefined, reserved: read
 
 export interface ButtonMarkupOptions {
   primary?: boolean;
+  /** A quiet text button: no fill and no edge at rest (`im-btn--ghost`), for a header tool or an action repeated per item. */
+  ghost?: boolean;
   danger?: boolean;
   sm?: boolean;
   busy?: boolean;
@@ -60,7 +62,7 @@ export interface ButtonMarkupOptions {
 
 /** An action button. `data-action` and optional `data-id` are interpreted by the consuming app. */
 export function buttonHtml(label: string, action: string, options: ButtonMarkupOptions = {}): string {
-  const classes = ['im-btn', options.primary && 'im-btn--primary', options.danger && 'im-btn--danger',
+  const classes = ['im-btn', options.primary && 'im-btn--primary', options.ghost && 'im-btn--ghost', options.danger && 'im-btn--danger',
     options.sm && 'im-btn--sm', options.cls].filter(Boolean).join(' ');
   const attrs = ['type="button"', `class="${escapeHtml(classes)}"`, `data-action="${escapeHtml(action)}"`,
     options.id !== undefined ? `data-id="${escapeHtml(options.id)}"` : '',

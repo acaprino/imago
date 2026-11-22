@@ -622,6 +622,61 @@ test('titlebarHtml writes the sidebar toggle of section 4 right after the brand,
   assert.doesNotMatch(titlebarHtml({ brand: { name: 'App' } }), /im-sidebar-toggle/, 'no toggle unless it is given');
 });
 
+// ---------- the tools and the action of the title bar ----------
+
+const TOOLS = [{ label: 'Sessions', action: 'tool', id: 'sessions' }, { label: 'Overview', action: 'tool', id: 'overview', pressed: true }, { label: 'Files', action: 'tool', id: 'files', pressed: false }, { label: 'Leftovers', action: 'tool', id: 'leftovers' }];
+/** The buttons of the group of tools, as opening tags. */
+const toolTags = (html: string): string[] => /<div class="im-titlebar-tools"[^>]*>([^]*?)<\/div>/.exec(html)?.[1].match(/<button[^>]*>/g) ?? [];
+
+test('titlebarHtml writes the tools as a group of ghost buttons right after the navigation, before the Views button', () => {
+  const html = titlebarHtml({ brand: { name: 'App' }, navigationHtml: '<nav class="im-tabs"></nav>', views: { label: 'Views', action: 'views' }, tools: TOOLS, toolsLabel: 'Panels' });
+  assert.match(html, /<\/nav><div class="im-titlebar-tools" role="group" aria-label="Panels">/, 'the group follows the navigation');
+  assert.ok(html.indexOf('im-titlebar-tools') < html.indexOf('im-views-menu'), 'and comes before the Views button');
+  const tags = toolTags(html);
+  assert.equal(tags.length, 4);
+  for (const tag of tags) {
+    assert.match(tag, /class="im-btn im-btn--ghost im-btn--sm"/, 'each is a quiet text button of the small size');
+    assert.doesNotMatch(tag, /role="tab"|aria-selected|aria-current/, 'a tool is not a tab: it opens a panel, it is not a view');
+  }
+  assert.match(tags[0], /data-action="tool" data-id="sessions"/);
+  assert.doesNotMatch(tags[0], /aria-pressed/, 'a tool without pressed has no pressed state');
+  assert.match(tags[1], /aria-pressed="true"/);
+  assert.match(tags[2], /aria-pressed="false"/, 'pressed false is a toggle that is off');
+  assert.match(html, /<span>Sessions<\/span>/);
+});
+
+test('the group of tools takes its name from toolsLabel and is left out without tools', () => {
+  assert.match(titlebarHtml({ brand: { name: 'App' }, tools: TOOLS, toolsLabel: 'Panels "all"' }), /<div class="im-titlebar-tools" role="group" aria-label="Panels &quot;all&quot;">/);
+  assert.doesNotMatch(titlebarHtml({ brand: { name: 'App' } }), /im-titlebar-tools/);
+  assert.doesNotMatch(titlebarHtml({ brand: { name: 'App' }, tools: [] }), /im-titlebar-tools/, 'an empty list writes no empty group');
+});
+
+test('a tool takes pressed only as a boolean, escapes its text and its identity, and keeps its own attributes', () => {
+  const odd = { label: '<b>"x"</b>', action: '"go', id: 'i<', pressed: 'true' as unknown as boolean, attrs: { title: 'Open "it"', 'aria-pressed': 'mixed' } };
+  const html = titlebarHtml({ brand: { name: 'App' }, tools: [odd] });
+  assert.doesNotMatch(html, /<b>"x"<\/b>/);
+  assert.match(html, /<span>&lt;b&gt;&quot;x&quot;&lt;\/b&gt;<\/span>/);
+  assert.match(html, /data-action="&quot;go" data-id="i&lt;"/);
+  assert.match(html, /title="Open &quot;it&quot;"/);
+  assert.equal([...html.matchAll(/aria-pressed=/g)].length, 1, 'one aria-pressed, whatever the attributes say');
+  assert.match(html, /aria-pressed="mixed"/, 'a string is not a boolean: the tool writes none of its own and the attribute of the caller stays');
+  assert.throws(() => titlebarHtml({ brand: { name: 'App' }, tools: [{ label: 'x', action: 'x', attrs: { onclick: 'bad' } }] }), TypeError);
+});
+
+test('titlebarHtml writes the action as one primary button before the status and the command', () => {
+  const html = titlebarHtml({ brand: { name: 'App' }, tools: TOOLS, action: { label: 'New "session"', action: 'new', id: 'n<', icon: 'plus' }, statusHtml: '<i data-s></i>', commands: { label: 'Commands', action: 'cmd' }, windowControls: true });
+  const tag = /<button[^>]*im-titlebar-action[^>]*>/.exec(html)?.[0] ?? '';
+  assert.match(tag, /class="im-btn im-btn--primary im-btn--sm im-titlebar-action"/);
+  assert.match(tag, /data-action="new" data-id="n&lt;"/);
+  assert.doesNotMatch(tag, /role="tab"|aria-pressed|aria-selected/);
+  assert.match(html, /im-titlebar-action"[^>]*>(<svg[^]*?<\/svg>)<span>New &quot;session&quot;<\/span><\/button>/, 'its icon, then its label, escaped');
+  assert.equal(html.match(/im-btn--primary/g)?.length, 1, 'one primary action in the bar');
+  const at = (text: string): number => html.indexOf(text);
+  assert.ok(at('im-titlebar-tools') < at('im-spacer') && at('im-spacer') < at('im-titlebar-action') && at('im-titlebar-action') < at('<i data-s>') && at('<i data-s>') < at('im-titlebar-command') && at('im-titlebar-command') < at('im-window-buttons'), 'tools, the spacer, the action, the status, the command, the window buttons');
+  assert.doesNotMatch(titlebarHtml({ brand: { name: 'App' } }), /im-titlebar-action/, 'no action unless it is given');
+  assert.doesNotMatch(titlebarHtml({ brand: { name: 'App' }, action: { label: 'Go', action: 'go', icon: 'no-such-icon' } }), /<svg/, 'an unknown icon writes none');
+});
+
 // ---------- the mark at the top left: the initial of the name, in capitals, in the accent's square, then the name ----------
 
 /** The brand titlebarHtml writes for a name. */

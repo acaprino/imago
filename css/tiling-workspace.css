@@ -4,9 +4,10 @@
 .im-pane.im-focused { border-color: var(--im-accent-text); }
 .im-header { display: flex; flex: 0 0 30px; min-width: 0; align-items: stretch; background: var(--im-sheet); border-bottom: 1px solid var(--im-line); }
 .im-control { min-width: 24px; min-height: 28px; padding: 0 var(--im-s-2); font-size: var(--im-fs-meta); letter-spacing: .04em; flex: none; }
-.im-pane-focus { color: var(--im-muted); padding: 0 var(--im-s-2); border: 0; font: var(--im-fs-meta) var(--im-font-code); }
+/* The label of a pane and the tab of a tile are chrome, not code: the head font, one line, cut with an ellipsis (the whole label is the tab's title). */
+.im-pane-focus { color: var(--im-muted); padding: 0 var(--im-s-2); border: 0; font: var(--im-fs-meta) var(--im-font-head); text-transform: var(--im-case); letter-spacing: var(--im-track); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .im-tile-tabs { display: flex; align-items: stretch; min-width: 0; flex: 1; overflow: auto; scrollbar-width: thin; }
-.im-tile-tab { display: block; min-width: 0; max-width: 190px; text-align: left; border-top: 0; border-bottom: 0; text-overflow: ellipsis; overflow: hidden; text-transform: none; font: var(--im-fs-meta) var(--im-font-code); }
+.im-tile-tab { display: block; min-width: 0; max-width: 190px; text-align: left; border-top: 0; border-bottom: 0; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; text-transform: var(--im-case); letter-spacing: var(--im-track); font: var(--im-fs-meta) var(--im-font-head); }
 .im-tile-tab:not([aria-selected="true"]):hover { color: var(--im-text); background: var(--im-hover); }
 .im-tile-tab[aria-selected="true"] { color: var(--im-accent-text); background: var(--im-selected); box-shadow: inset 0 -2px var(--im-accent); }
 .im-tile-body { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
@@ -53,15 +54,15 @@
 .im-drop-preview { backdrop-filter: blur(3px); }
 
 /* Tab quick filter: a pane with no tab of the chosen project says so and steps back. */
-.im-tile-tabs-filtered { align-self: center; padding: 0 var(--im-s-2); color: var(--im-muted); font: var(--im-fs-meta) var(--im-font-code); white-space: nowrap; }
+.im-tile-tabs-filtered { align-self: center; padding: 0 var(--im-s-2); color: var(--im-muted); font: var(--im-fs-meta) var(--im-font-head); white-space: nowrap; }
 .im-filtered-out > .im-tile-body { opacity: .35; transition: opacity var(--im-t-base) var(--im-ease); }
 
 /* Tab drag: the tab follows the pointer, the target lights up with what the drop will do. */
 .im-dragging, .im-dragging * { cursor: grabbing !important; }
 .im-tile-tab-dragging { opacity: .45; }
-.im-drag-ghost { position: fixed; left: 0; top: 0; z-index: 50; max-width: 240px; padding: var(--im-s-1) var(--im-s-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; border: 1px solid var(--im-accent); background: var(--im-float); color: var(--im-text); font: var(--im-fs-meta) var(--im-font-code); box-shadow: 0 8px 22px var(--im-shadow); }
+.im-drag-ghost { position: fixed; left: 0; top: 0; z-index: 50; max-width: 240px; padding: var(--im-s-1) var(--im-s-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; border: 1px solid var(--im-accent); background: var(--im-float); color: var(--im-text); font: var(--im-fs-meta) var(--im-font-head); box-shadow: 0 8px 22px var(--im-shadow); }
 .im-drop-preview { display: grid; place-items: center; transition: left var(--im-t-fast) var(--im-ease), top var(--im-t-fast) var(--im-ease), width var(--im-t-fast) var(--im-ease), height var(--im-t-fast) var(--im-ease); background: color-mix(in srgb, var(--im-accent) 14%, var(--im-scrim)); }
-.im-drop-label { padding: var(--im-s-1) var(--im-s-2); background: var(--im-sheet); border: 1px solid var(--im-accent); color: var(--im-accent-text, var(--im-accent-text)); font: var(--im-fs-meta) var(--im-font-code); }
+.im-drop-label { padding: var(--im-s-1) var(--im-s-2); background: var(--im-sheet); border: 1px solid var(--im-accent); color: var(--im-accent-text, var(--im-accent-text)); font: var(--im-fs-meta) var(--im-font-head); }
 .im-drop-marker { position: absolute; z-index: 6; width: 2px; pointer-events: none; background: var(--im-accent); box-shadow: 0 0 6px var(--im-accent); }
 @media (prefers-reduced-motion: reduce) { .im-drop-preview { transition: none; } }
 .im-host :is(.im-pane, .im-tile-body, .im-control, .im-tile-splitter, .im-drop-preview, .im-drop-marker, .im-drag-ghost, .im-parking)[hidden] { display: none; }

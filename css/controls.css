@@ -56,7 +56,7 @@
      an ONI chamfered button (looks/oni.css): a clip-path cuts an outer ring   5px inside
    A segment over a native radio has its ring on the label: the radio under it is hidden. */
 
-:where(.im-btn, .im-icon-btn, .im-select, .im-check, .im-radio, .im-switch, .im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
+:where(.im-btn, .im-icon-btn, .im-select, .im-check, .im-radio, .im-switch, .im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item, button.im-list-group):focus-visible,
 :where(.im-seg > label):has(> input:focus-visible),
 [data-im-force="focus"] {
   outline: 2px solid var(--im-accent-text);
@@ -64,9 +64,9 @@
 }
 
 /* The items of a container that clips: the ring is drawn inside them. */
-:where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item):focus-visible,
+:where(.im-row, .im-tab, .im-seg > button, .im-tree-item, .im-table tbody tr, .im-menu-item, button.im-list-group):focus-visible,
 :where(.im-seg > label):has(> input:focus-visible),
-:where(.im-row, .im-tab, .im-seg > :is(button, label), .im-tree-item, .im-table tbody tr, .im-menu-item)[data-im-force="focus"] {
+:where(.im-row, .im-tab, .im-seg > :is(button, label), .im-tree-item, .im-table tbody tr, .im-menu-item, button.im-list-group)[data-im-force="focus"] {
   outline-offset: -2px;
 }
 
@@ -982,6 +982,85 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   background: var(--im-badge);
 }
 
+/* ---------- list groups and row actions ---------- */
+
+/* The head of a group of rows (im-list-group) is a label, not a row: the small head text, muted, with the space of a group
+   above it (s-3) and the space of a label under it (s-1). Its text starts where a row's does, a border and a padding in. It
+   holds an optional icon first (all the rail shows), its label, an optional count, and, when it folds, a chevron at its end.
+   A head that folds is a button with aria-expanded: the chevron turns down while the group is open, so the state is not the
+   colour. It has the row's wash for hover and press, and the second text colour on them. */
+.im-list-group {
+  display: flex;
+  align-items: center;
+  gap: var(--im-s-2);
+  box-sizing: border-box;
+  min-inline-size: 0;
+  min-block-size: max(var(--im-h-control-sm), 24px);
+  margin: var(--im-s-3) 0 var(--im-s-1);
+  padding: 0 var(--im-s-2);
+  font: 600 var(--im-fs-meta)/1.2 var(--im-font-head);
+  letter-spacing: var(--im-track);
+  text-align: start;
+  text-transform: var(--im-case);
+  color: var(--im-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--im-r-control);
+}
+
+.im-list-group > span:not(.im-count) {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.im-list-group {
+  inline-size: 100%;
+  cursor: default;
+  transition:
+    background-color var(--im-t-fast) var(--im-ease),
+    color var(--im-t-fast) var(--im-ease);
+}
+
+button.im-list-group > .im-icon:last-child {
+  flex: none;
+  margin-inline-start: auto;
+  transition: transform var(--im-t-fast) var(--im-ease);
+}
+
+button.im-list-group[aria-expanded="true"] > .im-icon:last-child { transform: rotate(90deg); }
+
+button.im-list-group:where(:not(:disabled, [aria-disabled="true"])):is(:hover, [data-im-force="hover"]) {
+  color: var(--im-text-2);
+  background: var(--im-hover);
+}
+
+button.im-list-group:where(:not(:disabled, [aria-disabled="true"])):is(:active, [data-im-force="press"]) {
+  color: var(--im-text-2);
+  background: var(--im-press);
+}
+
+/* The actions at the end of a row (im-row-actions): at most two icon buttons, 24 high, which a row of one line holds. They
+   are hidden with visibility, so the row never changes size and a hidden action is out of the tab order: the row takes
+   focus first, and while it holds it the actions are shown, one Tab from it. They are shown while the row is hovered,
+   holds focus (itself or an action) or is selected. */
+.im-row-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--im-s-1);
+  visibility: hidden;
+}
+
+.im-row-actions > .im-icon-btn {
+  inline-size: max(var(--im-h-control-sm), 24px);
+  block-size: max(var(--im-h-control-sm), 24px);
+  color: var(--im-text-2);
+}
+
+.im-row:where(:not([aria-disabled="true"])):is(:hover, :focus-within, [aria-selected="true"], [data-im-force="hover"], [data-im-force="focus"]) > .im-row-actions { visibility: visible; }
+
 /* ---------- tree ---------- */
 
 .im-tree {
@@ -1405,7 +1484,9 @@ input:is([type="checkbox"], [type="radio"]):is(.im-check, .im-radio, .im-switch)
   .im-tab,
   .im-tab::after,
   .im-switch::after,
-  .im-tree-chevron { transition: none; }
+  .im-tree-chevron,
+  button.im-list-group,
+  button.im-list-group > .im-icon:last-child { transition: none; }
 
   .im-spinner,
   .im-progress:not([aria-valuenow])::before { animation: none; }

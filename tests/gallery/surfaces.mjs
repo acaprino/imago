@@ -322,9 +322,9 @@ async function dialogs(page, look, theme) {
   assert.equal(await dialog.evaluate((el) => el.contains(document.activeElement)), true, where('focus stays inside'));
 
   // The title bar stays usable, and the palette does not open over a dialog.
-  await page.focus('.im-titlebar-command');
+  await page.focus('#g-window .im-titlebar-command');
   assert.equal((await active(page)).cls.includes('im-titlebar-command'), true, where('the title bar takes focus while the dialog is open'));
-  await page.click('.im-titlebar-command');
+  await page.click('#g-window .im-titlebar-command');
   assert.equal(await count(page, '.im-palette'), 0, where('the command button opens no palette over a dialog'));
   await page.focus('.im-dialog .im-btn');
   await press(page, 'Control+k');
@@ -693,7 +693,7 @@ async function palettes(page, look, theme) {
   await page.fill('.im-palette-input', 'reg');
   await press(page, 'Enter');
   assert.equal(await count(page, '.im-palette'), 0, where('Enter closes the palette'));
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,true,false', where('Enter ran the first match: the Registry view'));
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('#g-window .im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,true,false', where('Enter ran the first match: the Registry view'));
   assert.equal(await page.evaluate(() => document.querySelector('.im-notice')?.textContent ?? ''), 'Ran: Views: Registry', where('and the command said so'));
   assert.equal(await count(page, '[inert]'), 0, where('the page is released'));
   assert.equal(await page.evaluate((s) => document.activeElement === document.querySelector(s), opener), true, where('focus is back where it was'));
@@ -719,12 +719,12 @@ async function palettes(page, look, theme) {
       return run();
     };
   });
-  await page.click('.im-titlebar-command');
+  await page.click('#g-window .im-titlebar-command');
   assert.equal(await count(page, '.im-palette'), 1, where('the title bar button opens the palette'));
   assert.equal(await page.evaluate(() => window.__paletteRuns), 1, where('through the registered command'));
   await page.locator('.im-palette-list [role="option"]', { hasText: 'Developers' }).click();
   assert.equal(await count(page, '.im-palette'), 0, where('a click on a command closes the palette'));
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,false,true', where('and runs it'));
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('#g-window .im-titlebar .im-tab')].map((t) => t.getAttribute('aria-selected')).join()), 'false,false,true', where('and runs it'));
 
   // A menu or a sheet open under Ctrl+K is closed, not left behind.
   await anchor(page);
@@ -756,7 +756,7 @@ async function everyApp(page) {
     const where = (text) => `${app}: ${text}`;
     await press(page, 'Control+k');
     assert.equal(await count(page, '.im-palette'), 1, where('Ctrl+K opens the palette'));
-    const expected = await page.evaluate(() => document.querySelectorAll('.im-titlebar .im-tab').length);
+    const expected = await page.evaluate(() => document.querySelectorAll('#g-window .im-titlebar .im-tab').length);
     const views = await page.locator('.im-palette-list [role="option"]', { hasText: /^(Views|Viste):/ }).count();
     assert.equal(views, expected, where('one Views command per tab'));
     if (app === 'daodan') {
@@ -841,7 +841,7 @@ async function sheets(page, look, theme) {
   await page.click('#anchor');
   await page.click('#sheet-name');
   assert.equal(await count(page, '.im-sheet'), 1, where('a press inside keeps it'));
-  await page.click('.im-titlebar .im-brand');
+  await page.click('#g-window .im-titlebar .im-brand');
   assert.equal(await count(page, '.im-sheet'), 1, where('a press on the title bar (moving the window) keeps it'));
   await page.click('.im-status');
   assert.equal(await count(page, '.im-sheet'), 0, where('a press outside closes it'));
@@ -911,17 +911,17 @@ async function sheets(page, look, theme) {
 // Under 620 the title-bar tabs are one "Views" menu: a menu under its button, whose items select the views.
 async function viewsMenu(page) {
   await show(page, { app: 'shinatama', look: 'smooth', theme: 'dark', width: 610 });
-  await page.click('.im-views-menu');
+  await page.click('#g-window .im-views-menu');
   assert.equal(await count(page, '.im-shell .im-menu'), 1, 'the Views button opens a menu');
-  const button = await box(page, '.im-views-menu');
+  const button = await box(page, '#g-window .im-views-menu');
   const menu = await box(page, '.im-shell .im-menu');
   assert.ok(menu.top >= button.bottom - 0.5, 'under the button');
   assert.equal(await count(page, '.im-shell .im-menu .im-menu-item'), 5, 'one item per view');
-  await page.click('.im-titlebar .im-brand');
+  await page.click('#g-window .im-titlebar .im-brand');
   assert.equal(await count(page, '.im-shell .im-menu'), 0, 'a press on the title bar closes a menu');
-  await page.click('.im-views-menu');
+  await page.click('#g-window .im-views-menu');
   await page.locator('.im-shell .im-menu-item', { hasText: 'Files' }).click();
-  assert.equal(await page.evaluate(() => [...document.querySelectorAll('.im-titlebar .im-tab')].findIndex((t) => t.getAttribute('aria-selected') === 'true')), 3, 'an item selects its view');
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('#g-window .im-titlebar .im-tab')].findIndex((t) => t.getAttribute('aria-selected') === 'true')), 3, 'an item selects its view');
   assert.equal(await page.evaluate(() => document.activeElement.className.includes('im-views-menu')), true, 'focus is back on the button');
   await show(page, { app: 'xiox', look: 'smooth', theme: 'dark', width: 1160 });
 }

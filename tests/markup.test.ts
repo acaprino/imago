@@ -68,6 +68,13 @@ test('the switch, the segmented control and the text field write the one drawing
   assert.doesNotMatch(mono, /<input[^>]*class=/, 'the input has no class of its own: its box draws it');
 });
 
+test('buttonHtml writes im-btn--ghost for ghost, alone or with the other options, and no class without it', () => {
+  assert.match(buttonHtml('Sessions', 'tool', { ghost: true }), /class="im-btn im-btn--ghost"/);
+  assert.match(buttonHtml('New', 'new', { ghost: true, sm: true, cls: 'x' }), /class="im-btn im-btn--ghost im-btn--sm x"/);
+  assert.doesNotMatch(buttonHtml('Sessions', 'tool'), /ghost/);
+  assert.doesNotMatch(buttonHtml('Sessions', 'tool', { ghost: false }), /ghost/);
+});
+
 test('switches and busy buttons retain accessible state and action identity', () => {
   assert.match(switchHtml(true, 'Auto update', 'toggle', 'p1', true), /aria-checked="true".*data-action="toggle".*data-id="p1" disabled/);
   const html = buttonHtml('Saving', 'save', { busy: true, disabled: true, icon: 'plus' });
