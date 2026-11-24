@@ -6,14 +6,15 @@ are the table [Moving from 0.4.1](#7-moving-from-041) at the end.
 
 ## 1. Depend on it
 
-The npm package is `@acaprino/imago` and the Rust crate is `imago-shell`. Both come from the repository `acaprino/imago`, and
-an app pins both to the same tag or the same commit (`imago-check` reports pins that differ: rule `pin-mismatch`).
+The npm package is `@acaprino/imago` and the Rust crate is `imago-shell`. Both come from a release of the repository
+`acaprino/imago`, at one version (`imago-check` reports pins that differ: rule `pin-mismatch`). The npm package is the asset of the
+release, already built: nothing is compiled when it is installed.
 
-`package.json` of the app, with the two peers of the package beside it:
+`package.json` of the app, with the peers of the package beside it:
 
 ```json
 "dependencies": {
-  "@acaprino/imago": "github:acaprino/imago#v<x>",
+  "@acaprino/imago": "https://github.com/acaprino/imago/releases/download/v<x>/acaprino-imago-<x>.tgz",
   "@acaprino/sigrid": "https://github.com/acaprino/sigrid/releases/download/v<y>/acaprino-sigrid-<y>.tgz",
   "react": "19.3.1",
   "react-dom": "19.3.1"
@@ -27,66 +28,68 @@ an app pins both to the same tag or the same commit (`imago-check` reports pins 
 imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 ```
 
-- A release of an app, the merge into its `main`, pins a **tag** of Imago: `v<x>`. The app's `develop` may pin a
-  **commit** of Imago's `develop`: `github:acaprino/imago#<commit>` in npm, and `rev = "<commit>"` in Cargo.
-- Sigrid 6 (`^6.0.0`) and React 19 are peers: the app has one copy of each.
+- Sigrid (`^6.2.0`) and React 19 are peers: the app has one copy of each.
 - **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
   `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`, so that
   the apps of the suite link one copy of each. The app's own `tauri` requirement must allow 2.12.5 (`"2"` and `"2.12"` do,
   `"2.13"` does not). A newer Tauri waits for a release of Imago that raises the pins.
-- A git install runs the package's prepare script, which compiles its TypeScript. The package carries `lib/`, its documents
-  under `docs/`, its check under `scripts/check/`, and `icons/`. The demo app (`examples/demo/`) and the tests are in the
-  repository only.
+- The package carries `lib/`, its documents under `docs/`, its check under `scripts/check/`, and `icons/`. The demo app
+  (`examples/demo/`) and the tests are in the repository only.
 
 ## 2. What the package has
 
 | Import | What it is |
 |---|---|
-| `@acaprino/imago` | The identity of an app: `defineApp` and its type `AppDefinition` |
+| `@acaprino/imago` | The shell (section 3) |
 | `@acaprino/imago/icons/<app>/<file>` | The icons of the executables (section 5) |
 
-Everything that draws is imported from Sigrid: `@acaprino/sigrid/primitives`, `/components`, `/layout`, `/assemblies`, and
-`@acaprino/sigrid/tauri` for the window.
+The parts of a screen are imported from Sigrid: `@acaprino/sigrid/primitives`, `/components`, `/layout` and `/assemblies`.
 
-## 3. The page
+## 3. The app
 
 ```tsx
-import { colorTheme } from '@acaprino/sigrid'
-import { applyKeptScheme } from '@acaprino/sigrid/assemblies'
-import { defineApp } from '@acaprino/imago'
+import { AppWindow, defineApp, startApp, useNotify } from '@acaprino/imago'
 import '@acaprino/sigrid/styles.css'
 
 const MURO = defineApp({
-  id: 'muro',
-  name: 'Muro',
-  accent: ACCENT,
+  id: 'muro', name: 'Muro', lang: 'en', accent: ACCENT,
   storage: { scheme: 'muro.theme', zoom: 'muro.zoom' },
 })
-const LOOK = {
-  theme: colorTheme({ id: MURO.id, label: MURO.name, color: MURO.accent, spot: 'balanced' }),
-  storageKey: MURO.storage.scheme,
+
+function Muro() {
+  const notify = useNotify()
+  const [view, setView] = useState('sync')
+  return (
+    <AppWindow
+      views={[{ id: 'sync', label: 'Sync', icon: 'refresh', command: 'Go to Sync' }, { id: 'projects', label: 'Projects', icon: 'structure' }]}
+      view={view} onView={setView}
+      status={<Status />} footer={<Text>Automatic sync on</Text>} search={find}
+    >
+      <Screen />
+    </AppWindow>
+  )
 }
-applyKeptScheme(LOOK)
+
+startApp(MURO, document.getElementById('app')!, <Muro />)
 ```
 
-`defineApp` takes the id, the name, the one colour and the storage keys the app already has, and gives them back, checked by
-their type. The frame, the palette, the notices and the views are Sigrid's parts, put together as
-[design-file.md](design-file.md), "The frame", says. `examples/demo/src/main.tsx` of the repository `acaprino/imago` is a
-whole page, in a browser and in a window.
+| Export | What it is |
+|---|---|
+| `defineApp` | The app: `AppDefinition` in, `App` out, which has the `theme` made from the one colour. `words` are the app's language: `words.sigrid` Sigrid's, `words.shell` the shell's (`ShellWords`). It refuses an accent that is not `#rrggbb` |
+| `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component |
+| `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `end`, what follows its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of its drawer (`Drawer`): `(drawer) => <Sidebar {...drawer} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. `contentLabel` names the content, when the view's label does not |
+| `useNotify` | `Notify`: says something in a notice. Its options are those of Sigrid's notice: `kind: 'error'`, `undo`, `actions`, `id` |
+| `useWindow` | `WindowHandle`: whether the app runs in a window of its own, its title, the progress on the taskbar, and a call when it is shown again |
+| `ScreenBoundary` | What fails while it is drawn says so in its place. `AppWindow` has one round the screen; an app puts one round an inspector that may fail |
+| `useFocusKept` | When one of its arguments changes and what had the focus has gone, the content takes it. `AppWindow` does it for the view; an app with steps of its own passes the step |
+
+The commands of the app are Sigrid's `useCommand`, in any component. `examples/demo/src` of the repository `acaprino/imago` is a
+whole app: views, a list with its details, a form, the notices, a job, a screen that fails.
 
 ## 4. The window
 
-The page's calls are the hooks of `@acaprino/sigrid/tauri`; their order, and the two commands and the event of the native
-side, are in [desktop-shell.md](desktop-shell.md), section 3:
-
-```tsx
-import { useWindowControls, useSnapLayouts, useWindowTheme, useZoom } from '@acaprino/sigrid/tauri'
-
-const controls = useWindowControls({ onError })
-const snap = useSnapLayouts({ command: 'window_caption_maximize', event: 'caption-maximize', onError })
-const { zoom } = useZoom({ storageKey: MURO.storage.zoom, onError })
-useWindowTheme(scheme, { command: 'set_window_theme', args: (resolved) => ({ theme: choice, resolved }), onError })
-```
+The shell calls the plugin of `imago-shell` ([desktop-shell.md](desktop-shell.md), section 3.4); the app writes nothing for it in
+the page. In a browser nothing of Tauri is called or loaded.
 
 Tauri 2 lets the page call the window, the webview or an event only when a capability file grants it. The app needs a file in
 `src-tauri/capabilities/` with these nine permissions. `windows` lists the label of every window that carries the title bar:
@@ -110,8 +113,8 @@ Tauri 2 lets the page call the window, the webview or an event only when a capab
 ```
 
 What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
-`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The app's own commands,
-`set_window_theme` and `window_caption_maximize`, need no permission of this list.
+`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The plugin's own commands are granted by
+`imago-shell:default`, in a capability beside it.
 
 ## 5. The icons of the executables
 
@@ -139,7 +142,7 @@ the root of the repository):
 
 ```markdown
 Before UI work, read node_modules/@acaprino/imago/docs/design-file.md and the files it references.
-Lay out with Sigrid's parts: write no class, no style and no stylesheet.
+The frame is the shell's (AppWindow of @acaprino/imago). Lay out with Sigrid's parts: write no class, no style and no stylesheet.
 Run npx imago-check and npx sigrid-check before you say UI work is done.
 ```
 
@@ -170,8 +173,8 @@ For UI work, apply the design file.
 
 | Key | What it is |
 |---|---|
-| `src` | The folders of the app's sources. Default `["src"]` |
-| `tests` | The folders of the app's tests |
+| `src` | The folders of the app's sources, read by every rule. Default `["src"]` |
+| `tests` | The folders of the app's tests, which only `removed-name` reads |
 | `cargo` | The `Cargo.toml` that depends on `imago-shell`, for `pin-mismatch`. Without it the rule is skipped |
 | `agents` | The agent files, for `agent-rules`. Default `["AGENTS.md", "CLAUDE.md"]` |
 | `app` | The app's id, one of the folders of the package's `icons/` |

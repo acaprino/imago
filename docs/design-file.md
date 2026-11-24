@@ -4,7 +4,8 @@ The canon of Imago: who owns what in an app of the suite, and the rules of the s
 Read it before UI work.
 
 **The look and the components are Sigrid's. The shell is Imago's. The screens are the app's.** Imago has no CSS, no token
-and no control of its own (decided by the owner on 2026-11-24).
+and no control of its own (decided by the owner on 2026-11-24): it puts Sigrid's parts together, once, and gives Sigrid's engine
+the look of the suite.
 
 ## The documents
 
@@ -22,7 +23,7 @@ The design system up to 0.4.1 (the CSS, the renderers, the two looks, the graphs
 | Layer | What it is | Where |
 |---|---|---|
 | Sigrid | The components and the theme engine: colour, type, spaces, density, motion, states, words. It knows no app | `@acaprino/sigrid`; its rules are its `DESIGN.md`, and its `agents/catalog.json` says which entry exports each name |
-| Imago | The base shell of the suite: the window, its icons, the identity of an app, and the one way the frame is put together | `@acaprino/imago` and the crate `imago-shell` |
+| Imago | The base shell of the suite: the window, the frame, the palette, the notices, the look as a theme preset, the icons, the identity of an app | `@acaprino/imago` and the crate `imago-shell` |
 | App | Its screens and its data, made of Sigrid's parts | the app |
 
 - A rule about how a part looks or behaves is Sigrid's. Imago does not restate it and does not override it.
@@ -30,20 +31,45 @@ The design system up to 0.4.1 (the CSS, the renderers, the two looks, the graphs
 - Sigrid and React are peers, so that an app has one copy of each.
 - A part the suite needs and Sigrid lacks is added to Sigrid, not to Imago or to an app.
 
-What exists today: the identity of an app (`defineApp`), the crate, the icons, the check, and the demo, a page on Sigrid in
-the window of the crate. The React shell (the frame, the palette and the notices as one part that an app fills) is not in
-the package yet. Until it is, the page of the demo is the example of how the parts go together.
+The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNotify`, `useWindow`, `useFocusKept`, and
+`ScreenBoundary` round a part that may fail. [using-imago.md](using-imago.md), section 3, has them.
+
+- An app does not write what the shell draws: `AppShell`, `TitleBar`, `WindowControls`, `CommandPalette`, `CommandsProvider`,
+  `Toasts` and `useSchemeCommands` are the shell's (rule `shell-import`). It writes its own `Sidebar`, `Inspector`, `Panel` and
+  commands (`useCommand`).
+- A prop is added to `AppWindow` when a second app needs it. Until then the need is met by a region.
 
 ## The look
 
-- The theme is computed by Sigrid from one colour, the app's accent, light and dark. An app gives its accent and no other
-  colour, size, radius or space.
-- Light, dark and the system's look are chosen in the palette, the same three commands in every app (`useSchemeCommands`).
-  No app draws a switch for them. The choice is kept under the app's own storage key, and is on the page before the first
-  paint (`applyKeptScheme`).
-- Surfaces are opaque. There is no glass.
+Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the repository). Sigrid's defaults are not touched.
+
+- An app gives one colour. It is its hue: the accent is that hue at the suite's lightness and saturation, one for dark and one
+  for light. An app writes no other colour, size, radius or space.
+- Two planes: the ground, which carries the title bar and the sidebar, and one sheet laid on it.
+
+| | Dark | Light |
+|---|---|---|
+| Ground | `#12161E` | `#F6F7F9` |
+| Sheet | `#1A202C` | `#FFFFFF` |
+| Raised | `#232834` | `#FFFFFF` |
+| Hairline | `#2A3240` | `#E3E6EA` |
+| Text | `#E8ECF3` | `#111827` |
+| Border of a control | `#8791A6` | `#767E8B` |
+| Daodan | `#6ED0FF` | `#006398` |
+| Xiox | `#F2B966` | `#844C00` |
+| Muro | `#68DDB8` | `#00714F` |
+| Shinatama | `#FFA3C8` | `#90355E` |
+| Mukade | `#D0B2FF` | `#674698` |
+
+- The corners are 4, 6 and 10; the density is compact (controls and rows of 32, 44 with a finger); keys are drawn as caps; fields
+  and outline buttons have the border of a control; the tone is Balanced, so the accents are the colours above.
+- Dark until the person chooses. Light, dark and the system's look are the same three commands of the palette in every app, and
+  no app draws a switch for them. The choice is kept under the app's own storage key, and is on the page before the first paint.
+- A state is a `Badge` with a `tone` and a word. Surfaces are opaque: there is no glass.
+- Every text has 4.5:1 on what it lies on, and every part of a control 3:1, for the five apps in both schemes
+  (`tests/preset.test.ts`).
 - An app of the suite writes no class, no style and no stylesheet. `sigrid-check` with its rule `own-class` is clean on its
-  sources, on Imago's `ts/` and on the demo's page.
+  sources, on Imago's `ts/` and on the demo.
 
 ## The frame
 
@@ -53,7 +79,12 @@ the package yet. Until it is, the page of the demo is the example of how the par
   with its key, and in a window the three buttons. The shared controls keep their places from one view to the next.
 - The views are in the title bar from 860px, in a row under it from 620px to 860px and in any narrower window, and at the
   foot only under 620px in a browser.
-- Every view is also a command, the one in use checked. `Ctrl+K` opens the palette; `F6` goes to the next region.
+- Every view is also a command, the one in use checked. `Ctrl+K` opens the palette; `Ctrl+F` is the search of the view, and where
+  there is none the shell says so; `F6` goes to the next region.
+- The foot names the keys that work now. A phone has no foot.
+- What had the focus and goes gives it to the content; a view opened from the palette does too, one opened from the bar keeps it.
+- The notices are one stack. One goes by itself, an error stays until it is closed, and one with the id of another takes its place.
+- A screen that fails while it is drawn says so in its place, with a button that draws it again; the bar stays.
 - Nothing overflows sideways, at any width from 340px.
 
 ## The window
@@ -62,7 +93,9 @@ the package yet. Until it is, the page of the demo is the example of how the par
   takes the browser's keys away and speaks to the native side. In a browser nothing of Tauri is called or loaded.
 - The one way from the page to the window is `@acaprino/sigrid/tauri`. The one native side is the crate `imago-shell`.
 - The window is told the scheme, and keeps it for its first frame, so that no start flashes.
-- A refused or failed call is said to the person in a notice, never dropped.
+- The choice of light, dark or the system's and the scheme drawn are both told, when either changes.
+- A call the person asked for (a window button, the zoom) that fails is said in a notice. What the page tells the window by itself
+  is written in the console when it fails.
 
 The techniques and the wiring are in [desktop-shell.md](desktop-shell.md).
 
@@ -79,8 +112,9 @@ reads the `"imago"` block of the app's `package.json` ([using-imago.md](using-im
 
 | Rule | What it reports |
 |---|---|
+| `shell-import` | A part of Sigrid the shell draws, imported by the app's own sources |
 | `removed-name` | A name the package removed (the table "Moving from 0.4.1"), with what replaces it, in the app's sources and tests |
-| `pin-mismatch` | The npm pin and the Cargo pin of Imago that are not the same tag or commit |
+| `pin-mismatch` | An npm pin of Imago that is not the asset of a release, a Cargo pin that is not a tag, or the two at different versions |
 | `app-icon` | An icon file that is not the package's, byte for byte |
 | `agent-rules` | `AGENTS.md` or `CLAUDE.md` without the path of this file in the installed package |
 

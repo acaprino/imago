@@ -7,8 +7,8 @@ the window on screen holds only as far as this file says.
 ## What this file does not cover
 
 **Nothing of the page on Sigrid has been run on a real window.** Its browser test (`npm run test:demo`) opens it in a browser,
-and with a window that only pretends to be Tauri's: the buttons, the drag, Snap Layouts, the zoom and the theme through the
-hooks of `@acaprino/sigrid/tauri` have never met the crate on a screen. `npm run capture` was changed for that page and has
+and with a window that only pretends to be Tauri's: the buttons, the drag, Snap Layouts, the zoom, the theme, the title, the
+progress and the first frame have never met the crate on a screen. `npm run capture` was changed for that page and has
 not been run since.
 
 What follows is of the build of commit `85b7472` (2026-11-20), whose page was the gallery of the design system up to 0.4.1.

@@ -2,7 +2,7 @@ name: Release
 
 # A release at every merge of develop into main. The same workflow is in Shinatama, Mukade, Xiox, Muro, Ethel
 # and artcraft-web, except that Imago has no program to build or package: its build is `npm run verify`, and
-# a release has no assets, and except that the plan job fails when it cannot read the merged pull request (the others
+# the one asset of a release is the npm package, and except that the plan job fails when it cannot read the merged pull request (the others
 # fall back to patch), that the push is `git push --atomic` and that the plan job's checkout keeps no credentials: the
 # three are for the others to take. The actions are the others' versions and commits (v7, on Node 24), less
 # setup-python, which Imago does not need. What is project-specific is in .github/release.json, the version logic in
@@ -11,7 +11,7 @@ name: Release
 #   2. the next version is written in every version file (and the project's Cargo.lock entries);
 #   3. `npm run verify` runs on the project's runner (windows-latest unless release.json says otherwise);
 #   4. the version commit and the tag <prefix><version> go on main, and the GitHub Release is created with
-#      no assets: an app depends on the tag;
+#      the npm package, already built (acaprino-imago-<version>.tgz);
 #   5. main is merged back into develop, so develop carries the new version.
 # Nothing is published when verify fails. Run by hand (Actions, Run workflow) it only verifies, unless
 # "publish" is ticked.
@@ -189,12 +189,15 @@ jobs:
           $tag = '${{ steps.version.outputs.tag }}'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # The package of this version, as `npm run verify` packed and installed it.
+          npm pack --silent
+          if ($LASTEXITCODE) { exit 1 }
           git add -- @(node .github/scripts/release.mjs paths)
           git commit -m "release $tag"
           git tag -a $tag -m "${{ steps.version.outputs.app }} ${{ steps.version.outputs.version }}"
           git push --atomic origin "HEAD:refs/heads/main" "refs/tags/$tag"
           if ($LASTEXITCODE) { exit 1 }
-          gh release create $tag --repo '${{ github.repository }}' --verify-tag --title "${{ steps.version.outputs.app }} ${{ steps.version.outputs.version }}" --generate-notes
+          gh release create $tag "acaprino-imago-${{ steps.version.outputs.version }}.tgz" --repo '${{ github.repository }}' --verify-tag --title "${{ steps.version.outputs.app }} ${{ steps.version.outputs.version }}" --generate-notes
           if ($LASTEXITCODE) { exit 1 }
 
       - name: develop follows main

@@ -187,15 +187,19 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 
 ### 3.4 The page, in order
 
-1. `applyKeptScheme` before React renders, so that the first paint has the person's scheme.
-2. `useDesktopGuard`, outside development only (section 3.2, step 1).
-3. `useWindowControls` and `useSnapLayouts`, whose results are the props of `WindowControls`: the second takes the names
-   of section 3.3, `{ command: 'window_caption_maximize', event: 'caption-maximize' }`.
-4. `useZoom`, with the storage key of the app.
-5. `useWindowTheme`, with `command: 'set_window_theme'` and the scheme `useSchemeCommands` draws.
+The shell of `@acaprino/imago` does it; an app writes none of it. The commands are those of the plugin.
 
-The hooks of 3 to 5 take `onError`, which is told of a call that was refused or failed. In a browser they call and load nothing of
-Tauri. `examples/demo/src/main.tsx` of the repository `acaprino/imago` is the page that does it.
+1. Before React draws: the density, the kept scheme (dark when none is kept) and the theme.
+2. In a window, outside development: the browser's own keys and menu taken away (`useDesktopGuard` of Sigrid).
+3. The first frame drawn, `plugin:imago-shell|ready`, once: after two animation frames, or after 250 ms, since a hidden window may
+   run none.
+4. `plugin:imago-shell|set_theme`, `{ theme, resolved }`: the choice and the scheme drawn, when either changes.
+5. The title bar drawn, `plugin:imago-shell|caption`, `{ x, y, width, height }`, by `useSnapLayouts`; `caption-maximize` comes back.
+6. `useWindowControls` and `useZoom` of Sigrid for the buttons and the zoom.
+7. `plugin:imago-shell|chrome`, `{ title, progress }`, always both, from the first time the app sets one; `window-shown` comes back.
+
+A button or the zoom that fails is said in a notice; a failure of the rest is written in the console. In a browser nothing of Tauri
+is called or loaded.
 
 ### 3.5 The capabilities
 

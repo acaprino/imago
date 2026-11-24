@@ -1,12 +1,12 @@
 # Imago
 
 The base shell of Shinatama, Xiox, Mukade, Muro and Daodan, built with the design system
-[Sigrid](https://github.com/acaprino/sigrid): the window of a Tauri app on Windows 11, the identity and the icon of each app,
-and the one frame they share. The look and the components are Sigrid's. Each app depends on a tag of this repository.
+[Sigrid](https://github.com/acaprino/sigrid): the window of a Tauri app on Windows 11, the one frame the apps share, their look,
+and the identity and the icon of each. The components are Sigrid's. An app depends on a release of this repository.
 
-What exists: the crate `imago-shell` (the native side of the window), `defineApp` (the typed identity of an app), the icons of
-the apps' executables, the check `imago-check`, and a demo app, one page on Sigrid in a real window. The React shell is not here
-yet. The version is set by the release workflow, not by hand.
+What exists: the React shell (`defineApp`, `startApp`, `AppWindow` and the rest of `@acaprino/imago`), the theme preset, the crate
+`imago-shell` (the native side of the window), the icons of the apps' executables, the check `imago-check`, and a demo app. The
+version is set by the release workflow, not by hand.
 
 The design system Imago was up to 0.4.1 (CSS, string renderers, tokens, gallery) is at the tag `v0.4.1`.
 
@@ -29,10 +29,10 @@ every rule of `imago-check`. It also checks that no document writes a removed na
 
 | Folder | What |
 |---|---|
-| `ts/` | The package: the root entry, `@acaprino/imago`. |
+| `ts/` | The package: the React shell and the theme preset, `@acaprino/imago`. |
 | `icons/` | The icons of each app's executables, made by `npm run icons`. |
 | `crates/imago-shell/` | The Rust side of the shell: material and theme, Snap Layouts, navigation guard, WebView2 recovery, window state. |
-| `examples/demo/` | The demo app: a page on Sigrid in a real Tauri window, and the screen capture that checks it. |
+| `examples/demo/` | The demo app: a small app on the shell, in a real Tauri window, and the screen capture that checks it. |
 | `docs/` | The documents above. |
 | `tests/` | The tests of the package, of the documents and of the demo's page. |
 | `scripts/` | The icon build, and `scripts/check/`, the program `imago-check`. |
@@ -47,7 +47,8 @@ They compile or test, so GitHub Actions runs them and no developer's machine doe
 |---|---|
 | `npm run build` | Compiles the package into `lib/`, type-checks it and the demo's page, and builds the page. |
 | `npm run check` | `sigrid-check`, with the rule `own-class`, on `ts/` and on the demo's page. |
-| `npm run test:demo` | Opens the built page in a browser, in both schemes and at the widths where the frame changes, and in a window that pretends to be Tauri's. |
+| `npm run test:demo` | Opens the built demo in a browser, in both schemes and at the widths where the frame changes, and in a window that pretends to be Tauri's. Its photographs are in `examples/demo/shots/`, and in the artifact `demo-shots` of a run of Verify. |
+| `npm run test:install` | Packs the package as a release gives it, installs it in an empty project and imports it. |
 | `npm test` | The unit tests (`node --test`), the document tests and the tests of `imago-check` included. |
 | `npm run verify` | The checks of CI: all of the above and `cargo test -p imago-shell`. |
 | `npm run icons` | Draws the icons of the apps' executables into `icons/<app>/`, on Windows with the font Segoe UI Variable Display; `-- --check` only compares. |
@@ -60,7 +61,8 @@ They compile or test, so GitHub Actions runs them and no developer's machine doe
 
 ## Using it
 
-An app pins a tag (`"@acaprino/imago": "github:acaprino/imago#v<x>"` and `imago-shell = { git =
+An app takes the asset of a release
+(`https://github.com/acaprino/imago/releases/download/v<x>/acaprino-imago-<x>.tgz`) and the crate at its tag (`imago-shell = { git =
 "https://github.com/acaprino/imago", tag = "v<x>" }`), with Sigrid 6 and React 19 as peers, and runs `npx imago-check` before it
 says UI work is done. [docs/using-imago.md](docs/using-imago.md) has the rest.
 
@@ -68,5 +70,5 @@ says UI work is done. [docs/using-imago.md](docs/using-imago.md) has the rest.
 
 Work happens on `develop`. A release is the pull request develop → main, merged only when the Verify run on develop's tip is
 green: the release workflow builds and publishes, it does not run the tests again. Imago has no program to build, so the
-workflow's build is `npm run verify`; it then sets the version and the tag `v<version>`, and publishes a GitHub Release with no
-installer. See [AGENTS.md](AGENTS.md).
+workflow's build is `npm run verify`; it then sets the version and the tag `v<version>`, and publishes a GitHub Release whose
+one asset is the npm package, already built, `acaprino-imago-<version>.tgz`. See [AGENTS.md](AGENTS.md).

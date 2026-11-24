@@ -15,7 +15,7 @@ tokens, up to v0.4.1, are gone: the look and the components are Sigrid's.
   Ethel and artcraft-web).
   The version goes up by a patch, or by a minor or major step when the pull request has the label
   `release:minor` or `release:major`; `npm run verify` is the build, on Windows; the tag `v<version>` and the
-  GitHub Release (no installer and no assets: an app depends on the tag) are published, and `main` is merged
+  GitHub Release (no installer; its one asset is the npm package, `acaprino-imago-<version>.tgz`) are published, and `main` is merged
   back into `develop`. Nothing is published when `npm run verify` fails.
 - A release is the pull request develop → main, merged only when the Verify run on develop's tip is green: the release workflow builds and publishes, it does not run the tests again.
 - Never change the version or create release tags by hand: the workflow does it (`.github/release.json` lists
@@ -26,7 +26,8 @@ tokens, up to v0.4.1, are gone: the look and the components are Sigrid's.
 - Before UI work, read `docs/design-file.md`: it is the canon, and every other document agrees with it.
 - No class, no style and no stylesheet in this repository: `npm run check` (`sigrid-check` with `own-class`, on `ts/` and on
   the demo's page) stays green, as well as `npm test` and `npm run test:demo`.
-- What the suite needs and Sigrid lacks is added to Sigrid. Imago re-exports nothing of it.
+- What the suite needs and Sigrid lacks is added to Sigrid. Imago re-exports nothing of it. A prop is added to `AppWindow` when a
+  second app needs it; until then the need is met by a region.
 - One way for each need. A name the package removes is removed, not kept as an alias; a name removed or renamed gets a
   row in the table "Moving from 0.4.1" of `docs/using-imago.md` (old name, and the new name or what to do instead) and
   an entry in `scripts/check/removed.mjs`, so that `imago-check` reports it in an app (`tests/check.test.ts` compares
@@ -34,8 +35,8 @@ tokens, up to v0.4.1, are gone: the look and the components are Sigrid's.
 - A new rule or export is written in the documents: the rule in `docs/design-file.md`, the calls in the document
   `docs/design-file.md` names for them. `tests/docs.test.ts` fails on an export no document writes, and on a name a
   document writes that neither the code nor Sigrid has.
-- The demo's page (`examples/demo/src`) is the executable example of the shell. A change to it is proved by
-  `tests/demo.mjs`, at every width where the frame changes and in both schemes.
+- The demo (`examples/demo/src`) is the executable example of an app on the shell. A change to it is proved by
+  `tests/demo.mjs`, at every width where the frame changes and in both schemes, and looked at in the artifact `demo-shots`.
 
 ## Rust is built and tested on GitHub only
 
