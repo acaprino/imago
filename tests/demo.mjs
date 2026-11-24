@@ -321,6 +321,92 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement.tagName), 'BUTTON', 'what stays keeps the focus');
   });
 
+  await onPage('the sidebar collapses to its rail and opens again, by its button and by the palette, and is kept', {}, async (page) => {
+    const sidebar = page.locator('[data-slot="sidebar"]');
+    const button = page.locator('[data-slot="sidebar-collapse"]');
+    const name = page.getByText('States', { exact: true });
+    const is = async (collapsed, why) => {
+      await page.waitForFunction((wanted) => document.querySelector('[data-slot="sidebar"]').hasAttribute('data-collapsed') === wanted, collapsed);
+      await still(page);
+      const { width } = await sidebar.boundingBox();
+      assert.ok(collapsed ? width < 60 : width === 256, `${why}: the sidebar is ${width} wide`);
+      assert.deepEqual([await button.getAttribute('aria-expanded'), await name.isVisible()], [String(!collapsed), !collapsed], why);
+      assert.deepEqual(await overflow(page), [], why);
+    };
+    const kept = () => page.evaluate(() => localStorage.getItem('imago.sidebar'));
+    const row = async (word) => {
+      await palette(page, word);
+      return page.getByRole('option').filter({ hasText: 'Collapse the sidebar' });
+    };
+    await is(false, 'at first');
+    assert.equal(await page.locator('[data-slot="sidebar-group-heading"]').count(), 0, 'the name of the list is its head');
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await is(true, 'after Enter on the button');
+    assert.equal(await kept(), 'collapsed');
+    assert.ok(await button.evaluate((element) => element === document.activeElement), 'the button keeps the focus');
+    await shot(page, 'rail');
+    // A place of the rail has its name, and takes there.
+    await sidebar.getByRole('button', { name: /^Failed/ }).click();
+    assert.equal(await page.getByRole('list', { name: 'Items' }).getByRole('listitem').count(), 1);
+    await page.reload();
+    await page.waitForSelector('[data-slot="app-shell"]');
+    await is(true, 'after a reload');
+    await button.focus();
+    await page.keyboard.press('Space');
+    await is(false, 'after Space on the button');
+    assert.equal(await kept(), 'open');
+    await button.click();
+    await is(true, 'after a press');
+
+    const open_ = await row('expand');
+    assert.equal(await open_.getAttribute('aria-checked'), 'true');
+    await page.keyboard.press('Enter');
+    await is(false, 'after the command');
+    const collapse = await row('collapse');
+    assert.equal(await collapse.getAttribute('aria-checked'), 'false');
+    await page.keyboard.press('Enter');
+    await is(true, 'after the command again');
+    await page.reload();
+    await page.waitForSelector('[data-slot="app-shell"]');
+    await is(true, 'after a reload again');
+  });
+
+  await onPage('where the width decides the form of the sidebar there is nothing to choose, and the choice stays', {}, async (page) => {
+    const sidebar = page.locator('[data-slot="sidebar"]');
+    const button = page.locator('[data-slot="sidebar-collapse"]');
+    const at = async (width) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.waitForFunction((form) => document.querySelector('[data-slot="app-shell"]').dataset.sidebar === form, width >= 850 ? 'full' : width >= 620 ? 'rail' : 'drawer');
+      await still(page);
+    };
+    const dimmed = async () => {
+      await palette(page, 'collapse');
+      const said = await page.getByRole('option').filter({ hasText: 'Collapse the sidebar' }).getAttribute('aria-disabled');
+      await page.keyboard.press('Escape');
+      await page.getByRole('dialog').waitFor({ state: 'hidden' });
+      return said === 'true';
+    };
+    for (const collapsed of [false, true]) {
+      await at(1000);
+      if (collapsed) await button.click();
+      assert.deepEqual([await sidebar.getAttribute('data-collapsed') !== null, await button.count(), await dimmed()], [collapsed, 1, false], 'at 1000');
+      await at(700);
+      assert.deepEqual([await sidebar.getAttribute('data-collapsed') !== null, await button.count(), await dimmed()], [true, 0, true], 'at 700');
+      await at(500);
+      assert.equal(await sidebar.count(), 0, 'at 500 it is out of the page');
+      assert.ok(await dimmed(), 'at 500');
+      await page.locator('[data-slot="title-bar"] button').first().click();
+      const drawer = page.getByRole('dialog');
+      await drawer.getByText('States', { exact: true }).last().waitFor();
+      assert.deepEqual([await drawer.locator('[data-slot="sidebar"]').getAttribute('data-collapsed'), await button.count()], [null, 0], 'the drawer is whole');
+      await page.keyboard.press('Escape');
+      await drawer.waitFor({ state: 'hidden' });
+    }
+    await at(1000);
+    assert.notEqual(await sidebar.getAttribute('data-collapsed'), null, 'the choice is still there');
+  });
+
   await onPage('the drawer of the sidebar opens from the bar, and a place closes it', { width: 500 }, async (page) => {
     await page.locator('[data-slot="title-bar"] button').first().click();
     await page.getByRole('dialog').waitFor();

@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useMedia, useWords } from '@acaprino/sigrid';
 import { Icon, Spacer, type IconName } from '@acaprino/sigrid/primitives';
-import { AppShell, DrawerButton, TitleBar, Toolbar, ToolbarBrand, ToolbarButton, ToolbarSpacer, ToolbarTab, ToolbarTabs, WindowControls } from '@acaprino/sigrid/layout';
+import { APP_SHELL_STEPS, AppShell, DrawerButton, TitleBar, Toolbar, ToolbarBrand, ToolbarButton, ToolbarSpacer, ToolbarTab, ToolbarTabs, WindowControls } from '@acaprino/sigrid/layout';
 import { CommandPalette, formatKeys, KeyHints, useCommand, useCommandPalette, type KeyHint } from '@acaprino/sigrid/assemblies';
 import { DRAG_REGION, useSnapLayouts, useWindowControls } from '@acaprino/sigrid/tauri';
 import { focusContent, useFocusKept } from './focus.js';
@@ -21,10 +21,12 @@ export interface AppView<Id extends string = string> {
   count?: number;
 }
 
-/** The state of the sidebar where it is a drawer: the props of Sigrid's `Sidebar`. */
-export interface Drawer {
+/** The state of the sidebar, as props of Sigrid's `Sidebar`: whether its drawer is open, and whether it is collapsed to its rail. */
+export interface SidebarState {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
 }
 
 export interface AppWindowProps<Id extends string = string> {
@@ -35,8 +37,8 @@ export interface AppWindowProps<Id extends string = string> {
   /** The tools of the view in the title bar, before «Commands». */
   tools?: ReactNode;
   status?: ReactNode;
-  /** The `Sidebar`, given the state of its drawer. The same in every view, so that the bar keeps its places. */
-  sidebar?: (drawer: Drawer) => ReactNode;
+  /** The `Sidebar`, given its state. The same in every view, so that the bar keeps its places. */
+  sidebar?: (state: SidebarState) => ReactNode;
   /** The `Inspector` of what is selected. */
   inspector?: ReactNode;
   /** The actions on the content, the primary one last. */
@@ -67,9 +69,41 @@ function ViewCommand({ view, checked, run }: { view: AppView; checked: boolean; 
   return null;
 }
 
+/** Whether the sidebar is collapsed, kept in the browser's storage: open until the person collapses it. */
+function useCollapsed(key: string): [boolean, (collapsed: boolean) => void] {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(key) === 'collapsed';
+    } catch {
+      return false;
+    }
+  });
+  return [collapsed, (next) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(key, next ? 'collapsed' : 'open');
+    } catch {
+      // No storage here: it holds until the page is closed.
+    }
+  }];
+}
+
+/** The collapsed sidebar as a command, where the width lets the person choose. */
+function SidebarCommand({ collapsed, onCollapsedChange }: Pick<SidebarState, 'collapsed' | 'onCollapsedChange'>) {
+  const { words } = useShell();
+  const { collapse, expand } = useWords().sidebar;
+  const room = useMedia(`(width >= ${APP_SHELL_STEPS.sidebar}px)`);
+  useCommand({
+    id: 'imago.sidebar', label: collapse, keywords: expand, group: words.views, icon: <Icon name="sidebarClose" />, checked: collapsed, when: room,
+    run: () => onCollapsedChange(!collapsed),
+  });
+  return null;
+}
+
 /** The window of the app, with its screen as the children. */
 export function AppWindow<Id extends string>({ views, view, onView, tools, status, sidebar, inspector, actions, footer, hints = [], search, contentLabel, children }: AppWindowProps<Id>) {
   const { app, words, notify, window: { own }, failed } = useShell();
+  const [collapsed, setCollapsed] = useCollapsed(app.storage.sidebar);
   const commands = useWords().palette.command;
   const palette = useCommandPalette();
   const [open, setOpen] = useState(false);
@@ -80,7 +114,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
   const wide = useMedia('(width >= 860px)');
   const narrow = useMedia('(width < 620px)');
   const phone = narrow && !own;
-  useFocusKept(view, wide, phone);
+  useFocusKept(view, wide, phone, collapsed);
 
   useCommand({ id: SEARCH, label: words.search, group: words.views, keys: 'Ctrl+F', icon: <Icon name="search" />, run: () => { if (search) search(); else notify(words.noSearch, { id: SEARCH }); } });
   const go = (next: string): void => {
@@ -95,11 +129,12 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
     </ToolbarTabs>
   );
   const row = <Toolbar aria-label={words.views}>{tabs}</Toolbar>;
-  const navigation = sidebar?.({ open, onOpenChange: setOpen });
+  const navigation = sidebar?.({ open, onOpenChange: setOpen, collapsed, onCollapsedChange: setCollapsed });
 
   return (
     <>
       {views.map((item) => <ViewCommand key={item.id} view={item} checked={item.id === view} run={() => go(item.id)} />)}
+      {navigation ? <SidebarCommand collapsed={collapsed} onCollapsedChange={setCollapsed} /> : null}
       <AppShell
         frame="sheet"
         desktop={own}

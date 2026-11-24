@@ -2,7 +2,7 @@
 // frame, the palette, the notices, the look and the window are the shell's.
 import { useEffect, useRef, useState } from 'react';
 import { Badge, Button, Count, Icon, Progress, Spacer, Text } from '@acaprino/sigrid/primitives';
-import { NavItem, Sidebar, SidebarGroup, ToolbarButton } from '@acaprino/sigrid/layout';
+import { NavItem, Sidebar, SidebarGroup, SidebarRow, ToolbarButton } from '@acaprino/sigrid/layout';
 import { useCommand } from '@acaprino/sigrid/assemblies';
 import { AppWindow, defineApp, startApp, useNotify, useWindow, type AppView } from '@acaprino/imago';
 import '@acaprino/sigrid/styles.css';
@@ -15,7 +15,7 @@ const DEMO = defineApp({
   lang: 'en',
   // design-check-ignore-next-line color-value: the demo's accent, the one colour an app gives
   accent: '#006398',
-  storage: { scheme: 'imago.scheme', zoom: 'imago.zoom' },
+  storage: { scheme: 'imago.scheme', zoom: 'imago.zoom', sidebar: 'imago.sidebar' },
 });
 
 type View = 'items' | 'new' | 'notices' | 'broken';
@@ -82,12 +82,12 @@ function Demo() {
           <Text>{window_.own ? 'Window' : 'Browser'}</Text>
         </>
       }
-      sidebar={(drawer) => (
-        <Sidebar aria-label="States" {...drawer}>
-          <SidebarGroup label="States">
-            <NavItem icon={<Icon name="all" />} current={view === 'items' && state === null} end={<Count value={items.length} label="items" reserve />} onClick={() => { drawer.onOpenChange(false); filter(null); }}>All</NavItem>
+      sidebar={(sidebar) => (
+        <Sidebar aria-label="States" header={<SidebarRow><Text variant="strong">States</Text> <Count value={STATES.length} label="states" /></SidebarRow>} {...sidebar}>
+          <SidebarGroup>
+            <NavItem icon={<Icon name="all" />} current={view === 'items' && state === null} end={<Count value={items.length} label="items" reserve />} onClick={() => { sidebar.onOpenChange(false); filter(null); }}>All</NavItem>
             {STATES.map(({ id, label, icon }) => (
-              <NavItem key={id} icon={<Icon name={icon} />} current={view === 'items' && state === id} end={<Count value={items.filter((item) => item.state === id).length} label="items" reserve />} onClick={() => { drawer.onOpenChange(false); filter(id); }}>{label}</NavItem>
+              <NavItem key={id} icon={<Icon name={icon} />} current={view === 'items' && state === id} end={<Count value={items.filter((item) => item.state === id).length} label="items" reserve />} onClick={() => { sidebar.onOpenChange(false); filter(id); }}>{label}</NavItem>
             ))}
           </SidebarGroup>
         </Sidebar>

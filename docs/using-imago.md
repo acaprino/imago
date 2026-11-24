@@ -55,7 +55,7 @@ import '@acaprino/sigrid/styles.css'
 
 const MURO = defineApp({
   id: 'muro', name: 'Muro', lang: 'en', accent: ACCENT,
-  storage: { scheme: 'muro.theme', zoom: 'muro.zoom' },
+  storage: { scheme: 'muro.theme', zoom: 'muro.zoom', sidebar: 'muro.sidebar' },
 })
 
 function Muro() {
@@ -79,7 +79,7 @@ startApp(MURO, document.getElementById('app')!, <Muro />)
 |---|---|
 | `defineApp` | The app: `AppDefinition` in, `App` out, which has the `theme` made from the one colour. `words` are the app's language: `words.sigrid` Sigrid's, `words.shell` the shell's (`ShellWords`). It refuses an accent that is not `#rrggbb` |
 | `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component |
-| `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of its drawer (`Drawer`): `(drawer) => <Sidebar {...drawer} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. `contentLabel` names the content, when the view's label does not |
+| `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`, its drawer and whether it is collapsed): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. `contentLabel` names the content, when the view's label does not |
 | `useNotify` | `Notify`: says something in a notice. Its options are those of Sigrid's notice: `kind: 'error'`, `undo`, `actions`, `id` |
 | `useWindow` | `WindowHandle`: whether the app runs in a window of its own, its title, the progress on the taskbar, and a call when it is shown again |
 | `ScreenBoundary` | What fails while it is drawn says so in its place. `AppWindow` has one round the screen; an app puts one round an inspector that may fail |

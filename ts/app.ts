@@ -14,8 +14,8 @@ export interface AppDefinition {
   accent: string;
   /** The words in its language: Sigrid's, and the shell's. Absent: English. */
   words?: { sigrid?: WordsOverride; shell?: Partial<ShellWords> };
-  /** The keys of the browser's storage for the scheme (light, dark or the system's) and for the zoom. */
-  storage: { scheme: string; zoom: string };
+  /** The keys of the browser's storage for the scheme (light, dark or the system's), for the zoom and for the collapsed sidebar. */
+  storage: { scheme: string; zoom: string; sidebar: string };
 }
 
 /** An app, with the theme computed from its colour. */

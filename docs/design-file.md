@@ -37,6 +37,8 @@ The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNoti
 - An app does not write what the shell draws: `AppShell`, `TitleBar`, `WindowControls`, `CommandPalette`, `CommandsProvider`,
   `Toasts` and `useSchemeCommands` are the shell's (rule `shell-import`). It writes its own `Sidebar`, `Inspector`, `Panel` and
   commands (`useCommand`).
+- The person collapses the sidebar to its rail, and opens it again, with its button and with a command of the palette. It is open
+  at first, and the choice is kept under the app's own storage key. Its head is the name of the list and its count.
 - A prop is added to `AppWindow` when a second app needs it. Until then the need is met by a region.
 
 ## The look

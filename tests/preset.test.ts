@@ -31,7 +31,7 @@ describe('the accent', () => {
   });
 
   test('defineApp refuses what is not a colour', () => {
-    const app = { id: 'x', name: 'X', lang: 'en', storage: { scheme: 'x.theme', zoom: 'x.zoom' } };
+    const app = { id: 'x', name: 'X', lang: 'en', storage: { scheme: 'x.theme', zoom: 'x.zoom', sidebar: 'x.sidebar' } };
     for (const accent of ['red', '#fff', '006398', '']) assert.throws(() => defineApp({ ...app, accent }), /#rrggbb/);
     assert.equal(defineApp({ ...app, accent: '#006398' }).theme.label, 'X');
   });

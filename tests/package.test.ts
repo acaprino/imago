@@ -31,7 +31,7 @@ test('Sigrid, React and the API of Tauri are peers, and the Sigrid the package i
 });
 
 test('Node loads the root entry with no browser, and defineApp gives back what it is given, with the theme', () => {
-  const app = { id: 'demo', name: 'Demo', lang: 'en', accent: '#006398', storage: { scheme: 'demo.scheme', zoom: 'demo.zoom' } };
+  const app = { id: 'demo', name: 'Demo', lang: 'en', accent: '#006398', storage: { scheme: 'demo.scheme', zoom: 'demo.zoom', sidebar: 'demo.sidebar' } };
   const { theme, ...rest } = defineApp(app);
   assert.deepEqual(rest, app);
   assert.equal(theme.id, 'demo');
