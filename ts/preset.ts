@@ -53,7 +53,8 @@ export function accentsOf(accent: string): { hue: number; dark: string; light: s
 export function shellTheme({ id, name, accent }: { id: string; name: string; accent: string }): ThemeDef {
   const { hue, dark, light } = accentsOf(accent);
   return {
-    id, label: name, hue: 80, chroma: 0, accent: [0.12, hue], sidebar: 'tenue', palette: 'crisp',
+    // The hue of the grays is that of the surfaces below: the engine gives it to a ground that has almost no colour of its own.
+    id, label: name, hue: 264, chroma: 0, accent: [0.12, hue], sidebar: 'tenue', palette: 'crisp',
     shape: 'soft', radii: { sm: 4, md: 6, lg: 10, xl: 10, chip: 4 }, keys: 'boxed', controls: 'strong',
     surfaces: {
       // design-check-ignore-next-line color-value: the dark surfaces of the suite, which the theme engine is given

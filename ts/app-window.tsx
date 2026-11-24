@@ -17,8 +17,8 @@ export interface AppView<Id extends string = string> {
   icon: IconName;
   /** The name of its command («Go to the graph»). Absent: its label. */
   command?: string;
-  /** After its word: a `Count`. */
-  end?: ReactNode;
+  /** How many things it holds, after its word. */
+  count?: number;
 }
 
 /** The state of the sidebar where it is a drawer: the props of Sigrid's `Sidebar`. */
@@ -41,7 +41,7 @@ export interface AppWindowProps<Id extends string = string> {
   inspector?: ReactNode;
   /** The actions on the content, the primary one last. */
   actions?: ReactNode;
-  /** The line at the start of the foot. A phone has no foot. */
+  /** The line at the start of the foot. A phone has no foot, and a narrow window no keys in it. */
   footer?: ReactNode;
   /** The keys of the app in the foot, before the shell's: ids of its commands, or keys with their words. */
   hints?: readonly (string | KeyHint)[];
@@ -90,7 +90,8 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
   // In a row too narrow for the words side by side the icon goes over the word.
   const tabs = (
     <ToolbarTabs aria-label={words.views} value={view} onValueChange={go} edge={phone ? 'top' : 'bottom'} layout={narrow ? 'stacked' : 'inline'}>
-      {views.map(({ id, label, icon, end }) => <ToolbarTab key={id} value={id} icon={narrow ? <Icon name={icon} /> : undefined}>{label}{end ? <> {end}</> : null}</ToolbarTab>)}
+      {/* One text: only a text keeps its width when its view is the current one, and the bar must not move. */}
+      {views.map(({ id, label, icon, count }) => <ToolbarTab key={id} value={id} icon={narrow ? <Icon name={icon} /> : undefined}>{count ? `${label} ${count}` : label}</ToolbarTab>)}
     </ToolbarTabs>
   );
   const row = <Toolbar aria-label={words.views}>{tabs}</Toolbar>;
@@ -121,7 +122,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
         sidebar={navigation}
         inspector={inspector}
         actions={actions}
-        footer={phone ? undefined : <>{footer}<Spacer /><KeyHints ids={[...hints, ...(search ? [SEARCH] : []), { keys: 'F6', label: words.nextRegion }]} /></>}
+        footer={narrow ? (phone ? undefined : footer) : <>{footer}<Spacer /><KeyHints ids={[...hints, ...(search ? [SEARCH] : []), { keys: 'F6', label: words.nextRegion }]} /></>}
       >
         <ScreenBoundary key={view}>{children}</ScreenBoundary>
         {/* Inside the frame, so that in a window it opens under the title bar. */}

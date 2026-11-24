@@ -60,7 +60,7 @@ function Demo() {
   useCommand({ id: 'demo.close', label: 'Close the details', group: 'Items', keys: 'Escape', icon: <Icon name="close" />, when: chosen !== null, run: () => setChosen(null) });
 
   const views: AppView<View>[] = [
-    { id: 'items', label: 'Items', command: 'Go to Items', icon: 'layers', end: <Count value={items.length} label="items" /> },
+    { id: 'items', label: 'Items', command: 'Go to Items', icon: 'layers', count: items.length },
     { id: 'new', label: 'New item', command: 'Go to New item', icon: 'plus' },
     { id: 'notices', label: 'Notices', command: 'Go to Notices', icon: 'info' },
     { id: 'broken', label: 'Failure', command: 'Go to Failure', icon: 'alert' },

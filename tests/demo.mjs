@@ -120,8 +120,8 @@ const palette = async (page, text) => {
 const region = (page) => page.evaluate(() => {
   const at = document.activeElement;
   if (at === document.body) return 'nowhere';
-  const held = at?.closest('[data-slot="app-shell-skip"], [data-slot="title-bar"], [data-slot="sidebar"], [data-slot="inspector"], [data-slot="app-shell-content"], [data-slot="app-shell-actions"], [data-slot="app-shell-footer"]');
-  return held?.getAttribute('data-slot') ?? at?.tagName.toLowerCase();
+  const held = at?.closest('[data-slot="app-shell-skip"], [data-slot="title-bar"], [data-slot="sidebar"], [data-slot="inspector"], [data-slot="app-shell-content"], [data-slot="app-shell-actions"], [data-slot="app-shell-footer"], [data-toasts]');
+  return held?.hasAttribute('data-toasts') ? 'notices' : held?.getAttribute('data-slot') ?? at?.tagName.toLowerCase();
 });
 
 /** The places of the controls every view shares, from the start of the bar to its end. */
@@ -205,6 +205,11 @@ try {
     assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
   });
 
+  await onPage('the light look: its ground and its sheet', { scheme: 'light', system: 'dark' }, async (page) => {
+    const color = (slot) => page.evaluate((name) => getComputedStyle(document.querySelector(`[data-slot="${name}"]`)).backgroundColor, slot);
+    assert.deepEqual([await color('app-shell'), await color('app-shell-work')], ['rgb(246, 247, 249)', 'rgb(255, 255, 255)']);
+  });
+
   await onPage('the palette: the views and the look, and the choice is kept', { system: 'dark' }, async (page) => {
     await palette(page, '');
     const options = await page.getByRole('option').allTextContents();
@@ -242,11 +247,11 @@ try {
     await page.locator('[data-slot="inspector-body"]').waitFor();
     await page.evaluate(() => document.activeElement.blur());
     const round = [];
-    for (let k = 0; k < 5; k++) {
+    for (let k = 0; k < 6; k++) {
       await page.keyboard.press('F6');
       round.push(await region(page));
     }
-    assert.deepEqual(round, ['title-bar', 'sidebar', 'app-shell-content', 'inspector', 'title-bar']);
+    assert.deepEqual(round, ['title-bar', 'sidebar', 'app-shell-content', 'inspector', 'notices', 'title-bar']);
     await page.reload();
     await page.getByRole('button', { name: /^Model cache/ }).click();
     await page.evaluate(() => document.activeElement.blur());

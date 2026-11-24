@@ -81,7 +81,7 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
   foot only under 620px in a browser.
 - Every view is also a command, the one in use checked. `Ctrl+K` opens the palette; `Ctrl+F` is the search of the view, and where
   there is none the shell says so; `F6` goes to the next region.
-- The foot names the keys that work now. A phone has no foot.
+- The foot names the keys that work now, from 620px. A phone has no foot.
 - What had the focus and goes gives it to the content; a view opened from the palette does too, one opened from the bar keeps it.
 - The notices are one stack. One goes by itself, an error stays until it is closed, and one with the id of another takes its place.
 - A screen that fails while it is drawn says so in its place, with a button that draws it again; the bar stays.
