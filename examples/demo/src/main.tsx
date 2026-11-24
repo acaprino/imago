@@ -83,7 +83,7 @@ function Demo() {
         </>
       }
       sidebar={(sidebar) => (
-        <Sidebar aria-label="States" header={<SidebarRow><Text variant="strong">States</Text> <Count value={STATES.length} label="states" /></SidebarRow>} {...sidebar}>
+        <Sidebar aria-label="States" header={<SidebarRow>States <Count value={STATES.length} label="states" /></SidebarRow>} {...sidebar}>
           <SidebarGroup>
             <NavItem icon={<Icon name="all" />} current={view === 'items' && state === null} end={<Count value={items.length} label="items" reserve />} onClick={() => { sidebar.onOpenChange(false); filter(null); }}>All</NavItem>
             {STATES.map(({ id, label, icon }) => (

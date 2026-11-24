@@ -68,7 +68,8 @@ function fakeWindow({ kept = null, refused = [] }) {
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
 }
 
-const browser = await chromium.launch();
+// Text in gray, as the window draws it (`browser_args` of imago-shell).
+const browser = await chromium.launch({ args: ['--disable-lcd-text'] });
 const failures = [];
 
 /** Opens the page in a context of its own, with `scheme` as the choice kept, and runs `look` on it; an error of the page fails it. */
@@ -226,12 +227,15 @@ try {
         weights: [...document.querySelectorAll('[data-slot="toolbar-tab"]')].map((tab) => getComputedStyle(tab).fontWeight),
         strip: [document.querySelector('[data-slot="app-shell-status"]').getBoundingClientRect().height, getComputedStyle(document.querySelector('[data-slot="app-shell-status"]')).fontSize],
         segment: ['toggle-group', 'toggle-group-item'].map((slot) => getComputedStyle(document.querySelector(`[data-slot="${slot}"]`)).borderTopLeftRadius),
+        bar: document.querySelector('[data-slot="title-bar"]').getBoundingClientRect().height,
+        head: (({ fontWeight }, { borderTopLeftRadius, backgroundColor }) => [fontWeight, parseFloat(borderTopLeftRadius) > 8, backgroundColor !== 'rgba(0, 0, 0, 0)'])(
+          getComputedStyle(document.querySelector('[data-slot="sidebar-row"]')), getComputedStyle(document.querySelector('[data-slot="sidebar-row"] [data-slot="count"]'))),
         commands: (({ borderTopColor, color: ink }) => [borderTopColor, ink])(getComputedStyle(document.querySelector('[data-slot="title-bar"] [data-variant="quiet"]'))),
         control: style.getPropertyValue('--density-control-md'), radius: [style.getPropertyValue('--radius-md'), style.getPropertyValue('--radius-lg')],
         ground: color('app-shell'), sheet: color('app-shell-work'),
       };
     });
-    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], loaded: [], weights: ['700', '500', '500', '500'], strip: [40, '14px'], segment: ['6px', '4px'], commands: ['rgb(42, 50, 64)', 'rgb(154, 165, 184)'], control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
+    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], loaded: [], weights: ['700', '500', '500', '500'], strip: [40, '14px'], segment: ['6px', '4px'], bar: 46, head: ['600', true, true], commands: ['rgb(42, 50, 64)', 'rgb(154, 165, 184)'], control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
   });
 
   await onPage('the light look: its ground and its sheet', { scheme: 'light', system: 'dark' }, async (page) => {
@@ -328,7 +332,7 @@ try {
   await onPage('the sidebar collapses to its rail and opens again, by its button and by the palette, and is kept', {}, async (page) => {
     const sidebar = page.locator('[data-slot="sidebar"]');
     const button = page.locator('[data-slot="sidebar-collapse"]');
-    const name = page.getByText('States', { exact: true });
+    const name = page.locator('[data-slot="sidebar-row"]');
     const top = async (locator) => (await locator.boundingBox()).y;
     const is = async (collapsed, why) => {
       await page.waitForFunction((wanted) => document.querySelector('[data-slot="sidebar"]').hasAttribute('data-collapsed') === wanted, collapsed);
@@ -404,7 +408,7 @@ try {
       assert.ok(await dimmed(), 'at 500');
       await page.locator('[data-slot="title-bar"] button').first().click();
       const drawer = page.getByRole('dialog');
-      await drawer.getByText('States', { exact: true }).last().waitFor();
+      await drawer.locator('[data-slot="sidebar-row"]').waitFor();
       assert.deepEqual([await drawer.locator('[data-slot="sidebar"]').getAttribute('data-collapsed'), await button.count()], [null, 0], 'the drawer is whole');
       await page.keyboard.press('Escape');
       await drawer.waitFor({ state: 'hidden' });
@@ -464,6 +468,24 @@ try {
     });
     assert.ok((await overflow(page)).length >= 2, 'a button of 2000px in a page of 340px is not found');
   });
+
+  for (const chosen of ['dark', 'light']) {
+    for (const width of [1440, 860, 700]) {
+      await onPage(`the line of the chosen view is clear of the sheet, ${chosen} at ${width}`, { width, scheme: chosen }, async (page) => {
+        for (const view of VIEWS.slice(0, 3)) {
+          await open(page, view);
+          await still(page);
+          const clear = await page.evaluate(() => {
+            const chosenTab = document.querySelector('[data-slot="toolbar-tab"][aria-current="page"]');
+            const line = getComputedStyle(chosenTab, '::after');
+            const end = chosenTab.getBoundingClientRect().bottom - parseFloat(line.bottom);
+            return { tall: line.height, gap: document.querySelector('[data-slot="app-shell-work"]').getBoundingClientRect().top - end };
+          });
+          assert.ok(clear.tall === '2px' && clear.gap >= 2, `${view}: the line is ${clear.tall} tall, ${clear.gap}px from the sheet`);
+        }
+      });
+    }
+  }
 
   const MOTION = /\/motion-impl-[\w-]+\.js$/;
   await onPage('the line of a view grows from its middle', {}, async (page, scripts) => {

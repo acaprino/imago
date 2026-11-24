@@ -67,7 +67,7 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 - The corners are 4, 6 and 10; the density is compact (controls and rows of 32, 44 with a finger); keys are drawn as caps; fields
   and outline buttons have the border of a control; the tone is Balanced, so the accents are the colours above.
 - The chosen view of the bar and the chosen item of a segment are marked by their weight, 700 beside 500, and by the accent: a line
-  under the view, the fill and the border of the item. The status strip is 40 tall and
+  under the view, clear of the sheet, the fill and the border of the item. The status strip is 40 tall and
   its text is that of the body. Commands is quiet: a hairline and muted text.
 - The font is the system's, Segoe UI on Windows: no font is loaded. An app sets none.
 - Motion is on for the whole app, on Fluent's curves in 90 to 180 ms: the line of the chosen view grows from its middle. A person who asked

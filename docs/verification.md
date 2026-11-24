@@ -45,6 +45,17 @@ second later the processes were killed:
 The zoom is in the browser's storage alone. With every process killed it was lost, in both, though it was chosen more than 12 seconds
 before.
 
+## The text in gray
+
+On 2026-11-24 a throwaway run (45494947853) started the demo on the same kind of runner, whose Windows smooths fonts with ClearType,
+took the screen and measured the unchosen tabs of the title bar: how far apart the three channels of a pixel lie between the ground
+and the ink. The program is the debug profile with nothing added to its config.
+
+| What | Before (the crate of `c1d29e0`) | With `--disable-lcd-text` |
+|---|---|---|
+| Pixels of text with a colour fringe (over 0.1 apart) | 756 of 921, the widest 0.81 | 0 of 898, the widest 0.01 |
+| The arguments the engine was started with | The two of wry | The same two, and `--disable-lcd-text` |
+
 ## Not run: for the coordinator
 
 From the artifact of a run of Verify on `develop`, on a desktop of Windows 11 (`npm run demo:fetch`, then `npm run capture`). The
