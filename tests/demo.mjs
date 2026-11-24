@@ -429,7 +429,7 @@ try {
     assert.equal(await page.getByText(/chrome/).count(), 0, 'what the page tells by itself is not said to the person');
   });
 
-  // WebView2 writes the page's storage some seconds late: after its process dies, what the browser keeps is old, or gone.
+  // WebView2 writes the page's storage some seconds late: after it dies, what the browser keeps is old, or gone.
   const themes = (page) => page.evaluate(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_theme').map(([, args]) => args));
   const drawn = (page) => page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|ready'));
   for (const [before, chosen] of [['none', undefined], ['another', 'dark']]) {

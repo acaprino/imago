@@ -27,10 +27,23 @@ check passed:
 | The second start | The kept theme is the first frame's |
 | The program started again while it runs | The second copy ends, and the page is told the window is back |
 
-Two things it showed besides. A choice of theme or zoom made in the seconds before the browser process is lost is lost with it:
-WebView2 writes the page's storage to the disk some seconds later, and the page that is loaded again, which finds no choice, says dark
-to the window, so `window-theme` is written over. A run that waited less than 12 seconds showed it. A window that had reached past the edge of that small screen came back inside
-its work area when it was built again.
+A window that had reached past the edge of that small screen came back inside its work area when it was built again.
+
+## The theme kept when WebView2 dies
+
+On 2026-11-24 two more throwaway runs, on the same runner, did these checks and the ones above on the sources before `kept_theme`
+(commit `0d9dda8`) and with it (`c3c4fe8`). The theme was dark for more than 12 seconds, light was chosen in the palette, and about a
+second later the processes were killed:
+
+| What | Before | With `kept_theme` |
+|---|---|---|
+| The browser process is killed alone (run 45479912755) | Light stays | Light stays |
+| Every process of the engine is killed at once, the one of the storage too (run 45480828899) | The page drew dark, and `window-theme` became `dark` | The page, the window's frame and `window-theme` are light |
+| The engine's folder is deleted between two starts (both runs) | The page drew dark, and `window-theme` became `dark` | The page, the window's first frame and `window-theme` are light |
+| `kept_theme` answers, before the page is drawn | There is none | Status 200, in 3 and 4 ms |
+
+The zoom is in the browser's storage alone. With every process killed it was lost, in both, though it was chosen more than 12 seconds
+before.
 
 ## Not run: for the coordinator
 

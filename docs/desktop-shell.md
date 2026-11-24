@@ -59,8 +59,8 @@ person's choice: `light`, `dark` or `system`.
 4. With nothing saved (a fresh install) the window follows Windows until the page has spoken. The page then says dark, which is
    what an app of the suite draws until the person chooses.
 5. The word in `window-theme` is the choice, and the page asks for it (`kept_theme`, 3.3) before it draws and takes it over its
-   own. The page's own copy is in the browser's storage, which WebView2 writes to the disk some seconds later: when the
-   browser's process dies, a choice made just before is lost there, and not in `window-theme`.
+   own. The page's own copy is in the browser's storage, which WebView2 writes to the disk some seconds later: when its
+   processes die, a choice made just before is lost there, and not in `window-theme`.
 
 `set_theme` reaches DWM through tao, and tauri-runtime-wry passes the new theme to WebView2's
 `PreferredColorScheme`. The JavaScript `setTheme()` would need `core:window:allow-set-theme` and cannot save the choice

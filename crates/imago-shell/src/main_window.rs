@@ -199,7 +199,7 @@ fn set_theme<R: Runtime>(
 
 /// What the page chose last, as [`set_theme`] kept it: `light`, `dark`, `system`, or none. The page
 /// takes it over its own when it starts: WebView2 writes the page's storage to the disk some seconds
-/// late, and loses what it had not written when its process dies.
+/// late, and loses what it has not written when it dies.
 #[tauri::command(async)]
 fn kept_theme<R: Runtime>(
     window: WebviewWindow<R>,
