@@ -127,6 +127,8 @@ export function ShellProvider({ app, untold, children }: { app: App; untold: boo
 
   useFocusFollowed();
   useDesktopGuard(own && released);
+  // shortcut: the zoom is in the browser's storage alone, and is lost when every process of the engine is killed; when that
+  // matters to an app, the plugin keeps it as it keeps the theme.
   useZoom({ storageKey: app.storage.zoom, onError: shell.failed });
 
   // The first frame is drawn: the window, which is hidden until then, is shown in its theme. A hidden window may run no

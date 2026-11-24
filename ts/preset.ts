@@ -1,6 +1,6 @@
 // The look of the suite, after Xiox: a theme for Sigrid's engine, made from the one colour of an app. The surfaces, the
 // control border, the corners and the keys are the suite's; the hue is the app's. Sigrid's own defaults are not touched.
-import { applyDensity, type ThemeDef, type ThemeTone } from '@acaprino/sigrid';
+import { applyDensity, applyFont, SYSTEM_FONT, type ThemeDef, type ThemeTone } from '@acaprino/sigrid';
 
 // What the suite asks of Sigrid by name, beside its colours. Each is a choice Sigrid leaves off: the theme's own here, then
 // the tone, then what is put on the page.
@@ -9,14 +9,17 @@ const HOOKS = {
   radii: { sm: 4, md: 6, lg: 10, xl: 10, chip: 4 },
   keys: 'boxed',
   controls: 'strong',
+  tabs: 'bold',
+  statusStrip: 'tall',
 } satisfies Partial<ThemeDef>;
 
 /** The tone as the colours are written: Sigrid's default one would make them more saturated. */
 export const SHELL_TONE: ThemeTone = { intensity: 'theme', light: 'theme' };
 
-/** Puts on the page what is not the theme's. */
+/** Puts on the page what is not the theme's. The bold tabs are at 700, which the system's font has and Sigrid's do not. */
 export function dress(root: HTMLElement): void {
   applyDensity(root, 'compact');
+  applyFont(root, SYSTEM_FONT.id);
 }
 
 const gamma = (value: number): number => (value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055);

@@ -29,7 +29,7 @@ release, already built: nothing is compiled when it is installed.
 imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 ```
 
-- Sigrid (`^6.2.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
+- Sigrid (`^6.4.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
   the last one too: it is loaded only in a window, but its bundler must find it.
 - **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
   `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`, so that

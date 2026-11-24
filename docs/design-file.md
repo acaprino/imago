@@ -63,6 +63,9 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 
 - The corners are 4, 6 and 10; the density is compact (controls and rows of 32, 44 with a finger); keys are drawn as caps; fields
   and outline buttons have the border of a control; the tone is Balanced, so the accents are the colours above.
+- The chosen view of the bar and the chosen item of a segment are marked by their weight, 700 beside 500, and by the accent: a line
+  under the view, the fill and the border of the item. The status strip is 40 tall.
+- The font is the system's, Segoe UI on Windows: no font is loaded. An app sets none.
 - Dark until the person chooses. Light, dark and the system's look are the same three commands of the palette in every app, and
   no app draws a switch for them. The choice is kept under the app's own storage key, and is on the page before the first paint.
 - A state is a `Badge` with a `tone` and a word. Surfaces are opaque: there is no glass.

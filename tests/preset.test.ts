@@ -45,7 +45,8 @@ describe('what the preset states', () => {
       dark: { paper: '#1a202c', sidebar: '#12161e', raised: '#232834', line: '#2a3240', ink: '#e8ecf3', input: '#8791a6', accent: '#6ed0ff', fill: '#6ed0ff' },
       light: { paper: '#ffffff', sidebar: '#f6f7f9', raised: '#ffffff', line: '#e3e6ea', ink: '#111827', input: '#767e8b', accent: '#006398', fill: '#006398' },
     });
-    assert.deepEqual({ shape: theme.shape, radii: theme.radii, keys: theme.keys, controls: theme.controls }, { shape: 'soft', radii: { sm: 4, md: 6, lg: 10, xl: 10, chip: 4 }, keys: 'boxed', controls: 'strong' });
+    const { shape, radii, keys, controls, tabs, statusStrip } = theme;
+    assert.deepEqual({ shape, radii, keys, controls, tabs, statusStrip }, { shape: 'soft', radii: { sm: 4, md: 6, lg: 10, xl: 10, chip: 4 }, keys: 'boxed', controls: 'strong', tabs: 'bold', statusStrip: 'tall' });
     assert.deepEqual(SHELL_TONE, { intensity: 'theme', light: 'theme' });
   });
 
@@ -57,6 +58,8 @@ describe('what the preset states', () => {
         assert.deepEqual(corrected, []);
         assert.equal(attributes['data-keys'], 'boxed');
         assert.equal(attributes['data-controls'], 'strong');
+        assert.equal(attributes['data-tabs'], 'bold');
+        assert.equal(attributes['data-status-strip'], 'tall');
         assert.deepEqual(
           { paper: colors.paper, ground: colors['sidebar-paper'], raised: colors.raised, line: colors.line, ink: colors.ink, input: colors.input, accent: colors.accent, primary: colors.primary },
           { paper: stated.paper, ground: stated.sidebar, raised: stated.raised, line: stated.line, ink: stated.ink, input: stated.input, accent: scheme === 'dark' ? dark : light, primary: scheme === 'dark' ? dark : light },
@@ -88,6 +91,7 @@ describe('contrast', () => {
     }
     text('the neutral badge', c.ink, over(c.ink, c.paper, 0.06));
     text('a notice', c.paper, c.ink);
+    text('the chosen item of a segment', c.ink, over(c.accent, c['paper-2'], 0.16));
     for (const line of ['input', 'ring']) part(`${line} on a chosen row`, c[line], c.selected);
     return out;
   }
