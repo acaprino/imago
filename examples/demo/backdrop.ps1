@@ -9,9 +9,9 @@ param(
   # It closes itself after this long, so a run that dies leaves nothing on the screen.
   [int]$Seconds = 240
 )
-# A plain window of one colour behind the demo window, for the glass to blur: the acrylic is a blur of what lies
-# behind the window, so the same glass is photographed over a dark and over a bright one. It never takes the
-# focus (the demo window must stay the active one, or Windows drops the material) and has no taskbar button.
+# A plain window of one colour behind the demo window: the same window is photographed over a dark and over a bright
+# one, and what lies behind it must not show. It never takes the focus (the demo window must stay the active one) and
+# has no taskbar button.
 # It prints "ready" once it is shown and runs until it is stopped.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing

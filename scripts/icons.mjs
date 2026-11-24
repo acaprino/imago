@@ -1,29 +1,27 @@
-// Makes the icon set of each app into icons/<app>/ from tokens/imago.tokens.json.
+// Makes the icon set of each app into icons/<app>/ from the table of the apps below.
 //   node scripts/icons.mjs            write the files (draws the PNGs: Windows, with Segoe UI Variable Display, and
 //                                     Playwright's Chromium; anywhere else it refuses, and says why)
-//   node scripts/icons.mjs --check    compare the SVGs and the list of files with what the tokens give, the size in the
+//   node scripts/icons.mjs --check    compare the SVGs and the list of files with what the table gives, the size in the
 //                                     header of each PNG with its name, and each .ico with the container of the
 //                                     folder's PNGs, without drawing; exit 1 on a difference
-//   --tokens <file> and --out <dir> point at other files (the tests check a copy). Any other argument is exit 2.
+//   --out <dir> points at another folder (the tests check a copy). Any other argument is exit 2.
 //
-// The icon is the mark of the title bar: a rounded square (corner 70 of 256, as 6 of 22) in the accent of the app's
-// dark theme, holding the capital initial of its name, weight 700, in the accent's ink. Both colours are read from the
-// tokens through color.mjs, the way css/tokens.css gets them, never typed. An app copies its own files from the
-// package; `imago-check` reports a copy that differs (rule app-icon).
+// The icon is a rounded square (corner 70 of 256) in the app's colour, holding the capital initial of its name, weight
+// 700, in the ink for that colour. An app copies its own files from the package; `imago-check` reports a copy that
+// differs (rule app-icon).
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { colorValueToHex } from './color.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The five apps: the id of the token file and the name the title bar writes. The initial of the name is the letter. */
+/** The five apps: the id, the name the title bar writes (its initial is the letter), the fill of the square and the ink of the letter. */
 export const APPS = [
-  ['shinatama', 'Shinatama'],
-  ['xiox', 'Xiox'],
-  ['mukade', 'Mukade'],
-  ['muro', 'Muro'],
-  ['daodan', 'Daodan'],
+  ['shinatama', 'Shinatama', '#FFA3C8', '#240E17'],
+  ['xiox', 'Xiox', '#F2B966', '#201301'],
+  ['mukade', 'Mukade', '#D0B2FF', '#191125'],
+  ['muro', 'Muro', '#68DDB8', '#001C13'],
+  ['daodan', 'Daodan', '#6ED0FF', '#011925'],
 ];
 
 export const PNG_SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
@@ -37,15 +35,6 @@ export const FILES = [
   ...PNG_SIZES.map((size) => `${size}x${size}.png`),
   'icon.png', 'icon.ico', 'favicon.ico',
 ];
-
-/** The fill and the ink of an app: its `--im-accent` and `--im-accent-on` in the dark theme, as #RRGGBB. */
-export function coloursOf(tokens, app) {
-  const hue = tokens.app?.[app]?.hue?.$value;
-  if (typeof hue !== 'number') throw new Error(`app.${app}.hue: no such token`);
-  const dark = tokens.accent?.dark;
-  if (!dark?.accent || !dark['accent-on']) throw new Error('accent.dark.accent and accent.dark.accent-on: no such tokens');
-  return { fill: colorValueToHex(dark.accent.$value, hue), ink: colorValueToHex(dark['accent-on'].$value, hue) };
-}
 
 /**
  * The source of an icon: one line with no line break, so that a checkout that changes line endings cannot change a
@@ -83,9 +72,9 @@ export function icoFile(images) {
   return Buffer.concat([header, ...images.map(({ png }) => png)]);
 }
 
-/** The SVGs of every app, from the tokens: { app: svg }. */
-export function svgsOf(tokens) {
-  return Object.fromEntries(APPS.map(([app, name]) => [app, iconSvg({ letter: name[0].toUpperCase(), ...coloursOf(tokens, app) })]));
+/** The SVGs of every app: { app: svg }. */
+export function svgsOf() {
+  return Object.fromEntries(APPS.map(([app, name, fill, ink]) => [app, iconSvg({ letter: name[0].toUpperCase(), fill, ink })]));
 }
 
 /** The PNGs of each SVG, one per size of PNG_SIZES, drawn at their own size by Chromium on a transparent background: { app: { size: bytes } }. */
@@ -138,9 +127,9 @@ function pngSize(bytes) {
 const sizeByName = (name) => (name === 'icon.png' ? 512 : Number(/^(\d+)x\1\.png$/.exec(name)?.[1] ?? NaN));
 
 /** What is wrong in the icons folder `out`: the list of files, the SVGs, the headers of the PNGs and the .ico containers, without drawing. */
-export function problems(tokens, out) {
+export function problems(out) {
   const found = [];
-  const svgs = svgsOf(tokens);
+  const svgs = svgsOf();
   const apps = new Set(APPS.map(([app]) => app));
   const there = existsSync(out) ? readdirSync(out).sort() : [];
   for (const name of there) if (!apps.has(name)) found.push(`${name}: not one of the apps (${[...apps].join(', ')})`);
@@ -155,7 +144,7 @@ export function problems(tokens, out) {
     for (const name of present) if (!FILES.includes(name)) found.push(`${app}/${name}: not a file of the icon set`);
     for (const name of ['icon.svg', 'favicon.svg']) {
       if (!present.includes(name)) continue;
-      if (normal(readFileSync(join(folder, name), 'utf8')) !== svgs[app]) found.push(`${app}/${name}: not what the tokens give`);
+      if (normal(readFileSync(join(folder, name), 'utf8')) !== svgs[app]) found.push(`${app}/${name}: not what the table gives`);
     }
     for (const name of FILES.filter((file) => file.endsWith('.png') && present.includes(file))) {
       const size = pngSize(readFileSync(join(folder, name)));
@@ -176,17 +165,17 @@ export function problems(tokens, out) {
 /** A bad argument: exit 2, and nothing is drawn or written. */
 class ArgumentError extends Error {}
 
-/** The arguments: --check, --tokens <file> and --out <dir>, and nothing else. */
+/** The arguments: --check and --out <dir>, and nothing else. */
 function parseArguments(args) {
-  const options = { check: false, tokens: undefined, out: undefined };
+  const options = { check: false, out: undefined };
   for (let k = 0; k < args.length; k++) {
     const arg = args[k];
     if (arg === '--check') options.check = true;
-    else if (arg === '--tokens' || arg === '--out') {
+    else if (arg === '--out') {
       const value = args[++k];
       if (!value || value.startsWith('--')) throw new ArgumentError(`${arg} needs a path`);
-      options[arg.slice(2)] = value;
-    } else throw new ArgumentError(`unknown argument ${arg}: the arguments are --check, --tokens <file> and --out <dir>`);
+      options.out = value;
+    } else throw new ArgumentError(`unknown argument ${arg}: the arguments are --check and --out <dir>`);
   }
   return options;
 }
@@ -214,15 +203,13 @@ export function drawingRefusal(platform, hasFont) {
 
 async function main() {
   const args = parseArguments(process.argv.slice(2));
-  const tokensFile = args.tokens ?? join(root, 'tokens', 'imago.tokens.json');
   const out = args.out ?? join(root, 'icons');
   const name = relative(process.cwd(), out) || out;
-  const tokens = JSON.parse(readFileSync(tokensFile, 'utf8'));
 
   if (args.check) {
-    const found = problems(tokens, out);
+    const found = problems(out);
     if (found.length) {
-      console.error(`${name} is out of date with ${relative(process.cwd(), tokensFile) || tokensFile}: run "npm run icons".\n${found.map((line) => `  ${line}`).join('\n')}`);
+      console.error(`${name} is out of date with scripts/icons.mjs: run "npm run icons".\n${found.map((line) => `  ${line}`).join('\n')}`);
       process.exitCode = 1;
     }
     return;
@@ -230,7 +217,7 @@ async function main() {
 
   const refusal = drawingRefusal(process.platform, process.platform === 'win32' && fontFound());
   if (refusal) throw new Error(refusal);
-  const svgs = svgsOf(tokens);
+  const svgs = svgsOf();
   const drawn = await drawAll(svgs);
   for (const [app, svg] of Object.entries(svgs)) {
     mkdirSync(join(out, app), { recursive: true });

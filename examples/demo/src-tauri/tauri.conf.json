@@ -3,7 +3,7 @@
   "productName": "Imago demo",
   "identifier": "dev.imago.demo",
   "build": {
-    "beforeDevCommand": "npm run gallery -- --host 127.0.0.1 --port 1420 --strictPort",
+    "beforeDevCommand": "npm run demo:serve",
     "beforeBuildCommand": "npm run demo:web",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"

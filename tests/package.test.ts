@@ -1,48 +1,35 @@
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { defineApp } from '@acaprino/imago';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file: string): string => readFileSync(join(root, file), 'utf8');
-const walk = (folder: string): string[] => readdirSync(join(root, folder), { withFileTypes: true })
-  .flatMap((entry) => entry.isDirectory() ? walk(join(folder, entry.name)) : [join(folder, entry.name)]);
-const manifest = (): { version: string; exports: Record<string, string> } => JSON.parse(read('package.json'));
+type Manifest = { version: string; exports: Record<string, string>; files: string[]; peerDependencies: Record<string, string>; devDependencies: Record<string, string> };
+const manifest = (): Manifest => JSON.parse(read('package.json'));
 
-test('every path in "exports" resolves to an existing file or folder', () => {
-  const entries = Object.entries(manifest().exports);
-  assert.ok(entries.length > 0, 'package.json has no "exports"');
-  for (const [entry, target] of entries) {
-    // "./css/*": "./css/*" exposes the folder: check the folder.
-    const path = join(root, target.replace(/\*.*$/, ''));
-    assert.ok(existsSync(path), `exports["${entry}"] points to ${target}, which does not exist`);
-  }
+test('every path in "exports" and "files" is there', () => {
+  const { exports, files } = manifest();
+  // "./icons/*": "./icons/*" exposes the folder: check the folder.
+  for (const [entry, target] of Object.entries(exports)) assert.ok(existsSync(join(root, target.replace(/\*.*$/, ''))), `exports["${entry}"] points to ${target}, which does not exist`);
+  for (const file of files) assert.ok(existsSync(join(root, file)), `"files" names ${file}, which does not exist`);
 });
 
 test('the version is major.minor.patch', () => {
   assert.match(manifest().version, /^\d+\.\d+\.\d+$/);
 });
 
-test('@acaprino/imago/shell no longer exports the Shinatama skins: Shinatama takes them from the tag v0.1.4', async () => {
-  const shell: Record<string, unknown> = await import('@acaprino/imago/shell');
-  for (const name of ['applyShinatamaPalette', 'SHINATAMA_PALETTES', 'ShinatamaPaletteTokens']) {
-    assert.ok(!(name in shell), `@acaprino/imago/shell still exports ${name}`);
-  }
-  assert.equal(typeof shell.applyLook, 'function', 'the import found the shell module');
-  assert.ok(!existsSync(join(root, 'ts/shell/shinatama-palette.ts')), 'the source of the skins is still in the package');
+test('Sigrid and React are peers, and the Sigrid the package is built with is one the peer allows', () => {
+  const { peerDependencies, devDependencies } = manifest();
+  assert.deepEqual(peerDependencies, { '@acaprino/sigrid': '^6.0.0', react: '^19.0.0' });
+  assert.match(devDependencies['@acaprino/sigrid'], /\/download\/v(6\.\d+\.\d+)\/acaprino-sigrid-\1\.tgz$/);
 });
 
-test('the modal drawers are gone from the package: a side panel is the inspector, a dialog is centred', () => {
-  const removed = /im-content-dialog--drawer|im-sectioned-drawer|im-padded-drawer/;
-  const files = [...walk('css'), ...walk('ts'), ...walk('react')].filter((file) => /\.(css|ts|tsx)$/.test(file));
-  assert.ok(files.length > 20, 'the walk found the package sources');
-  for (const file of files) assert.ok(!removed.test(read(file)), `${file} still names a removed drawer class`);
-  // The drawer that is left is not modal: a layer beside live panels (openDialogDrawer), never a way to block the window.
-  const drawer = read('ts/ui/drawer.ts');
-  assert.ok(drawer.includes('dialog.show()') && !drawer.includes('showModal'), 'a drawer is shown, not modal');
-  for (const file of files) if (!['css/surfaces.css', 'ts/ui/drawer.ts'].includes(file.replaceAll('\\', '/'))) assert.ok(!/im-content-drawer/.test(read(file)), `${file} names im-content-drawer, which only the drawer writes`);
-  assert.ok(!/['"]drawer['"]/.test(read('ts/ui/content-dialog.ts')), "createContentDialog's show still takes a 'drawer' mode");
+test('Node loads the root entry with no browser, and defineApp gives back what it is given', () => {
+  const app = { id: 'demo', name: 'Demo', accent: '#006398', storage: { scheme: 'demo.scheme', zoom: 'demo.zoom' } };
+  assert.equal(defineApp(app), app);
 });
 
 test('AGENTS.md carries the branch rule', () => {
