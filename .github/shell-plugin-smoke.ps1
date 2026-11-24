@@ -53,6 +53,7 @@ $env:IMAGO_DEMO_HOME = "$Data-embedded"
 Write-Host '--- the embedded page'
 $demo = Start-Demo
 $title = Wait-For { $t = Title $demo; if ($t -match '^Smoke') { $t } } 25
+Write-Host "now: $(Main $demo)"
 Say ($title -match 'tauri.localhost set_theme:ok caption:ok chrome:ok ready:ok') "the page calls the four commands: $title"
 Say ((Get-Content "$env:IMAGO_DEMO_HOME/window-theme" -ErrorAction SilentlyContinue) -eq 'light') 'the theme is kept'
 Close-Demo $demo
@@ -64,10 +65,11 @@ $server = Start-Server
 Start-Sleep 2
 $demo = Start-Demo
 $title = Wait-For { $t = Title $demo; if ($t -match '^Smoke') { $t } } 25
+Write-Host "now: $(Main $demo)"
 Say ($title -match '127.0.0.1:50777 set_theme:ok caption:ok chrome:ok ready:ok') "the page calls the four commands: $title"
 $still = Wait-For { $t = Title $demo; if ($t -match '^Still') { $t } } 15
 Say ($still -match 'Still http://127.0.0.1:50777 open:null') "another origin and a new window are refused: $still"
-$null = [W]::SetWindowPos([IntPtr][int64]("$(Main $demo)".Split('|')[0]), [IntPtr]::Zero, 120, 60, 700, 560, 0x14)
+$null = [W]::SetWindowPos([IntPtr][int64]("$(Main $demo)".Split('|')[0]), [IntPtr]::Zero, 120, 60, 700, 560, 0x4014)
 Start-Sleep 1
 $before = Main $demo
 Kill-Engine $demo 'browser'

@@ -154,6 +154,10 @@ fn text(error: impl Display) -> String {
 }
 
 // ---- the plugin ------------------------------------------------------------------------------
+//
+// The commands are `async`, off the window's thread. Tauri holds its list of plugins while a plugin's
+// command runs on that thread, and takes it again for each window event: a command that shows the
+// window there waits for itself, forever.
 
 /// The plugin. An app registers it on its builder before anything calls the crate.
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
@@ -168,7 +172,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
 
 /// The theme the page chose (`light`, `dark` or `system`) and the one it draws (`light` or `dark`):
 /// the window takes it, and keeps the choice for the first frame of the next start.
-#[tauri::command]
+#[tauri::command(async)]
 fn set_theme<R: Runtime>(
     window: WebviewWindow<R>,
     shell: State<'_, Shell>,
@@ -189,7 +193,7 @@ fn set_theme<R: Runtime>(
 }
 
 /// Where the page's maximize button is, in physical pixels of the client area.
-#[tauri::command]
+#[tauri::command(async)]
 fn caption<R: Runtime>(
     window: WebviewWindow<R>,
     shell: State<'_, Shell>,
@@ -207,7 +211,7 @@ fn caption<R: Runtime>(
 }
 
 /// The page has drawn its first frame. Called again after each reload, which shows nothing.
-#[tauri::command]
+#[tauri::command(async)]
 fn ready<R: Runtime>(window: WebviewWindow<R>, shell: State<'_, Shell>) -> Result<(), String> {
     shell.options_of(&window)?;
     show_drawn(&window);
@@ -216,7 +220,7 @@ fn ready<R: Runtime>(window: WebviewWindow<R>, shell: State<'_, Shell>) -> Resul
 
 /// The title of the window and the percent of the job in progress, if there is one, for the taskbar
 /// button. A job that ends while the window is not in front asks for attention.
-#[tauri::command]
+#[tauri::command(async)]
 fn chrome<R: Runtime>(
     window: WebviewWindow<R>,
     shell: State<'_, Shell>,

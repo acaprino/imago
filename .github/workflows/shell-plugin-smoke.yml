@@ -66,4 +66,5 @@ jobs:
           })();
           '@
       - run: cargo build -p imago-demo --features custom-protocol
-      - run: ./.github/shell-plugin-smoke.ps1 -Exe "$PWD/target/debug/imago-demo.exe" -Data "$env:RUNNER_TEMP/demo-data" -Page "$PWD/examples/demo/dist"
+      - timeout-minutes: 6
+        run: ./.github/shell-plugin-smoke.ps1 -Exe "$PWD/target/debug/imago-demo.exe" -Data "$env:RUNNER_TEMP/demo-data" -Page "$PWD/examples/demo/dist"
