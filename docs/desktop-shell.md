@@ -1,12 +1,12 @@
-# Desktop shell: glass, window and native-feeling components
+# Desktop shell: the window, native and in the page
 
-How a Tauri 2 window on Windows 11 looks and behaves like a desktop application with a glass material, and how an
-app of the suite gets that from Imago. The design values are in [design-file.md](design-file.md) and in
-`tokens/imago.tokens.json`; this file holds the techniques, the reasons and the measurements behind them.
+How a Tauri 2 window on Windows 11 looks and behaves like a desktop application, and how an app of the suite gets that
+from Imago. The native side is the crate `imago-shell`. The page side is Sigrid's: the parts of `@acaprino/sigrid/layout`
+and the hooks of `@acaprino/sigrid/tauri` ([design-file.md](design-file.md) says who owns what). This file holds the
+techniques, the reasons and the measurements behind them.
 
-This is Shinatama's `docs/design-system/desktop-shell.md`, moved to the package and updated. What changed: the code
-that Shinatama and Xiox each had per app is now the crate `imago-shell` (the Rust side) and the modules in
-`ts/shell` (the page side), and an app calls them instead of copying them.
+It comes from Shinatama's `docs/design-system/desktop-shell.md`. The code that Shinatama and Xiox each had per app is the
+crate, and an app calls it instead of copying it.
 
 The measurements in section 1 were made by Shinatama on 2026-11-19 with Tauri 2.12.5, tauri-runtime-wry 2.12.3,
 tao 0.37.2, wry 0.57.1, window-vibrancy 0.8.1 and WebView2 on Windows 11 Home 10.0.26200. The crate pins
@@ -14,7 +14,7 @@ tao 0.37.2, wry 0.57.1, window-vibrancy 0.8.1 and WebView2 on Windows 11 Home 10
 [verification.md](verification.md). A statement here that `verification.md` does not list as run is a statement
 from Shinatama's work or from reading the code.
 
-## 1. The glass technique
+## 1. The material of the window
 
 ### 1.1 What Windows paints
 
@@ -35,12 +35,11 @@ Facts about the material:
   path is used (and is slow to drag).
 - There the acrylic has no colour but the tint, so the tint follows the look and the theme the page draws, which the
   page sends with the window theme (1.2). `apply_theme` sets it: `acrylic_tint(look, theme)` is the ground of the look
-  under glass (the row "Ground" of 1.3), with its alpha as a byte: Smooth dark `#0C111D` and 204, Smooth light
+  under glass, with its alpha as a byte: Smooth dark `#0C111D` and 204, Smooth light
   `#F6F7F9` and 224, ONI dark `#0B0416` and 219, ONI light `#E9EEF8` and 230. A window on Windows 10 is then light
   under a light look and dark under a dark one. Under the theme `system` the tint follows a change of Windows' colours
-  only when the page calls `applyLook` again at that change, as [using-imago.md](using-imago.md), section 3, asks
-  (listening to `prefers-color-scheme`): then the page sends the theme it draws again. The demo's page does it
-  (`gallery/mount/desktop.ts` of the repository `acaprino/imago`). The first frame keeps the tint of the app's own config, which
+  only when the page sends the theme it draws again at that change, as Sigrid's `useWindowTheme` does. The first frame
+  keeps the tint of the app's own config, which
   `glass_window_config` leaves as it is, until the page's first `set_window_theme`. On Windows 11 22H2 and later
   nothing changes: setting the effect again sets the backdrop the window already has (the call Tauri made when it
   built the window), and that backdrop takes no tint.
@@ -49,32 +48,22 @@ Facts about the material:
   dark window**. A light acrylic over dark content is therefore a mid grey, and a dark one over bright content a
   lighter grey.
 - Windows drops the material (a solid fallback) when the window is inactive, in battery saver, with transparency off
-  in Settings, and in high contrast. The page cannot detect most of these states, so every layer the page paints
-  must keep its text readable on its own.
+  in Settings, and in high contrast. The page cannot detect most of these states.
+- Sigrid's surfaces are opaque and cover the window, so the material is seen only before the page draws. The demo, whose
+  page is Sigrid's, shows no glass.
 
-### 1.2 The window theme follows the look
+### 1.2 The window theme follows the page
 
-The theme of the window decides the acrylic. A dark acrylic under light surfaces is exactly what turned Smooth light
-grey in Shinatama before 2026-11-19. The rule, as `windowThemeFor(look, choice)` gives it:
-
-| Look | Theme chosen | Window theme |
-|---|---|---|
-| Smooth | Light | `light` |
-| Smooth | Dark | `dark` |
-| Smooth | Windows | `system`: no theme of its own, the window follows Windows |
-| ONI | Light | `light` |
-| ONI | Dark | `dark` |
-| ONI | Windows | `dark`: ONI has no light backdrop to follow |
+The theme of the window decides the acrylic, the frame Windows draws and the colour scheme of WebView2. It is the
+person's choice: `light`, `dark` or `system`.
 
 `WindowTheme` is the Rust type of that word: `Light`, `Dark` or `System`. `Look` is the Rust type of the page's look,
 `Look::Smooth` or `Look::Oni`, read by `parse_look` (`oni` is ONI, any other word Smooth): it decides the tint of 1.1
 and nothing else. The path of the word:
 
-1. The page calls `applyLook`, which sets the root attributes and sends the window theme to the window through the
-   function the app gives as `setWindowTheme`, with `{ look, resolved }`: the look and the theme the page draws
-   (`light` or `dark`, never `system`). Called again, it sends again when the word, the look or the theme drawn
-   changed, and not otherwise; under `system` a change of Windows' colours changes the theme drawn, when the app calls
-   `applyLook` again at that change (1.1).
+1. The page sends the choice as `theme` and the scheme it draws (`light` or `dark`, never `system`) as `resolved`, with
+   Sigrid's `useWindowTheme` and its option `command`. The hook sends when the scheme drawn changes: a choice that leaves
+   it as it was is not sent.
 2. The app's command `set_window_theme` calls `parse_theme` (a word that is not `light`, `dark` or `system` is
    refused) and `drawn_by_page` for the look and the theme drawn (a page that sends neither, an older one, is Smooth
    in the word's own theme, and dark for `system`), then `apply_theme(window, theme, look, resolved)` (Tauri's
@@ -91,64 +80,21 @@ and nothing else. The path of the word:
 `core:window:allow-set-theme` and cannot save the choice for the first frame. The calls the page makes on the window
 itself (minimize, maximize, close, drag, zoom, listening to an event) do need permissions: see section 3.5.
 
-### 1.3 The layers
+### 1.3 How to check it on screen
 
-From the back to the front. Under the root class `im-glass` these tokens are translucent; without it they are opaque.
-Alpha values are read from `css/tokens.css`.
-
-| Layer | Smooth dark | Smooth light | ONI dark | ONI light |
-|---|---|---|---|---|
-| Acrylic material | dark | light | dark | light |
-| Ground, `--im-ground` | `#0C111D` at 80% | `#F6F7F9` at 88% | `#0B0416` at 86% | `#E9EEF8` at 90% |
-| The title bar | nothing painted | nothing painted | nothing painted: the grid of the ground shows | nothing painted: the grid of the ground shows |
-| The sidebar | nothing painted | nothing painted | a bordered pane on `--im-sheet` | a bordered pane on `--im-sheet` |
-| Sheets, `--im-sheet` | `#1A202C` at 94% | white at 95% | `#0D0A22` at 80% | white at 82% |
-| Floating surfaces, `--im-float` | `#242935` at 96% | white at 97% | `#10081F` at 97% | `#FAFCFF` at 98% |
-| Dense surfaces, `--im-terminal` | `#0E1118` at 70% | white | `#05030E` at 70% | white |
-
-Why these values, from Shinatama's measurements:
-
-- **The frame is one sheet of glass.** Bars with their own fill over a dense ground made the title bar and the
-  toolbar one opaque band: in Smooth dark it measured 32,35,41, the colour of Windows 11's own dark title bar
-  (32,32,32), which is why it read as a native frame.
-- **The dark tint is darker and bluer than the sheet.** The dark acrylic is neutral grey; mixed into a neutral slate
-  it gives Windows grey. A deep cool slate keeps the frame at about 23,26,37 over a dark window: glass in the
-  suite's colours, not the system caption.
-- **Light frost is denser.** A grey ground over a light acrylic over a dark window gave 228 to 230 (grey).
-- **Terminals stay dense.** Text contrast on terminals must not depend on the desktop behind.
-
-What is not settled: Shinatama measured Smooth dark at 23,26,37 and Smooth light at 241,241,242 over a dark window,
-with its own values. Imago's Smooth dark ground is Shinatama's tint. Its Smooth light ground is `#F6F7F9` at 88%
-where Shinatama's was white at 88%, and ONI's values are not Shinatama's. The CSS does not blur what is behind a
-translucent surface (Shinatama blurred sheets by 18px and saturated them by 1.5; nothing in `css/` does). No look
-has been captured on a real window with Imago's CSS unless [verification.md](verification.md) says so.
-
-### 1.4 Rules
-
-- Never put light glass on a dark acrylic material, or dark glass on a light one: set the window theme from the
-  look before the first frame.
-- Never paint an opaque fill on the frame bars over the glass: a band of one colour along the top reads as the
-  system's title bar.
-- Keep a dark ground away from Windows' caption grey (32,32,32): tint it.
-- Keep hover and pressed fills translucent on glass (`--im-hover`, `--im-press`).
-- Check contrast on the composited colour, not on the token alone.
-
-### 1.5 How to check it on screen
-
-A webview screenshot draws the acrylic as white: it cannot judge the glass. Photograph the real window from the
-screen. Imago's demo app (`examples/demo` of the repository `acaprino/imago`) is the gallery in a real glass window, and `npm run capture` copies it
-from the screen in both looks and both themes over a dark and a bright window. The demo is never built on a
-developer's machine: the `demo` job of the Verify workflow builds it and keeps it as the artifact `imago-demo`. Run
-`npm run demo:fetch` first, which downloads the artifact of the latest successful run of a push to `develop` to
-`examples/demo/app/` (never one of a pull request, because the capture starts the program and clicks it), says which
-commit built it and warns when that is not the checkout's `HEAD`, then `npm run capture`.
-(`npm run demo` starts it in development and is for a machine where Rust may be built.)
-Shinatama's method still holds:
+A webview screenshot does not show what Windows composes. Photograph the real window from the screen. Imago's demo app
+(`examples/demo` of the repository `acaprino/imago`) is a page on Sigrid in a real window, and `npm run capture` copies it
+from the screen in both themes over a dark and a bright window. The demo is never built on a developer's machine: the
+`demo` job of the Verify workflow builds it and keeps it as the artifact `imago-demo`. Run `npm run demo:fetch` first,
+which downloads the artifact of the latest successful run of a push to `develop` to `examples/demo/app/` (never one of a
+pull request, because the capture starts the program and clicks it), says which commit built it and warns when that is
+not the checkout's `HEAD`, then `npm run capture`. (`npm run demo` starts it in development and is for a machine where
+Rust may be built.) Shinatama's method still holds:
 
 - Raise the window once (topmost) and keep it there for every capture of a run. A window lowered between captures
   ends up behind the window in use.
 - Discard a capture whose title bar pixel is not the app's: it photographed the window in front.
-- Switch looks through the page, not by reloading.
+- Switch the theme through the page, not by reloading.
 
 ## 2. The window: Tauri techniques
 
@@ -156,15 +102,15 @@ Shinatama's method still holds:
 |---|---|---|
 | No white flash | Transparent window, clear background; wry gives WebView2 a transparent default background | `glass_window_config` |
 | Windows built after the app state | `"create": false` in the window's config, built in `setup` once every service is managed | the app's `main.rs` |
-| HTML title bar with Snap Layouts | No decorations. A child window that never paints lies over the HTML maximize button and answers `HTMAXBUTTON`; the page reports the button's rectangle | `install_snap_layouts`, `SnapLayouts::set_rect`, `mountWindowControls` |
-| Dragging | `data-tauri-drag-region` on each element that should drag: the title bar, its spacer, and the brand with everything inside it. Tauri starts a drag only when the pressed element itself carries the attribute, and nothing in `css/` changes what a child does with the pointer. Buttons, tabs and fields are left unmarked, so they take their clicks. Needs the permissions of section 3.5 | the app's markup; `markDragRegion` in `gallery/mount/desktop.ts` |
+| HTML title bar with Snap Layouts | No decorations. A child window that never paints lies over the HTML maximize button and answers `HTMAXBUTTON`; the page reports the button's rectangle | `install_snap_layouts`, `SnapLayouts::set_rect`; `useSnapLayouts` and `WindowControls` of Sigrid |
+| Dragging | `data-tauri-drag-region` on each element that should drag. Tauri starts a drag only when the pressed element itself carries the attribute; Sigrid's `TitleBar` hands it to its toolbar, its title and its spacers, and leaves buttons, tabs and fields unmarked, so they take their clicks. Needs the permissions of section 3.5 | `DRAG_REGION` of Sigrid, given to `TitleBar` as `dragProps` |
 | Snap zones | A minimum width of 500 | `glass_window_config` |
-| Not a web page | Navigation limited to the app's own origin; new windows refused; browser accelerators off and the engine's context menu trimmed to editing in a release build; browser keys, the page menu and the mouse's back and forward buttons refused in the page | `guard_navigation`, `disable_browser_accelerators`, `trim_context_menu`, `guardDesktop` |
+| Not a web page | Navigation limited to the app's own origin; new windows refused; browser accelerators off and the engine's context menu trimmed to editing in a release build; browser keys, the page menu and the mouse's back and forward buttons refused in the page | `guard_navigation`, `disable_browser_accelerators`, `trim_context_menu`; `useDesktopGuard` of Sigrid |
 | Reload when hung | A "Reload interface" item in the window menu (Alt+Space) | `install_reload_menu` |
 | WebView2 crash | A page reloaded at most three times a minute; a lost browser process rebuilds the windows; nothing is done while the app closes | `watch_process_failures`, `recovery_action`, `Recovery` (see section 4) |
-| Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, panels, notices and code are selectable | `css/base.css` |
-| Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `mountZoom` |
-| Theme | The window theme from the look, saved for the first frame (1.2), and the tint of the acrylic for Windows 10 (1.1) | `applyLook`, `parse_theme`, `drawn_by_page`, `apply_theme`, `acrylic_tint`, `Look`, `save_theme`, `saved_theme` |
+| Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, the content and what carries `data-selectable` are selectable | `AppShell` of Sigrid with `desktop` |
+| Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `useZoom` of Sigrid |
+| Theme | The window theme from the person's choice, saved for the first frame (1.2), and the tint of the acrylic for Windows 10 (1.1) | `useWindowTheme` of Sigrid, `parse_theme`, `drawn_by_page`, `apply_theme`, `acrylic_tint`, `Look`, `save_theme`, `saved_theme` |
 | Place of the window | The pieces to save the position, size and maximized state and to bring them back inside the monitors there are now. The crate gives the pieces and the app wires them, as the paragraph below says; the demo does not | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
 
 The place of the window is Xiox's, moved into the shell. Xiox saves it in `window.json` in the data folder with the
@@ -186,7 +132,7 @@ reads or saves the place of its window, so the place of the window has not been 
 ## 3. The wiring of an app, in order
 
 The Rust side and the page side, each in the order that works. The demo app (`examples/demo`) is the executable
-example. [using-imago.md](using-imago.md) has the page side with signatures.
+example.
 
 ### 3.1 Rust, once at start
 
@@ -203,11 +149,9 @@ A window built again after a lost browser process goes through this again.
    build keeps the engine's own reload and DevTools keys and its whole context menu (Inspect). That is the Rust side.
    `trim_context_menu` decides what WebView2's own menu holds when it opens: the editing commands (emoji, undo, redo,
    cut, copy, paste, paste as plain text, select all), a separator only between two of them, and no menu at all when
-   nothing is left. The page's `guardDesktop` (section 3.4) decides where the menu opens: it refuses it outside
-   fields, the `allowReloadIn` places and selected text. It also refuses F5, F12, Ctrl+R and Ctrl+Shift+I, J and C in
-   every build, so under `tauri dev` it takes reload and DevTools away too: an app calls it only outside development
-   (`if (!import.meta.env.DEV) guardDesktop(document)`), as the sketch in [using-imago.md](using-imago.md), section 5,
-   does.
+   nothing is left. The page's guard (section 3.4) decides where the menu opens: it refuses it outside fields and the
+   places the app names. It also refuses the browser's own keys (reload, the developer tools) in every build, so an app
+   turns it on only outside development.
 2. `watch_process_failures(&window, handler)`. The handler calls `recovery_action` (section 4).
 3. `install_snap_layouts(&window)`, and keep the `SnapLayouts` it returns **per window label**, replacing the entry
    when the window is rebuilt. A `Mutex<HashMap<String, SnapLayouts>>` in the app's state does it. Tauri's `manage`
@@ -224,7 +168,7 @@ one window closes for good, the app calls `Recovery::close` on the `Recovery` of
 
 | What | Name | Direction |
 |---|---|---|
-| The window theme | the command `set_window_theme(theme: String, look: Option<String>, resolved: Option<String>)` | page to Rust. The app registers it: the crate has no command of its own. `theme` is the first argument of `setWindowTheme`, and `look` (`smooth` or `oni`) and `resolved` (the theme the page draws, `light` or `dark`) come from its second, `{ look, resolved }`, for the tint of 1.1. `drawn_by_page` reads the two, and gives a page that sends neither Smooth in the word's own theme, dark for `system`. `applyLook` calls `setWindowTheme` again when the word, the look or the theme drawn changed |
+| The window theme | the command `set_window_theme(theme: String, look: Option<String>, resolved: Option<String>)` | page to Rust. The app registers it: the crate has no command of its own. `theme` is the person's choice and `resolved` the theme the page draws, `light` or `dark`, for the tint of 1.1; `look` is for a page with the looks of v0.4, and Sigrid's has none. `drawn_by_page` reads the two, and gives a page that sends neither Smooth in the word's own theme, dark for `system` |
 | The maximize button's rectangle | the command `window_caption_maximize(window, x, y, width, height)` | page to Rust. It finds the window's `SnapLayouts` by `window.label()` and calls `set_rect` with the four numbers unchanged |
 | Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay, at every change and again at every `window_caption_maximize` | Rust to page. Listening needs `core:event:allow-listen` and `core:event:allow-unlisten` (section 3.5) |
 
@@ -233,25 +177,25 @@ and the monitor's scale are both part of `devicePixelRatio`, so the numbers are 
 client area, which is the coordinate system of the child window. The command multiplies by nothing. A rectangle of
 all zeros, or a negative size, hides the overlay: the page sends it when the title bar is hidden.
 
-The page's `onOsHover` wants `none`, `hover` or `pressed`: `pressed` when `pressed` is true, else `hover` when
-`hover` is true, else `none`.
+`useSnapLayouts` reads it as `pressed` when `pressed` is true, else `hover` when `hover` is true, else neither, and gives
+it to `WindowControls` as `maximizeState`.
 
-The state comes again with every rectangle because the page draws its title bar anew on a change of look: a page
+The state comes again with every rectangle because a page may draw its title bar anew: a page
 that was mounted while the pointer rested on the button has seen no event, and the rectangle it sends tells it. A
 hover begins only when Windows has accepted the request to say when the pointer leaves, and it ends with that
 message or when the rectangle is empty (the overlay hidden), which also ends a press that began on the button.
 
 ### 3.4 The page, in order
 
-1. `applyLook` on the root, before the first paint, with `glass: true` in the desktop app.
-2. `guardDesktop(document)`, outside development only (section 3.2, step 1).
-3. `mountZoom(document, { apply })`, with `getCurrentWebview().setZoom` as `apply`.
-4. `mountWindowControls(titlebar, api, { onError })`.
-5. The app's own key handlers on the document, if it has any (a terminal): before the next step, so they run before the
-   registry and claim what they answer.
-6. `mountApp(shell, registry, options)`, which attaches the layers, the registry's keys, the regions and the sidebar
-   functions, and registers `Ctrl+K`, `Ctrl+F` and the look and theme commands ([using-imago.md](using-imago.md),
-   section 6).
+1. `applyKeptScheme` before React renders, so that the first paint has the person's scheme.
+2. `useDesktopGuard`, outside development only (section 3.2, step 1).
+3. `useWindowControls` and `useSnapLayouts`, whose results are the props of `WindowControls`: the second takes the names
+   of section 3.3, `{ command: 'window_caption_maximize', event: 'caption-maximize' }`.
+4. `useZoom`, with the storage key of the app.
+5. `useWindowTheme`, with `command: 'set_window_theme'` and the scheme `useSchemeCommands` draws.
+
+Each takes `onError`, which is told of a call that was refused or failed. In a browser they call and load nothing of
+Tauri. `examples/demo/src/main.tsx` of the repository `acaprino/imago` is the page that does it.
 
 ### 3.5 The capabilities
 
@@ -263,21 +207,17 @@ serve a part of the wiring that an app can leave out, and say so:
 |---|---|
 | `core:window:allow-minimize`, `core:window:allow-close` | The window buttons: `win.minimize()` and `win.close()` |
 | `core:window:allow-toggle-maximize` | The maximize button: `win.toggleMaximize()` |
-| `core:window:allow-is-maximized` | Only with `onMaximized` (the button's icon and label follow the window's state): `win.isMaximized()`, read when the window is resized. An app that gives no `onMaximized` does not need it |
+| `core:window:allow-is-maximized` | `useWindowControls`: the button's icon and name follow the window's state, read when the window is resized |
 | `core:window:allow-start-dragging`, `core:window:allow-internal-toggle-maximize` | Only with drag regions (section 2): a press on one drags the window, and a double click on one maximizes it. A title bar with no `data-tauri-drag-region` needs neither |
-| `core:webview:allow-set-webview-zoom` | `mountZoom`: `getCurrentWebview().setZoom` |
-| `core:event:allow-listen`, `core:event:allow-unlisten` | The event `caption-maximize` (and, with `onMaximized`, the resize events), and the function that stops listening |
+| `core:webview:allow-set-webview-zoom` | `useZoom` |
+| `core:event:allow-listen`, `core:event:allow-unlisten` | The event `caption-maximize`, the resize events, and the function that stops listening |
 
-A call the capability does not allow is a rejected promise, and who sees it depends on the call. `mountWindowControls`
-passes the refusal of `minimize`, `toggleMaximize` and `close` to its `onError`. It does not see a refused `listen`,
-`unlisten`, drag or zoom: `mountZoom` moves a refused zoom back to the level it had, and a refused drag leaves the window where it is.
-A refused `listen` is a rejection that only the app can catch, where it calls `listen`: the demo's `stopOnResolve`
-(`gallery/mount/desktop.ts` of the repository `acaprino/imago`) catches it and shows it in a notice. Left alone it is an unhandled rejection, and the page
-never hears `caption-maximize`, so the maximize button draws no hover or press from Windows.
+A call the capability does not allow is a rejected promise. Sigrid's hooks pass it to their `onError`, and a refused zoom
+goes back to the level it had; a refused drag leaves the window where it is, and nobody is told.
 
 The app's own commands (`set_window_theme`, `window_caption_maximize`) are not on this list. The file that works is
 `examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago` (it is not in the npm package); it grants these nine and nothing else, and its `windows` names
-the label `main`. [using-imago.md](using-imago.md), section 5, shows the file's shape.
+the label `main`. [using-imago.md](using-imago.md), section 4, shows the file's shape.
 
 ## 4. WebView2 recovery
 
@@ -341,33 +281,14 @@ A second `Browser` report is `Rebuild` again. It is the app's flag that makes it
 
 ## 5. Native-feeling components
 
-In-page components that behave like the operating system's. None uses `showModal()`: that makes the custom title bar
-inert and leaves a borderless window that cannot be moved, minimized or closed.
-
-- **Title bar and window buttons** (`im-titlebar`, `im-window-buttons`). Three buttons of 44 pixels at the right edge,
-  full height. Close turns to the accent on hover. The page marks them `data-im-window="minimize"`, `"maximize"` and
-  `"close"`; `mountWindowControls` finds them by that attribute. The maximize button gets Snap Layouts from the
-  native child window, so its hover and press come from Windows as `data-im-os` (`hover` or `pressed`), and its
-  state shows as `data-im-maximized`, which swaps the icon between maximize and restore.
-- **Menus** (`openMenu`): a popover under its control, with a shadow. Escape and a press outside close it and give
-  focus back to the control.
-- **The inspector** (`inspector`) replaces the right-hand drawers of Shinatama and Muro and Xiox's bottom detail box.
-  From 1000 up it is docked at the right and pushes the content; it has no scrim and nothing is inert, so a terminal
-  keeps working beside it. Below 1000 it covers the content as a drawer.
-- **Dialogs** (`confirm`, and the others of [native-forms.md](native-forms.md)): `confirm` is for a decision about the
-  whole window; a form that must block the window while it saves is a dialog too (`openFormDialog`). Everything below
-  the title bar becomes inert; containment and Escape are explicit; the actions stay at the bottom.
-- **Sheets** (`openSheet`): docked to the control or pane they belong to (below, pane top, pane bottom). A press
-  outside dismisses one the way Escape does. One at a time.
-- **Notices** (`notify`): bottom centre, never take focus. An error says Error in text, not only in colour.
-- **The command palette** (`openPalette`): `Ctrl+K`, modal like a dialog.
-- **Attention widget.** Shinatama has a separate transparent, always-on-top window without effects that never takes
-  focus. It is Shinatama's own and is not in the package.
+They are Sigrid's. None may use `showModal()`: it makes the custom title bar inert and leaves a borderless window that
+cannot be moved, minimized or closed. `AppShell` with `desktop` opens every dialog, sheet and menu under the title bar.
+Shinatama's attention widget (a separate transparent, always-on-top window without effects that never takes focus) is its
+own and is not in the package.
 
 ## 6. Reusing it in another app
 
-[using-imago.md](using-imago.md) says how an app depends on the package and in what order it adopts it. For the
-shell in short:
+[using-imago.md](using-imago.md) says how an app depends on the package. For the shell in short:
 
 1. Depend on the package (`@acaprino/imago` and `imago-shell`) at one version. The crate pins `tauri = "=2.12.5"`, and
    `serde`, `serde_json`, `webview2-com` and `windows-core` exactly too (the versions Shinatama's lock resolves, so the
@@ -375,9 +296,8 @@ shell in short:
    newer one does not build until the crate moves.
 2. Declare the window as in section 1.1 by building it from `glass_window_config`.
 3. Add the two commands of section 3.3 and the wiring of section 3.
-4. Set the three root attributes and the root class `im-glass` with `applyLook`, in the desktop app only, so a
-   browser preview stays opaque.
-5. Check the result with a screen capture (section 1.5) in each look, over a dark and a bright window.
+4. Wire the page as in section 3.4.
+5. Check the result with a screen capture (section 1.3) in each theme, over a dark and a bright window.
 
 ## 7. What is not verified on a real window
 
