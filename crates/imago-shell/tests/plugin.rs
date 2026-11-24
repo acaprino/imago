@@ -19,6 +19,10 @@ use tauri::{
 const PAGE: &str = "http://127.0.0.1:50123/app/?token=x";
 const ORIGIN: &str = "http://127.0.0.1:50123";
 const LOCAL: &str = "http://tauri.localhost";
+const OPAQUE: Material = Material::Opaque {
+    dark: Color(18, 22, 30, 255),
+    light: Color(246, 247, 249, 255),
+};
 
 /// Every command, with arguments it takes.
 fn commands() -> [(&'static str, Value); 4] {
@@ -33,27 +37,35 @@ fn commands() -> [(&'static str, Value); 4] {
     ]
 }
 
-/// An app with the plugin, its main window opened, and no capability yet; with its data folder.
-fn app() -> (App<MockRuntime>, tempfile::TempDir) {
+/// An app with the plugin, `windows` in its config, and no capability yet.
+fn app_with(windows: Vec<WindowConfig>) -> App<MockRuntime> {
     let file: PermissionFile =
         serde_json::from_str(include_str!("../permissions/default.json")).unwrap();
     let acl = BTreeMap::from([("imago-shell".to_owned(), Manifest::new(vec![file], None))]);
     let mut context = mock_context(noop_assets());
     *context.runtime_authority_mut() = tauri::runtime_authority!(acl, Default::default());
-    context.config_mut().app.windows.push(WindowConfig {
+    context.config_mut().app.windows = windows;
+    mock_builder().plugin(plugin()).build(context).unwrap()
+}
+
+/// The window `main` of an app's config.
+fn main_config() -> WindowConfig {
+    WindowConfig {
         create: false,
+        title: "Imago".into(),
         ..Default::default()
-    });
-    let app = mock_builder().plugin(plugin()).build(context).unwrap();
+    }
+}
+
+/// An app with its main window opened; with its data folder.
+fn app() -> (App<MockRuntime>, tempfile::TempDir) {
+    let app = app_with(vec![main_config()]);
     let data = tempfile::tempdir().unwrap();
     open_main(
         app.handle(),
         Options {
             data_dir: Some(data.path().to_owned()),
-            material: Material::Opaque {
-                dark: Color(18, 22, 30, 255),
-                light: Color(246, 247, 249, 255),
-            },
+            material: OPAQUE,
             ..Options::for_app(&app).unwrap()
         },
     )
@@ -180,6 +192,33 @@ fn the_theme_the_page_chose_is_kept_for_the_next_start() {
     let unknown = set(json!({ "theme": "purple" })).unwrap_err();
     assert!(unknown.contains("unknown window theme"), "{unknown}");
     assert_eq!(kept(), "system");
+}
+
+#[test]
+fn the_options_start_from_the_main_window_of_the_apps_config() {
+    let options = Options::for_app(&app_with(vec![main_config()])).unwrap();
+    assert_eq!(options.window, main_config());
+    assert_eq!(options.material, Material::Acrylic);
+    assert!(!options.background);
+    assert!((options.before_reload)(None), "a reload is not refused");
+    let other = WindowConfig {
+        label: "other".into(),
+        ..main_config()
+    };
+    assert!(Options::for_app(&app_with(vec![other])).is_err());
+}
+
+#[test]
+fn the_commands_work_without_a_data_folder() {
+    let app = app_with(vec![main_config()]);
+    let options = Options {
+        data_dir: None,
+        material: OPAQUE,
+        ..Options::for_app(&app).unwrap()
+    };
+    open_main(app.handle(), options).unwrap();
+    app.add_capability(remote(&[ORIGIN])).unwrap();
+    assert_allowed(&app, PAGE);
 }
 
 #[test]
