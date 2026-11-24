@@ -194,14 +194,14 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 4. `useZoom`, with the storage key of the app.
 5. `useWindowTheme`, with `command: 'set_window_theme'` and the scheme `useSchemeCommands` draws.
 
-Each takes `onError`, which is told of a call that was refused or failed. In a browser they call and load nothing of
+The hooks of 3 to 5 take `onError`, which is told of a call that was refused or failed. In a browser they call and load nothing of
 Tauri. `examples/demo/src/main.tsx` of the repository `acaprino/imago` is the page that does it.
 
 ### 3.5 The capabilities
 
 Tauri 2 refuses every call of the page on the window, the webview or an event until a capability file allows it. The
-wiring of this document needs nine permissions, for the label of every window that carries the title bar. Two rows
-serve a part of the wiring that an app can leave out, and say so:
+wiring of this document needs nine permissions, for the label of every window that carries the title bar. One row
+serves a part of the wiring that an app can leave out, and says so:
 
 | Permission | What needs it |
 |---|---|
