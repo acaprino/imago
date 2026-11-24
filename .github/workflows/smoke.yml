@@ -38,6 +38,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-demo-
       - run: npm ci
+      # The engine does not take the port from the environment here (the runner is elevated): the window asks for it.
+      - run: |
+          $conf = 'examples/demo/src-tauri/tauri.conf.json'
+          (Get-Content $conf -Raw).Replace('"decorations": false', '"decorations": false, "additionalBrowserArgs": "--remote-debugging-port=9333 --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"') | Set-Content $conf
       - run: npm run demo:build
       - timeout-minutes: 8
         run: ./.github/smoke.ps1 -Exe "$PWD/target/debug/imago-demo.exe" -Data "$env:RUNNER_TEMP/demo-data" -Out "$env:RUNNER_TEMP/smoke"

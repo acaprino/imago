@@ -64,7 +64,6 @@ function Screen-Shot([string]$name) {
 
 $env:IMAGO_DEMO_HOME = $Data
 $env:WEBVIEW2_USER_DATA_FOLDER = [IO.Path]::Combine($Data, "webview")
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9333 --remote-debugging-address=127.0.0.1'
 $screen = (Get-CimInstance Win32_VideoController | Select-Object -First 1); Write-Host "screen $($screen.CurrentHorizontalResolution)x$($screen.CurrentVerticalResolution), Windows $((Get-CimInstance Win32_OperatingSystem).Version)"
 
 function Start-Demo {
@@ -83,11 +82,12 @@ Write-Host "      made $script:made, hidden $script:hidden, shown $script:shown,
 Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -notmatch '--type=' } | ForEach-Object { Write-Host "      engine $($_.ProcessId) of $($_.ParentProcessId): $($_.CommandLine)" }
 Screen-Shot 'start'
 $first = Ask 'read'
+if (-not $first) { exit 1 }
 $call = { param($name) $first.ipc | Where-Object { $_.call -eq "plugin:imago-shell|$name" } | Select-Object -First 1 }
 foreach ($name in 'set_theme', 'caption', 'ready') { $c = & $call $name; Say ($c -and $c.status -eq 200) "$name answered: $($c | ConvertTo-Json -Compress)" }
 $ready = & $call 'ready'; $theme = & $call 'set_theme'
 $readyAt = $first.timeOrigin + $ready.end
-Write-Host "      window made hidden: $script:hidden; shown $($script:shown - $script:made) ms after it was made; ready answered $([int]($readyAt - $script:made)) ms after; shown $([int]($script:shown - $readyAt)) ms after ready answered"
+Write-Host "      window made hidden: $script:hidden; shown $($script:shown - $script:made) ms after it was made; ready answered $([Math]::Round($readyAt - $script:made)) ms after; shown $([Math]::Round($script:shown - $readyAt)) ms after ready answered"
 Say $script:hidden 'the window is made hidden'
 Say ($script:shown -ge ($first.timeOrigin + $ready.start - 60) -and $script:shown -le ($readyAt + 600)) 'the window is shown by ready: not before it was sent, and at once after'
 Say ($theme.end -le $ready.start) 'the theme was told before ready was sent'
