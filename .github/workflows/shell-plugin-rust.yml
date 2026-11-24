@@ -1,0 +1,39 @@
+name: Rust (throwaway, branch shell-plugin only)
+
+on:
+  push:
+    branches: [shell-plugin]
+    paths: ['crates/**', '.github/workflows/shell-plugin-rust.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup show active-toolchain
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: none
+          restore-keys: |
+            ${{ runner.os }}-cargo-verify-
+      - run: cargo fmt --all --check
+      - if: always()
+        run: cargo clippy -p imago-shell --all-targets -- -D warnings
+      - if: always()
+        run: cargo test -p imago-shell

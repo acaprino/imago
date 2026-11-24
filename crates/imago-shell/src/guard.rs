@@ -40,22 +40,6 @@ fn embedded_origin(http_mapped: bool, use_https: bool) -> &'static str {
     }
 }
 
-fn with_origins<'a, R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'a, R, M>,
-    app_origins: &[&str],
-    use_https: Option<bool>,
-) -> WebviewWindowBuilder<'a, R, M> {
-    let embedded = embedded_origins(cfg!(any(windows, target_os = "android")), use_https);
-    let origins: Vec<Url> = embedded
-        .iter()
-        .chain(app_origins)
-        .filter_map(|origin| parse_origin(origin))
-        .collect();
-    builder
-        .on_navigation(move |url| is_allowed(url, &origins))
-        .on_new_window(|_, _| NewWindowResponse::Deny)
-}
-
 /// Registers the navigation policy on a window builder, and Tauri's protocol: the embedded frontend
 /// at that exact origin and `origins` are allowed, every other navigation and every request for a
 /// new window is refused. `opening` is told each page the window goes to.
