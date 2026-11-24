@@ -116,14 +116,13 @@ The crate is a Tauri plugin that opens the main window of an app and watches it.
 2. In `setup`, `open_main(app.handle(), options)`. The window is the one called `main` in `tauri.conf.json`, with
    `"create": false`.
 3. `on_run_event` given to `run`. An app with a handler of its own calls it there, but not for an `ExitRequested` it
-   prevents.
-   Without it a rebuild of the window ends the application.
+   prevents. Without it a rebuild of the window ends the application.
 
 `Options::for_app` gives the defaults of `Options`:
 
 | Field | What it is | Default |
 |---|---|---|
-| `window` | The window's config: title, size, minimum, first page | The window `main` of the app's config |
+| `window` | The window's config: title, size, minimum, first page. The window is made with `WebviewWindowBuilder::from_config`, so the fields the crate does not set (`dragDropEnabled`, `center`) hold as the app wrote them | The window `main` of the app's config |
 | `data_dir` | Where the theme and the place are kept; with none, neither is | The app's data folder |
 | `material` | `Material` (1.1) | `Material::Acrylic` |
 | `origins` | `Origins`: what the window may show besides its embedded page. Clones share one list, and `Origins::allow` adds to it also after the window is open | None, and the dev server in development |
