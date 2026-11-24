@@ -45,7 +45,7 @@ export interface AppWindowProps<Id extends string = string> {
   inspector?: ReactNode;
   /** The actions on the content, the primary one last. */
   actions?: ReactNode;
-  /** The line at the start of the foot. A phone has no foot, and a narrow window no keys in it. */
+  /** The line at the start of the foot. A phone has no foot, and a window under 1000px no keys in it. */
   footer?: ReactNode;
   /** The keys of the app in the foot, before the shell's: ids of its commands, or keys with their words. */
   hints?: readonly (string | KeyHint)[];
@@ -112,6 +112,8 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
   const controls = useWindowControls({ onError: failed });
   const snap = useSnapLayouts({ command: 'plugin:imago-shell|caption', event: 'caption-maximize', onError: failed });
 
+  // From 1000px the keys have room in the foot beside the app's line.
+  const keys = useMedia('(width >= 1000px)');
   // The views: in the bar from 860px, at the foot under 620px in a browser, in a row under the bar otherwise.
   const wide = useMedia('(width >= 860px)');
   const narrow = useMedia('(width < 620px)');
@@ -159,7 +161,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
         sidebar={navigation}
         inspector={inspector}
         actions={actions}
-        footer={narrow ? (phone ? undefined : footer) : <>{footer}<Spacer /><KeyHints ids={[...hints, ...(search ? [SEARCH] : []), { keys: 'F6', label: words.nextRegion }]} /></>}
+        footer={phone ? undefined : !keys ? footer : <>{footer}<Spacer /><KeyHints ids={[...hints, ...(search ? [SEARCH] : []), { keys: 'F6', label: words.nextRegion }]} /></>}
       >
         <ScreenBoundary key={view}>{children}</ScreenBoundary>
         {/* Inside the frame, so that in a window it opens under the title bar. */}

@@ -112,11 +112,13 @@ const overflow = (page) => still(page).then(() => page.evaluate(() => {
   const out = [];
   const wide = document.documentElement;
   if (wide.scrollWidth > wide.clientWidth) out.push(`the page is ${wide.scrollWidth} wide in ${wide.clientWidth}`);
-  for (const slot of ['title-bar', 'app-shell-tabs', 'app-shell-status', 'sidebar', 'app-shell-content', 'app-shell-actions', 'app-shell-footer', 'app-shell-bottom', 'panel-header', 'panel-tools', 'panel-body', 'panel-footer', 'inspector-body', 'inspector-footer']) {
+  for (const slot of ['title-bar', 'app-shell-tabs', 'app-shell-status', 'sidebar', 'app-shell-content', 'app-shell-actions', 'app-shell-footer', 'app-shell-bottom', 'panel-header', 'panel-tools', 'panel-body', 'panel-footer', 'inspector-body', 'inspector-footer', 'key-hints']) {
     for (const region of document.querySelectorAll(`[data-slot="${slot}"]`)) {
       if (region.clientWidth > 1 && region.scrollWidth > region.clientWidth) out.push(`${slot} is ${region.scrollWidth} wide in ${region.clientWidth}`);
     }
   }
+  const foot = document.querySelector('[data-slot="app-shell-footer"]')?.clientHeight ?? 0;
+  if (foot > 36) out.push(`the foot is ${foot} tall: more than a line`);
   for (const control of document.querySelectorAll('button, input, textarea')) {
     const box = control.getBoundingClientRect();
     if (box.width > 1 && (box.left < 0 || box.right > innerWidth)) out.push(`"${control.textContent || control.getAttribute('aria-label')}" goes from ${box.left} to ${box.right} in ${innerWidth}`);
