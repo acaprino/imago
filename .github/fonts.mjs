@@ -37,7 +37,7 @@ for (const channel of [undefined, 'msedge']) {
       console.log(outerHTML.replace(/<[^>]+>/g, '').slice(0, 24).padEnd(25), of('font-weight'), of('color'), of('font-family').slice(0, 40), '=>', fonts.map(({ familyName, postScriptName, glyphCount }) => `${familyName} / ${postScriptName} (${glyphCount})`).join(', '));
     }
   };
-  await ask('[data-slot="toolbar-tab"]');
+  await ask('[data-slot="toolbar-tab"] [data-label], [data-slot="toggle-group-item"] [data-label]');
   await ask('[data-slot="toolbar-brand-name"], [data-slot="sidebar-row"] [data-slot="text"], [data-slot="toggle-group-item"]');
   await page.screenshot({ path: `fonts/${channel ?? 'chromium'}.png`, clip: { x: 0, y: 0, width: 1440, height: 170 } });
   await page.setContent(`<body style="background:#12161e;color:#9aa5b8">${['"Segoe UI Variable Text", "Segoe UI"', '"Segoe UI Variable Text"', '"Segoe UI"'].flatMap((f) => [400, 500, 600, 700].map((w) => `<p style="margin:4px"><span style='font:${w} 14px ${f}'>New item</span></p>`)).join('')}`);
