@@ -3,9 +3,33 @@
 //! (Ctrl+click, middle click, `window.open`), and the browser's own keys do nothing
 //! ([`disable_browser_accelerators`]), and the engine's context menu holds the editing commands
 //! only ([`trim_context_menu`]).
+use std::sync::{Arc, PoisonError, RwLock};
 use tauri::{
     webview::NewWindowResponse, Manager, Runtime, Url, WebviewWindow, WebviewWindowBuilder,
 };
+
+/// The origins a window may show besides the app's embedded frontend. The clones share one list, so
+/// an origin can be allowed after the window was opened (the app's own server, once its port is
+/// known).
+#[derive(Clone, Debug, Default)]
+pub struct Origins(Arc<RwLock<Vec<Url>>>);
+
+impl Origins {
+    /// Allows `origin` (`http://127.0.0.1:50123`; only the origin of a longer URL counts). False
+    /// when it is not a URL with a host: nothing is allowed then.
+    pub fn allow(&self, origin: &str) -> bool {
+        let Some(origin) = parse_origin(origin) else {
+            return false;
+        };
+        let mut origins = self.0.write().unwrap_or_else(PoisonError::into_inner);
+        origins.push(origin);
+        true
+    }
+
+    fn allows(&self, url: &Url) -> bool {
+        is_allowed(url, &self.0.read().unwrap_or_else(PoisonError::into_inner))
+    }
+}
 
 /// Registers the navigation policy on a window builder. The app's embedded frontend and the
 /// origins in `app_origins` (typically the dev server in development builds) are allowed.
@@ -56,6 +80,31 @@ fn with_origins<'a, R: Runtime, M: Manager<R>>(
         .collect();
     builder
         .on_navigation(move |url| is_allowed(url, &origins))
+        .on_new_window(|_, _| NewWindowResponse::Deny)
+}
+
+/// [`guard_navigation_with_scheme`] with origins that can be allowed later. `opening` is told each
+/// page the window goes to.
+pub(crate) fn guard_window<'a, R: Runtime, M: Manager<R>>(
+    builder: WebviewWindowBuilder<'a, R, M>,
+    origins: Origins,
+    use_https_scheme: bool,
+    opening: impl Fn(&Url) + Send + 'static,
+) -> WebviewWindowBuilder<'a, R, M> {
+    let embedded = Origins::default();
+    let http_mapped = cfg!(any(windows, target_os = "android"));
+    for origin in embedded_origins(http_mapped, Some(use_https_scheme)) {
+        embedded.allow(origin);
+    }
+    builder
+        .use_https_scheme(use_https_scheme)
+        .on_navigation(move |url| {
+            let allowed = embedded.allows(url) || origins.allows(url);
+            if allowed {
+                opening(url);
+            }
+            allowed
+        })
         .on_new_window(|_, _| NewWindowResponse::Deny)
 }
 
@@ -336,6 +385,33 @@ mod tests {
         assert!(parse_origin("localhost:1420 and more").is_none());
         assert!(parse_origin("").is_none());
         assert!(parse_origin("not a url").is_none());
+    }
+
+    #[test]
+    fn an_origin_is_allowed_later_through_any_clone() {
+        let origins = Origins::default();
+        let of_the_window = origins.clone();
+        let page = url("http://127.0.0.1:50123/app/?token=x");
+        assert!(!of_the_window.allows(&page), "nothing is allowed at first");
+        assert!(origins.allow("http://127.0.0.1:50123/app/?token=x"));
+        assert!(of_the_window.allows(&page));
+        assert!(of_the_window.allows(&url("http://127.0.0.1:50123/map")));
+        for other in [
+            "http://127.0.0.1:50124/",
+            "http://localhost:50123/",
+            "https://127.0.0.1:50123/",
+            "http://127.0.0.1.evil.test:50123/",
+        ] {
+            assert!(!of_the_window.allows(&url(other)), "{other}");
+        }
+        assert!(origins.allow("http://127.0.0.1:50124"), "another port");
+        assert!(of_the_window.allows(&url("http://127.0.0.1:50124/")));
+        assert!(
+            of_the_window.allows(&page),
+            "what was allowed stays allowed"
+        );
+        assert!(!origins.allow("not an origin"));
+        assert!(!origins.allow(""));
     }
 
     // ---- the context menu ------------------------------------------------------------------

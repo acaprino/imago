@@ -165,7 +165,7 @@ Shinatama's method still holds:
 | Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, panels, notices and code are selectable | `css/base.css` |
 | Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `mountZoom` |
 | Theme | The window theme from the look, saved for the first frame (1.2), and the tint of the acrylic for Windows 10 (1.1) | `applyLook`, `parse_theme`, `drawn_by_page`, `apply_theme`, `acrylic_tint`, `Look`, `save_theme`, `saved_theme` |
-| Place of the window | The pieces to save the position, size and maximized state and to bring them back inside the monitors there are now. The crate gives the pieces and the app wires them, as the paragraph below says; the demo does not | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
+| Place of the window | The position, size and maximized state are saved, and brought back inside the monitors there are now. `open_main` (section 8) does it; an app that opens its windows itself wires the pieces, as the paragraph below says | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
 
 The place of the window is Xiox's, moved into the shell. Xiox saves it in `window.json` in the data folder with the
 fields `x`, `y`, `width`, `height` and `maximized`, and the crate reads that file as it is. `WindowState` is that
@@ -174,19 +174,19 @@ reports the position (-32000, -32000) and a size of 0: `state_to_save` keeps the
 `load_state` gives back what the file holds, so the app always passes it through `clamp_to_screens` before it uses
 it. Pass the primary monitor first: a window whose corner is on no monitor goes to the first.
 
-The crate does not watch the window: the app does the wiring. At start it reads the monitors (the primary first, with
+`open_main` (section 8) does this wiring. An app that opens its windows itself does it like this. At start it reads the monitors (the primary first, with
 their work areas and the minimum multiplied by the monitor's scale, all in physical pixels), passes the loaded state
 through `clamp_to_screens` and applies the position, the size and the maximized state when it builds the window. While
 the window lives it keeps the last state it saw while the window was neither maximized nor minimized (from the move
 and resize events), and when the window closes it passes that, the two flags and a way to measure the window to
-`state_to_save`, and gives the result to `save_state`. The demo app (`examples/demo`) wires none of this: it never
-reads or saves the place of its window, so the place of the window has not been run on a real window, and
+`state_to_save`, and gives the result to `save_state`. The place of the window has not been run on a real window, and
 [verification.md](verification.md) lists it as not run. The crate's own tests cover the arithmetic and the file.
 
 ## 3. The wiring of an app, in order
 
-The Rust side and the page side, each in the order that works. The demo app (`examples/demo`) is the executable
-example. [using-imago.md](using-imago.md) has the page side with signatures.
+The Rust side and the page side, each in the order that works. An app with one main window takes the plugin instead
+(section 8), as the demo app (`examples/demo`) does, and writes none of sections 3.1 to 3.3: they are for an app that
+opens its windows itself. [using-imago.md](using-imago.md) has the page side with signatures.
 
 ### 3.1 Rust, once at start
 
@@ -224,7 +224,7 @@ one window closes for good, the app calls `Recovery::close` on the `Recovery` of
 
 | What | Name | Direction |
 |---|---|---|
-| The window theme | the command `set_window_theme(theme: String, look: Option<String>, resolved: Option<String>)` | page to Rust. The app registers it: the crate has no command of its own. `theme` is the first argument of `setWindowTheme`, and `look` (`smooth` or `oni`) and `resolved` (the theme the page draws, `light` or `dark`) come from its second, `{ look, resolved }`, for the tint of 1.1. `drawn_by_page` reads the two, and gives a page that sends neither Smooth in the word's own theme, dark for `system`. `applyLook` calls `setWindowTheme` again when the word, the look or the theme drawn changed |
+| The window theme | the command `set_window_theme(theme: String, look: Option<String>, resolved: Option<String>)` | page to Rust. An app without the plugin registers it. `theme` is the first argument of `setWindowTheme`, and `look` (`smooth` or `oni`) and `resolved` (the theme the page draws, `light` or `dark`) come from its second, `{ look, resolved }`, for the tint of 1.1. `drawn_by_page` reads the two, and gives a page that sends neither Smooth in the word's own theme, dark for `system`. `applyLook` calls `setWindowTheme` again when the word, the look or the theme drawn changed |
 | The maximize button's rectangle | the command `window_caption_maximize(window, x, y, width, height)` | page to Rust. It finds the window's `SnapLayouts` by `window.label()` and calls `set_rect` with the four numbers unchanged |
 | Hover and press of the maximize button | the event `caption-maximize`, payload `{ hover, pressed }`, sent with `emit_to` to the window that owns the overlay, at every change and again at every `window_caption_maximize` | Rust to page. Listening needs `core:event:allow-listen` and `core:event:allow-unlisten` (section 3.5) |
 
@@ -275,7 +275,8 @@ A refused `listen` is a rejection that only the app can catch, where it calls `l
 (`gallery/mount/desktop.ts` of the repository `acaprino/imago`) catches it and shows it in a notice. Left alone it is an unhandled rejection, and the page
 never hears `caption-maximize`, so the maximize button draws no hover or press from Windows.
 
-The app's own commands (`set_window_theme`, `window_caption_maximize`) are not on this list. The file that works is
+The app's own commands (`set_window_theme`, `window_caption_maximize`) are not on this list; those of the plugin have
+the permission of section 8. The file that works is
 `examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago` (it is not in the npm package); it grants these nine and nothing else, and its `windows` names
 the label `main`. [using-imago.md](using-imago.md), section 5, shows the file's shape.
 
@@ -318,8 +319,8 @@ included. The app calls it:
 A closed `Recovery` stays closed, so a window opened anew under the same label, and not rebuilt, gets a new one
 (`Recovery::new`): with the old one it would never reload, rebuild or ask again. A window destroyed to be built again
 is not closing: while the rebuilding flag is set the app calls it for none of them, prevents the exit as the contract
-below says, and keeps each `Recovery` as it is. The demo does it in `build_main`, `on_run_event` and
-`close_recoveries` (`examples/demo/src-tauri/src/main.rs`); it prevents no exit and no close.
+below says, and keeps each `Recovery` as it is. `open_main` and `on_run_event` (section 8) do it for the main
+window.
 
 ### The rebuilding contract
 
@@ -373,8 +374,9 @@ shell in short:
    `serde`, `serde_json`, `webview2-com` and `windows-core` exactly too (the versions Shinatama's lock resolves, so the
    apps of the suite link one copy of each): the app's `tauri` must resolve to exactly 2.12.5, and an app that asks for a
    newer one does not build until the crate moves.
-2. Declare the window as in section 1.1 by building it from `glass_window_config`.
-3. Add the two commands of section 3.3 and the wiring of section 3.
+2. Open the window with the plugin (section 8), or declare it as in section 1.1 by building it from
+   `glass_window_config`.
+3. Without the plugin, add the two commands of section 3.3 and the wiring of section 3.
 4. Set the three root attributes and the root class `im-glass` with `applyLook`, in the desktop app only, so a
    browser preview stays opaque.
 5. Check the result with a screen capture (section 1.5) in each look, over a dark and a bright window.
@@ -386,3 +388,56 @@ From the code and its tests, these were never run with a live webview when the c
 WebView2 that turn the browser accelerators off, trim the context menu and watch the process failures, the tint of
 the acrylic on Windows 10, what the failure watcher reports while the application closes, and the real flow of a
 rebuild. Targets other than Windows compile the same names to no-ops that have been read, not built.
+
+## 8. The plugin
+
+The crate is a Tauri plugin that opens the main window of an app and watches it. The demo's `main.rs`
+(`examples/demo/src-tauri/src/main.rs` of the repository `acaprino/imago`) is the whole of what an app writes:
+
+1. `imago_shell::plugin()` on the app's builder (`plugin`).
+2. In `setup`, `open_main(app.handle(), options)`. The window is the one called `main` in `tauri.conf.json`, with
+   `"create": false`.
+3. `on_run_event` given to `run`. An app with a handler of its own calls it there, but not for an exit it prevents.
+
+`open_main` does for that window what sections 3.1 and 3.2 list, and the rest of what the apps wired by hand: the theme
+saved for the first frame, the place kept, the window hidden until the page has drawn (shown anyway after three
+seconds), and the recovery of section 4 with its rebuild. `Options::for_app` gives the defaults of `Options`:
+
+| Field | What it is | Default |
+|---|---|---|
+| `window` | The window's config: title, size, minimum, first page | The window `main` of the app's config |
+| `data_dir` | Where the theme and the place are kept; with none, neither is | The app's data folder |
+| `material` | `Material::Acrylic`, the glass of section 1, or `Material::Opaque`, one colour for each theme: the ground the page draws there | `Material::Acrylic` |
+| `origins` | `Origins`: what the window may show besides its embedded page. Clones share one list, and `Origins::allow` adds to it also after the window is open | None, and the dev server in development |
+| `background` | Started with Windows: hidden until `show_main` | No |
+| `reload_label`, `stopped_message`, `lost_message` | The reload item of the window menu, the question when reloading did not help, and what is said when the window cannot be built again (the app then ends) | English |
+| `before_reload` | Called before each reload, on a thread that may wait: the app saves what it must and answers whether to reload. It is given the `ProcessFailure`, or none when the person asked for the reload | Reload |
+
+A page is reloaded three times a minute by itself, then a native message asks. A window that is built again opens the
+page it went to last. `show_main` brings the window to the front, from the notification area or because the app was
+started again.
+
+### 8.1 What the page calls
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `plugin:imago-shell\|set_theme` | `theme` (`light`, `dark` or `system`, the choice) and, optional, `resolved` (`light` or `dark`, the theme drawn) | The window takes the theme and its material's colour, and keeps the choice for the next start |
+| `plugin:imago-shell\|caption` | `x`, `y`, `width`, `height` in physical pixels | The rectangle of the maximize button, as in section 3.3 |
+| `plugin:imago-shell\|ready` | None | The first frame is drawn: the window is shown |
+| `plugin:imago-shell\|chrome` | `title`, and `progress` (a whole number from 0 to 100, or null) | The window's title and the taskbar button. A job that ends while the window is not in front asks for attention |
+
+The events are `caption-maximize` (section 3.3) and `window-shown`, sent when `show_main` brought the window back:
+WebView2 gives the page no focus event for that. A capability grants the four commands with `imago-shell:default`, and
+only the main window has them.
+
+A page that is not embedded in the app (a server on `http://127.0.0.1`) is refused every command until a capability
+names it, the plugin's and Tauri's own alike: `"remote": { "urls": ["http://127.0.0.1:*"] }` is any port of that
+address and no other host. A capability may also be added once the port is known. The guard is a second lock: the
+window goes only to the origins in `origins`.
+
+### 8.2 One running copy
+
+`single_instance::launch` takes the data folder and whether this is a background start, and answers with a `Launch`:
+`Launch::First` with the `Instance` whose `on_raise` is called each time the app is started again, `Launch::Running`
+(the copy that runs was asked to show its window: end), or `Launch::Closing` (one is still quitting after five
+seconds). An app that quits slowly holds `Quitting::mark` meanwhile, so that a new start waits for it.

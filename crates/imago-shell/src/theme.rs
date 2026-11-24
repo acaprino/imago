@@ -199,9 +199,121 @@ pub fn glass_window_config(base: WindowConfig, saved: Option<WindowTheme>) -> Wi
     config
 }
 
+/// What the window is made of, behind the page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Material {
+    /// The acrylic of [`glass_window_config`], tinted for the Smooth look ([`apply_theme`]).
+    Acrylic,
+    /// One opaque colour for each theme, the ground the page draws there: what shows before the
+    /// page has drawn, while it is reloaded and at the edge of a window that is resized.
+    Opaque { dark: Color, light: Color },
+}
+
+impl Material {
+    /// The colour of an opaque window in `theme`.
+    fn ground(self, theme: Theme) -> Option<Color> {
+        match (self, theme) {
+            (Material::Acrylic, _) => None,
+            (Material::Opaque { light, .. }, Theme::Light) => Some(light),
+            // Dark, and any theme a later Tauri adds.
+            (Material::Opaque { dark, .. }, _) => Some(dark),
+        }
+    }
+
+    /// The window of this material, from the app's own config, with the theme of `saved`: without
+    /// decorations and at least 500 wide, as [`glass_window_config`] says.
+    pub(crate) fn window_config(
+        self,
+        base: WindowConfig,
+        saved: Option<WindowTheme>,
+    ) -> WindowConfig {
+        let config = glass_window_config(base, saved);
+        match self.ground(config.theme.unwrap_or(Theme::Dark)) {
+            None => config,
+            ground => WindowConfig {
+                transparent: false,
+                window_effects: None,
+                background_color: ground,
+                ..config
+            },
+        }
+    }
+
+    /// An opaque window that follows Windows gets the ground of the theme Windows has.
+    pub(crate) fn paint_first_frame<R: Runtime>(
+        self,
+        window: &WebviewWindow<R>,
+    ) -> tauri::Result<()> {
+        match self.ground(window.theme()?) {
+            None => Ok(()),
+            ground => window.set_background_color(ground),
+        }
+    }
+
+    /// The window takes the theme the page chose, and the material of the theme it draws.
+    pub(crate) fn apply<R: Runtime>(
+        self,
+        window: &WebviewWindow<R>,
+        theme: WindowTheme,
+        resolved: Theme,
+    ) -> tauri::Result<()> {
+        match self.ground(resolved) {
+            None => apply_theme(window, theme, Look::Smooth, resolved),
+            ground => {
+                window.set_theme(theme.to_tauri())?;
+                window.set_background_color(ground)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_opaque_window_has_the_ground_of_its_theme_and_no_glass() {
+        let (dark, light) = (Color(18, 22, 30, 255), Color(246, 247, 249, 255));
+        let opaque = Material::Opaque { dark, light };
+        // The app's own file may still ask for glass: the material wins.
+        let base = WindowConfig {
+            transparent: true,
+            decorations: true,
+            min_width: Some(300.0),
+            window_effects: Some(WindowEffectsConfig {
+                effects: vec![WindowEffect::Acrylic],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        for (saved, ground) in [
+            (Some(WindowTheme::Light), light),
+            (Some(WindowTheme::Dark), dark),
+            (Some(WindowTheme::System), dark),
+            (None, dark),
+        ] {
+            let config = opaque.window_config(base.clone(), saved);
+            assert!(!config.transparent && !config.decorations, "{saved:?}");
+            assert!(config.window_effects.is_none(), "{saved:?}");
+            assert_eq!(config.background_color, Some(ground), "{saved:?}");
+            assert_eq!(config.min_width, Some(500.0), "the snap zones need it");
+            assert_eq!(config.theme, saved.and_then(WindowTheme::to_tauri));
+        }
+        assert_eq!(opaque.ground(Theme::Light), Some(light));
+        assert_eq!(opaque.ground(Theme::Dark), Some(dark));
+    }
+
+    #[test]
+    fn an_acrylic_window_is_the_glass_window() {
+        let config = Material::Acrylic.window_config(WindowConfig::default(), None);
+        assert!(config.transparent);
+        assert_eq!(config.background_color, Some(Color(0, 0, 0, 0)));
+        assert_eq!(
+            config.window_effects.expect("an acrylic effect").effects,
+            vec![WindowEffect::Acrylic]
+        );
+        assert_eq!(Material::Acrylic.ground(Theme::Light), None);
+    }
 
     #[test]
     fn parse_theme_reads_only_its_three_words() {
