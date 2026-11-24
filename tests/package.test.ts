@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +32,18 @@ test('Sigrid and React are peers, and the Sigrid the package is built with is on
 test('Node loads the root entry with no browser, and defineApp gives back what it is given', () => {
   const app = { id: 'demo', name: 'Demo', accent: '#006398', storage: { scheme: 'demo.scheme', zoom: 'demo.zoom' } };
   assert.equal(defineApp(app), app);
+});
+
+test('sigrid-check, run as `npm run check` runs it, refuses a class of the app\'s own', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'imago-own-class-'));
+  try {
+    writeFileSync(join(dir, 'a.tsx'), 'export const A = () => <div className="p-2">x</div>;\n');
+    const run = spawnSync(process.execPath, [join(root, 'node_modules/@acaprino/sigrid/bin/sigrid-check.mjs'), dir], { cwd: root, encoding: 'utf8' });
+    assert.equal(run.status, 1, run.stdout + run.stderr);
+    assert.match(run.stdout, /own-class/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('AGENTS.md carries the branch rule', () => {

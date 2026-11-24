@@ -87,7 +87,7 @@ jobs:
           path: ~/AppData/Local/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('node_modules/playwright-core/package.json') }}
 
-      # The gallery test drives a browser.
+      # The test of the demo page drives a browser.
       - name: Install the browser
         run: npx playwright install chromium
 

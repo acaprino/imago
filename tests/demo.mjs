@@ -117,6 +117,15 @@ try {
     assert.equal(await scheme(page), 'dark');
   });
 
+  await onPage('what sticks out is found', { width: 340 }, async (page) => {
+    await page.evaluate(() => {
+      const wide = document.createElement('button');
+      wide.style.width = '2000px';
+      document.querySelector('[data-slot="app-shell-content"]').append(wide);
+    });
+    assert.ok((await overflow(page)).length >= 2, 'a button of 2000px in a page of 340px is not found');
+  });
+
   await onPage('in a browser there are no window buttons, and nothing of Tauri is there', {}, async (page) => {
     assert.equal(await page.locator('[data-slot="window-controls"]').count(), 0);
     assert.equal(await page.evaluate(() => '__TAURI_INTERNALS__' in window), false);
