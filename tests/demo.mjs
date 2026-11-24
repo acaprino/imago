@@ -475,7 +475,7 @@ try {
       to.click();
       await new Promise(requestAnimationFrame);
       const moves = document.getAnimations().filter(({ effect }) => effect.pseudoElement === '::after' && [from, to].includes(effect.target));
-      const each = moves.map(({ transitionProperty, effect }) => [transitionProperty, effect.getTiming().duration]);
+      const each = moves.map(({ transitionProperty, effect }) => [transitionProperty, effect.getTiming().duration, effect.getTiming().easing]);
       for (const move of moves) {
         move.pause();
         move.currentTime = 40;
@@ -485,7 +485,7 @@ try {
       for (const move of moves) move.finish();
       return { before, each, during, middle: Math.abs(parseFloat(transformOrigin) - parseFloat(width) / 2) < 1, after: scaled() };
     });
-    assert.deepEqual([line.before, line.each, line.middle, line.after], [[1, 0], [['scale', 180], ['scale', 180]], true, [0, 1]]);
+    assert.deepEqual([line.before, line.each, line.middle, line.after], [[1, 0], [['scale', 180, 'cubic-bezier(0, 0, 0, 1)'], ['scale', 180, 'cubic-bezier(0, 0, 0, 1)']], true, [0, 1]]);
     for (const scale of line.during) assert.ok(scale > 0 && scale < 1, `the two lines are at ${line.during.join(' and ')}`);
     // So that the test below can fail: what moves by script is loaded here.
     assert.ok(scripts.some((script) => MOTION.test(script)), `nothing of the motion was loaded: ${scripts.join(' ')}`);

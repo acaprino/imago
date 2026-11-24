@@ -70,7 +70,7 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
   under the view, the fill and the border of the item. The status strip is 40 tall and
   its text is that of the body. Commands is quiet: a hairline and muted text.
 - The font is the system's, Segoe UI on Windows: no font is loaded. An app sets none.
-- Motion is on for the whole app, easing out in 90 to 180 ms: the line of the chosen view grows from its middle. A person who asked
+- Motion is on for the whole app, on Fluent's curves in 90 to 180 ms: the line of the chosen view grows from its middle. A person who asked
   the system for less motion sees none. What a press does is done at once: nothing waits for a movement.
 - Dark until the person chooses. Light, dark and the system's look are the same three commands of the palette in every app, and
   no app draws a switch for them. The choice is kept under the app's own storage key, and is on the page before the first paint.

@@ -16,8 +16,8 @@ const HOOKS = {
 /** The tone as the colours are written: Sigrid's default one would make them more saturated. */
 export const SHELL_TONE: ThemeTone = { intensity: 'theme', light: 'theme' };
 
-/** How the suite moves: Xiox's times, 180 ms for the line under a view, and of Sigrid's curves the one that eases out. */
-export const SHELL_MOTION: MotionFeel = { ease: 'ease-out', pace: 0.9 };
+/** How the suite moves: Xiox's times, 180 ms for the line under a view, and of Sigrid's curves the nearest to that line's. */
+export const SHELL_MOTION: MotionFeel = { ease: 'fluent', pace: 0.9 };
 
 /** Puts on the page what is not the theme's. The bold tabs are at 700, which the system's font has and Sigrid's do not. */
 export function dress(root: HTMLElement): void {
