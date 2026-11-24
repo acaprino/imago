@@ -144,9 +144,10 @@ Start-Sleep 12
 $null = Ask 'light'
 Say ((Kept) -eq 'light') "light is kept by the window: $(Kept)"
 $chosen = Now
-$mine = Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.ParentProcessId -eq $demo.Id -and $_.CommandLine -notmatch '--type=' }
+$mine = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -match 'demo-data' } | Sort-Object { if ($_.CommandLine -match 'StorageService') { 0 } elseif ($_.CommandLine -notmatch '--type=') { 1 } else { 2 } })
+$mine | ForEach-Object { Write-Host "      to kill $($_.ProcessId) $(if ($_.CommandLine -match 'utility-sub-type=(\S+)') { $Matches[1] } elseif ($_.CommandLine -match '--type=(\S+)') { $Matches[1] } else { 'browser' })" }
 $old = "$(Main $demo)".Split('|')[0]
-$mine | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Stop-Process -Id ($mine.ProcessId) -Force -ErrorAction SilentlyContinue
 Write-Host "      killed $((Now) - $chosen) ms after the choice was read back"
 $rebuilt = Wait-For { $m = Main $demo; if ($m -and $m.Split('|')[0] -ne $old) { $m } } 30
 Say ($rebuilt -and -not $demo.HasExited) "the window is built again and the program goes on (on_run_event): $rebuilt"
