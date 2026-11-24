@@ -138,6 +138,8 @@ $o = "$([W]::Child((Handle $demo), 'ImagoMaximizeOverlay'))".Split('|')[0].Split
 Say ($o[0] -eq $zoom.button.x -and $o[2] -eq $zoom.button.width) "the overlay follows the zoom: $($o -join ',') / $($zoom.button | ConvertTo-Json -Compress)"
 
 Write-Host '--- the browser process is lost'
+# What the page keeps in its storage reaches the disk some seconds after it is written.
+Start-Sleep 12
 $mine = Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.ParentProcessId -eq $demo.Id -and $_.CommandLine -notmatch '--type=' }
 $old = "$(Main $demo)".Split('|')[0]
 $mine | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
