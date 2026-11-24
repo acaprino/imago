@@ -341,10 +341,11 @@ try {
   await onPage('in a window the bar has its buttons, and the window is told what it must be', { system: 'dark', own: true }, async (page, scripts) => {
     const calls = (command) => page.evaluate((name) => window.calls.filter(([each]) => each === name).map(([, args]) => args), command);
     const called = (command) => page.waitForFunction((name) => window.calls.some(([each]) => each === name), command);
-    assert.ok(scripts.some((script) => TAURI.test(script)) || (await called('plugin:imago-shell|ready')), 'nothing of Tauri was loaded');
     assert.equal(await page.locator('[data-slot="window-controls"] button').count(), 3);
     assert.equal(await page.locator('[data-slot="title-bar"][data-tauri-drag-region]').count(), 1);
     await called('plugin:imago-shell|ready');
+    // So that the test above can fail: in a window what it looks for is loaded.
+    assert.ok(scripts.some((script) => TAURI.test(script)), `nothing of Tauri was loaded: ${scripts.join(' ')}`);
     await page.waitForTimeout(400);
     assert.equal((await calls('plugin:imago-shell|ready')).length, 1, 'ready is said once');
 
@@ -365,6 +366,8 @@ try {
 
     assert.deepEqual(await calls('plugin:imago-shell|chrome'), [], 'the window has its own title until the app says another');
     await page.getByRole('button', { name: 'Check all' }).click();
+    await page.locator('[role="progressbar"][aria-valuenow="50"]').waitFor();
+    await shot(page, 'window-job');
     await page.getByText('All items are checked.').waitFor({ timeout: 15000 });
     await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|chrome').at(-1)[1].progress === null);
     const jobs = await calls('plugin:imago-shell|chrome');

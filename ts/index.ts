@@ -4,5 +4,5 @@ export { startApp } from './start.js';
 export { AppWindow, type AppView, type AppWindowProps, type Drawer } from './app-window.js';
 export { useNotify, useWindow, type Notify, type WindowHandle } from './shell.js';
 export { ScreenBoundary } from './screen-boundary.js';
-export { useFocusKept } from './focus.js';
+export { focusContent, useFocusKept } from './focus.js';
 export type { ShellWords } from './words.js';

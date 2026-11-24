@@ -31,8 +31,8 @@ The design system up to 0.4.1 (the CSS, the renderers, the two looks, the graphs
 - Sigrid and React are peers, so that an app has one copy of each.
 - A part the suite needs and Sigrid lacks is added to Sigrid, not to Imago or to an app.
 
-The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNotify`, `useWindow`, `useFocusKept`, and
-`ScreenBoundary` round a part that may fail. [using-imago.md](using-imago.md), section 3, has them.
+The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNotify`, `useWindow`, `useFocusKept`,
+`focusContent`, and `ScreenBoundary` round a part that may fail. [using-imago.md](using-imago.md), section 3, has them.
 
 - An app does not write what the shell draws: `AppShell`, `TitleBar`, `WindowControls`, `CommandPalette`, `CommandsProvider`,
   `Toasts` and `useSchemeCommands` are the shell's (rule `shell-import`). It writes its own `Sidebar`, `Inspector`, `Panel` and

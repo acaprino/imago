@@ -16,6 +16,7 @@ release, already built: nothing is compiled when it is installed.
 "dependencies": {
   "@acaprino/imago": "https://github.com/acaprino/imago/releases/download/v<x>/acaprino-imago-<x>.tgz",
   "@acaprino/sigrid": "https://github.com/acaprino/sigrid/releases/download/v<y>/acaprino-sigrid-<y>.tgz",
+  "@tauri-apps/api": "2.12.4",
   "react": "19.3.1",
   "react-dom": "19.3.1"
 }
@@ -28,7 +29,8 @@ release, already built: nothing is compiled when it is installed.
 imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 ```
 
-- Sigrid (`^6.2.0`) and React 19 are peers: the app has one copy of each.
+- Sigrid (`^6.2.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
+  the last one too: it is loaded only in a window, but its bundler must find it.
 - **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
   `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`, so that
   the apps of the suite link one copy of each. The app's own `tauri` requirement must allow 2.12.5 (`"2"` and `"2.12"` do,
@@ -82,6 +84,7 @@ startApp(MURO, document.getElementById('app')!, <Muro />)
 | `useWindow` | `WindowHandle`: whether the app runs in a window of its own, its title, the progress on the taskbar, and a call when it is shown again |
 | `ScreenBoundary` | What fails while it is drawn says so in its place. `AppWindow` has one round the screen; an app puts one round an inspector that may fail |
 | `useFocusKept` | When one of its arguments changes and what had the focus has gone, the content takes it. `AppWindow` does it for the view; an app with steps of its own passes the step |
+| `focusContent` | Gives the focus to the content: after a press whose own control goes away with what it did |
 
 The commands of the app are Sigrid's `useCommand`, in any component. `examples/demo/src` of the repository `acaprino/imago` is a
 whole app: views, a list with its details, a form, the notices, a job, a screen that fails.

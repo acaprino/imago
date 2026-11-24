@@ -38,7 +38,7 @@ Facts about the material:
   under glass, with its alpha as a byte: Smooth dark `#0C111D` and 204, Smooth light
   `#F6F7F9` and 224, ONI dark `#0B0416` and 219, ONI light `#E9EEF8` and 230. A window on Windows 10 is then light
   under a light look and dark under a dark one. Under the theme `system` the tint follows a change of Windows' colours
-  only when the page sends the theme it draws again at that change, as Sigrid's `useWindowTheme` does. The first frame
+  only when the page sends the theme it draws again at that change, as the shell does. The first frame
   keeps the tint of the app's own config, which
   `glass_window_config` leaves as it is, until the page's first `set_window_theme`. On Windows 11 22H2 and later
   nothing changes: setting the effect again sets the backdrop the window already has (the call Tauri made when it
@@ -61,9 +61,8 @@ person's choice: `light`, `dark` or `system`.
 `Look::Smooth` or `Look::Oni`, read by `parse_look` (`oni` is ONI, any other word Smooth): it decides the tint of 1.1
 and nothing else. The path of the word:
 
-1. The page sends the choice as `theme` and the scheme it draws (`light` or `dark`, never `system`) as `resolved`, with
-   Sigrid's `useWindowTheme` and its option `command`. The hook sends when the scheme drawn changes: a choice that leaves
-   it as it was is not sent.
+1. The page sends the choice as `theme` and the scheme it draws (`light` or `dark`, never `system`) as `resolved`, when
+   either changes. The shell of `@acaprino/imago` does it (section 3.4).
 2. The app's command `set_window_theme` calls `parse_theme` (a word that is not `light`, `dark` or `system` is
    refused) and `drawn_by_page` for the look and the theme drawn (a page that sends neither, an older one, is Smooth
    in the word's own theme, and dark for `system`), then `apply_theme(window, theme, look, resolved)` (Tauri's
@@ -110,7 +109,7 @@ Rust may be built.) Shinatama's method still holds:
 | WebView2 crash | A page reloaded at most three times a minute; a lost browser process rebuilds the windows; nothing is done while the app closes | `watch_process_failures`, `recovery_action`, `Recovery` (see section 4) |
 | Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, the content and what carries `data-selectable` are selectable | `AppShell` of Sigrid with `desktop` |
 | Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `useZoom` of Sigrid |
-| Theme | The window theme from the person's choice, saved for the first frame (1.2), and the tint of the acrylic for Windows 10 (1.1) | `useWindowTheme` of Sigrid, `parse_theme`, `drawn_by_page`, `apply_theme`, `acrylic_tint`, `Look`, `save_theme`, `saved_theme` |
+| Theme | The window theme from the person's choice, saved for the first frame (1.2), and the tint of the acrylic for Windows 10 (1.1) | the shell (section 3.4), `parse_theme`, `drawn_by_page`, `apply_theme`, `acrylic_tint`, `Look`, `save_theme`, `saved_theme` |
 | Place of the window | The pieces to save the position, size and maximized state and to bring them back inside the monitors there are now. The crate gives the pieces and the app wires them, as the paragraph below says; the demo does not | `load_state`, `save_state`, `state_to_save`, `clamp_to_monitors`, `clamp_to_screens` |
 
 The place of the window is Xiox's, moved into the shell. Xiox saves it in `window.json` in the data folder with the
