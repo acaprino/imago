@@ -3,7 +3,13 @@ name = "imago-shell"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "The Rust side of Imago's desktop shell: glass window, window theme, Snap Layouts, navigation guard, WebView2 recovery and window state"
+description = "The Rust side of Imago's desktop shell, a Tauri plugin: the window, its theme, Snap Layouts, navigation guard, WebView2 recovery, its place and one running copy"
+# What makes the crate a Tauri plugin: the app's build reads the permissions through this name.
+links = "imago-shell"
+
+# Only the build script: nothing of it is in the executable.
+[build-dependencies]
+tauri-plugin = { version = "=2.7.2", features = ["build"] }
 
 # Every version is the one Shinatama's Cargo.lock resolves (2026-11-20), so the apps of the suite
 # link one copy of each. Features are the ones Shinatama's desktop crate enables.
@@ -13,12 +19,15 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 
 # The Win32 areas src/frame.rs calls (the Snap Layouts child window, the reload item of the window
-# menu, which subclasses the window with Win32_UI_Shell), and no more.
+# menu, which subclasses the window with Win32_UI_Shell), src/message.rs (a message box) and
+# src/single_instance.rs (named events), and no more.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
+    "Win32_Security",
     "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
@@ -30,4 +39,5 @@ webview2-com = "=0.39.1"
 windows-core = "=0.62.2"
 
 [dev-dependencies]
+tauri = { version = "=2.12.5", features = ["test"] }
 tempfile = "=3.27.0"

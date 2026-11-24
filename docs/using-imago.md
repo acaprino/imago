@@ -91,8 +91,41 @@ whole app: views, a list with its details, a form, the notices, a job, a screen 
 
 ## 4. The window
 
-The shell calls the plugin of `imago-shell` ([desktop-shell.md](desktop-shell.md), section 3.4); the app writes nothing for it in
-the page. In a browser nothing of Tauri is called or loaded.
+The page writes nothing for its window: the shell calls the plugin of `imago-shell` ([desktop-shell.md](desktop-shell.md), section
+3.4), and in a browser nothing of Tauri is called or loaded. The program of the app is this, and what it adds of its own:
+
+```rust
+use imago_shell::{on_run_event, open_main, plugin, Material, Options};
+use tauri::window::Color;
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(plugin())
+        .setup(|app| {
+            let options = Options {
+                material: Material::Opaque {
+                    dark: Color(0x12, 0x16, 0x1E, 255),
+                    light: Color(0xF6, 0xF7, 0xF9, 255),
+                },
+                ..Options::for_app(app)?
+            };
+            open_main(app.handle(), options)?;
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("the app failed to start")
+        .run(on_run_event);
+}
+```
+
+- **`on_run_event` goes to `run`.** When the browser process of the window is lost the window is destroyed and built again, and
+  without it that ends the app. An app with a handler of its own calls it there, but not for an exit it prevents.
+- The two grounds are those of the look ([design-file.md](design-file.md), "The look"): they show before the page has drawn and at
+  the edge of a window that is resized.
+- The window is the one called `main` in `tauri.conf.json`, with `"create": false` and no decorations. Its material, its
+  visibility and its place are the crate's.
+- The other fields of `Options`, `show_main` and `single_instance` (one running copy) are in [desktop-shell.md](desktop-shell.md),
+  sections 3.1 and 3.2. `examples/demo/src-tauri/src/main.rs` of the repository `acaprino/imago` uses them.
 
 Tauri 2 lets the page call the window, the webview or an event only when a capability file grants it. The app needs a file in
 `src-tauri/capabilities/` with these nine permissions. `windows` lists the label of every window that carries the title bar:
@@ -117,7 +150,7 @@ Tauri 2 lets the page call the window, the webview or an event only when a capab
 
 What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
 `examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The plugin's own commands are granted by
-`imago-shell:default`, in a capability beside it.
+`imago-shell:default`, in a capability beside it (`capabilities/shell.json` of the demo); `tauri.conf.json` lists both.
 
 ## 5. The icons of the executables
 

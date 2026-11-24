@@ -92,7 +92,8 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 - The page asks where it runs (`readHost`), and only in a window of its own draws the buttons, marks what drags the window,
   takes the browser's keys away and speaks to the native side. In a browser nothing of Tauri is called or loaded.
 - The one way from the page to the window is `@acaprino/sigrid/tauri`. The one native side is the crate `imago-shell`.
-- The window is told the scheme, and keeps it for its first frame, so that no start flashes.
+- The window is hidden until the page has drawn and its theme was told, and has the ground of the look until then, so that no start
+  flashes. An app passes `on_run_event` to the run loop: without it a window built again ends the app.
 - The choice of light, dark or the system's and the scheme drawn are both told, when either changes.
 - A call the person asked for (a window button, the zoom) that fails is said in a notice. What the page tells the window by itself
   is written in the console when it fails.

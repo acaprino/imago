@@ -6,27 +6,28 @@
 //! the page's (inner) size. The file is the one Xiox wrote before the shell was shared.
 use serde::{Deserialize, Serialize};
 use std::{fs, io, path::Path};
+use tauri::{PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 /// The saved place, next to the theme file.
 const STATE_FILE: &str = "window.json";
 
 /// Where the window was.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct WindowState {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-    pub maximized: bool,
+pub(crate) struct WindowState {
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) maximized: bool,
 }
 
 /// A rectangle in physical pixels: a monitor, or the part of it that is not the taskbar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Rect {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
+struct Rect {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
 }
 
 impl Rect {
@@ -42,46 +43,25 @@ impl Rect {
 
 /// A monitor: its work area (the screen without the taskbar) and its full rectangle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Screen {
-    pub work: Rect,
-    pub full: Rect,
+struct Screen {
+    work: Rect,
+    full: Rect,
 }
 
-impl Screen {
-    /// A monitor whose work area is its whole rectangle.
-    pub fn whole(rect: Rect) -> Self {
-        Self {
-            work: rect,
-            full: rect,
-        }
-    }
+/// The index of the screen a window with its corner at (`x`, `y`) is on: the one whose work area
+/// holds the corner, else the one whose full rectangle does (the taskbar strip), else the first.
+fn screen_at(x: i32, y: i32, screens: &[Screen]) -> Option<usize> {
+    screens
+        .iter()
+        .position(|screen| screen.work.holds(x, y))
+        .or_else(|| screens.iter().position(|screen| screen.full.holds(x, y)))
+        .or((!screens.is_empty()).then_some(0))
 }
 
-/// The window brought inside one of `monitors` and to at least `min_width` x `min_height`. The
-/// monitor is the one that holds the window's top-left corner; a corner on none (the monitor it
-/// was saved on is gone) takes the first, so **pass the primary monitor first**. The window is cut
-/// to the monitor and moved until all of it is inside. Without any monitor only the minimum is
-/// applied.
+/// The window brought inside one of `screens` and to at least `min_width` x `min_height`: it is cut to
+/// the work area and moved until all of it is inside.
 ///
-/// Everything here is in physical pixels, the minimum too: the shell's own minimum width of 500
-/// (`glass_window_config`) is in the window config's logical pixels, so the app multiplies it by
-/// the monitor's scale factor before it passes it here.
-///
-/// For a window whose frame is not the page (a system title bar, a taskbar that is not on the
-/// monitor's rectangle) see [`clamp_to_screens`].
-pub fn clamp_to_monitors(
-    state: WindowState,
-    monitors: &[Rect],
-    min_width: u32,
-    min_height: u32,
-) -> WindowState {
-    let screens: Vec<Screen> = monitors.iter().copied().map(Screen::whole).collect();
-    clamp_to_screens(state, &screens, (0, 0), min_width, min_height)
-}
-
-/// [`clamp_to_monitors`] for a window that has a frame, on monitors that have a taskbar.
-///
-/// The window is brought inside the work area of the monitor that holds its top-left corner. A
+/// The area is the one of the monitor that holds its top-left corner. A
 /// corner in the taskbar strip is in no work area but is on its monitor, so the full rectangles
 /// are tried next, and a corner on no monitor takes the first. `frame` is the window's outer size
 /// minus its inner size (title bar and borders), because the state holds the inner size: the
@@ -92,7 +72,7 @@ pub fn clamp_to_monitors(
 /// Choose the app's minimum so it fits a 1366x768 laptop at 125 % (Xiox measured it): 1093 x 614
 /// logical, 574 once the 48 px Windows 11 taskbar is out, and the page plus the title bar and
 /// borders (about 31 logical pixels high) must fit in that. Xiox's 960 x 540 does.
-pub fn clamp_to_screens(
+fn clamp_to_screens(
     state: WindowState,
     screens: &[Screen],
     frame: (u32, u32),
@@ -104,19 +84,10 @@ pub fn clamp_to_screens(
         height: state.height.max(min_height),
         ..state
     };
-    let screen = screens
-        .iter()
-        .find(|screen| screen.work.holds(state.x, state.y))
-        .or_else(|| {
-            screens
-                .iter()
-                .find(|screen| screen.full.holds(state.x, state.y))
-        })
-        .or(screens.first());
-    let Some(screen) = screen else {
+    let Some(at) = screen_at(state.x, state.y, screens) else {
         return state;
     };
-    let area = screen.work;
+    let area = screens[at].work;
     let width = state.width.min(area.width.saturating_sub(frame.0));
     let height = state.height.min(area.height.saturating_sub(frame.1));
     let (outer_width, outer_height) = (
@@ -142,7 +113,7 @@ pub fn clamp_to_screens(
 /// `(-32000, -32000)` and size 0), so what is saved is the last normal state, which is what
 /// restoring brings back, flagged maximized; only a normal window is measured (`live`). With no
 /// normal state ever seen nothing is saved, rather than a wrong place.
-pub fn state_to_save(
+pub(crate) fn state_to_save(
     maximized: bool,
     minimized: bool,
     normal: Option<WindowState>,
@@ -156,21 +127,130 @@ pub fn state_to_save(
 
 /// The saved state, or `None` when there is no file or it is not a state. The state is given back
 /// as the file holds it, not checked against anything: it may be on a monitor that is gone, below
-/// the minimum, or the (-32000, -32000, 0 x 0) of a minimized window, so the caller always passes
-/// it through [`clamp_to_monitors`] or [`clamp_to_screens`] before it uses it.
-pub fn load_state(data_dir: &Path) -> Option<WindowState> {
+/// the minimum, or the (-32000, -32000, 0 x 0) of a minimized window: [`restore`] brings it back.
+pub(crate) fn load_state(data_dir: &Path) -> Option<WindowState> {
     serde_json::from_str(&fs::read_to_string(data_dir.join(STATE_FILE)).ok()?).ok()
 }
 
 /// Keeps the state in `<data_dir>/window.json`, whole or not at all, making the folder if needed.
-pub fn save_state(data_dir: &Path, state: &WindowState) -> io::Result<()> {
+pub(crate) fn save_state(data_dir: &Path, state: &WindowState) -> io::Result<()> {
     let text = serde_json::to_string_pretty(state).map_err(io::Error::other)?;
     crate::write_atomically(&data_dir.join(STATE_FILE), text.as_bytes())
+}
+
+/// [`clamp_to_screens`] with the minimum in logical pixels, as the window's config has it: `screens`
+/// come with their scale, and the minimum takes the one of the screen the window goes to.
+fn place(
+    saved: WindowState,
+    screens: &[(Screen, f64)],
+    frame: (u32, u32),
+    minimum: (f64, f64),
+) -> WindowState {
+    let areas: Vec<Screen> = screens.iter().map(|(screen, _)| *screen).collect();
+    let scale = screen_at(saved.x, saved.y, &areas).map_or(1.0, |at| screens[at].1);
+    let physical = |logical: f64| (logical * scale).round() as u32;
+    let (min_width, min_height) = (physical(minimum.0), physical(minimum.1));
+    clamp_to_screens(saved, &areas, frame, min_width, min_height)
+}
+
+/// Where the window is now; only meaningful while it is neither maximized nor minimized.
+pub(crate) fn measure<R: Runtime>(window: &WebviewWindow<R>) -> Option<WindowState> {
+    let (at, size) = (window.outer_position().ok()?, window.inner_size().ok()?);
+    Some(WindowState {
+        x: at.x,
+        y: at.y,
+        width: size.width,
+        height: size.height,
+        maximized: false,
+    })
+}
+
+/// Puts the window where it was (`saved`), inside the monitors there are now, and gives back the
+/// place it got. `minimum` is in logical pixels.
+pub(crate) fn restore<R: Runtime>(
+    window: &WebviewWindow<R>,
+    saved: WindowState,
+    minimum: (f64, f64),
+) -> tauri::Result<WindowState> {
+    let mut monitors = window.available_monitors()?;
+    if let Some(primary) = window.primary_monitor()? {
+        monitors.sort_by_key(|monitor| monitor.position() != primary.position());
+    }
+    let rect = |at: PhysicalPosition<i32>, size: PhysicalSize<u32>| Rect {
+        x: at.x,
+        y: at.y,
+        width: size.width,
+        height: size.height,
+    };
+    let screens: Vec<(Screen, f64)> = monitors
+        .iter()
+        .map(|monitor| {
+            let work = monitor.work_area();
+            let screen = Screen {
+                work: rect(work.position, work.size),
+                full: rect(*monitor.position(), *monitor.size()),
+            };
+            (screen, monitor.scale_factor())
+        })
+        .collect();
+    let (outer, inner) = (window.outer_size()?, window.inner_size()?);
+    let frame = (
+        outer.width.saturating_sub(inner.width),
+        outer.height.saturating_sub(inner.height),
+    );
+    let state = place(saved, &screens, frame, minimum);
+    // The position first: on a monitor of another scale Windows changes the size.
+    window.set_position(PhysicalPosition::new(state.x, state.y))?;
+    window.set_size(PhysicalSize::new(state.width, state.height))?;
+    if state.maximized {
+        window.maximize()?;
+    }
+    Ok(state)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl Screen {
+        /// A monitor whose work area is its whole rectangle.
+        fn whole(rect: Rect) -> Self {
+            Self {
+                work: rect,
+                full: rect,
+            }
+        }
+    }
+
+    /// [`clamp_to_screens`] on monitors without a taskbar, for a window without a frame.
+    fn clamp_to_monitors(
+        state: WindowState,
+        monitors: &[Rect],
+        min_width: u32,
+        min_height: u32,
+    ) -> WindowState {
+        let screens: Vec<Screen> = monitors.iter().copied().map(Screen::whole).collect();
+        clamp_to_screens(state, &screens, (0, 0), min_width, min_height)
+    }
+
+    #[test]
+    fn the_minimum_takes_the_scale_of_the_screen_the_window_goes_to() {
+        let screens = [(Screen::whole(SCREEN), 1.0), (Screen::whole(SECOND), 1.5)];
+        let on = |x| {
+            let narrow = WindowState {
+                x,
+                width: 10,
+                height: 10,
+                ..BIG
+            };
+            let state = place(narrow, &screens, (0, 0), (500.0, 540.0));
+            (state.width, state.height)
+        };
+        assert_eq!(on(100), (500, 540));
+        assert_eq!(on(2000), (750, 810), "the second screen is at 150 %");
+        assert_eq!(on(9000), (500, 540), "on no screen: the first one's");
+        assert_eq!(place(BIG, &[], (0, 0), (500.0, 540.0)), BIG, "no screen");
+    }
 
     const SCREEN: Rect = Rect {
         x: 0,

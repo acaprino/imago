@@ -1,7 +1,7 @@
 // What the parts of the shell share, for the whole page: the app, its words, the one stack of notices and the window.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useDesktopGuard } from '@acaprino/sigrid';
-import { useSchemeCommands, type SchemeChoice, type SchemeCommandsOptions } from '@acaprino/sigrid/assemblies';
+import { useSchemeCommands, type SchemeCommandsOptions } from '@acaprino/sigrid/assemblies';
 import { Toasts, type ToastItem } from '@acaprino/sigrid/components';
 import { readHost, tauriApi, useZoom, type TauriErrorHandler } from '@acaprino/sigrid/tauri';
 import type { App } from './app.js';
@@ -62,6 +62,34 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
 /** Not in development, where reload and the developer tools are needed. */
 const released = !(import.meta as { env?: { DEV?: boolean } }).env?.DEV;
 
+/** Tells the window something by itself: a failure is written in the console. */
+const tell = (command: string, args?: Record<string, unknown>): Promise<void> =>
+  tauriApi.invoke(PLUGIN + command, args).then(() => {}, (error: unknown) => console.warn(`imago: ${command}:`, error));
+
+/**
+ * A command that is sent one call at a time, and of the calls that came meanwhile the last: the plugin answers two that are
+ * sent together in no fixed order, and an old value would land after the new one.
+ */
+function inTurn(command: string): (args: Record<string, unknown>) => Promise<void> {
+  let next: Record<string, unknown> | undefined;
+  let running: Promise<void> | undefined;
+  return (args) => {
+    next = args;
+    running ??= (async () => {
+      while (next) {
+        const now = next;
+        next = undefined;
+        await tell(command, now);
+      }
+      running = undefined;
+    })();
+    return running;
+  };
+}
+const setTheme = inTurn('set_theme');
+const chrome = inTurn('chrome');
+let themeTold: Promise<void> = Promise.resolve();
+
 let notices = 0; // not crypto.randomUUID, which a page served over plain http does not have
 
 /** The state of the shell around the app, with the notices drawn once. */
@@ -94,22 +122,20 @@ export function ShellProvider({ app, children }: { app: App; children: ReactNode
       },
     };
   }, [app, own, words]);
-  const tell = (command: string, args?: Record<string, unknown>): void => {
-    tauriApi.invoke(PLUGIN + command, args).catch((error: unknown) => console.warn(`imago: ${command}:`, error));
-  };
 
   useFocusFollowed();
   useDesktopGuard(own && released);
   useZoom({ storageKey: app.storage.zoom, onError: shell.failed });
 
-  // The first frame is drawn: the window, which is hidden until then, is shown. A hidden window may run no animation frame.
+  // The first frame is drawn: the window, which is hidden until then, is shown in its theme. A hidden window may run no
+  // animation frame.
   useEffect(() => {
     if (!own) return;
     let sent = false;
     const send = (): void => {
       if (sent) return;
       sent = true;
-      tell('ready');
+      void themeTold.then(() => tell('ready'));
     };
     let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(send); });
     const timer = setTimeout(send, READY_FALLBACK_MS);
@@ -125,7 +151,7 @@ export function ShellProvider({ app, children }: { app: App; children: ReactNode
     if (title === null && progress === null && !told.current) return;
     told.current = true;
     document.title = title ?? app.name;
-    if (own) tell('chrome', { title: title ?? app.name, progress });
+    if (own) void chrome({ title: title ?? app.name, progress });
   }, [app, own, title, progress]);
 
   useEffect(() => {
@@ -139,15 +165,15 @@ export function ShellProvider({ app, children }: { app: App; children: ReactNode
     <ShellContext value={shell}>
       {children}
       {/* After the app, so that its commands come after the app's in the palette. */}
-      <Look app={app} told={(choice, scheme) => { if (own) tell('set_theme', { theme: choice, resolved: scheme }); }} />
+      <Look app={app} own={own} />
       <Toasts items={items} durationMs={NOTICE_MS} onDismiss={(id) => setItems((now) => now.filter((item) => item.id !== id))} />
     </ShellContext>
   );
 }
 
 /** Light, dark and the system's look as commands, and the window told of the choice and of the scheme drawn, when either changes. */
-function Look({ app, told }: { app: App; told: (choice: SchemeChoice, scheme: 'light' | 'dark') => void }) {
+function Look({ app, own }: { app: App; own: boolean }) {
   const { choice, scheme } = useSchemeCommands(lookOf(app));
-  useEffect(() => { told(choice, scheme); }, [choice, scheme]);
+  useEffect(() => { if (own) themeTold = setTheme({ theme: choice, resolved: scheme }); }, [own, choice, scheme]);
   return null;
 }

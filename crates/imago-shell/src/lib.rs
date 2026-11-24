@@ -1,12 +1,12 @@
-//! The Rust side of Imago's desktop shell: the window's acrylic and theme, Snap Layouts, the guard
-//! and WebView2 recovery.
+//! The Rust side of Imago's desktop shell, as a Tauri plugin that opens and watches the main window:
+//! its material and theme, Snap Layouts, the guard, WebView2 recovery and its place.
 //!
-//! One copy of what Shinatama and Xiox each had, for every app of the suite:
+//! What an app calls is here: [`plugin`], [`open_main`] with its [`Options`], [`show_main`],
+//! [`on_run_event`] and [`single_instance`]. The rest is inside:
 //!
-//! - `theme`: the window theme (light, dark or the system's), kept in a file in the data folder so
-//!   the next start opens on the right acrylic, the tint of the acrylic for Windows 10
-//!   ([`acrylic_tint`]), and [`glass_window_config`], the main window's config with the glass
-//!   material.
+//! - `main_window`: the plugin and the one window of an app, which put the other modules together.
+//! - `theme`: [`Material`], glass or opaque, and the window theme (light, dark or the system's), kept
+//!   in a file in the data folder so the next start opens in it.
 //! - `frame`: Snap Layouts on the HTML maximize button, and the "Reload interface" item of the
 //!   window menu.
 //! - `guard`: a webview shows only the app's own pages, the browser's own keys are off, and the
@@ -14,6 +14,7 @@
 //! - `recovery`: what failed in WebView2 and what to do about it; a page is reloaded at most
 //!   three times a minute, and nothing is done once the application is closing.
 //! - `window_state`: where the window was, brought back inside the monitors there are now.
+//! - `message`: a native message, for when the page cannot be asked.
 //!
 //! The decisions (parsing, files, limits, geometry) are plain functions that need no window; the Win32
 //! and Tauri calls are thin around them. Win32 is behind `cfg(windows)`: other targets compile the
@@ -21,25 +22,17 @@
 
 mod frame;
 mod guard;
+mod main_window;
+mod message;
 mod recovery;
+pub mod single_instance;
 mod theme;
 mod window_state;
 
-pub use frame::{install_reload_menu, install_snap_layouts, SnapLayouts};
-pub use guard::{
-    disable_browser_accelerators, guard_navigation, guard_navigation_with_scheme, trim_context_menu,
-};
-pub use recovery::{
-    recovery_action, watch_process_failures, ProcessFailure, Recovery, RecoveryAction,
-};
-pub use theme::{
-    acrylic_tint, apply_theme, drawn_by_page, glass_window_config, parse_look, parse_theme,
-    save_theme, saved_theme, Look, WindowTheme,
-};
-pub use window_state::{
-    clamp_to_monitors, clamp_to_screens, load_state, save_state, state_to_save, Rect, Screen,
-    WindowState,
-};
+pub use guard::Origins;
+pub use main_window::{on_run_event, open_main, plugin, show_main, Options};
+pub use recovery::ProcessFailure;
+pub use theme::Material;
 
 use std::{
     ffi::OsString,

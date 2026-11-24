@@ -34,10 +34,17 @@ const server = createServer((request, response) => {
 await new Promise((done) => server.listen(0, '127.0.0.1', done));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
-/** The window of Tauri as the page finds it: it answers every call and writes it down, but for those of `window.refused`. */
+/**
+ * The window of Tauri as the page finds it: it answers every call and writes it down, but for those of `window.refused`. The
+ * plugin answers late, as off the window's thread; `together` is the most calls of a command that were in the air at once.
+ */
 function fakeWindow() {
   window.calls = [];
   window.refused = [];
+  window.log = [];
+  window.together = {};
+  const late = { 'plugin:imago-shell|set_theme': 400, 'plugin:imago-shell|chrome': 1000 };
+  const air = {};
   const handlers = [];
   const listeners = {};
   window.emit = (event, payload) => { for (const handler of listeners[event] ?? []) handlers[handler]({ event, id: 1, payload }); };
@@ -47,6 +54,12 @@ function fakeWindow() {
     unregisterCallback: () => {},
     invoke: async (command, args) => {
       window.calls.push([command, args]);
+      window.log.push(command);
+      air[command] = (air[command] ?? 0) + 1;
+      window.together[command] = Math.max(window.together[command] ?? 0, air[command]);
+      if (late[command]) await new Promise((done) => setTimeout(done, late[command]));
+      air[command] -= 1;
+      window.log.push(`${command} answered`);
       if (window.refused.includes(command)) throw new Error('refused');
       if (command === 'plugin:event|listen') (listeners[args.event] ??= []).push(args.handler);
       return command === 'plugin:window|is_maximized' ? false : command === 'plugin:event|listen' ? 1 : null;
@@ -348,6 +361,8 @@ try {
     assert.ok(scripts.some((script) => TAURI.test(script)), `nothing of Tauri was loaded: ${scripts.join(' ')}`);
     await page.waitForTimeout(400);
     assert.equal((await calls('plugin:imago-shell|ready')).length, 1, 'ready is said once');
+    const log = await page.evaluate(() => window.log);
+    assert.ok(log.indexOf('plugin:imago-shell|set_theme answered') < log.indexOf('plugin:imago-shell|ready'), 'the window is shown in its theme');
 
     assert.deepEqual(await calls('plugin:imago-shell|set_theme'), [{ theme: 'dark', resolved: 'dark' }]);
     // The system's look on a dark system draws the same scheme: the choice is told all the same.
@@ -373,6 +388,9 @@ try {
     const jobs = await calls('plugin:imago-shell|chrome');
     assert.deepEqual(jobs[0], { title: 'Imago demo', progress: 0 });
     assert.deepEqual(jobs.at(-1), { title: 'Imago demo', progress: null });
+    const together = await page.evaluate(() => window.together);
+    assert.deepEqual([together['plugin:imago-shell|chrome'], together['plugin:imago-shell|set_theme']], [1, 1], 'the next call waits for the answer to the one before');
+    assert.ok(jobs.length < 12, `${jobs.length} calls: of the values that came meanwhile only the last is sent`);
     await open(page, 'notices');
     await page.getByRole('button', { name: 'Title of the window' }).click();
     await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|chrome').at(-1)[1].title === '3 items · Imago demo');

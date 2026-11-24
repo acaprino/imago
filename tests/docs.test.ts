@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { TAURI_PERMISSIONS } from '@acaprino/sigrid/tauri';
+import { shellTheme } from '../lib/preset.js';
 import { REMOVED } from '../scripts/check/removed.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -82,17 +83,15 @@ const isExport = (name: string): boolean => EXPORTS.has(name) || [...SIGRID.valu
 const RUST_NAMES = new Set([...RUST_TEXT.matchAll(/^\s*pub(?:\([a-z]+\))?\s+(?:const\s+)?(?:fn|struct|enum|const|type|trait)\s+([A-Za-z_]\w*)/gm)].map((match) => match[1]));
 
 /** The names the crate re-exports from its root: what an app can write after `use imago_shell::`. */
-const CRATE_ROOT = [...read('crates/imago-shell/src/lib.rs').matchAll(/pub use [\w:]+::\{([^}]+)\}/g)]
-  .flatMap((match) => match[1].split(',').map((part) => part.trim()).filter(Boolean));
+const CRATE_ROOT = [...read('crates/imago-shell/src/lib.rs').matchAll(/^pub (?:use [\w:]+::(?:\{([^}]+)\}|(\w+))|mod (\w+));/gm)]
+  .flatMap((match) => (match[1] ?? match[2] ?? match[3]).split(',').map((part) => part.trim()).filter(Boolean));
 
 /** The ids of the rules of imago-check, as scripts/check/rules.mjs names them. */
 const RULE_IDS = new Set([...read('scripts/check/rules.mjs').matchAll(/(?:finding\((?:[^()]|\([^()]*\))*?|const id = )'([a-z]+(?:-[a-z]+)+)'/g)].map((match) => match[1]));
 
 // Names that belong to someone else. Each entry is a name a document uses on purpose; nothing else goes here.
-const THEIRS_TS = new Set(['build', 'getBoundingClientRect', 'setTheme', 'showModal']);
-const APP_OWNED_RUST = new Set(['set_window_theme', 'window_caption_maximize']); // the two commands an app registers (see desktop-shell.md)
-const THEIRS_RUST = new Set(['from_config']);
-const THEIRS_CAMEL = new Set(['WebView2', 'WebviewWindowBuilder', 'ExitRequested', 'SetWindowCompositionAttribute']);
+const THEIRS_TS = new Set(['getBoundingClientRect', 'setTheme', 'showModal']);
+const THEIRS_CAMEL = new Set(['SetWindowCompositionAttribute']);
 
 // ---------- the tests ----------
 
@@ -107,7 +106,7 @@ describe('names', () => {
     for (const name of ['defineApp', 'startApp', 'AppWindow', 'useNotify', 'useWindow', 'ScreenBoundary']) assert.ok(EXPORTS.has(name), `ts/index.ts does not export ${name}`);
     assert.ok(SIGRID.get('@acaprino/sigrid/layout')?.has('AppShell'), 'the catalogue of Sigrid does not list AppShell');
     assert.ok(SIGRID.get('@acaprino/sigrid/tauri')?.has('useZoom'), 'the catalogue of Sigrid does not list useZoom');
-    for (const name of ['glass_window_config', 'install_snap_layouts', 'recovery_action', 'SnapLayouts', 'Recovery']) assert.ok(CRATE_ROOT.includes(name), `lib.rs does not re-export ${name}`);
+    for (const name of ['open_main', 'show_main', 'on_run_event', 'plugin', 'Options']) assert.ok(CRATE_ROOT.includes(name), `lib.rs does not re-export ${name}`);
   });
 
   for (const doc of DOCS) {
@@ -135,9 +134,9 @@ describe('names', () => {
         if (method) {
           if (!CODE.includes(method[1]) && !THEIRS_CAMEL.has(method[1])) problems.push(`${span}: no ${method[1]} in the code`);
           // Type::name is a function or constant of the crate, or a variant of one of its enums (a word in its sources).
-          if (!RUST_NAMES.has(method[2]) && !THEIRS_RUST.has(method[2]) && !new RegExp(`\\b${method[2]}\\b`).test(RUST_TEXT)) problems.push(`${span}: no ${method[2]} in crates/imago-shell`);
+          if (!RUST_NAMES.has(method[2]) && !new RegExp(`\\b${method[2]}\\b`).test(RUST_TEXT)) problems.push(`${span}: no ${method[2]} in crates/imago-shell`);
         } else if (call?.includes('_')) {
-          if (!RUST_NAMES.has(call) && !APP_OWNED_RUST.has(call) && !THEIRS_RUST.has(call)) problems.push(`${span}: no pub ${call} in crates/imago-shell`);
+          if (!RUST_NAMES.has(call)) problems.push(`${span}: no pub ${call} in crates/imago-shell`);
         } else if (call ?? hook) {
           const name = (call ?? hook)!;
           if (!isExport(name) && !THEIRS_TS.has(name)) problems.push(`${span}: ${name} is exported neither by the package nor by Sigrid`);
@@ -177,7 +176,7 @@ describe('names', () => {
 
   test('every name in the lists at the top of this file is written in a document, so no entry outlives its use', () => {
     const written = DOCS.map(read).join('\n');
-    assert.deepEqual([...THEIRS_TS, ...APP_OWNED_RUST, ...THEIRS_RUST, ...THEIRS_CAMEL].filter((name) => !written.includes(name)), []);
+    assert.deepEqual([...THEIRS_TS, ...THEIRS_CAMEL].filter((name) => !written.includes(name)), []);
   });
 });
 
@@ -228,6 +227,25 @@ describe('the capabilities', () => {
   test('docs/desktop-shell.md says what each of them is for', () => {
     const written = named(read('docs/desktop-shell.md'));
     assert.deepEqual(granted.filter((name) => !written.includes(name)), []);
+  });
+});
+
+describe('the window\'s material', () => {
+  // The ground of the window, which shows before the page has drawn, is the ground the page draws: the preset states it
+  // (ts/preset.ts), and the demo's program and using-imago.md write it again, in Rust.
+  const { surfaces } = shellTheme({ id: 'x', name: 'X', accent: '#006398' });
+  const grounds = [surfaces!.dark.sidebar, surfaces!.light.sidebar];
+  const written = (text: string): string[] => ['dark', 'light'].map((scheme) =>
+    `#${[...new RegExp(`${scheme}: Color\\(0x(\\w\\w), 0x(\\w\\w), 0x(\\w\\w), 255\\)`).exec(text)!.slice(1)].join('').toLowerCase()}`);
+
+  for (const file of ['examples/demo/src-tauri/src/main.rs', USING]) {
+    test(`${file} writes the grounds of the preset`, () => assert.deepEqual(written(read(file)), grounds));
+  }
+
+  test('the demo passes what an app must: the plugin, the window, and what the run loop says', () => {
+    const main = read('examples/demo/src-tauri/src/main.rs');
+    for (const call of ['.plugin(plugin())', 'open_main(', '.run(on_run_event)']) assert.ok(main.includes(call), `main.rs does not write ${call}`);
+    assert.ok(read('examples/demo/src-tauri/capabilities/shell.json').includes('imago-shell:default'));
   });
 });
 
