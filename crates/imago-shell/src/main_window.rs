@@ -11,12 +11,13 @@
 //!   mends is asked of the person ([`recovery_action`]).
 //! - [`on_run_event`]: what the exit of the application and the end of the window mean for that.
 use crate::{
-    disable_browser_accelerators, drawn_by_page,
-    guard::{guard_window, Origins},
-    install_reload_menu, install_snap_layouts, load_state, message, parse_theme, recovery_action,
-    save_state, save_theme, saved_theme, state_to_save, trim_context_menu, watch_process_failures,
-    window_state::{measure, restore},
-    Material, ProcessFailure, Recovery, RecoveryAction, SnapLayouts, WindowState,
+    frame::{install_reload_menu, install_snap_layouts, SnapLayouts},
+    guard::{disable_browser_accelerators, guard_window, trim_context_menu},
+    message,
+    recovery::{recovery_action, watch_process_failures, Recovery, RecoveryAction},
+    theme::{drawn_by_page, parse_theme, save_theme, saved_theme},
+    window_state::{load_state, measure, restore, save_state, state_to_save, WindowState},
+    Material, Origins, ProcessFailure,
 };
 use std::{
     fmt::Display,
@@ -181,7 +182,7 @@ fn set_theme<R: Runtime>(
 ) -> Result<(), String> {
     let options = shell.options_of(&window)?;
     let theme = parse_theme(&theme).ok_or_else(|| format!("unknown window theme \"{theme}\""))?;
-    let (_, resolved) = drawn_by_page(theme, None, resolved.as_deref());
+    let resolved = drawn_by_page(theme, resolved.as_deref());
     options
         .material
         .apply(&window, theme, resolved)

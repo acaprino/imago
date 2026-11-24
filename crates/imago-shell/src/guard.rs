@@ -31,39 +31,12 @@ impl Origins {
     }
 }
 
-/// Registers the navigation policy on a window builder. The app's embedded frontend and the
-/// origins in `app_origins` (typically the dev server in development builds) are allowed.
-/// Every other navigation and every request for a new window is refused.
-///
-/// On Windows and Android this accepts both HTTP and HTTPS forms of Tauri's protocol.
-/// Use [`guard_navigation_with_scheme`] to limit a window to its configured protocol.
-pub fn guard_navigation<'a, R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'a, R, M>,
-    app_origins: &[&str],
-) -> WebviewWindowBuilder<'a, R, M> {
-    with_origins(builder, app_origins, None)
-}
-
-/// Configures Tauri's protocol and limits navigation to that exact origin and `app_origins`.
-/// Pass the window configuration's `use_https_scheme` when building from a config.
-pub fn guard_navigation_with_scheme<'a, R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'a, R, M>,
-    app_origins: &[&str],
-    use_https_scheme: bool,
-) -> WebviewWindowBuilder<'a, R, M> {
-    with_origins(
-        builder.use_https_scheme(use_https_scheme),
-        app_origins,
-        Some(use_https_scheme),
-    )
-}
-
-fn embedded_origins(http_mapped: bool, use_https: Option<bool>) -> &'static [&'static str] {
+/// The origin of the app's embedded frontend.
+fn embedded_origin(http_mapped: bool, use_https: bool) -> &'static str {
     match (http_mapped, use_https) {
-        (false, _) => &["tauri://localhost"],
-        (true, Some(false)) => &["http://tauri.localhost"],
-        (true, Some(true)) => &["https://tauri.localhost"],
-        (true, None) => &["http://tauri.localhost", "https://tauri.localhost"],
+        (false, _) => "tauri://localhost",
+        (true, false) => "http://tauri.localhost",
+        (true, true) => "https://tauri.localhost",
     }
 }
 
@@ -83,19 +56,18 @@ fn with_origins<'a, R: Runtime, M: Manager<R>>(
         .on_new_window(|_, _| NewWindowResponse::Deny)
 }
 
-/// [`guard_navigation_with_scheme`] with origins that can be allowed later. `opening` is told each
-/// page the window goes to.
+/// Registers the navigation policy on a window builder, and Tauri's protocol: the embedded frontend
+/// at that exact origin and `origins` are allowed, every other navigation and every request for a
+/// new window is refused. `opening` is told each page the window goes to.
 pub(crate) fn guard_window<'a, R: Runtime, M: Manager<R>>(
     builder: WebviewWindowBuilder<'a, R, M>,
     origins: Origins,
     use_https_scheme: bool,
     opening: impl Fn(&Url) + Send + 'static,
 ) -> WebviewWindowBuilder<'a, R, M> {
-    let embedded = Origins::default();
     let http_mapped = cfg!(any(windows, target_os = "android"));
-    for origin in embedded_origins(http_mapped, Some(use_https_scheme)) {
-        embedded.allow(origin);
-    }
+    let embedded = Origins::default();
+    embedded.allow(embedded_origin(http_mapped, use_https_scheme));
     builder
         .use_https_scheme(use_https_scheme)
         .on_navigation(move |url| {
@@ -112,13 +84,13 @@ pub(crate) fn guard_window<'a, R: Runtime, M: Manager<R>>(
 /// rest of what makes a window feel like a web page. Editing keys (copy, cut, paste...) and every
 /// key the page handles keep working. WebView2's default is on.
 ///
-/// The app decides when: Shinatama calls it in release builds only (`!tauri::is_dev()`), because a
-/// development build keeps reload and DevTools. Call it on each window right after it is built, a
-/// rebuilt window included. The page's own `guardDesktop` covers the keys the engine leaves to it.
+/// The page's own guard covers the keys the engine leaves to it.
 ///
 /// The `Ok` of a window that exists means the change was handed to the thread that owns the
 /// webview, where COM can still fail; nothing reports that. On other targets this does nothing.
-pub fn disable_browser_accelerators<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
+pub(crate) fn disable_browser_accelerators<R: Runtime>(
+    window: &WebviewWindow<R>,
+) -> tauri::Result<()> {
     #[cfg(windows)]
     {
         window.with_webview(|webview| {
@@ -153,14 +125,11 @@ pub fn disable_browser_accelerators<R: Runtime>(window: &WebviewWindow<R>) -> ta
 /// is not shown at all. WebView2's default is the browser's whole menu.
 ///
 /// This decides what the menu holds when WebView2 opens it, on its `ContextMenuRequested` event.
-/// Where it opens at all is the page's own `guardDesktop`, which refuses it outside fields, the
-/// places that run their own menus and selected text. The app decides when, as for
-/// [`disable_browser_accelerators`]: the demo trims it in release builds only, so a development
-/// build keeps Inspect. Call it on each window right after it is built, a rebuilt window included.
+/// Where it opens at all is the page's own guard.
 ///
 /// The `Ok` of a window that exists means the handler was handed to the thread that owns the
 /// webview, where COM can still fail; nothing reports that. On other targets this does nothing.
-pub fn trim_context_menu<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
+pub(crate) fn trim_context_menu<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
     #[cfg(windows)]
     {
         win::install(window)
@@ -319,10 +288,7 @@ mod tests {
             (false, false, 2),
             (false, true, 2),
         ] {
-            let origins: Vec<_> = embedded_origins(http_mapped, Some(https))
-                .iter()
-                .map(|origin| url(origin))
-                .collect();
+            let origins = [url(embedded_origin(http_mapped, https))];
             for (i, candidate) in urls.iter().enumerate() {
                 assert_eq!(is_allowed(&url(candidate), &origins), i == allowed);
             }

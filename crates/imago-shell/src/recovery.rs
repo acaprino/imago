@@ -9,11 +9,10 @@
 //! - [`recovery_action`], the decision: what to do about a [`ProcessFailure`].
 //! - [`watch_process_failures`], the WebView2 events that say what failed, and nothing more.
 //!
-//! What to do on each failure is the app's, whose terminals, sessions and dialogs differ. These are
-//! Shinatama's rules, which [`recovery_action`] answers for:
+//! What is done about it is in `main_window`. The rules, Shinatama's:
 //!
-//! - The browser process exits: every webview of the application is dead. All configured windows
-//!   are destroyed and built again, the main one where it was ([`RecoveryAction::Rebuild`]).
+//! - The browser process exits: every webview of the application is dead. The window is destroyed
+//!   and built again where it was ([`RecoveryAction::Rebuild`]).
 //! - A render process exits: only that page is dead. It is reloaded ([`RecoveryAction::Reload`]).
 //! - The page fails to load: it is loaded again after a second (`Reload`, after
 //!   [`ProcessFailure::reload_delay`]).
@@ -39,20 +38,18 @@ const PERIOD: Duration = Duration::from_secs(60);
 /// A page that failed to load waits a moment before it tries again.
 const LOAD_RETRY_DELAY: Duration = Duration::from_secs(1);
 
-/// The reloads of one window in the last minute, and whether it is closing. Keep one for each
-/// window, and keep it across rebuilds (a window built again after a lost browser process that
-/// failed three times a minute ago has still failed three times): a window that fails does not use
-/// up the reloads of another. A window opened anew, not rebuilt, gets a new one, also under a label
-/// used before.
+/// The reloads of the window in the last minute, and whether it is closing. It is kept across a
+/// rebuild (a window that failed three times a minute ago has still failed three times); a window
+/// opened anew gets a new one.
 #[derive(Debug, Default)]
-pub struct Recovery {
+pub(crate) struct Recovery {
     reloads: VecDeque<Instant>,
     /// The application or this window is closing: no failure is acted on any more.
     closing: bool,
 }
 
 impl Recovery {
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             reloads: VecDeque::new(),
             closing: false,
@@ -61,7 +58,7 @@ impl Recovery {
 
     /// Whether the window may be reloaded at `now`. If it may, the reload is counted; a refusal is
     /// not, so it does not extend the wait.
-    pub fn allow_reload(&mut self, now: Instant) -> bool {
+    fn allow_reload(&mut self, now: Instant) -> bool {
         self.reloads.retain(|at| now.duration_since(*at) < PERIOD);
         if self.reloads.len() >= LIMIT {
             return false;
@@ -72,7 +69,7 @@ impl Recovery {
 
     /// Starts the count again: the person answered the question and chose to reload, so the page
     /// has a fresh minute.
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.reloads.clear();
     }
 
@@ -81,22 +78,14 @@ impl Recovery {
     /// answers every failure of this window with [`RecoveryAction::Ignore`] (no reload, no rebuild,
     /// no question). There is no way back, and [`reset`](Recovery::reset) does not undo it.
     ///
-    /// It stays on this `Recovery` for good, so it is for a window that will not come back: a
-    /// window opened anew under the same label, not rebuilt, gets a new `Recovery`
-    /// ([`Recovery::new`]), or it would never reload, rebuild or ask.
-    ///
-    /// Call it on every window's `Recovery` when an exit begins that the app does not prevent
-    /// (`RunEvent::ExitRequested`, `RunEvent::Exit`): an exit the app prevents (to rebuild its
-    /// windows, or to stay in the tray) closes nothing. Call it on one window's when that window is
-    /// closed for good: on `WindowEvent::Destroyed`, or already on `WindowEvent::CloseRequested`
-    /// when the app never prevents a close. A window destroyed to be built again is not closing:
-    /// while the app rebuilds its windows (see [`RecoveryAction::Rebuild`]) it calls this for none.
-    pub fn close(&mut self) {
+    /// It is for a window that will not come back: a window destroyed to be built again is not
+    /// closing, and neither is the application when an exit is prevented.
+    pub(crate) fn close(&mut self) {
         self.closing = true;
     }
 }
 
-/// What WebView2 reported lost in one window.
+/// What WebView2 reported lost in the window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProcessFailure {
     /// The browser process exited: every webview of the application is dead, and each one reports
@@ -117,7 +106,7 @@ pub enum ProcessFailure {
 impl ProcessFailure {
     /// How long to wait before the reload [`recovery_action`] allows: a failed load waits a moment
     /// before it tries again, the others reload at once.
-    pub fn reload_delay(self) -> Duration {
+    pub(crate) fn reload_delay(self) -> Duration {
         match self {
             ProcessFailure::NotLoaded(_) => LOAD_RETRY_DELAY,
             _ => Duration::ZERO,
@@ -125,32 +114,18 @@ impl ProcessFailure {
     }
 }
 
-/// What the app does about a [`ProcessFailure`].
+/// What is done about a [`ProcessFailure`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RecoveryAction {
-    /// Reload this window's page, after [`ProcessFailure::reload_delay`]. The callback of
-    /// [`watch_process_failures`] is already off WebView2's thread, so it may sleep and reload.
+pub(crate) enum RecoveryAction {
+    /// Reload the page, after [`ProcessFailure::reload_delay`].
     Reload,
-    /// Destroy every configured window and build them again, the main one where it was. Every
-    /// webview reports the same loss: do it once, for the first report, with a flag the app sets
-    /// here and clears when the windows are built, and pass that flag to [`recovery_action`] as
-    /// `rebuilding`. Read the main window's place before destroying anything and put it back after;
-    /// a label is free again only once its window is gone, so wait for that (Shinatama waits up to
-    /// five seconds) before building.
-    ///
-    /// While the flag is set, the destruction of the windows is not the end of the application and
-    /// not the person closing them:
-    ///
-    /// - Answer `RunEvent::ExitRequested { code: None, .. }` with `api.prevent_exit()`: with every
-    ///   window destroyed the application would otherwise exit.
-    /// - Skip the window event handler that saves the window's state or tidies up when a window is
-    ///   closed or destroyed (Shinatama: `if recovering() { return; }`), or the place saved is the
-    ///   one of a window that is not there.
+    /// Destroy the window and build it again where it was, once for each loss. Meanwhile its end is
+    /// not the end of the application and not the person closing it: an exit with no code is
+    /// prevented, and nothing of its place is saved. The place is read before it is destroyed, and a
+    /// label is free again only once its window is gone.
     Rebuild,
-    /// No automatic reload: the main window asks the person (other windows stay as they are until
-    /// the main one is built again). Either the page failed more than three times in a minute, or
-    /// the render process is unresponsive. When the person says yes, call [`Recovery::reset`] and
-    /// reload.
+    /// No automatic reload: the person is asked. Either the page failed more than three times in a
+    /// minute, or the render process is unresponsive.
     GiveUp,
     /// Nothing to do: WebView2 restarts the process itself, the window is being rebuilt, or the
     /// application or the window is closing ([`Recovery::close`]).
@@ -161,14 +136,12 @@ pub enum RecoveryAction {
 /// allowed is counted, so ask once for each failure. A rebuild is not a reload and is not counted:
 /// the browser process only dies for the whole application.
 ///
-/// `rebuilding` is the app's flag that its windows are being destroyed and built again (see
-/// [`RecoveryAction::Rebuild`]). A page that fails to load in a window that is going away is
-/// `Ignore`, and spends no reload: that is the one case Shinatama guards with its flag
-/// (`!recovering()` on a failed navigation). Every other failure is the same either way: a second
-/// `Browser` report is `Rebuild` again, and it is the app's flag that makes it act once.
+/// `rebuilding`: the window is being destroyed and built again (see [`RecoveryAction::Rebuild`]). A
+/// page that fails to load in a window that is going away is `Ignore`, and spends no reload. Every
+/// other failure is the same either way: a second `Browser` report is `Rebuild` again.
 ///
 /// Once [`Recovery::close`] was called, every failure is `Ignore` and nothing is counted.
-pub fn recovery_action(
+pub(crate) fn recovery_action(
     failure: ProcessFailure,
     recovery: &mut Recovery,
     now: Instant,
@@ -192,19 +165,16 @@ pub fn recovery_action(
     }
 }
 
-/// Watches the window's WebView2 and calls `on_failure` with what failed, for the app to decide
+/// Watches the window's WebView2 and calls `on_failure` with what failed, for the answer to be decided
 /// with [`recovery_action`]. It also turns WebView2's built-in error page off: it has no way back
-/// into the app, so a page that failed to load is blank until the app's answer (a reload) comes.
+/// into the app, so a page that failed to load is blank until the answer (a reload) comes.
 ///
 /// `on_failure` runs on a thread of its own for every report, never inside WebView2's callback, so
-/// it may destroy windows, build them, ask the person and sleep. Reports of one loss can arrive
-/// from several windows at once: the app serializes its own response (see
-/// [`RecoveryAction::Rebuild`], which also says what the app must do while it rebuilds). Call it
-/// once for each window, right after it is built; a rebuilt window needs it again.
+/// it may destroy the window, build it, ask the person and sleep.
 ///
 /// The `Ok` of a window that exists means the watcher was handed to the thread that owns the
 /// webview, where COM can still fail; nothing reports that. On other targets this does nothing.
-pub fn watch_process_failures<R: Runtime>(
+pub(crate) fn watch_process_failures<R: Runtime>(
     window: &WebviewWindow<R>,
     on_failure: impl Fn(ProcessFailure) + Send + Sync + 'static,
 ) -> tauri::Result<()> {
