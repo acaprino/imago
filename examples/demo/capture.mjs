@@ -155,11 +155,16 @@ function placeWindow(demo) {
 
 /** Switches the theme in the page and waits for it to reach the window and the screen. */
 async function select(demo, fixture, theme) {
-  await demo.page.evaluate(([key, value]) => {
-    localStorage.setItem(key, value);
-    window.dispatchEvent(new StorageEvent('storage', { key, newValue: value }));
-  }, [SCHEME_KEY, theme]);
-  await demo.page.waitForFunction((wanted) => document.documentElement.dataset.scheme === wanted, theme);
+  // The other theme first: the page tells the window only when the scheme it draws changes (from the system's to dark, on a
+  // dark Windows, it does not).
+  for (const choice of [theme === 'dark' ? 'light' : 'dark', theme]) {
+    await demo.page.evaluate(([key, value]) => {
+      localStorage.setItem(key, value);
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: value }));
+    }, [SCHEME_KEY, choice]);
+    await demo.page.waitForFunction((wanted) => document.documentElement.dataset.scheme === wanted, choice);
+    await delay(300);
+  }
   await delay(900);
   // The native side keeps the theme it was told in a file, for the first frame of the next start.
   const kept = (await readFile(resolve(fixture, 'data', 'window-theme'), 'utf8').catch(() => '')).trim();
