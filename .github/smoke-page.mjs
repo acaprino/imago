@@ -32,7 +32,7 @@ const read = () => page.evaluate(() => {
     system: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
     os: document.querySelector('[data-os-state]')?.getAttribute('data-os-state') ?? null,
     button: { x: Math.round(button.left * ratio), y: Math.round(button.top * ratio), width: Math.round(button.width * ratio), height: Math.round(button.height * ratio) },
-    notices: [...document.querySelectorAll('[data-toasts] li, [data-toasts] [data-slot]')].map((each) => each.textContent).filter(Boolean),
+    notices: [...document.querySelectorAll('[data-toasts]')].map((each) => each.innerText).filter(Boolean),
     inner: `${innerWidth}x${innerHeight}`,
     ratio,
   };

@@ -18,6 +18,9 @@ public static class W {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern bool GetCursorPos(out P p);
+  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(P p);
+  public static string Under() { P p; GetCursorPos(out p); IntPtr h = WindowFromPoint(p); return p.X + "," + p.Y + " " + Name(h, true); }
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, uint d, IntPtr e);
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);
   [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr h);
@@ -51,7 +54,7 @@ function Now { [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }
 function Ask([string]$action, [string]$more = '') {
   $said = node "$PSScriptRoot/smoke-page.mjs" 9333 $action $more
   if ($LASTEXITCODE) { Say $false "the page did not answer to $action"; return $null }
-  if ($said) { Write-Host "      page: $said"; return $said | ConvertFrom-Json }
+  if ($said) { return $said | ConvertFrom-Json }
 }
 function Kept { (Get-Content "$Data/window-theme" -ErrorAction SilentlyContinue) }
 function Screen-Shot([string]$name) {
@@ -102,9 +105,11 @@ Screen-Shot 'first-dark'
 
 Write-Host '--- the mouse over the maximize button, the real one'
 $at = "$overlay".Split('|')[1].Split(',') | ForEach-Object { [int]$_ }
-$null = [W]::SetCursorPos($at[0] + 20, $at[1] + 20); Start-Sleep -Milliseconds 300; [W]::mouse_event(1, 1, 1, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 1500
+$null = [W]::SetCursorPos($at[0] + 20, $at[1] + 20); Start-Sleep -Milliseconds 300
+foreach ($k in 1..6) { [W]::mouse_event(1, $(if ($k % 2) { 2 } else { -2 }), 1, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 150 }
+Write-Host "      the pointer is at $([W]::Under())"
 $hover = Ask 'read'
-Write-Host "INFO  data-os-state under the real pointer: $($hover.os)"
+Say ($hover.os -eq 'hover') "the real pointer on the maximize button reaches the page: data-os-state is '$($hover.os)'; the pointer is at $([W]::Under())"
 Screen-Shot 'snap-layouts'
 $null = [W]::SetCursorPos(5, 5); Start-Sleep -Milliseconds 600
 
@@ -156,6 +161,7 @@ $other = Start-Process $Exe -PassThru; $null = $other.Handle
 $null = $other.WaitForExit(8000)
 Say ($other.HasExited -and -not $demo.HasExited) 'a second copy ends, the first one stays'
 $woke = Ask 'read'
+Write-Host "      the two pages spoke: $(@($woke.ipc).Count) calls"
 Say ("$($woke.notices -join ' ')" -match 'The window is back') "the page was told it is shown again: $($woke.notices -join ' / ')"
 $null = Ask 'close'
 $null = $demo.WaitForExit(15000)
