@@ -23,7 +23,7 @@ minimum width of 500 or the app's own if larger (the snap zones need it), and th
 
 - `Material::Opaque` is one colour for each theme, the ground the page draws there. It shows before the page has drawn,
   while it is reloaded and at the edge of a window that is resized. It is the material of the suite, whose page is opaque:
-  its two grounds are in [using-imago.md](using-imago.md), section 4.
+  its two grounds are `DARK_GROUND` and `LIGHT_GROUND` of the crate.
 - `Material::Acrylic` is a transparent window with the background colour `#00000000`, so there is no white flash before
   the page draws, and Windows' acrylic behind it.
 
@@ -58,6 +58,9 @@ person's choice: `light`, `dark` or `system`.
    after a WebView2 crash gets it too.
 4. With nothing saved (a fresh install) the window follows Windows until the page has spoken. The page then says dark, which is
    what an app of the suite draws until the person chooses.
+5. The word in `window-theme` is the choice, and the page asks for it (`kept_theme`, 3.3) before it draws and takes it over its
+   own. The page's own copy is in the browser's storage, which WebView2 writes to the disk some seconds later: when the
+   browser's process dies, a choice made just before is lost there, and not in `window-theme`.
 
 `set_theme` reaches DWM through tao, and tauri-runtime-wry passes the new theme to WebView2's
 `PreferredColorScheme`. The JavaScript `setTheme()` would need `core:window:allow-set-theme` and cannot save the choice
@@ -150,6 +153,7 @@ seconds). An app that quits slowly holds `Quitting::mark` meanwhile, so that a n
 | What | Name | Direction |
 |---|---|---|
 | The window theme | `plugin:imago-shell\|set_theme`, `theme` (`light`, `dark` or `system`, the choice) and, optional, `resolved` (`light` or `dark`, the theme drawn). A page that sends no `resolved` draws its word's own, and dark for `system` | page to Rust. The window takes the theme and its material's colour, and keeps the choice (1.2) |
+| The theme kept | `plugin:imago-shell\|kept_theme`, no arguments | page to Rust. The answer is the choice in `window-theme`, or null when there is none (1.2) |
 | The maximize button's rectangle | `plugin:imago-shell\|caption`, `x`, `y`, `width`, `height` | page to Rust. The numbers go to the overlay unchanged |
 | The first frame | `plugin:imago-shell\|ready`, no arguments | page to Rust. The page has drawn: the window is shown |
 | The title and the taskbar | `plugin:imago-shell\|chrome`, `title` and `progress` (a whole number from 0 to 100, or null), always both | page to Rust. A job that ends while the window is not in front asks for attention |
@@ -176,7 +180,9 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 
 The shell of `@acaprino/imago` does it; an app writes none of it.
 
-1. Before React draws: the density, the kept scheme (dark when none is kept) and the theme.
+1. Before React draws: the density, the kept scheme and the theme. In a window `kept_theme` is asked, and the choice it answers is
+   the page's; with none there the one of the browser's storage is, and with none at all dark. When the call fails the page
+   draws the one of its storage, and sends no `set_theme` until the person chooses.
 2. In a window, outside development: the browser's own keys and menu taken away (`useDesktopGuard` of Sigrid).
 3. The first frame drawn, `ready`, once: after two animation frames, or after 250 ms, since a hidden window may run none.
 4. `set_theme`: the choice and the scheme drawn, when either changes.
@@ -206,7 +212,7 @@ serves a part of the wiring that an app can leave out, and says so:
 A call the capability does not allow is a rejected promise. Sigrid's hooks pass it to their `onError`, and a refused zoom
 goes back to the level it had; a refused drag leaves the window where it is, and nobody is told.
 
-The four commands of the plugin are granted by `imago-shell:default`, in a capability beside it
+The five commands of the plugin are granted by `imago-shell:default`, in a capability beside it
 (`examples/demo/src-tauri/capabilities/shell.json`). A page that is not embedded in the app (a server on
 `http://127.0.0.1`) is refused every command until a capability names it, the plugin's and Tauri's own alike:
 `"remote": { "urls": ["http://127.0.0.1:*"] }` is any port of that address and no other host. A capability may also be

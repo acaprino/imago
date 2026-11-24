@@ -1,13 +1,18 @@
 {
   "default": {
     "description": "The window's own commands: its theme, its maximize button, its first frame, its title and its taskbar button.",
-    "permissions": ["allow-set-theme", "allow-caption", "allow-ready", "allow-chrome"]
+    "permissions": ["allow-set-theme", "allow-kept-theme", "allow-caption", "allow-ready", "allow-chrome"]
   },
   "permission": [
     {
       "identifier": "allow-set-theme",
       "description": "The page tells the window its theme.",
       "commands": { "allow": ["set_theme"] }
+    },
+    {
+      "identifier": "allow-kept-theme",
+      "description": "The page asks the window which theme it keeps.",
+      "commands": { "allow": ["kept_theme"] }
     },
     {
       "identifier": "allow-caption",

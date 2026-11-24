@@ -165,7 +165,9 @@ fn text(error: impl Display) -> String {
 /// The plugin. An app registers it on its builder before anything calls the crate.
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("imago-shell")
-        .invoke_handler(tauri::generate_handler![set_theme, caption, ready, chrome])
+        .invoke_handler(tauri::generate_handler![
+            set_theme, kept_theme, caption, ready, chrome
+        ])
         .setup(|app, _| {
             app.manage(Shell::default());
             Ok(())
@@ -193,6 +195,19 @@ fn set_theme<R: Runtime>(
         Some(dir) => save_theme(dir, theme).map_err(text),
         None => Ok(()),
     }
+}
+
+/// What the page chose last, as [`set_theme`] kept it: `light`, `dark`, `system`, or none. The page
+/// takes it over its own when it starts: WebView2 writes the page's storage to the disk some seconds
+/// late, and loses what it had not written when its process dies.
+#[tauri::command(async)]
+fn kept_theme<R: Runtime>(
+    window: WebviewWindow<R>,
+    shell: State<'_, Shell>,
+) -> Result<Option<&'static str>, String> {
+    let options = shell.options_of(&window)?;
+    let kept = options.data_dir.as_deref().and_then(saved_theme);
+    Ok(kept.map(|theme| theme.word()))
 }
 
 /// Where the page's maximize button is, in physical pixels of the client area.

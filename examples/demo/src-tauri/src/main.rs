@@ -5,15 +5,15 @@
 use imago_shell::{
     on_run_event, open_main, plugin, show_main,
     single_instance::{launch, Launch},
-    Material, Options,
+    Material, Options, DARK_GROUND, LIGHT_GROUND,
 };
 use std::path::PathBuf;
-use tauri::{window::Color, App};
+use tauri::App;
 
-/// The ground the page draws in each theme, the one the look states (`ts/preset.ts`; `tests/docs.test.ts` compares them).
+/// The ground the page draws in each theme.
 const MATERIAL: Material = Material::Opaque {
-    dark: Color(0x12, 0x16, 0x1E, 255),
-    light: Color(0xF6, 0xF7, 0xF9, 255),
+    dark: DARK_GROUND,
+    light: LIGHT_GROUND,
 };
 
 fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {

@@ -87,13 +87,15 @@ function inTurn(command: string): (args: Record<string, unknown>) => Promise<voi
   };
 }
 const setTheme = inTurn('set_theme');
+/** The choice the window keeps, written as the person makes it: what the browser keeps reaches the disk later. Null is none. */
+export const keptTheme = (): Promise<unknown> => tauriApi.invoke(`${PLUGIN}kept_theme`);
 const chrome = inTurn('chrome');
 let themeTold: Promise<void> = Promise.resolve();
 
 let notices = 0; // not crypto.randomUUID, which a page served over plain http does not have
 
-/** The state of the shell around the app, with the notices drawn once. */
-export function ShellProvider({ app, children }: { app: App; children: ReactNode }) {
+/** The state of the shell around the app, with the notices drawn once. `untold`: the window did not say which theme it keeps. */
+export function ShellProvider({ app, untold, children }: { app: App; untold: boolean; children: ReactNode }) {
   const own = useMemo(() => readHost().ownWindow, []);
   const words = useMemo(() => ({ ...SHELL_WORDS, ...app.words?.shell }), [app]);
   const [items, setItems] = useState<ToastItem[]>([]);
@@ -165,15 +167,23 @@ export function ShellProvider({ app, children }: { app: App; children: ReactNode
     <ShellContext value={shell}>
       {children}
       {/* After the app, so that its commands come after the app's in the palette. */}
-      <Look app={app} own={own} />
+      <Look app={app} own={own} untold={untold} />
       <Toasts items={items} durationMs={NOTICE_MS} onDismiss={(id) => setItems((now) => now.filter((item) => item.id !== id))} />
     </ShellContext>
   );
 }
 
-/** Light, dark and the system's look as commands, and the window told of the choice and of the scheme drawn, when either changes. */
-function Look({ app, own }: { app: App; own: boolean }) {
+/**
+ * Light, dark and the system's look as commands, and the window told of the choice and of the scheme drawn, when either changes;
+ * one that did not say what it keeps is told nothing until the person chooses, so that its own is not written over.
+ */
+function Look({ app, own, untold }: { app: App; own: boolean; untold: boolean }) {
   const { choice, scheme } = useSchemeCommands(lookOf(app));
-  useEffect(() => { if (own) themeTold = setTheme({ theme: choice, resolved: scheme }); }, [own, choice, scheme]);
+  const unchosen = useRef(untold ? choice : null);
+  useEffect(() => {
+    if (!own || choice === unchosen.current) return;
+    unchosen.current = null;
+    themeTold = setTheme({ theme: choice, resolved: scheme });
+  }, [own, choice, scheme]);
   return null;
 }

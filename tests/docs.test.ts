@@ -231,15 +231,21 @@ describe('the capabilities', () => {
 });
 
 describe('the window\'s material', () => {
-  // The ground of the window, which shows before the page has drawn, is the ground the page draws: the preset states it
-  // (ts/preset.ts), and the demo's program and using-imago.md write it again, in Rust.
-  const { surfaces } = shellTheme({ id: 'x', name: 'X', accent: '#006398' });
-  const grounds = [surfaces!.dark.sidebar, surfaces!.light.sidebar];
-  const written = (text: string): string[] => ['dark', 'light'].map((scheme) =>
-    `#${[...new RegExp(`${scheme}: Color\\(0x(\\w\\w), 0x(\\w\\w), 0x(\\w\\w), 255\\)`).exec(text)!.slice(1)].join('').toLowerCase()}`);
+  // The ground of the window, which shows before the page has drawn, is the ground the page draws: the crate states it
+  // (crates/imago-shell/src/theme.rs) and the preset too (ts/preset.ts). An app writes the crate's names.
+  test('the grounds of the crate are those of the preset', () => {
+    const { surfaces } = shellTheme({ id: 'x', name: 'X', accent: '#006398' });
+    const crate = [...read('crates/imago-shell/src/theme.rs').matchAll(/^pub const (\w+_GROUND): Color = Color\(0x(\w\w), 0x(\w\w), 0x(\w\w), 255\);/gm)]
+      .map(([, name, ...parts]) => [name, `#${parts.join('').toLowerCase()}`]);
+    assert.deepEqual(crate, [['DARK_GROUND', surfaces!.dark.sidebar], ['LIGHT_GROUND', surfaces!.light.sidebar]]);
+  });
 
   for (const file of ['examples/demo/src-tauri/src/main.rs', USING]) {
-    test(`${file} writes the grounds of the preset`, () => assert.deepEqual(written(read(file)), grounds));
+    test(`${file} takes them from the crate`, () => {
+      const text = read(file);
+      assert.match(text, /Material::Opaque \{\s*dark: DARK_GROUND,\s*light: LIGHT_GROUND,\s*\}/);
+      assert.doesNotMatch(text, /Color\(0x/);
+    });
   }
 
   test('the demo passes what an app must: the plugin, the window, and what the run loop says', () => {

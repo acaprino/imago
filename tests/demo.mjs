@@ -38,9 +38,9 @@ const url = `http://127.0.0.1:${server.address().port}/`;
  * The window of Tauri as the page finds it: it answers every call and writes it down, but for those of `window.refused`. The
  * plugin answers late, as off the window's thread; `together` is the most calls of a command that were in the air at once.
  */
-function fakeWindow() {
+function fakeWindow({ kept = null, refused = [] }) {
   window.calls = [];
-  window.refused = [];
+  window.refused = refused;
   window.log = [];
   window.together = {};
   const late = { 'plugin:imago-shell|set_theme': 400, 'plugin:imago-shell|chrome': 1000 };
@@ -62,7 +62,7 @@ function fakeWindow() {
       window.log.push(`${command} answered`);
       if (window.refused.includes(command)) throw new Error('refused');
       if (command === 'plugin:event|listen') (listeners[args.event] ??= []).push(args.handler);
-      return command === 'plugin:window|is_maximized' ? false : command === 'plugin:event|listen' ? 1 : null;
+      return command === 'plugin:window|is_maximized' ? false : command === 'plugin:event|listen' ? 1 : command === 'plugin:imago-shell|kept_theme' ? kept : null;
     },
   };
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
@@ -72,7 +72,7 @@ const browser = await chromium.launch();
 const failures = [];
 
 /** Opens the page in a context of its own, with `scheme` as the choice kept, and runs `look` on it; an error of the page fails it. */
-async function onPage(name, { width = 1440, scheme, system = 'light', own = false, expected } = {}, look) {
+async function onPage(name, { width = 1440, scheme, system = 'light', own = false, kept, refused, expected } = {}, look) {
   const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: system });
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
@@ -83,7 +83,7 @@ async function onPage(name, { width = 1440, scheme, system = 'light', own = fals
   page.on('requestfailed', (request) => problems.push(`${request.url()} failed`));
   page.on('request', (request) => { if (request.resourceType() === 'script') scripts.push(new URL(request.url()).pathname); });
   if (scheme) await page.addInitScript((value) => { if (!localStorage.getItem('imago.scheme')) localStorage.setItem('imago.scheme', value); }, scheme);
-  if (own) await page.addInitScript(fakeWindow);
+  if (own) await page.addInitScript(fakeWindow, { kept, refused });
   try {
     await page.goto(url);
     await page.waitForSelector('[data-slot="app-shell"]');
@@ -427,6 +427,36 @@ try {
     await page.getByRole('button', { name: 'Its own title' }).click();
     await page.waitForFunction(() => document.title === 'Imago demo');
     assert.equal(await page.getByText(/chrome/).count(), 0, 'what the page tells by itself is not said to the person');
+  });
+
+  // WebView2 writes the page's storage some seconds late: after its process dies, what the browser keeps is old, or gone.
+  const themes = (page) => page.evaluate(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_theme').map(([, args]) => args));
+  const drawn = (page) => page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|ready'));
+  for (const [before, chosen] of [['none', undefined], ['another', 'dark']]) {
+    await onPage(`in a window the theme it keeps is the page's, with ${before} in the browser`, { system: 'dark', own: true, kept: 'light', scheme: chosen }, async (page) => {
+      await drawn(page);
+      assert.equal(await scheme(page), 'light');
+      assert.equal(await page.evaluate(() => localStorage.getItem('imago.scheme')), 'light');
+      assert.deepEqual(await themes(page), [{ theme: 'light', resolved: 'light' }]);
+    });
+  }
+
+  await onPage('a window that keeps none is told the browser\'s', { system: 'dark', own: true, scheme: 'light' }, async (page) => {
+    await drawn(page);
+    assert.deepEqual(await themes(page), [{ theme: 'light', resolved: 'light' }]);
+  });
+
+  await onPage('a window that does not say which theme it keeps is told none until the person chooses', { own: true, scheme: 'dark', refused: ['plugin:imago-shell|kept_theme'] }, async (page) => {
+    const told = (count) => page.waitForFunction((n) => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_theme').length === n, count);
+    await drawn(page);
+    assert.equal(await scheme(page), 'dark');
+    assert.deepEqual(await themes(page), []);
+    for (const word of ['light', 'dark']) {
+      await palette(page, `${word} theme`);
+      await page.keyboard.press('Enter');
+      await told(word === 'light' ? 1 : 2);
+    }
+    assert.deepEqual(await themes(page), [{ theme: 'light', resolved: 'light' }, { theme: 'dark', resolved: 'dark' }]);
   });
 } finally {
   await browser.close();

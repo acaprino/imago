@@ -1,7 +1,7 @@
 //! The plugin on Tauri's mock runtime: which page may call its commands, by the capability the app
 //! gives it, and what the commands do. The calls go through the same gate as a real page's (Tauri's
 //! access control list), made from the crate's own permission file. A real window is not here.
-use imago_shell::{open_main, plugin, Material, Options};
+use imago_shell::{open_main, plugin, Material, Options, DARK_GROUND, LIGHT_GROUND};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use tauri::{
@@ -9,7 +9,7 @@ use tauri::{
     test::{get_ipc_response, mock_builder, mock_context, noop_assets, MockRuntime, INVOKE_KEY},
     utils::{
         acl::manifest::{Manifest, PermissionFile},
-        config::{Color, WindowConfig},
+        config::WindowConfig,
     },
     webview::InvokeRequest,
     App, Manager, WebviewWindowBuilder,
@@ -20,14 +20,15 @@ const PAGE: &str = "http://127.0.0.1:50123/app/?token=x";
 const ORIGIN: &str = "http://127.0.0.1:50123";
 const LOCAL: &str = "http://tauri.localhost";
 const OPAQUE: Material = Material::Opaque {
-    dark: Color(18, 22, 30, 255),
-    light: Color(246, 247, 249, 255),
+    dark: DARK_GROUND,
+    light: LIGHT_GROUND,
 };
 
 /// Every command, with arguments it takes.
-fn commands() -> [(&'static str, Value); 4] {
+fn commands() -> [(&'static str, Value); 5] {
     [
         ("set_theme", json!({ "theme": "dark", "resolved": "dark" })),
+        ("kept_theme", json!({})),
         (
             "caption",
             json!({ "x": 1, "y": 0, "width": 46, "height": 32 }),
@@ -85,14 +86,14 @@ fn remote(urls: &[&str]) -> String {
     .to_string()
 }
 
-/// The page at `url` in the window `label` calls `command`.
+/// The page at `url` in the window `label` calls `command`: the answer.
 fn call(
     app: &App<MockRuntime>,
     label: &str,
     url: &str,
     command: &str,
     arguments: Value,
-) -> Result<(), String> {
+) -> Result<Value, String> {
     let request = InvokeRequest {
         cmd: format!("plugin:imago-shell|{command}"),
         callback: CallbackFn(0),
@@ -103,17 +104,14 @@ fn call(
         invoke_key: INVOKE_KEY.to_string(),
     };
     get_ipc_response(&app.get_webview_window(label).unwrap(), request)
-        .map(|_| ())
+        .map(|answer| answer.deserialize().unwrap())
         .map_err(|error| error.to_string())
 }
 
 fn assert_allowed(app: &App<MockRuntime>, url: &str) {
     for (command, arguments) in commands() {
-        assert_eq!(
-            call(app, "main", url, command, arguments),
-            Ok(()),
-            "{command} from {url}"
-        );
+        let answer = call(app, "main", url, command, arguments);
+        assert!(answer.is_ok(), "{command} from {url}: {answer:?}");
     }
 }
 
@@ -183,12 +181,14 @@ fn the_theme_the_page_chose_is_kept_for_the_next_start() {
     let (app, data) = app();
     app.add_capability(remote(&["http://127.0.0.1:*"])).unwrap();
     let set = |arguments| call(&app, "main", PAGE, "set_theme", arguments);
+    let said = || call(&app, "main", PAGE, "kept_theme", json!({})).unwrap();
     let kept = || std::fs::read_to_string(data.path().join("window-theme")).unwrap();
+    assert_eq!(said(), Value::Null, "a fresh install");
     // What Sigrid's hook sends on its own, and the choice with the theme drawn.
     set(json!({ "theme": "light" })).unwrap();
-    assert_eq!(kept(), "light");
+    assert_eq!((kept(), said()), ("light".into(), json!("light")));
     set(json!({ "theme": "system", "resolved": "dark" })).unwrap();
-    assert_eq!(kept(), "system");
+    assert_eq!((kept(), said()), ("system".into(), json!("system")));
     let unknown = set(json!({ "theme": "purple" })).unwrap_err();
     assert!(unknown.contains("unknown window theme"), "{unknown}");
     assert_eq!(kept(), "system");
@@ -219,6 +219,8 @@ fn the_commands_work_without_a_data_folder() {
     open_main(app.handle(), options).unwrap();
     app.add_capability(remote(&[ORIGIN])).unwrap();
     assert_allowed(&app, PAGE);
+    let kept = call(&app, "main", PAGE, "kept_theme", json!({}));
+    assert_eq!(kept, Ok(Value::Null), "a theme was told and none is kept");
 }
 
 #[test]

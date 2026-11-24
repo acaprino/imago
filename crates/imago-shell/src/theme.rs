@@ -22,6 +22,14 @@ const THEME_FILE: &str = "window-theme";
 /// The narrowest window of the suite. A `minWidth` of 500 is what gives the window its snap zones.
 const MIN_WIDTH: f64 = 500.0;
 
+/// The ground the page of the suite draws in dark, for [`Material::Opaque`]. `ts/preset.ts` states
+/// it too.
+pub const DARK_GROUND: Color = Color(0x12, 0x16, 0x1E, 255);
+
+/// The ground the page of the suite draws in light, for [`Material::Opaque`]. `ts/preset.ts` states
+/// it too.
+pub const LIGHT_GROUND: Color = Color(0xF6, 0xF7, 0xF9, 255);
+
 /// What the window asks Windows for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WindowTheme {
@@ -33,7 +41,7 @@ pub(crate) enum WindowTheme {
 
 impl WindowTheme {
     /// The word the file and the page use.
-    fn word(self) -> &'static str {
+    pub(crate) fn word(self) -> &'static str {
         match self {
             WindowTheme::Light => "light",
             WindowTheme::Dark => "dark",
@@ -155,7 +163,8 @@ pub enum Material {
     /// Windows' acrylic, behind a transparent page.
     Acrylic,
     /// One opaque colour for each theme, the ground the page draws there: what shows before the
-    /// page has drawn, while it is reloaded and at the edge of a window that is resized.
+    /// page has drawn, while it is reloaded and at the edge of a window that is resized. The suite's
+    /// are [`DARK_GROUND`] and [`LIGHT_GROUND`].
     Opaque { dark: Color, light: Color },
 }
 

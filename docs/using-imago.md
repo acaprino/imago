@@ -95,8 +95,7 @@ The page writes nothing for its window: the shell calls the plugin of `imago-she
 3.4), and in a browser nothing of Tauri is called or loaded. The program of the app is this, and what it adds of its own:
 
 ```rust
-use imago_shell::{on_run_event, open_main, plugin, Material, Options};
-use tauri::window::Color;
+use imago_shell::{on_run_event, open_main, plugin, Material, Options, DARK_GROUND, LIGHT_GROUND};
 
 fn main() {
     tauri::Builder::default()
@@ -104,8 +103,8 @@ fn main() {
         .setup(|app| {
             let options = Options {
                 material: Material::Opaque {
-                    dark: Color(0x12, 0x16, 0x1E, 255),
-                    light: Color(0xF6, 0xF7, 0xF9, 255),
+                    dark: DARK_GROUND,
+                    light: LIGHT_GROUND,
                 },
                 ..Options::for_app(app)?
             };
@@ -149,8 +148,8 @@ Tauri 2 lets the page call the window, the webview or an event only when a capab
 ```
 
 What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
-`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The plugin's own commands, `set_theme`, `caption`, `ready` and
-`chrome`, which the shell sends, are granted by `imago-shell:default`, in a capability beside it (`capabilities/shell.json` of the demo); `tauri.conf.json` lists both. The events `caption-maximize` and `window-shown`, which come back, need the two `core:event` permissions of the nine.
+`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The plugin's own commands, `set_theme`, `kept_theme`,
+`caption`, `ready` and `chrome`, which the shell sends, are granted by `imago-shell:default`, in a capability beside it (`capabilities/shell.json` of the demo); `tauri.conf.json` lists both. The events `caption-maximize` and `window-shown`, which come back, need the two `core:event` permissions of the nine.
 
 ## 5. The icons of the executables
 
