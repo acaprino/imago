@@ -72,8 +72,8 @@ const browser = await chromium.launch();
 const failures = [];
 
 /** Opens the page in a context of its own, with `scheme` as the choice kept, and runs `look` on it; an error of the page fails it. */
-async function onPage(name, { width = 1440, scheme, system = 'light', own = false, kept, refused, expected } = {}, look) {
-  const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: system });
+async function onPage(name, { width = 1440, scheme, system = 'light', own = false, kept, refused, reduced = false, expected } = {}, look) {
+  const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: system, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
   const problems = [];
@@ -99,8 +99,16 @@ async function onPage(name, { width = 1440, scheme, system = 'light', own = fals
   await context.close();
 }
 
+/** How many movements of the page a clock runs: not those a scroll does. */
+const movements = (page) => page.evaluate(() => document.getAnimations().filter(({ timeline }) => timeline === document.timeline).length);
+/** Waits for what moves after a press. */
+const still = (page) => page.evaluate(() => Promise.race([
+  Promise.all(document.getAnimations().filter(({ timeline }) => timeline === document.timeline).map(({ finished }) => finished.catch(() => {}))),
+  new Promise((done) => setTimeout(done, 1000)),
+]).then(() => {}));
+
 /** What sticks out of the page or of a region of the frame, sideways. */
-const overflow = (page) => page.evaluate(() => {
+const overflow = (page) => still(page).then(() => page.evaluate(() => {
   const out = [];
   const wide = document.documentElement;
   if (wide.scrollWidth > wide.clientWidth) out.push(`the page is ${wide.scrollWidth} wide in ${wide.clientWidth}`);
@@ -114,7 +122,7 @@ const overflow = (page) => page.evaluate(() => {
     if (box.width > 1 && (box.left < 0 || box.right > innerWidth)) out.push(`"${control.textContent || control.getAttribute('aria-label')}" goes from ${box.left} to ${box.right} in ${innerWidth}`);
   }
   return out;
-});
+}));
 
 const scheme = (page) => page.evaluate(() => document.documentElement.dataset.scheme);
 const tab = (page, view) => page.locator('[data-slot="toolbar-tab"]').nth(VIEWS.indexOf(view));
@@ -123,7 +131,7 @@ const open = async (page, view) => {
   await page.locator(`[data-slot="toolbar-tab"][aria-current="page"]`).waitFor();
   assert.equal(await tab(page, view).getAttribute('aria-current'), 'page', view);
 };
-const shot = async (page, name) => { await page.screenshot({ path: join(shots, `${name}.png`) }); };
+const shot = async (page, name) => { await still(page); await page.screenshot({ path: join(shots, `${name}.png`) }); };
 const palette = async (page, text) => {
   await page.keyboard.press('Control+k');
   await page.getByRole('dialog').waitFor();
@@ -364,6 +372,77 @@ try {
     assert.ok((await overflow(page)).length >= 2, 'a button of 2000px in a page of 340px is not found');
   });
 
+  const MOTION = /\/motion-impl-[\w-]+\.js$/;
+  await onPage('the line of a view grows from its middle', {}, async (page, scripts) => {
+    await page.waitForFunction(() => document.documentElement.hasAttribute('data-motion'));
+    const line = await page.evaluate(async () => {
+      const [from, to] = document.querySelectorAll('[data-slot="toolbar-tab"]');
+      const scaled = () => [from, to].map((one) => parseFloat(getComputedStyle(one, '::after').scale));
+      const before = scaled();
+      to.click();
+      await new Promise(requestAnimationFrame);
+      const moves = document.getAnimations().filter(({ effect }) => effect.pseudoElement === '::after' && [from, to].includes(effect.target));
+      const each = moves.map(({ transitionProperty, effect }) => [transitionProperty, effect.getTiming().duration]);
+      for (const move of moves) {
+        move.pause();
+        move.currentTime = 40;
+      }
+      const during = scaled();
+      const { transformOrigin, width } = getComputedStyle(to, '::after');
+      for (const move of moves) move.finish();
+      return { before, each, during, middle: Math.abs(parseFloat(transformOrigin) - parseFloat(width) / 2) < 1, after: scaled() };
+    });
+    assert.deepEqual([line.before, line.each, line.middle, line.after], [[1, 0], [['scale', 180], ['scale', 180]], true, [0, 1]]);
+    for (const scale of line.during) assert.ok(scale > 0 && scale < 1, `the two lines are at ${line.during.join(' and ')}`);
+    // So that the test below can fail: what moves by script is loaded here.
+    assert.ok(scripts.some((script) => MOTION.test(script)), `nothing of the motion was loaded: ${scripts.join(' ')}`);
+  });
+
+  await onPage('a person who asked for less motion sees none', { reduced: true }, async (page, scripts) => {
+    const moving = [];
+    const look = async (what) => { if (await movements(page)) moving.push(what); };
+    for (const view of VIEWS.slice(0, 3)) {
+      await open(page, view);
+      await look(view);
+    }
+    await open(page, 'items');
+    await page.getByRole('group', { name: 'Which items' }).getByRole('button', { name: 'Open' }).click();
+    await look('the filter');
+    await page.getByRole('list', { name: 'Items' }).getByRole('button').first().click();
+    await look('the details');
+    await palette(page, 'notices');
+    await look('the palette');
+    await page.keyboard.press('Enter');
+    await look('the palette that closes');
+    await page.setViewportSize({ width: 500, height: 800 });
+    await page.locator('[data-slot="title-bar"] button').first().click();
+    await page.getByRole('dialog').waitFor();
+    await look('the drawer');
+    assert.deepEqual(moving, []);
+    assert.deepEqual(scripts.filter((script) => MOTION.test(script)), []);
+  });
+
+  await onPage('what a press does is done at once, with the movements all but stopped', { own: true, width: 1000 }, async (page) => {
+    await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|ready'));
+    const engine = await page.context().newCDPSession(page);
+    await engine.send('Animation.enable');
+    await engine.send('Animation.setPlaybackRate', { playbackRate: 0.001 });
+    page.setDefaultTimeout(1500);
+    await open(page, 'new');
+    await page.getByRole('textbox', { name: 'Name' }).waitFor();
+    assert.ok(await movements(page) > 0, 'nothing moves: the test shows nothing');
+    await palette(page, 'go to items');
+    await page.keyboard.press('Enter');
+    await page.getByRole('list', { name: 'Items' }).waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-slot') === 'app-shell-content');
+    await page.getByRole('group', { name: 'Which items' }).getByRole('button', { name: 'Caution' }).press('Enter');
+    assert.equal(await page.getByRole('list', { name: 'Items' }).getByRole('listitem').count(), 2);
+    await page.getByRole('list', { name: 'Items' }).getByRole('button').first().press('Enter');
+    await page.locator('[data-slot="inspector-body"]').waitFor();
+    await page.evaluate(() => window.emit('window-shown', null));
+    await page.getByText('The window is back.').waitFor();
+  });
+
   const TAURI = /\/(?:core|event|window|webview)-[\w-]+\.js$/;
   await onPage('in a browser there are no window buttons, and nothing of Tauri is loaded', {}, async (page, scripts) => {
     for (const view of VIEWS.slice(0, 3)) await open(page, view);
@@ -462,6 +541,18 @@ try {
     }
     assert.deepEqual(await themes(page), [{ theme: 'light', resolved: 'light' }, { theme: 'dark', resolved: 'dark' }]);
   });
+
+  // For the eye: the top of Xiox, as Imago drew it on 2026-11-20 (tests/xiox), over the top of the demo, at twice its size.
+  const tops = [];
+  for (const chosen of ['dark', 'light']) {
+    await onPage(`the top beside Xiox's, ${chosen}`, { width: 1180, scheme: chosen, own: true }, async (page) => {
+      await still(page);
+      tops.push(readFileSync(join(root, 'tests', 'xiox', `${chosen}.png`)), await page.screenshot({ clip: { x: 0, y: 0, width: 1180, height: 170 } }));
+    });
+  }
+  const sheet = await browser.newPage({ viewport: { width: 2360, height: 800 } });
+  await sheet.setContent(`<body style="margin:0">${tops.map((png) => `<img style="display:block;width:2360px;margin-bottom:12px;image-rendering:pixelated" src="data:image/png;base64,${png.toString('base64')}">`).join('')}`);
+  await sheet.screenshot({ path: join(shots, 'compare.png'), fullPage: true });
 } finally {
   await browser.close();
   server.close();

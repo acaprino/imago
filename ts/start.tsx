@@ -1,11 +1,11 @@
 // The start of an app: its look on the page before anything is drawn, then the app inside the shell.
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { WordsProvider } from '@acaprino/sigrid';
+import { MotionProvider, WordsProvider } from '@acaprino/sigrid';
 import { applyKeptScheme, CommandsProvider } from '@acaprino/sigrid/assemblies';
 import { readHost } from '@acaprino/sigrid/tauri';
 import type { App } from './app.js';
-import { dress } from './preset.js';
+import { dress, SHELL_MOTION } from './preset.js';
 import { keptTheme, lookOf, ShellProvider } from './shell.js';
 
 const CHOICES = ['light', 'dark', 'system'];
@@ -33,11 +33,13 @@ export function startApp(app: App, root: HTMLElement, node: ReactNode): () => vo
     if (gone) return;
     applyKeptScheme(lookOf(app));
     react.render(
-      <WordsProvider words={app.words?.sigrid}>
-        <CommandsProvider>
-          <ShellProvider app={app} untold={untold}>{node}</ShellProvider>
-        </CommandsProvider>
-      </WordsProvider>,
+      <MotionProvider animated {...SHELL_MOTION}>
+        <WordsProvider words={app.words?.sigrid}>
+          <CommandsProvider>
+            <ShellProvider app={app} untold={untold}>{node}</ShellProvider>
+          </CommandsProvider>
+        </WordsProvider>
+      </MotionProvider>,
     );
   };
   if (readHost().ownWindow) {
