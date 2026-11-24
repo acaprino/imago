@@ -3,10 +3,11 @@ import { chromium } from 'playwright';
 
 const [port, action] = process.argv.slice(2);
 let browser;
-for (let attempt = 0; attempt < 60 && !browser; attempt++) {
-  try { browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 2000 }); } catch { await new Promise((done) => setTimeout(done, 250)); }
+let last;
+for (let attempt = 0; attempt < 20 && !browser; attempt++) {
+  try { browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 10000 }); } catch (error) { last = error; await new Promise((done) => setTimeout(done, 250)); }
 }
-if (!browser) throw new Error('the debugging port did not open');
+if (!browser) throw new Error(`the debugging port did not open: ${String(last).slice(0, 600)}`);
 let page;
 for (let attempt = 0; attempt < 60 && !page; attempt++) {
   page = browser.contexts()[0]?.pages().find((each) => /tauri\.localhost/.test(each.url()));

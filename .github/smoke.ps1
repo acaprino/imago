@@ -1,6 +1,7 @@
 # Throwaway: the merged demo on a real WebView2, after imago-crate's smoke of the plugin (1edf67a).
 param([string]$Exe, [string]$Data, [string]$Out)
 $ErrorActionPreference = 'Stop'
+$Data = [IO.Path]::GetFullPath($Data); $Out = [IO.Path]::GetFullPath($Out)
 New-Item -ItemType Directory -Force $Data, $Out | Out-Null
 Add-Type -TypeDefinition @'
 using System; using System.Collections.Generic; using System.Runtime.InteropServices; using System.Text;
@@ -62,7 +63,7 @@ function Screen-Shot([string]$name) {
 }
 
 $env:IMAGO_DEMO_HOME = $Data
-$env:WEBVIEW2_USER_DATA_FOLDER = "$Data/webview"
+$env:WEBVIEW2_USER_DATA_FOLDER = [IO.Path]::Combine($Data, "webview")
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9333 --remote-debugging-address=127.0.0.1'
 $screen = (Get-CimInstance Win32_VideoController | Select-Object -First 1); Write-Host "screen $($screen.CurrentHorizontalResolution)x$($screen.CurrentVerticalResolution), Windows $((Get-CimInstance Win32_OperatingSystem).Version)"
 
@@ -77,6 +78,10 @@ function Start-Demo {
 
 Write-Host '--- the first start: nothing kept'
 $demo = Start-Demo
+Start-Sleep 4
+Write-Host "      made $script:made, hidden $script:hidden, shown $script:shown, window $(Main $demo), running $(-not $demo.HasExited)"
+Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -notmatch '--type=' } | ForEach-Object { Write-Host "      engine $($_.ProcessId) of $($_.ParentProcessId): $($_.CommandLine)" }
+Screen-Shot 'start'
 $first = Ask 'read'
 $call = { param($name) $first.ipc | Where-Object { $_.call -eq "plugin:imago-shell|$name" } | Select-Object -First 1 }
 foreach ($name in 'set_theme', 'caption', 'ready') { $c = & $call $name; Say ($c -and $c.status -eq 200) "$name answered: $($c | ConvertTo-Json -Compress)" }

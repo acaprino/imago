@@ -168,7 +168,7 @@ async function select(demo, fixture, theme) {
   await delay(900);
   // The native side keeps the theme it was told in a file, for the first frame of the next start.
   const kept = (await readFile(resolve(fixture, 'data', 'window-theme'), 'utf8').catch(() => '')).trim();
-  if (kept !== theme) fail(`${theme}: the window theme kept on disk is "${kept}", not "${theme}": set_window_theme did not reach the native side`);
+  if (kept !== theme) fail(`${theme}: the window theme kept on disk is "${kept}", not "${theme}": set_theme did not reach the native side`);
 }
 
 /** Where the title bar and the work sheet can be read: empty spots of the real window, in physical pixels of its client area. */
