@@ -9,7 +9,8 @@ screen holds only as far as this file says.
 On 2026-11-24 a throwaway run of GitHub Actions (45472732704, commit `2a6ca89`) built the demo, started it on a `windows-latest`
 runner (Windows 10.0.26100, a screen of 1024x768 at 100%, WebView2 157.0.4341.46, apps in the light theme) and drove its page
 over the debugging port of WebView2. The program is the debug profile with the page embedded, under the policy of
-`tauri.conf.json`. Every check passed:
+`tauri.conf.json`, with one line added for the run: `additionalBrowserArgs` in the window's config, which opens the port. Every
+check passed:
 
 | What | Measured |
 |---|---|
@@ -26,13 +27,18 @@ over the debugging port of WebView2. The program is the debug profile with the p
 | The second start | The kept theme is the first frame's |
 | The program started again while it runs | The second copy ends, and the page is told the window is back |
 
-Two things it showed besides. A choice made in the seconds before the browser process is lost may be lost with it: WebView2 writes
-the page's storage to the disk some seconds later. A window that had reached past the edge of that small screen came back inside
+Two things it showed besides. A choice of theme or zoom made in the seconds before the browser process is lost is lost with it:
+WebView2 writes the page's storage to the disk some seconds later, and the page that is loaded again, which finds no choice, says dark
+to the window, so `window-theme` is written over. A run that waited less than 12 seconds showed it. A window that had reached past the edge of that small screen came back inside
 its work area when it was built again.
 
 ## Not run: for the coordinator
 
-From the artifact of a run of Verify on `develop`, on a desktop of Windows 11 (`npm run demo:fetch`, then `npm run capture`):
+From the artifact of a run of Verify on `develop`, on a desktop of Windows 11 (`npm run demo:fetch`, then `npm run capture`). The
+capture opens the debugging port with the environment (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`). On the runner the engine did not
+take it, and why is not known (the runner is elevated; a desktop was not tried): if the capture says that the port did not open,
+that is the cause.
+
 
 1. The four photographs: both themes, over a dark and a bright window, with nothing showing through.
 2. The flyout of Snap Layouts under the real pointer (the runner above opened none).

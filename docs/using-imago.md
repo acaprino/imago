@@ -149,8 +149,8 @@ Tauri 2 lets the page call the window, the webview or an event only when a capab
 ```
 
 What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
-`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The plugin's own commands are granted by
-`imago-shell:default`, in a capability beside it (`capabilities/shell.json` of the demo); `tauri.conf.json` lists both.
+`examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The plugin's own commands, `set_theme`, `caption`, `ready` and
+`chrome`, which the shell sends, are granted by `imago-shell:default`, in a capability beside it (`capabilities/shell.json` of the demo); `tauri.conf.json` lists both. The events `caption-maximize` and `window-shown`, which come back, need the two `core:event` permissions of the nine.
 
 ## 5. The icons of the executables
 
