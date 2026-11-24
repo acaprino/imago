@@ -171,7 +171,8 @@ The crate is a Tauri plugin that opens the main window of an app and watches it.
 1. `imago_shell::plugin()` on the app's builder (`plugin`).
 2. In `setup`, `open_main(app.handle(), options)`. The window is the one called `main` in `tauri.conf.json`, with
    `"create": false`.
-3. `on_run_event` given to `run`. An app with a handler of its own calls it there, but not for an exit it prevents.
+3. `on_run_event` given to `run`. An app with a handler of its own calls it there, but not for an `ExitRequested` it
+   prevents.
    Without it a rebuild of the window ends the application.
 
 `Options::for_app` gives the defaults of `Options`:
