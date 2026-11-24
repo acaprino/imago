@@ -1,10 +1,10 @@
 // node tests/demo.mjs, after `npm run build` (it opens what `npm run demo:web` built, examples/demo/dist).
-// The demo page in a browser: it loads without an error under the content policy of its window, in both schemes; nothing
-// overflows at the widths where the frame changes, with the views where that width puts them; the palette opens and
-// chooses the scheme; in a browser nothing of Tauri is asked for, and in a window (a fake one) the bar has its buttons and
-// the window is told its theme and where the maximize button is.
+// The demo app in a browser, and in a window that only pretends to be Tauri's. At each width where the frame changes and in
+// both schemes nothing overflows, the views are where the width puts them and the shared controls keep their places; then
+// the keys, the palette, the focus, the notices, a screen that fails, and what the window is told. Photographs of the page
+// go to examples/demo/shots.
 import assert from 'node:assert/strict';
-import { readFileSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,8 +12,14 @@ import { chromium } from 'playwright';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'examples', 'demo', 'dist');
+const shots = join(root, 'examples', 'demo', 'shots');
+rmSync(shots, { recursive: true, force: true });
+mkdirSync(shots, { recursive: true });
 const policy = JSON.parse(readFileSync(join(root, 'examples/demo/src-tauri/tauri.conf.json'), 'utf8')).app.security.csp;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.woff2': 'font/woff2' };
+const WIDTHS = [340, 500, 620, 860, 1000, 1440];
+const SHOTS = [340, 620, 860, 1440];
+const VIEWS = ['items', 'new', 'notices', 'failure'];
 
 const server = createServer((request, response) => {
   const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
@@ -28,16 +34,21 @@ const server = createServer((request, response) => {
 await new Promise((done) => server.listen(0, '127.0.0.1', done));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
-/** The window of Tauri as the page finds it: it answers every call and writes it down in `window.calls`. */
+/** The window of Tauri as the page finds it: it answers every call and writes it down, but for those of `window.refused`. */
 function fakeWindow() {
   window.calls = [];
-  let callbacks = 0;
+  window.refused = [];
+  const handlers = [];
+  const listeners = {};
+  window.emit = (event, payload) => { for (const handler of listeners[event] ?? []) handlers[handler]({ event, id: 1, payload }); };
   window.__TAURI_INTERNALS__ = {
     metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main', windowLabel: 'main' } },
-    transformCallback: () => ++callbacks,
+    transformCallback: (callback) => handlers.push(callback) - 1,
     unregisterCallback: () => {},
     invoke: async (command, args) => {
       window.calls.push([command, args]);
+      if (window.refused.includes(command)) throw new Error('refused');
+      if (command === 'plugin:event|listen') (listeners[args.event] ??= []).push(args.handler);
       return command === 'plugin:window|is_maximized' ? false : command === 'plugin:event|listen' ? 1 : null;
     },
   };
@@ -45,23 +56,34 @@ function fakeWindow() {
 }
 
 const browser = await chromium.launch();
+const failures = [];
 
-/** Opens the page in a context of its own, runs `look` on it, and fails on an error the page reported. */
-async function onPage(name, { width = 1280, colorScheme = 'light', init } = {}, look) {
-  const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme });
+/** Opens the page in a context of its own, with `scheme` as the choice kept, and runs `look` on it; an error of the page fails it. */
+async function onPage(name, { width = 1440, scheme, system = 'light', own = false, expected } = {}, look) {
+  const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: system });
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
   const problems = [];
+  const scripts = [];
   page.on('pageerror', (error) => problems.push(error.message));
-  page.on('console', (message) => { if (message.type() === 'error') problems.push(message.text()); });
+  page.on('console', (message) => { if (message.type() === 'error' && !(expected && message.text().includes(expected))) problems.push(message.text()); });
   page.on('requestfailed', (request) => problems.push(`${request.url()} failed`));
-  if (init) await page.addInitScript(init);
-  await page.goto(url);
-  await page.waitForSelector('[data-slot="app-shell"]');
-  await look(page);
-  assert.deepEqual(problems, [], name);
+  page.on('request', (request) => { if (request.resourceType() === 'script') scripts.push(new URL(request.url()).pathname); });
+  if (scheme) await page.addInitScript((value) => { if (!localStorage.getItem('imago.scheme')) localStorage.setItem('imago.scheme', value); }, scheme);
+  if (own) await page.addInitScript(fakeWindow);
+  try {
+    await page.goto(url);
+    await page.waitForSelector('[data-slot="app-shell"]');
+    await page.evaluate(() => document.fonts.ready);
+    await look(page, scripts);
+    assert.deepEqual(problems, []);
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failures.push(name);
+    console.log(`FAIL ${name}\n     ${String(error?.stack ?? error).split('\n').slice(0, 24).join('\n     ')}${problems.length ? `\n     the page said: ${problems.join(' | ')}` : ''}`);
+    await page.screenshot({ path: join(shots, `FAIL ${name.replace(/[^\w ]/g, '')}.png`) }).catch(() => {});
+  }
   await context.close();
-  console.log(`ok   ${name}`);
 }
 
 /** What sticks out of the page or of a region of the frame, sideways. */
@@ -69,52 +91,229 @@ const overflow = (page) => page.evaluate(() => {
   const out = [];
   const wide = document.documentElement;
   if (wide.scrollWidth > wide.clientWidth) out.push(`the page is ${wide.scrollWidth} wide in ${wide.clientWidth}`);
-  for (const slot of ['title-bar', 'app-shell-tabs', 'app-shell-status', 'app-shell-content', 'app-shell-actions', 'app-shell-footer', 'app-shell-bottom', 'panel-body', 'inspector-body']) {
+  for (const slot of ['title-bar', 'app-shell-tabs', 'app-shell-status', 'sidebar', 'app-shell-content', 'app-shell-actions', 'app-shell-footer', 'app-shell-bottom', 'panel-header', 'panel-tools', 'panel-body', 'panel-footer', 'inspector-body', 'inspector-footer']) {
     for (const region of document.querySelectorAll(`[data-slot="${slot}"]`)) {
-      if (region.scrollWidth > region.clientWidth) out.push(`${slot} is ${region.scrollWidth} wide in ${region.clientWidth}`);
+      if (region.clientWidth > 1 && region.scrollWidth > region.clientWidth) out.push(`${slot} is ${region.scrollWidth} wide in ${region.clientWidth}`);
     }
   }
-  for (const control of document.querySelectorAll('button')) {
+  for (const control of document.querySelectorAll('button, input, textarea')) {
     const box = control.getBoundingClientRect();
-    if (box.width > 1 && (box.left < 0 || box.right > innerWidth)) out.push(`the button "${control.textContent || control.getAttribute('aria-label')}" goes from ${box.left} to ${box.right} in ${innerWidth}`);
+    if (box.width > 1 && (box.left < 0 || box.right > innerWidth)) out.push(`"${control.textContent || control.getAttribute('aria-label')}" goes from ${box.left} to ${box.right} in ${innerWidth}`);
   }
   return out;
 });
 
 const scheme = (page) => page.evaluate(() => document.documentElement.dataset.scheme);
-const ground = (page) => page.evaluate(() => getComputedStyle(document.querySelector('[data-slot="app-shell-work"]')).backgroundColor);
+const tab = (page, view) => page.locator('[data-slot="toolbar-tab"]').nth(VIEWS.indexOf(view));
+const open = async (page, view) => {
+  await tab(page, view).click();
+  await page.locator(`[data-slot="toolbar-tab"][aria-current="page"]`).waitFor();
+  assert.equal(await tab(page, view).getAttribute('aria-current'), 'page', view);
+};
+const shot = async (page, name) => { await page.screenshot({ path: join(shots, `${name}.png`) }); };
+const palette = async (page, text) => {
+  await page.keyboard.press('Control+k');
+  await page.getByRole('dialog').waitFor();
+  await page.keyboard.type(text);
+};
+/** The region of the frame that has the focus. */
+const region = (page) => page.evaluate(() => {
+  const at = document.activeElement;
+  if (at === document.body) return 'nowhere';
+  const held = at?.closest('[data-slot="app-shell-skip"], [data-slot="title-bar"], [data-slot="sidebar"], [data-slot="inspector"], [data-slot="app-shell-content"], [data-slot="app-shell-actions"], [data-slot="app-shell-footer"]');
+  return held?.getAttribute('data-slot') ?? at?.tagName.toLowerCase();
+});
+
+/** The places of the controls every view shares, from the start of the bar to its end. */
+const places = async (page) => {
+  const box = async (locator) => {
+    const found = await locator.boundingBox();
+    return found && { x: Math.round(found.x), y: Math.round(found.y), width: Math.round(found.width) };
+  };
+  return {
+    brand: await box(page.locator('[data-slot="toolbar-brand"]')),
+    views: await box(page.locator('[data-slot="toolbar-tabs"]')),
+    commands: await box(page.locator('[data-slot="title-bar"]').getByRole('button', { name: /^Commands/ })),
+  };
+};
+
+const FORM = (width, own) => (width >= 860 ? 'title-bar' : width < 620 && !own ? 'app-shell-bottom' : 'app-shell-tabs');
+
+/** Every view at one width: no overflow, the views in their one place, the shared controls where they were; a photograph of each. */
+async function everyView(page, name, width, own) {
+  const photographed = SHOTS.includes(width);
+  const first = [];
+  for (const view of VIEWS) {
+    await open(page, view);
+    if (view === 'items' && width >= 1000) {
+      await page.getByRole('button', { name: /^Model cache/ }).click();
+      await page.locator('[data-slot="inspector-body"]').waitFor();
+    }
+    if (photographed) await shot(page, `${name}-${view}`);
+    assert.deepEqual(await overflow(page), [], `${view}: overflow`);
+    assert.equal(await page.locator('[data-slot="toolbar-tabs"]').count(), 1, 'the views are drawn once');
+    assert.equal(await page.locator(`[data-slot="${FORM(width, own)}"] [data-slot="toolbar-tabs"]`).count(), 1, `the views are in ${FORM(width, own)}`);
+    const now = await places(page);
+    if (!first.length) {
+      first.push(now);
+      assert.ok(now.brand.x < now.commands.x, 'the brand comes before Commands');
+      if (width >= 860) assert.ok(now.brand.x < now.views.x && now.views.x + now.views.width <= now.commands.x, 'the views are between the brand and Commands');
+      if (own) {
+        const buttons = await page.locator('[data-slot="window-controls"]').boundingBox();
+        assert.ok(now.commands.x + now.commands.width <= buttons.x && Math.round(buttons.x + buttons.width) === width, 'the window buttons are the last, at the corner');
+      }
+    } else assert.deepEqual(now, first[0], `${view}: the shared controls have moved`);
+  }
+  await open(page, 'items');
+  if (width < 1000) {
+    await page.getByRole('button', { name: /^Model cache/ }).click();
+    await page.locator('[data-slot="inspector-body"]').waitFor();
+    if (photographed) await shot(page, `${name}-details`);
+    assert.deepEqual(await overflow(page), [], 'the details: overflow');
+  }
+}
 
 try {
-  const grounds = {};
-  for (const colorScheme of ['light', 'dark']) {
-    for (const [width, views] of [[340, 'app-shell-bottom'], [620, 'app-shell-tabs'], [860, 'title-bar'], [1440, 'title-bar']]) {
-      await onPage(`${colorScheme} at ${width}`, { width, colorScheme }, async (page) => {
-        assert.equal(await scheme(page), colorScheme);
-        grounds[colorScheme] = await ground(page);
-        assert.equal(await page.locator(`[data-slot="${views}"] [data-slot="toolbar-tabs"]`).count(), 1, `the views are in ${views}`);
-        assert.equal(await page.locator('[data-slot="toolbar-tabs"]').count(), 1, 'and nowhere else');
-        assert.deepEqual(await overflow(page), [], 'the list');
-        await page.getByRole('button', { name: /^Zoom/ }).click();
-        await page.locator('[data-slot="inspector-body"]').waitFor();
-        assert.deepEqual(await overflow(page), [], 'with the details open');
-        await page.locator('[data-slot="inspector-close"]').click();
-        await page.getByRole('button', { name: 'Settings' }).click();
-        await page.getByRole('switch').waitFor();
-        assert.deepEqual(await overflow(page), [], 'the settings');
+  for (const chosen of ['dark', 'light']) {
+    for (const width of WIDTHS) {
+      // The system says the other scheme: what is drawn is the choice.
+      await onPage(`${chosen} at ${width}`, { width, scheme: chosen, system: chosen === 'dark' ? 'light' : 'dark', expected: 'items.json' }, async (page) => {
+        await everyView(page, `${chosen}-${width}`, width, false);
+        assert.equal(await scheme(page), chosen);
+      });
+    }
+    for (const width of [500, 1440]) {
+      await onPage(`${chosen} at ${width}, in a window`, { width, scheme: chosen, own: true, expected: 'items.json' }, async (page) => {
+        await everyView(page, `window-${chosen}-${width}`, width, true);
+        await shot(page, `window-${chosen}-${width}`);
       });
     }
   }
-  assert.notEqual(grounds.light, grounds.dark, 'the two schemes draw the same ground');
 
-  await onPage('the palette chooses the scheme, and the choice is kept', {}, async (page) => {
-    await page.keyboard.press('Control+k');
-    await page.getByRole('dialog').waitFor();
-    await page.keyboard.type('dark');
+  await onPage('the look: dark until the person chooses, boxed keys, strong borders, compact', { system: 'light' }, async (page) => {
+    assert.equal(await scheme(page), 'dark');
+    const look = await page.evaluate(() => {
+      const root_ = document.documentElement;
+      const style = getComputedStyle(root_);
+      const color = (slot) => getComputedStyle(document.querySelector(`[data-slot="${slot}"]`)).backgroundColor;
+      return {
+        lang: root_.lang, keys: root_.dataset.keys, controls: root_.dataset.controls, density: root_.dataset.density,
+        control: style.getPropertyValue('--density-control-md'), radius: [style.getPropertyValue('--radius-md'), style.getPropertyValue('--radius-lg')],
+        ground: color('app-shell'), sheet: color('app-shell-work'),
+      };
+    });
+    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
+  });
+
+  await onPage('the palette: the views and the look, and the choice is kept', { system: 'dark' }, async (page) => {
+    await palette(page, '');
+    const options = await page.getByRole('option').allTextContents();
+    const at = (word) => options.findIndex((option) => option.includes(word));
+    for (const word of ['Check all items', 'Search in this view', 'Go to Items', 'Go to Failure', 'Light theme', 'System theme']) assert.notEqual(at(word), -1, `${word} is not in ${options.join(' | ')}`);
+    assert.ok(at('Go to Items') < at('Go to New item') && at('Go to Failure') < at('Light theme'), options.join(' | '));
+    await shot(page, 'palette');
+    await page.keyboard.type('light theme');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.documentElement.dataset.scheme === 'dark');
+    await page.waitForFunction(() => document.documentElement.dataset.scheme === 'light');
     await page.reload();
     await page.waitForSelector('[data-slot="app-shell"]');
-    assert.equal(await scheme(page), 'dark');
+    assert.equal(await scheme(page), 'light');
+  });
+
+  await onPage('a view opened from the palette gives the focus to its content', {}, async (page) => {
+    await palette(page, 'new item');
+    await page.keyboard.press('Enter');
+    await page.getByRole('textbox', { name: 'Name' }).waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-slot') === 'app-shell-content');
+  });
+
+  await onPage('Ctrl+F is the search of the view, and where there is none the shell says so', {}, async (page) => {
+    assert.ok((await page.locator('[data-slot="key-hints"]').textContent()).includes('Search in this view'));
+    await page.keyboard.press('Control+f');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('type') === 'search');
+    await open(page, 'new');
+    assert.ok(!(await page.locator('[data-slot="key-hints"]').textContent()).includes('Search in this view'));
+    await page.keyboard.press('Control+f');
+    await page.getByText('This view has no search.').waitFor();
+  });
+
+  await onPage('F6 goes round the regions, and Tab goes through them in the order they are read', {}, async (page) => {
+    await page.getByRole('button', { name: /^Model cache/ }).click();
+    await page.locator('[data-slot="inspector-body"]').waitFor();
+    await page.evaluate(() => document.activeElement.blur());
+    const round = [];
+    for (let k = 0; k < 5; k++) {
+      await page.keyboard.press('F6');
+      round.push(await region(page));
+    }
+    assert.deepEqual(round, ['title-bar', 'sidebar', 'app-shell-content', 'inspector', 'title-bar']);
+    await page.reload();
+    await page.getByRole('button', { name: /^Model cache/ }).click();
+    await page.evaluate(() => document.activeElement.blur());
+    const order = [];
+    // From the top of the page: a press on nothing is where the round begins.
+    await page.evaluate(() => { document.body.tabIndex = -1; document.body.focus(); document.body.removeAttribute('tabindex'); });
+    for (let k = 0; k < 40; k++) {
+      await page.keyboard.press('Tab');
+      const now = await region(page);
+      if (order.at(-1) !== now) order.push(now);
+      if (now === 'app-shell-actions') break;
+    }
+    assert.deepEqual(order, ['app-shell-skip', 'title-bar', 'sidebar', 'app-shell-content', 'inspector', 'app-shell-actions']);
+  });
+
+  await onPage('the focus goes to the content when what held it goes', { width: 1000 }, async (page) => {
+    await tab(page, 'notices').focus();
+    await page.setViewportSize({ width: 500, height: 800 });
+    await page.locator('[data-slot="app-shell-bottom"]').waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-slot') === 'app-shell-content');
+    await page.locator('[data-slot="app-shell-content"] button').first().focus();
+    await page.setViewportSize({ width: 1000, height: 800 });
+    await page.locator('[data-slot="title-bar"] [data-slot="toolbar-tabs"]').waitFor();
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'BUTTON', 'what stays keeps the focus');
+  });
+
+  await onPage('the drawer of the sidebar opens from the bar, and a place closes it', { width: 500 }, async (page) => {
+    await page.locator('[data-slot="title-bar"] button').first().click();
+    await page.getByRole('dialog').waitFor();
+    await shot(page, 'drawer');
+    await page.getByRole('dialog').getByRole('button', { name: /^Failed/ }).click();
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
+    assert.equal(await page.getByRole('list', { name: 'Items' }).getByRole('listitem').count(), 1, 'the list is filtered');
+  });
+
+  await onPage('the notices: one goes by itself, one is undone, one takes the place of another, an error stays', {}, async (page) => {
+    await open(page, 'notices');
+    await page.getByRole('button', { name: 'Always the same' }).click();
+    await page.getByRole('button', { name: 'Always the same' }).click();
+    await page.getByText('The server is busy.').first().waitFor();
+    assert.equal(await page.getByText('The server is busy.', { exact: true }).count(), 1);
+    await page.getByRole('button', { name: 'One with Undo' }).click();
+    await page.getByRole('button', { name: /^Undo/ }).click();
+    await page.getByText('The item is back.').waitFor();
+    await page.getByRole('button', { name: 'An error' }).click();
+    await page.getByText('The server did not answer.').waitFor();
+    await page.waitForTimeout(600);
+    await shot(page, 'notices');
+    assert.deepEqual(await overflow(page), []);
+    await page.mouse.move(700, 200);
+    await page.getByText('The item is back.').waitFor({ state: 'hidden', timeout: 15000 });
+    assert.equal(await page.getByText('The server did not answer.').count(), 1, 'the error is gone');
+    await page.getByRole('button', { name: /Close the notice: The server did not answer/ }).click();
+    await page.getByText('The server did not answer.').waitFor({ state: 'hidden' });
+  });
+
+  await onPage('a screen that fails says so in its place, the bar stays, and it can be drawn again', { expected: 'items.json' }, async (page) => {
+    await open(page, 'failure');
+    await page.getByText('This screen could not be shown').waitFor();
+    await page.getByText('items.json, line 12').waitFor();
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await page.getByText('This screen could not be shown').waitFor();
+    await page.getByRole('button', { name: 'Mend the screen' }).click();
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await page.getByText('The screen is drawn').waitFor();
+    assert.equal(await region(page), 'app-shell-content');
+    await open(page, 'items');
   });
 
   await onPage('what sticks out is found', { width: 340 }, async (page) => {
@@ -126,25 +325,71 @@ try {
     assert.ok((await overflow(page)).length >= 2, 'a button of 2000px in a page of 340px is not found');
   });
 
-  await onPage('in a browser there are no window buttons, and nothing of Tauri is there', {}, async (page) => {
+  const TAURI = /\/(?:core|event|window|webview)-[\w-]+\.js$/;
+  await onPage('in a browser there are no window buttons, and nothing of Tauri is loaded', {}, async (page, scripts) => {
+    for (const view of VIEWS.slice(0, 3)) await open(page, view);
     assert.equal(await page.locator('[data-slot="window-controls"]').count(), 0);
-    assert.equal(await page.evaluate(() => '__TAURI_INTERNALS__' in window), false);
+    assert.deepEqual(scripts.filter((script) => TAURI.test(script)), []);
+    assert.ok(scripts.length > 0);
   });
 
-  await onPage('in a window the bar has its buttons, and the window is told its theme and its maximize button', { colorScheme: 'dark', init: fakeWindow }, async (page) => {
+  await onPage('in a window the bar has its buttons, and the window is told what it must be', { system: 'dark', own: true }, async (page, scripts) => {
+    const calls = (command) => page.evaluate((name) => window.calls.filter(([each]) => each === name).map(([, args]) => args), command);
+    const called = (command) => page.waitForFunction((name) => window.calls.some(([each]) => each === name), command);
+    assert.ok(scripts.some((script) => TAURI.test(script)) || (await called('plugin:imago-shell|ready')), 'nothing of Tauri was loaded');
     assert.equal(await page.locator('[data-slot="window-controls"] button').count(), 3);
     assert.equal(await page.locator('[data-slot="title-bar"][data-tauri-drag-region]').count(), 1);
-    await page.click('[data-window-control="minimize"]');
-    await page.waitForFunction(() => window.calls.some(([command]) => command === 'plugin:window|minimize'));
-    const calls = await page.evaluate(() => window.calls);
-    const argsOf = (command) => calls.find(([name]) => name === command)?.[1];
-    assert.deepEqual(argsOf('set_window_theme'), { theme: 'system', resolved: 'dark' });
+    await called('plugin:imago-shell|ready');
+    await page.waitForTimeout(400);
+    assert.equal((await calls('plugin:imago-shell|ready')).length, 1, 'ready is said once');
+
+    assert.deepEqual(await calls('plugin:imago-shell|set_theme'), [{ theme: 'dark', resolved: 'dark' }]);
+    // The system's look on a dark system draws the same scheme: the choice is told all the same.
+    await palette(page, 'system theme');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_theme').length === 2);
+    assert.deepEqual((await calls('plugin:imago-shell|set_theme'))[1], { theme: 'system', resolved: 'dark' });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_theme').length === 3);
+    assert.deepEqual((await calls('plugin:imago-shell|set_theme'))[2], { theme: 'system', resolved: 'light' });
+
     const box = await page.locator('[data-window-control="maximize"]').boundingBox();
-    assert.deepEqual(argsOf('window_caption_maximize'), { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) });
-    assert.ok(calls.some(([command, args]) => command === 'plugin:event|listen' && args.event === 'caption-maximize'), 'the page listens to caption-maximize');
-    assert.deepEqual(await overflow(page), []);
+    assert.deepEqual((await calls('plugin:imago-shell|caption')).at(-1), { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) });
+    await page.evaluate(() => window.emit('caption-maximize', { hover: true, pressed: false }));
+    await page.locator('[data-window-control="maximize"][data-os-state="hover"]').waitFor();
+
+    assert.deepEqual(await calls('plugin:imago-shell|chrome'), [], 'the window has its own title until the app says another');
+    await page.getByRole('button', { name: 'Check all' }).click();
+    await page.getByText('All items are checked.').waitFor({ timeout: 15000 });
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|chrome').at(-1)[1].progress === null);
+    const jobs = await calls('plugin:imago-shell|chrome');
+    assert.deepEqual(jobs[0], { title: 'Imago demo', progress: 0 });
+    assert.deepEqual(jobs.at(-1), { title: 'Imago demo', progress: null });
+    await open(page, 'notices');
+    await page.getByRole('button', { name: 'Title of the window' }).click();
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|chrome').at(-1)[1].title === '3 items · Imago demo');
+    assert.equal(await page.title(), '3 items · Imago demo');
+
+    await page.keyboard.press('Control+Equal');
+    await page.waitForFunction(() => window.calls.some(([name, args]) => name === 'plugin:webview|set_webview_zoom' && args.value === 1.1));
+    assert.equal(await page.evaluate(() => localStorage.getItem('imago.zoom')), '1.1');
+
+    await page.evaluate(() => window.emit('window-shown', null));
+    await page.getByText('The window is back.').waitFor();
+
+    await page.evaluate(() => window.refused.push('plugin:window|minimize'));
+    await page.click('[data-window-control="minimize"]');
+    await page.getByText('The window did not answer (minimize): refused').waitFor();
+    await page.evaluate(() => window.refused.push('plugin:imago-shell|chrome'));
+    await page.getByRole('button', { name: 'Its own title' }).click();
+    await page.waitForFunction(() => document.title === 'Imago demo');
+    assert.equal(await page.getByText(/chrome/).count(), 0, 'what the page tells by itself is not said to the person');
   });
 } finally {
   await browser.close();
   server.close();
+}
+if (failures.length) {
+  console.log(`\n${failures.length} failed: ${failures.join('; ')}`);
+  process.exitCode = 1;
 }

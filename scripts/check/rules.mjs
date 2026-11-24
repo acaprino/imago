@@ -6,7 +6,7 @@
 import { posix } from 'node:path';
 import { namesIn } from './names.mjs';
 import { REMOVED } from './removed.mjs';
-import { lineAt } from './source.mjs';
+import { lineAt, lineCounter } from './source.mjs';
 
 /**
  * @typedef {import('./source.mjs').Source} Source
@@ -30,6 +30,30 @@ function finding(file, line, rule, message) {
  */
 export function removedName(source, removed = REMOVED) {
   return namesIn(source, removed).map(({ name, line, entry }) => finding(source.file, line, 'removed-name', `${name} was removed: ${entry.now}`));
+}
+
+// ---------- shell-import ----------
+
+/** The parts of Sigrid the shell draws, or the hook it calls, with what of @acaprino/imago has it. */
+const SHELL = new Map([
+  ['AppShell', 'AppWindow'], ['TitleBar', 'AppWindow'], ['WindowControls', 'AppWindow'], ['CommandPalette', 'AppWindow'],
+  ['CommandsProvider', 'startApp'], ['useSchemeCommands', 'startApp'], ['Toasts', 'useNotify'],
+]);
+
+/**
+ * A part of Sigrid that the shell draws once for every app, imported by the app itself, under its name or through a
+ * namespace.
+ * @param {Source} source @returns {Finding[]}
+ */
+export function shellImport(source) {
+  return source.imports.filter(({ specifier }) => /^@acaprino\/sigrid(?:\/|$)/.test(specifier)).flatMap(({ specifier, line, names, namespace }) => {
+    const members = !namespace ? [] : source.code.flatMap(({ text, line: first }) => {
+      const lineOf = lineCounter(text, first);
+      return [...text.matchAll(new RegExp(`(?<![\\w$.])${namespace.replaceAll('$', '\\$')}\\s*\\.\\s*([A-Za-z]\\w*)`, 'g'))].map((match) => ({ name: match[1], line: lineOf(match.index) }));
+    });
+    return [...names.map((name) => ({ name, line })), ...members].filter(({ name }) => SHELL.has(name))
+      .map((use) => finding(source.file, use.line, 'shell-import', `${use.name} of ${specifier}: the shell has it, ${SHELL.get(use.name)} of @acaprino/imago; an app does not write it itself`));
+  });
 }
 
 // ---------- pin-mismatch ----------
@@ -115,108 +139,47 @@ export function cargoEntry(text, workspace) {
   return found;
 }
 
-/** @typedef {{ kind: 'tag' | 'commit', value: string }} Ref */
-
-/** @returns {Ref} */
-const refOf = (/** @type {string} */ value) => (/^[0-9a-f]{7,40}$/i.test(value) ? { kind: 'commit', value: value.toLowerCase() } : { kind: 'tag', value });
-const sameCommit = (/** @type {string} */ a, /** @type {string} */ b) => a.startsWith(b) || b.startsWith(a);
-const describe = (/** @type {Ref} */ ref) => `the ${ref.kind} ${ref.kind === 'commit' ? ref.value.slice(0, 7) : ref.value}`;
-
-/** The commit package-lock.json installed the package from. */
-function npmLockCommit(/** @type {string | null} */ lock) {
-  if (!lock) return null;
-  try {
-    const data = JSON.parse(lock);
-    const resolved = data?.packages?.['node_modules/@acaprino/imago']?.resolved ?? data?.dependencies?.['@acaprino/imago']?.version;
-    return typeof resolved === 'string' ? (/#([0-9a-f]{40})$/i.exec(resolved)?.[1]?.toLowerCase() ?? null) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** The commit Cargo.lock took imago-shell from, when its source is the pin the manifest writes. */
-function cargoLockCommit(/** @type {string | null} */ lock, /** @type {CargoEntry} */ entry) {
-  if (!lock) return null;
-  const query = entry.tag ? `tag=${entry.tag}` : entry.rev ? `rev=${entry.rev}` : null;
-  for (const block of lock.split(/^\[\[package\]\]\s*$/m)) {
-    if (!/^name\s*=\s*"imago-shell"\s*$/m.test(block)) continue;
-    const source = /^source\s*=\s*"([^"]+)"/m.exec(block)?.[1] ?? '';
-    const match = /[?&]([a-z]+=[^#&]+)[^#]*#([0-9a-f]{40})$/i.exec(source);
-    if (match && query && match[1] === query) return match[2].toLowerCase();
-  }
-  return null;
-}
+/** The tag whose release asset an npm spec installs, or null. */
+const releaseTag = (/** @type {string} */ spec) => /\/acaprino\/imago\/releases\/download\/(v([^/]+))\/acaprino-imago-\2\.tgz$/.exec(spec)?.[1] ?? null;
 
 /**
- * The npm pin of @acaprino/imago and the Cargo pin of imago-shell: the same tag, or the same commit. A Cargo.toml that
- * takes the crate from its workspace is read through the root Cargo.toml. A tag on one side and a commit on the
- * other are compared through the lock files when they say the commit; otherwise the program says it cannot compare
- * them offline (a note, not a finding).
+ * The npm pin of @acaprino/imago, the asset of a release, and the Cargo pin of imago-shell, a tag: the same version. A
+ * Cargo.toml that takes the crate from its workspace is read through the root Cargo.toml.
  * @param {{
  *   npm: { file: string, text: string },
  *   cargo: { file: string, text: string },
  *   workspace: { file: string, text: string } | null,
- *   npmLock: string | null,
- *   cargoLock: string | null,
  * }} input
- * @returns {{ findings: Finding[], notes: string[] }}
+ * @returns {Finding[]}
  */
-export function pinMismatch({ npm, cargo, workspace, npmLock, cargoLock }) {
+export function pinMismatch({ npm, cargo, workspace }) {
   const id = 'pin-mismatch';
-  /** @type {Finding[]} */
-  const findings = [];
-  /** @type {string[]} */
-  const notes = [];
-  const done = () => ({ findings, notes });
-
   const pin = npmPin(npm.text, npm.file);
-  if (!pin) {
-    findings.push(finding(npm.file, 1, id, '@acaprino/imago is not a dependency: pin it to a tag or a commit, as imago-shell is'));
-    return done();
-  }
+  if (!pin) return [finding(npm.file, 1, id, '@acaprino/imago is not a dependency: pin the asset of a release, as imago-shell pins its tag')];
   let crate = cargoEntry(cargo.text, false);
   let crateFile = cargo.file;
-  if (!crate) {
-    findings.push(finding(cargo.file, 1, id, 'imago-shell is not a dependency of this crate: pin it as @acaprino/imago is pinned'));
-    return done();
-  }
+  if (!crate) return [finding(cargo.file, 1, id, 'imago-shell is not a dependency of this crate: pin the tag of the release @acaprino/imago is taken from')];
   if (crate.workspace === 'true') {
     const member = `${cargo.file}:${crate.line}`;
     const shared = workspace ? cargoEntry(workspace.text, true) : null;
     if (!workspace || !shared) {
-      findings.push(finding(workspace?.file ?? cargo.file, workspace ? 1 : crate.line, id, `${member} takes imago-shell from the workspace, and ${workspace ? `${workspace.file} has no imago-shell in [workspace.dependencies]` : 'no Cargo.toml above it has [workspace]'}`));
-      return done();
+      return [finding(workspace?.file ?? cargo.file, workspace ? 1 : crate.line, id, `${member} takes imago-shell from the workspace, and ${workspace ? `${workspace.file} has no imago-shell in [workspace.dependencies]` : 'no Cargo.toml above it has [workspace]'}`)];
     }
     crate = shared;
     crateFile = workspace.file;
   }
-  const where = `${crateFile}:${crate.line}`;
-
-  const hash = pin.spec.lastIndexOf('#');
-  const npmRef = hash === -1 || !pin.spec.slice(hash + 1) || pin.spec.slice(hash + 1).startsWith('semver:') ? null : refOf(pin.spec.slice(hash + 1));
-  /** @type {Ref | null} */
-  const cargoRef = crate.tag ? { kind: 'tag', value: crate.tag } : crate.rev ? refOf(crate.rev) : null;
-  if (!npmRef) findings.push(finding(pin.file, pin.line, id, `@acaprino/imago is "${pin.spec}": pin a tag (#v<x>) or a commit (#<commit>)`));
-  if (!cargoRef) {
-    const what = crate.branch ? `the branch ${crate.branch}` : crate.git ? 'the default branch' : crate.version ? `the version ${crate.version}, not the git repository` : 'no pin';
-    findings.push(finding(crateFile, crate.line, id, `imago-shell takes ${what}: pin a tag or a rev`));
+  const npmTag = releaseTag(pin.spec);
+  /** @type {Finding[]} */
+  const findings = [];
+  if (!npmTag) findings.push(finding(pin.file, pin.line, id, `@acaprino/imago is "${pin.spec}": pin the asset of a release (https://github.com/acaprino/imago/releases/download/v<x>/acaprino-imago-<x>.tgz)`));
+  if (!crate.tag) {
+    const what = crate.rev ? `the commit ${crate.rev}` : crate.branch ? `the branch ${crate.branch}` : crate.git ? 'the default branch' : crate.version ? `the version ${crate.version}, not the git repository` : 'no pin';
+    findings.push(finding(crateFile, crate.line, id, `imago-shell takes ${what}: pin the tag of a release`));
   }
-  if (!npmRef || !cargoRef) return done();
-
-  const both = `npm pins @acaprino/imago to ${describe(npmRef)} and Cargo pins imago-shell to ${describe(cargoRef)} (${where})`;
-  if (npmRef.kind === cargoRef.kind) {
-    const same = npmRef.kind === 'tag' ? npmRef.value === cargoRef.value : sameCommit(npmRef.value, cargoRef.value);
-    if (!same) findings.push(finding(pin.file, pin.line, id, `${both}: pin both to the same ${npmRef.kind}`));
-    return done();
+  if (npmTag && crate.tag && npmTag !== crate.tag) {
+    findings.push(finding(pin.file, pin.line, id, `npm takes @acaprino/imago of ${npmTag} and Cargo imago-shell of ${crate.tag} (${crateFile}:${crate.line}): pin both to the same version`));
   }
-  const npmCommit = npmRef.kind === 'commit' ? npmRef.value : npmLockCommit(npmLock);
-  const cargoCommit = cargoRef.kind === 'commit' ? cargoRef.value : cargoLockCommit(cargoLock, crate);
-  if (npmCommit && cargoCommit) {
-    if (!sameCommit(npmCommit, cargoCommit)) findings.push(finding(pin.file, pin.line, id, `${both}, which the lock files resolve to ${npmCommit.slice(0, 7)} and ${cargoCommit.slice(0, 7)}: pin both to the same commit`));
-  } else {
-    notes.push(`pin-mismatch: cannot compare offline: ${both}; pin both by tag or both by commit to have them compared`);
-  }
-  return done();
+  return findings;
 }
 
 // ---------- agent-rules ----------

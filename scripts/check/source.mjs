@@ -1,17 +1,20 @@
 // The text of a file into what the rules read: its styles, its strings, its code and its comments, each with lines. A
 // stylesheet is read without its comments; a script (.ts, .tsx, .js, .mjs) by the small lexer below, which knows comments,
 // strings, template literals with their ${} and regular expressions; a page (.html) is split into its <style> and <script>
-// blocks and the attributes of its tags.
+// blocks and the attributes of its tags. The imports of a script are read from its code.
 
 /**
- * @typedef {{ text: string, line: number, attribute?: string }} Str
+ * @typedef {{ text: string, line: number, attribute?: string, at?: number }} Str
  *   A string of a script, or the value of an `attribute` of a page. In `text` each ${} of a template literal is the
  *   character DYNAMIC followed by as many new lines as the expression held, so that a line counted in `text` is a line of
- *   the file.
+ *   the file. `at` is the offset of a quoted string's opening quote in the code it was lexed from.
  * @typedef {{ text: string, line: number }} Chunk
  *   Code with its strings' contents and its comments blanked, or CSS with its comments blanked, new lines kept.
  * @typedef {{ text: string, line: number }} Comment
- * @typedef {{ file: string, kind: 'css' | 'script' | 'html', styles: Chunk[], strings: Str[], code: Chunk[], comments: Comment[] }} Source
+ * @typedef {{ specifier: string, line: number, names: string[], namespace: string | null }} Import
+ *   A module a script imports, or re-exports, with `import … from` or `export … from`: the names it takes of it (types left
+ *   out), and the name of `* as ns`.
+ * @typedef {{ file: string, kind: 'css' | 'script' | 'html', styles: Chunk[], strings: Str[], code: Chunk[], comments: Comment[], imports: Import[] }} Source
  */
 
 /** Stands for a ${} of a template literal: a name next to it is built at run time. */
@@ -61,10 +64,10 @@ export function lineCounter(text, firstLine) {
  */
 export function parseSource(file, text) {
   const lower = file.toLowerCase();
-  if (lower.endsWith('.css')) return { file, kind: 'css', strings: [], code: [], ...styleOf(text, 1) };
+  if (lower.endsWith('.css')) return { file, kind: 'css', strings: [], code: [], imports: [], ...styleOf(text, 1) };
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return parseHtml(file, text);
   const { strings, comments, code } = lexScript(text);
-  return { file, kind: 'script', styles: [], strings, code: [{ text: code, line: 1 }], comments };
+  return { file, kind: 'script', styles: [], strings, code: [{ text: code, line: 1 }], comments, imports: importsIn(code, strings, 1) };
 }
 
 const blanked = (/** @type {string} */ text) => text.replace(/[^\n]/g, ' ');
@@ -126,7 +129,7 @@ function lexScript(text, firstLine = 1) {
     let i = start + 1;
     while (i < text.length && text[i] !== quote && text[i] !== '\n') i += text[i] === '\\' ? 2 : 1;
     const end = Math.min(i, text.length);
-    strings.push({ text: text.slice(start + 1, end), line: line(start) });
+    strings.push({ text: text.slice(start + 1, end), line: line(start), at: start });
     blank(start + 1, end);
     return text[end] === quote ? end + 1 : end;
   };
@@ -231,6 +234,29 @@ function lexScript(text, firstLine = 1) {
   return { strings, comments, code: code.join('') };
 }
 
+// A statement of a script's code (its strings blanked, their quotes kept) that names a module: the quote that ends the match
+// opens the specifier.
+const IMPORT = /(?<![\w$.])(?:import|export)(?![\w$])(\s*type(?![\w$]))?([\w$\s{},*]*?)(?<![\w$])from\s*(?=["'])/g;
+
+/**
+ * The imports of a script that are not of types alone.
+ * @param {string} code @param {Str[]} strings @param {number} firstLine
+ * @returns {Import[]}
+ */
+function importsIn(code, strings, firstLine) {
+  const byOffset = new Map(strings.map((str) => [str.at, str.text]));
+  const line = lineCounter(code, firstLine);
+  return [...code.matchAll(IMPORT)].flatMap((match) => {
+    const specifier = byOffset.get(match.index + match[0].length);
+    if (specifier === undefined || match[1]) return [];
+    const names = (/\{([^}]*)\}/.exec(match[2])?.[1] ?? '').split(',').flatMap((part) => {
+      const name = /^\s*(type\s+)?([\w$]+)(?:\s+as\s+[\w$]+)?\s*$/.exec(part);
+      return name && !name[1] ? [name[2]] : [];
+    });
+    return [{ specifier, line: line(match.index), names, namespace: /\*\s*as\s+([\w$]+)/.exec(match[2])?.[1] ?? null }];
+  });
+}
+
 // ---------- pages ----------
 
 /**
@@ -240,7 +266,7 @@ function lexScript(text, firstLine = 1) {
  */
 function parseHtml(file, text) {
   /** @type {Source} */
-  const source = { file, kind: 'html', styles: [], strings: [], code: [], comments: [] };
+  const source = { file, kind: 'html', styles: [], strings: [], code: [], comments: [], imports: [] };
   const line = lineCounter(text, 1);
   let rest = text.replace(/<!--([\s\S]*?)-->/g, (match, comment, at) => {
     source.comments.push({ text: comment, line: line(at) });
@@ -258,6 +284,7 @@ function parseHtml(file, text) {
     source.strings.push(...strings);
     source.comments.push(...comments);
     source.code.push({ text: code, line: first });
+    source.imports.push(...importsIn(code, strings, first));
     return open + blanked(script);
   });
   for (const tag of rest.matchAll(/<[A-Za-z][\w:-]*(?:\s+[^\s=>"'/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+))?)*\s*\/?>/g)) {

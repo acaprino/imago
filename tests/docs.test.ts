@@ -64,10 +64,11 @@ function namesText(doc: string): string {
 
 const RUST_FILES = filesIn('crates/imago-shell/src', '.rs');
 const RUST_TEXT = RUST_FILES.map(read).join('\n');
-const CODE = [...filesIn('ts', '.ts').map(read), RUST_TEXT].join('\n');
+const CODE = [...filesIn('ts', '.ts').map(read), ...filesIn('ts', '.tsx').map(read), RUST_TEXT].join('\n');
 
-/** What the root entry exports. */
-const EXPORTS = new Set([...read('ts/index.ts').matchAll(/^export\s+(?:function|const|class|type|interface)\s+([A-Za-z_$][\w$]*)/gm)].map((match) => match[1]));
+/** What the root entry exports: it only hands on the names of its modules. */
+const EXPORTS = new Set([...read('ts/index.ts').matchAll(/export\s+(?:type\s+)?\{([^}]+)\}/g)]
+  .flatMap((match) => match[1].split(',').map((part) => part.trim().replace(/^type\s+/, '')).filter(Boolean)));
 
 /** What each entry of the installed Sigrid exports, from the catalogue it comes with. */
 type CatalogFile = { components?: { name: string }[]; types?: { name: string }[]; also?: string[] };
@@ -103,7 +104,7 @@ describe('the documents exist', () => {
 
 describe('names', () => {
   test('the lists the tests read are not empty', () => {
-    assert.ok(EXPORTS.has('defineApp'), 'ts/index.ts does not export defineApp');
+    for (const name of ['defineApp', 'startApp', 'AppWindow', 'useNotify', 'useWindow', 'ScreenBoundary']) assert.ok(EXPORTS.has(name), `ts/index.ts does not export ${name}`);
     assert.ok(SIGRID.get('@acaprino/sigrid/layout')?.has('AppShell'), 'the catalogue of Sigrid does not list AppShell');
     assert.ok(SIGRID.get('@acaprino/sigrid/tauri')?.has('useZoom'), 'the catalogue of Sigrid does not list useZoom');
     for (const name of ['glass_window_config', 'install_snap_layouts', 'recovery_action', 'SnapLayouts', 'Recovery']) assert.ok(CRATE_ROOT.includes(name), `lib.rs does not re-export ${name}`);
@@ -196,7 +197,7 @@ describe('the package', () => {
   test('every `npm run` script named in README.md is a script of package.json, and every script a person runs is named there', () => {
     const named = [...read('README.md').matchAll(/npm run ([a-z:]+)/g)].map((match) => match[1]);
     assert.deepEqual(named.filter((name) => !(name in manifest.scripts)), []);
-    const byNpm = ['test', 'pretest', 'prepare', 'build:package'];
+    const byNpm = ['test', 'pretest', 'prepack', 'build:package'];
     assert.deepEqual(Object.keys(manifest.scripts).filter((name) => !byNpm.includes(name) && !named.includes(name)), []);
   });
 

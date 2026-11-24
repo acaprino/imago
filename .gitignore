@@ -3,6 +3,7 @@ node_modules/
 target/
 dist/
 examples/demo/captures/
+examples/demo/shots/
 examples/demo/app/
 
 /lib/

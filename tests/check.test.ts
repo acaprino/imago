@@ -42,8 +42,8 @@ function folder(files: Record<string, string>): string {
   return dir;
 }
 
-const SHA = '1c5ffa2005a613eeb64a63dbebb528ad93b4c608';
-const OTHER_SHA = '964266f0000000000000000000000000000000aa';
+/** The asset of a release, as an app pins it. */
+const asset = (version: string): string => `https://github.com/acaprino/imago/releases/download/v${version}/acaprino-imago-${version}.tgz`;
 
 /** The package as an app has it installed. */
 const INSTALLED = {
@@ -60,7 +60,7 @@ const AGENTS = {
   'CLAUDE.md': 'For UI work, apply the design file.\n\n@node_modules/@acaprino/imago/docs/design-file.md\n',
 };
 
-const manifest = (imago: object, spec = 'github:acaprino/imago#v0.1.4'): string =>
+const manifest = (imago: object, spec = asset('0.1.4')): string =>
   `${JSON.stringify({ name: 'app', private: true, dependencies: { '@acaprino/imago': spec }, imago }, null, 2)}\n`;
 
 const cargo = (pin: string): string => `[package]\nname = "app"\n\n[dependencies]\ntauri = "2.12"\nimago-shell = { git = "https://github.com/acaprino/imago", ${pin} }\n`;
@@ -163,60 +163,74 @@ describe('removed.mjs', () => {
 
 // ---------- the other rules ----------
 
+describe('shell-import', () => {
+  const found = (text: string, file = 'src/app.tsx'): string[] => rules.shellImport(parseSource(file, text)).map((finding: Finding) => `${finding.line} ${finding.message.split(' of ')[0]}`);
+
+  test('finds each part the shell has, under its name, an alias, a re-export or a namespace', () => {
+    const names = "import { AppShell, Inspector, TitleBar as Bar, WindowControls } from '@acaprino/sigrid/layout';\nimport {\n  CommandPalette,\n  CommandsProvider,\n  useSchemeCommands,\n  useCommand,\n} from '@acaprino/sigrid/assemblies';\nexport { Toasts } from \"@acaprino/sigrid/components\";\nimport * as layout from '@acaprino/sigrid/layout';\nconst a = <layout.AppShell />;\n";
+    assert.deepEqual(found(names), ['1 AppShell', '1 TitleBar', '1 WindowControls', '2 CommandPalette', '2 CommandsProvider', '2 useSchemeCommands', '8 Toasts', '10 AppShell']);
+    assert.match(rules.shellImport(parseSource('src/a.tsx', names))[0].message, /AppWindow of @acaprino\/imago/);
+  });
+
+  test('leaves the other parts, the types, and the same names of another module or of the app', () => {
+    const fine = "import { Inspector, Panel, Sidebar, type AppShellProps } from '@acaprino/sigrid/layout';\nimport type { Toasts } from '@acaprino/sigrid/components';\nimport { Toasts as Own } from './toasts';\nimport { AppWindow } from '@acaprino/imago';\n// import { AppShell } from '@acaprino/sigrid/layout'\nconst TitleBar = () => null;\nconst b = <TitleBar />;\nimport * as layout from '@acaprino/sigrid/layout';\nconst c = <layout.Panel title=\"x\" />;\n";
+    assert.deepEqual(found(fine), []);
+  });
+
+  test('the demo, which is an app of the shell, has none', () => {
+    for (const file of ['main.tsx', 'screens.tsx']) assert.deepEqual(found(readFileSync(join(root, 'examples/demo/src', file), 'utf8'), file), []);
+  });
+
+  test('it reads the app\'s sources, not its tests', () => {
+    const files = cleanApp();
+    const shell = "import { AppShell } from '@acaprino/sigrid/layout';\nexport const A = AppShell;\n";
+    files['package.json'] = manifest({ src: ['src'], tests: ['tests'], cargo: 'src-tauri/Cargo.toml', app: 'shinatama', icons: ICONS });
+    files['src/frame.tsx'] = shell;
+    files['tests/frame.tsx'] = shell;
+    assert.deepEqual(check({ root: folder(files) }).findings.map((f: Finding) => `${f.file}:${f.line} ${f.rule}`), ['src/frame.tsx:1 shell-import']);
+  });
+});
+
 describe('pin-mismatch', () => {
   const npm = (spec: string) => ({ file: 'package.json', text: manifest({}, spec) });
   const crate = (pin: string) => ({ file: 'src-tauri/Cargo.toml', text: cargo(pin) });
-  const pins = (input: object) => rules.pinMismatch({ workspace: null, npmLock: null, cargoLock: null, ...input });
+  const pins = (input: object): Finding[] => rules.pinMismatch({ workspace: null, ...input });
 
-  test('a tag in npm and the same tag in Cargo agree', () => {
-    assert.deepEqual(pins({ npm: npm('github:acaprino/imago#v0.1.4'), cargo: crate('tag = "v0.1.4"') }), { findings: [], notes: [] });
+  test('the asset of a release in npm and its tag in Cargo agree', () => {
+    assert.deepEqual(pins({ npm: npm(asset('0.1.4')), cargo: crate('tag = "v0.1.4"') }), []);
   });
 
-  test('two different tags are a finding', () => {
-    const { findings } = pins({ npm: npm('github:acaprino/imago#v0.1.4'), cargo: crate('tag = "v0.1.3"') });
-    assert.deepEqual(findings.map((f: Finding) => f.rule), ['pin-mismatch']);
-    assert.match(findings[0].message, /v0\.1\.3/);
+  test('two versions are a finding, which names both', () => {
+    const [finding] = pins({ npm: npm(asset('0.1.4')), cargo: crate('tag = "v0.1.3"') });
+    assert.equal(finding.rule, 'pin-mismatch');
+    assert.match(finding.message, /v0\.1\.4.*v0\.1\.3.*src-tauri\/Cargo\.toml:6/);
   });
 
-  test('a tag in npm and a rev in Cargo cannot be compared offline: a note, not a finding', () => {
-    const { findings, notes } = pins({ npm: npm('github:acaprino/imago#v0.1.4'), cargo: crate(`rev = "${SHA}"`) });
-    assert.deepEqual(findings, []);
-    assert.equal(notes.length, 1);
-    assert.match(notes[0], /cannot compare offline/);
+  test('npm pins the asset of a release and nothing else: a git ref, another version\'s file, another repository', () => {
+    for (const spec of ['github:acaprino/imago#v0.1.4', '^0.1.4', 'file:../imago', asset('0.1.4').replace('-0.1.4.tgz', '-0.1.3.tgz'), asset('0.1.4').replace('acaprino/imago', 'someone/imago')]) {
+      assert.deepEqual(pins({ npm: npm(spec), cargo: crate('tag = "v0.1.4"') }).map((f) => `${f.file} ${f.rule}`), ['package.json pin-mismatch'], spec);
+    }
   });
 
-  test('a tag and a rev are compared through the lock file when it says which commit the tag installed', () => {
-    const npmLock = JSON.stringify({ packages: { 'node_modules/@acaprino/imago': { resolved: `git+ssh://git@github.com/acaprino/imago.git#${OTHER_SHA}` } } });
-    const { findings, notes } = pins({ npm: npm('github:acaprino/imago#v0.1.4'), cargo: crate(`rev = "${SHA}"`), npmLock });
-    assert.deepEqual(notes, []);
-    assert.deepEqual(findings.map((f: Finding) => f.rule), ['pin-mismatch']);
-  });
-
-  test('a commit in npm and the same commit, written short, in Cargo agree', () => {
-    assert.deepEqual(pins({ npm: npm(`git+https://github.com/acaprino/imago.git#${SHA}`), cargo: crate(`rev = "${SHA.slice(0, 7)}"`) }), { findings: [], notes: [] });
-  });
-
-  test('two different commits are a finding, and so is a pin that is not a tag or a commit', () => {
-    assert.equal(pins({ npm: npm(`github:acaprino/imago#${SHA}`), cargo: crate(`rev = "${OTHER_SHA}"`) }).findings.length, 1);
-    assert.equal(pins({ npm: npm('github:acaprino/imago'), cargo: crate('tag = "v0.1.4"') }).findings.length, 1);
-    assert.equal(pins({ npm: npm('github:acaprino/imago#v0.1.4'), cargo: crate('branch = "develop"') }).findings.length, 1);
+  test('Cargo pins a tag and nothing else: a commit, a branch, a version', () => {
+    for (const pin of ['rev = "1c5ffa2"', 'branch = "develop"']) assert.deepEqual(pins({ npm: npm(asset('0.1.4')), cargo: crate(pin) }).map((f) => f.file), ['src-tauri/Cargo.toml'], pin);
   });
 
   test('imago-shell.workspace = true is resolved through the root Cargo.toml', () => {
     const member = { file: 'apps/desktop/src-tauri/Cargo.toml', text: '[package]\nname = "app"\n\n[dependencies]\nimago-shell.workspace = true\n' };
     const workspace = (pin: string) => ({ file: 'Cargo.toml', text: `[workspace]\nmembers = ["apps/desktop/src-tauri"]\n\n[workspace.dependencies]\nimago-shell = { git = "https://github.com/acaprino/imago", ${pin} }\n` });
-    assert.deepEqual(pins({ npm: npm(`github:acaprino/imago#${SHA}`), cargo: member, workspace: workspace(`rev = "${SHA}"`) }), { findings: [], notes: [] });
-    const { findings } = pins({ npm: npm(`github:acaprino/imago#${SHA}`), cargo: member, workspace: workspace(`rev = "${OTHER_SHA}"`) });
-    assert.deepEqual(findings.map((f: Finding) => f.rule), ['pin-mismatch']);
-    assert.match(findings[0].message, /Cargo\.toml:5/, 'the finding says where the workspace pins it');
+    assert.deepEqual(pins({ npm: npm(asset('0.1.4')), cargo: member, workspace: workspace('tag = "v0.1.4"') }), []);
+    const [finding] = pins({ npm: npm(asset('0.1.4')), cargo: member, workspace: workspace('tag = "v0.1.3"') });
+    assert.match(finding.message, /Cargo\.toml:5/, 'the finding says where the workspace pins it');
+    assert.equal(pins({ npm: npm(asset('0.1.4')), cargo: member }).length, 1, 'no workspace above it');
   });
 
   test('the table form [dependencies.imago-shell] and { workspace = true } are read too', () => {
     const table = { file: 'src-tauri/Cargo.toml', text: '[dependencies.imago-shell]\ngit = "https://github.com/acaprino/imago"\ntag = "v0.1.4"\n' };
-    assert.deepEqual(pins({ npm: npm('github:acaprino/imago#v0.1.4'), cargo: table }), { findings: [], notes: [] });
+    assert.deepEqual(pins({ npm: npm(asset('0.1.4')), cargo: table }), []);
     const inline = { file: 'src-tauri/Cargo.toml', text: '[dependencies]\nimago-shell = { workspace = true }\n' };
     const workspace = { file: 'Cargo.toml', text: '[workspace.dependencies.imago-shell]\ngit = "https://github.com/acaprino/imago"\ntag = "v0.1.4"\n' };
-    assert.deepEqual(pins({ npm: npm('github:acaprino/imago#v0.1.4'), cargo: inline, workspace }), { findings: [], notes: [] });
+    assert.deepEqual(pins({ npm: npm(asset('0.1.4')), cargo: inline, workspace }), []);
   });
 });
 
@@ -361,9 +375,9 @@ describe('imago-check on an app', () => {
 
   test('a Cargo.toml that takes imago-shell from the workspace is compared with the root Cargo.toml', () => {
     const files = cleanApp();
-    files['package.json'] = manifest({ src: ['src'], cargo: 'src-tauri/Cargo.toml' }, `git+https://github.com/acaprino/imago.git#${SHA}`);
+    files['package.json'] = manifest({ src: ['src'], cargo: 'src-tauri/Cargo.toml' });
     files['src-tauri/Cargo.toml'] = '[package]\nname = "app"\n\n[dependencies]\nimago-shell.workspace = true\n';
-    files['Cargo.toml'] = `[workspace]\nmembers = ["src-tauri"]\n\n[workspace.dependencies]\nimago-shell = { git = "https://github.com/acaprino/imago", rev = "${OTHER_SHA}" }\n`;
+    files['Cargo.toml'] = `[workspace]\nmembers = ["src-tauri"]\n\n[workspace.dependencies]\nimago-shell = { git = "https://github.com/acaprino/imago", tag = "v0.1.3" }\n`;
     assert.deepEqual(check({ root: folder(files) }).findings.map((f: Finding) => `${f.file} ${f.rule}`), ['package.json pin-mismatch']);
   });
 

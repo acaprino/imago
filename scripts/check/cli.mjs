@@ -11,7 +11,7 @@
 //   { "src": ["apps/desktop/src"], "tests": ["apps/desktop/tests"], "cargo": "apps/desktop/src-tauri/Cargo.toml",
 //     "agents": ["AGENTS.md", "CLAUDE.md"], "app": "muro", "package": "apps/desktop/node_modules/@acaprino/imago",
 //     "icons": { "src-tauri/icons/icon.ico": "icon.ico", "src-tauri/icons/128x128@2x.png": "256x256.png" } }
-// `src` defaults to ["src"] and `agents` to those two files. Without `cargo` or `icons` their rules are skipped, and the
+// `src` defaults to ["src"] and `agents` to those two files; `tests` lists folders that only removed-name reads. Without `cargo` or `icons` their rules are skipped, and the
 // program says so. `app` is the id of the app, one of the folders of the package's icons/, and `icons` maps a file of the
 // app to the file of icons/<app>/ in the package that it must equal; `icons` needs `app`. `package` is where the package
 // is installed (default node_modules/@acaprino/imago, beside package.json or beside the package.json that depends on it).
@@ -179,7 +179,7 @@ export function readConfig(block) {
   /** @type {Record<string, { is: (entry: any) => boolean, must: string }>} */
   const keys = {
     src: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths' },
-    tests: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths: the folders of the app\'s tests' },
+    tests: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths: the folders of the app\'s tests, which only removed-name reads' },
     agents: { is: (entry) => Array.isArray(entry) && entry.every(text), must: 'a list of paths' },
     cargo: { is: text, must: 'a path' },
     app: { is: text, must: 'the id of the app' },
@@ -322,6 +322,7 @@ function checkApp(root, findings, exceptions, notes) {
     const folders = [...config.src, ...config.tests];
     throw new UsageError(`read no source file (${SOURCE_EXTENSIONS.join(', ')}) in ${folders.length ? folders.join(', ') : 'no folder: "imago.src" is empty'}: point "imago.src" at the app's sources`);
   }
+  for (const source of sources) findings.push(...rules.shellImport(source));
   for (const source of [...sources, ...tests]) {
     findings.push(...rules.removedName(source));
     exceptions.push(...rules.exceptionsIn(source));
@@ -331,17 +332,11 @@ function checkApp(root, findings, exceptions, notes) {
     const cargoPath = resolve(root, config.cargo);
     if (!isFile(cargoPath)) throw new UsageError(`"imago.cargo" names ${config.cargo}, which does not exist`);
     const workspacePath = upTo(root, cargoPath).map((dir) => join(dir, 'Cargo.toml')).find((path) => isFile(path) && /^\s*\[workspace\]\s*$/m.test(read(path)));
-    const lockDir = workspacePath ? dirname(workspacePath) : dirname(cargoPath);
-    const npmLock = [root, dirname(npmPath)].map((dir) => join(dir, 'package-lock.json')).find(isFile);
-    const pins = rules.pinMismatch({
+    findings.push(...rules.pinMismatch({
       npm: { file: fromRoot(root, npmPath), text: read(npmPath) },
       cargo: { file: fromRoot(root, cargoPath), text: read(cargoPath) },
       workspace: workspacePath ? { file: fromRoot(root, workspacePath), text: read(workspacePath) } : null,
-      npmLock: npmLock ? read(npmLock) : null,
-      cargoLock: isFile(join(lockDir, 'Cargo.lock')) ? read(join(lockDir, 'Cargo.lock')) : null,
-    });
-    findings.push(...pins.findings);
-    notes.push(...pins.notes);
+    }));
   } else {
     notes.push('pin-mismatch: skipped, no "cargo" in the "imago" block of package.json');
   }

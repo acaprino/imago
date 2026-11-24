@@ -25,13 +25,20 @@ test('the version is major.minor.patch', () => {
 
 test('Sigrid and React are peers, and the Sigrid the package is built with is one the peer allows', () => {
   const { peerDependencies, devDependencies } = manifest();
-  assert.deepEqual(peerDependencies, { '@acaprino/sigrid': '^6.0.0', react: '^19.0.0' });
-  assert.match(devDependencies['@acaprino/sigrid'], /\/download\/v(6\.\d+\.\d+)\/acaprino-sigrid-\1\.tgz$/);
+  assert.deepEqual(peerDependencies, { '@acaprino/sigrid': '^6.2.0', react: '^19.0.0', 'react-dom': '^19.0.0' });
+  const [, minor] = /\/download\/v6\.(\d+)\.(\d+)\/acaprino-sigrid-6\.\1\.\2\.tgz$/.exec(devDependencies['@acaprino/sigrid']) ?? [];
+  assert.ok(Number(minor) >= 2, devDependencies['@acaprino/sigrid']);
 });
 
-test('Node loads the root entry with no browser, and defineApp gives back what it is given', () => {
-  const app = { id: 'demo', name: 'Demo', accent: '#006398', storage: { scheme: 'demo.scheme', zoom: 'demo.zoom' } };
-  assert.equal(defineApp(app), app);
+test('Node loads the root entry with no browser, and defineApp gives back what it is given, with the theme', () => {
+  const app = { id: 'demo', name: 'Demo', lang: 'en', accent: '#006398', storage: { scheme: 'demo.scheme', zoom: 'demo.zoom' } };
+  const { theme, ...rest } = defineApp(app);
+  assert.deepEqual(rest, app);
+  assert.equal(theme.id, 'demo');
+});
+
+test('what is read of Sigrid by the shell is not handed on: the root exports its own names only', async () => {
+  assert.deepEqual(Object.keys(await import('@acaprino/imago')).sort(), ['AppWindow', 'ScreenBoundary', 'defineApp', 'startApp', 'useFocusKept', 'useNotify', 'useWindow']);
 });
 
 test('sigrid-check, run as `npm run check` runs it, refuses a class of the app\'s own', () => {
