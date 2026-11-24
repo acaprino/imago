@@ -212,13 +212,14 @@ try {
       return {
         lang: root_.lang, keys: root_.dataset.keys, controls: root_.dataset.controls, density: root_.dataset.density,
         tabs: root_.dataset.tabs, font: [root_.dataset.font, getComputedStyle(document.body).fontFamily.split(',')[0]],
+        loaded: [...document.fonts].filter(({ status }) => status !== 'unloaded').map(({ family }) => family),
         weights: [...document.querySelectorAll('[data-slot="toolbar-tab"]')].map((tab) => getComputedStyle(tab).fontWeight),
         strip: document.querySelector('[data-slot="app-shell-status"]').getBoundingClientRect().height,
         control: style.getPropertyValue('--density-control-md'), radius: [style.getPropertyValue('--radius-md'), style.getPropertyValue('--radius-lg')],
         ground: color('app-shell'), sheet: color('app-shell-work'),
       };
     });
-    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], weights: ['700', '500', '500', '500'], strip: 40, control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
+    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], loaded: [], weights: ['700', '500', '500', '500'], strip: 40, control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
   });
 
   await onPage('the light look: its ground and its sheet', { scheme: 'light', system: 'dark' }, async (page) => {
