@@ -6,9 +6,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use tauri::{
     ipc::{CallbackFn, InvokeBody},
-    test::{
-        get_ipc_response, mock_builder, mock_context, noop_assets, MockRuntime, INVOKE_KEY,
-    },
+    test::{get_ipc_response, mock_builder, mock_context, noop_assets, MockRuntime, INVOKE_KEY},
     utils::{
         acl::manifest::{Manifest, PermissionFile},
         config::{Color, WindowConfig},

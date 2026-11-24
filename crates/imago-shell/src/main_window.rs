@@ -337,7 +337,9 @@ fn build<R: Runtime>(
     let shell = app.state::<Shell>();
     let options = shell.options().ok_or(tauri::Error::WindowNotFound)?;
     let saved = options.data_dir.as_deref().and_then(saved_theme);
-    let mut config = options.material.window_config(options.window.clone(), saved);
+    let mut config = options
+        .material
+        .window_config(options.window.clone(), saved);
     config.visible = false;
     config
         .prevent_overflow
