@@ -23,6 +23,8 @@ export interface AppView<Id extends string = string> {
 
 /** The state of the sidebar, as props of Sigrid's `Sidebar`: whether its drawer is open, and whether it is collapsed to its rail. */
 export interface SidebarState {
+  /** The button that collapses it is at the head. */
+  toggle: 'head';
   open: boolean;
   onOpenChange: (open: boolean) => void;
   collapsed: boolean;
@@ -129,7 +131,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
     </ToolbarTabs>
   );
   const row = <Toolbar aria-label={words.views}>{tabs}</Toolbar>;
-  const navigation = sidebar?.({ open, onOpenChange: setOpen, collapsed, onCollapsedChange: setCollapsed });
+  const navigation = sidebar?.({ toggle: 'head', open, onOpenChange: setOpen, collapsed, onCollapsedChange: setCollapsed });
 
   return (
     <>
@@ -147,7 +149,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
               {wide ? tabs : null}
               <ToolbarSpacer />
               {tools}
-              <ToolbarButton label={commands} icon={<Icon name="search" />} shortcut={formatKeys('Ctrl+K')} variant="outline" onClick={() => palette.setOpen(true)}>{commands}</ToolbarButton>
+              <ToolbarButton label={commands} icon={<Icon name="search" />} shortcut={formatKeys('Ctrl+K')} variant="quiet" onClick={() => palette.setOpen(true)}>{commands}</ToolbarButton>
             </Toolbar>
           </TitleBar>
         }

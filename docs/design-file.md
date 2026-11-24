@@ -37,8 +37,8 @@ The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNoti
 - An app does not write what the shell draws: `AppShell`, `TitleBar`, `WindowControls`, `CommandPalette`, `CommandsProvider`,
   `Toasts` and `useSchemeCommands` are the shell's (rule `shell-import`). It writes its own `Sidebar`, `Inspector`, `Panel` and
   commands (`useCommand`).
-- The person collapses the sidebar to its rail, and opens it again, with its button and with a command of the palette. It is open
-  at first, and the choice is kept under the app's own storage key. Its head is the name of the list and its count.
+- The person collapses the sidebar to its rail, and opens it again, with the button at its head and with a command of the palette.
+  It is open at first, and the choice is kept under the app's own storage key. Its head is the name of the list and its count.
 - A prop is added to `AppWindow` when a second app needs it. Until then the need is met by a region.
 
 ## The look
@@ -56,6 +56,7 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 | Raised | `#232834` | `#FFFFFF` |
 | Hairline | `#2A3240` | `#E3E6EA` |
 | Text | `#E8ECF3` | `#111827` |
+| Muted text | `#9AA5B8` | `#5B6472` |
 | Border of a control | `#8791A6` | `#767E8B` |
 | Daodan | `#6ED0FF` | `#006398` |
 | Xiox | `#F2B966` | `#844C00` |
@@ -66,7 +67,8 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 - The corners are 4, 6 and 10; the density is compact (controls and rows of 32, 44 with a finger); keys are drawn as caps; fields
   and outline buttons have the border of a control; the tone is Balanced, so the accents are the colours above.
 - The chosen view of the bar and the chosen item of a segment are marked by their weight, 700 beside 500, and by the accent: a line
-  under the view, the fill and the border of the item. The status strip is 40 tall.
+  under the view, the fill and the border of the item. The status strip is 40 tall and
+  its text is that of the body. Commands is quiet: a hairline and muted text.
 - The font is the system's, Segoe UI on Windows: no font is loaded. An app sets none.
 - Motion is on for the whole app, easing out in 90 to 180 ms: the line of the chosen view grows from its middle. A person who asked
   the system for less motion sees none. What a press does is done at once: nothing waits for a movement.

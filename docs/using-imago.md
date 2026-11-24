@@ -29,7 +29,7 @@ release, already built: nothing is compiled when it is installed.
 imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 ```
 
-- Sigrid (`^6.4.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
+- Sigrid (`^6.5.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
   the last one too: it is loaded only in a window, but its bundler must find it.
 - **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
   `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`, so that
@@ -79,7 +79,7 @@ startApp(MURO, document.getElementById('app')!, <Muro />)
 |---|---|
 | `defineApp` | The app: `AppDefinition` in, `App` out, which has the `theme` made from the one colour. `words` are the app's language: `words.sigrid` Sigrid's, `words.shell` the shell's (`ShellWords`). It refuses an accent that is not `#rrggbb` |
 | `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component |
-| `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`, its drawer and whether it is collapsed): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. `contentLabel` names the content, when the view's label does not |
+| `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`: its drawer, whether it is collapsed, and the button of that at its head): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. `contentLabel` names the content, when the view's label does not |
 | `useNotify` | `Notify`: says something in a notice. Its options are those of Sigrid's notice: `kind: 'error'`, `undo`, `actions`, `id` |
 | `useWindow` | `WindowHandle`: whether the app runs in a window of its own, its title, the progress on the taskbar, and a call when it is shown again |
 | `ScreenBoundary` | What fails while it is drawn says so in its place. `AppWindow` has one round the screen; an app puts one round an inspector that may fail |

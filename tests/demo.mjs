@@ -222,12 +222,14 @@ try {
         tabs: root_.dataset.tabs, font: [root_.dataset.font, getComputedStyle(document.body).fontFamily.split(',')[0]],
         loaded: [...document.fonts].filter(({ status }) => status !== 'unloaded').map(({ family }) => family),
         weights: [...document.querySelectorAll('[data-slot="toolbar-tab"]')].map((tab) => getComputedStyle(tab).fontWeight),
-        strip: document.querySelector('[data-slot="app-shell-status"]').getBoundingClientRect().height,
+        strip: [document.querySelector('[data-slot="app-shell-status"]').getBoundingClientRect().height, getComputedStyle(document.querySelector('[data-slot="app-shell-status"]')).fontSize],
+        segment: ['toggle-group', 'toggle-group-item'].map((slot) => getComputedStyle(document.querySelector(`[data-slot="${slot}"]`)).borderTopLeftRadius),
+        commands: (({ borderTopColor, color: ink }) => [borderTopColor, ink])(getComputedStyle(document.querySelector('[data-slot="title-bar"] [data-variant="quiet"]'))),
         control: style.getPropertyValue('--density-control-md'), radius: [style.getPropertyValue('--radius-md'), style.getPropertyValue('--radius-lg')],
         ground: color('app-shell'), sheet: color('app-shell-work'),
       };
     });
-    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], loaded: [], weights: ['700', '500', '500', '500'], strip: 40, control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
+    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], loaded: [], weights: ['700', '500', '500', '500'], strip: [40, '14px'], segment: ['6px', '4px'], commands: ['rgb(42, 50, 64)', 'rgb(154, 165, 184)'], control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
   });
 
   await onPage('the light look: its ground and its sheet', { scheme: 'light', system: 'dark' }, async (page) => {
@@ -325,12 +327,14 @@ try {
     const sidebar = page.locator('[data-slot="sidebar"]');
     const button = page.locator('[data-slot="sidebar-collapse"]');
     const name = page.getByText('States', { exact: true });
+    const top = async (locator) => (await locator.boundingBox()).y;
     const is = async (collapsed, why) => {
       await page.waitForFunction((wanted) => document.querySelector('[data-slot="sidebar"]').hasAttribute('data-collapsed') === wanted, collapsed);
       await still(page);
       const { width } = await sidebar.boundingBox();
       assert.ok(collapsed ? width < 60 : width === 256, `${why}: the sidebar is ${width} wide`);
       assert.deepEqual([await button.getAttribute('aria-expanded'), await name.isVisible()], [String(!collapsed), !collapsed], why);
+      assert.ok(await top(button) < await top(sidebar.getByRole('listitem').first()), `${why}: the button is at the head`);
       assert.deepEqual(await overflow(page), [], why);
     };
     const kept = () => page.evaluate(() => localStorage.getItem('imago.sidebar'));
