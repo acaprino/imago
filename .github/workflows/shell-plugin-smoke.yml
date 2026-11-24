@@ -7,20 +7,63 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   smoke:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         shell: pwsh
+    env:
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: gh run download 45459349035 --name imago-demo --dir demo
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - run: ./.github/shell-plugin-smoke.ps1 -Exe "$PWD/demo/imago-demo.exe" -Data "$env:RUNNER_TEMP/demo-data"
+      - run: rustup show active-toolchain
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: none
+          restore-keys: |
+            ${{ runner.os }}-cargo-demo-
+      - name: The demo on a test page
+        run: |
+          $demo = 'examples/demo/src-tauri'
+          $main = Get-Content "$demo/src/main.rs" -Raw
+          $insert = @'
+              if let Ok(url) = std::env::var("SMOKE_URL") {
+                  options.origins.allow(&url);
+                  options.window.url = tauri::WebviewUrl::External(url.parse()?);
+              }
+              let launched
+          '@
+          $main = $main.Replace('    let launched', $insert)
+          Set-Content "$demo/src/main.rs" $main
+          Set-Content "$demo/capabilities/remote.json" '{ "identifier": "remote", "windows": ["main"], "local": false, "remote": { "urls": ["http://127.0.0.1:*"] }, "permissions": ["imago-shell:default"] }'
+          (Get-Content "$demo/tauri.conf.json" -Raw).Replace('["default", "shell"]', '["default", "shell", "remote"]') | Set-Content "$demo/tauri.conf.json"
+          New-Item -ItemType Directory -Force examples/demo/dist | Out-Null
+          Set-Content examples/demo/dist/index.html '<!doctype html><meta charset="utf-8"><title>smoke</title><body>smoke<script src="smoke.js"></script>'
+          Set-Content examples/demo/dist/smoke.js @'
+          (async () => {
+            const call = (c, a) => window.__TAURI_INTERNALS__.invoke('plugin:imago-shell|' + c, a).then(() => c + ':ok', (e) => c + ':' + JSON.stringify(e));
+            const out = [];
+            out.push(await call('set_theme', { theme: 'light', resolved: 'light' }));
+            out.push(await call('caption', { x: 600, y: 0, width: 46, height: 32 }));
+            out.push(await call('chrome', { title: 'first', progress: 40 }));
+            out.push(await call('ready', {}));
+            await call('chrome', { title: 'Smoke ' + location.origin + ' ' + out.join(' '), progress: null });
+            await new Promise((r) => setTimeout(r, 1500));
+            const opened = window.open('https://example.com/');
+            location.href = 'https://example.com/';
+            await new Promise((r) => setTimeout(r, 1500));
+            await call('chrome', { title: 'Still ' + location.origin + ' open:' + (opened === null ? 'null' : 'a window'), progress: null });
+          })();
+          '@
+      - run: cargo build -p imago-demo --features custom-protocol
+      - run: ./.github/shell-plugin-smoke.ps1 -Exe "$PWD/target/debug/imago-demo.exe" -Data "$env:RUNNER_TEMP/demo-data" -Page "$PWD/examples/demo/dist"
