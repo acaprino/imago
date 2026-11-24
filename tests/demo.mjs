@@ -275,6 +275,7 @@ try {
     assert.ok(group.x >= field.x + field.width && Math.abs(group.y + group.height / 2 - field.y - field.height / 2) <= 1, 'the filter is not beside the search');
     await filter.getByRole('button', { name: 'Caution' }).click();
     assert.equal(await rows(), 2);
+    await page.waitForTimeout(300); // The mark of the filter is moved by a script, which `still` does not see.
     await shot(page, 'filter');
     await filter.getByRole('button', { name: 'All' }).click();
     assert.equal(await rows(), 6);
