@@ -1,5 +1,12 @@
 # Imago: rules for agents
 
+## What Imago is (the owner, 2026-11-24)
+
+Imago is the base shell of the suite in Xiox's style, built with Sigrid: the window (the Rust crate of this repository), the
+title bar, the frame, the commands, the palette, the theme and the look, the notices. Shinatama, Daodan, Muro, Mukade and
+Xiox stand on it and bring only their screens, made of Sigrid's components. It is not retired. The CSS controls it holds
+today are replaced by Sigrid's components.
+
 - Two branches, and only two: `main` (what is released) and `develop` (where work is integrated).
 - Work always on `develop`, or on a short branch from `develop` that is merged back into `develop` and then
   deleted. Never merge or push into `main`, and leave no other branch, locally or on GitHub.
