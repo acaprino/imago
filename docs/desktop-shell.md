@@ -430,6 +430,9 @@ The events are `caption-maximize` (section 3.3) and `window-shown`, sent when `s
 WebView2 gives the page no focus event for that. A capability grants the four commands with `imago-shell:default`, and
 only the main window has them.
 
+The commands run off the window's thread, so two sent together have no fixed order: a page that sends one again waits
+for the answer to the one before.
+
 A page that is not embedded in the app (a server on `http://127.0.0.1`) is refused every command until a capability
 names it, the plugin's and Tauri's own alike: `"remote": { "urls": ["http://127.0.0.1:*"] }` is any port of that
 address and no other host. A capability may also be added once the port is known. The guard is a second lock: the
