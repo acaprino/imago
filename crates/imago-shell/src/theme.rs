@@ -30,6 +30,32 @@ pub const DARK_GROUND: Color = Color(0x12, 0x16, 0x1E, 255);
 /// it too.
 pub const LIGHT_GROUND: Color = Color(0xF6, 0xF7, 0xF9, 255);
 
+/// What wry passes to WebView2 for a window that gives no arguments of its own, when Tauri builds
+/// it: a window that gives some replaces them all.
+const WRY_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                        --autoplay-policy=no-user-gesture-required";
+
+/// Text in shades of gray: on an opaque window the engine draws it with ClearType, whose colour
+/// fringes make it look thinner than on a transparent one.
+const GRAY_TEXT: &str = "--disable-lcd-text";
+
+/// The browser arguments of a window: its own, or wry's for one that has none, and gray text. The
+/// main window has them. WebView2 refuses another webview on the same data folder with other
+/// arguments, so an app that opens one gives it these.
+pub fn browser_args(window: &WindowConfig) -> String {
+    let mut args = match (&window.additional_browser_args, &window.proxy_url) {
+        (Some(own), _) => own.clone(),
+        (None, None) => WRY_ARGS.to_owned(),
+        (None, Some(proxy)) => {
+            let proxy = proxy.as_str().trim_end_matches('/');
+            format!("{WRY_ARGS} --proxy-server={proxy}")
+        }
+    };
+    args.push(' ');
+    args.push_str(GRAY_TEXT);
+    args
+}
+
 /// What the window asks Windows for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WindowTheme {
@@ -139,6 +165,7 @@ pub(crate) fn apply_theme<R: Runtime>(
 ///   theme; the tint reaches Windows 10 only, so the app's own is kept as it is.
 /// - No decorations: the HTML title bar is the frame.
 /// - A minimum width of 500, or the app's own if larger: the snap zones need it.
+/// - Text in gray ([`browser_args`]).
 /// - The theme of `saved` (see [`saved_theme`]), so the first frame already has the right acrylic.
 ///   With nothing saved the config's own theme stands, and with none the window follows Windows.
 fn glass_window_config(base: WindowConfig, saved: Option<WindowTheme>) -> WindowConfig {
@@ -147,6 +174,7 @@ fn glass_window_config(base: WindowConfig, saved: Option<WindowTheme>) -> Window
     config.background_color = Some(Color(0, 0, 0, 0));
     config.decorations = false;
     config.min_width = Some(config.min_width.unwrap_or(0.0).max(MIN_WIDTH));
+    config.additional_browser_args = Some(browser_args(&config));
     config.window_effects = Some(WindowEffectsConfig {
         effects: vec![WindowEffect::Acrylic],
         ..config.window_effects.unwrap_or_default()
@@ -272,6 +300,38 @@ mod tests {
             vec![WindowEffect::Acrylic]
         );
         assert_eq!(Material::Acrylic.ground(Theme::Light), None);
+    }
+
+    #[test]
+    fn a_window_draws_gray_text_and_keeps_the_arguments_it_has() {
+        let wry = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                   --autoplay-policy=no-user-gesture-required";
+        let plain = WindowConfig::default();
+        assert_eq!(browser_args(&plain), format!("{wry} --disable-lcd-text"));
+        let proxied = WindowConfig {
+            proxy_url: Some("http://127.0.0.1:8080".parse().unwrap()),
+            ..Default::default()
+        };
+        assert_eq!(
+            browser_args(&proxied),
+            format!("{wry} --proxy-server=http://127.0.0.1:8080 --disable-lcd-text")
+        );
+        // An app's own arguments replace wry's, as without the crate.
+        let own = WindowConfig {
+            additional_browser_args: Some("--own".into()),
+            ..proxied
+        };
+        assert_eq!(browser_args(&own), "--own --disable-lcd-text");
+        let opaque = Material::Opaque {
+            dark: DARK_GROUND,
+            light: LIGHT_GROUND,
+        };
+        for material in [Material::Acrylic, opaque] {
+            for window in [&plain, &own] {
+                let config = material.window_config(window.clone(), None);
+                assert_eq!(config.additional_browser_args, Some(browser_args(window)));
+            }
+        }
     }
 
     #[test]

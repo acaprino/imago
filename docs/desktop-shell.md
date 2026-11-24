@@ -27,6 +27,12 @@ minimum width of 500 or the app's own if larger (the snap zones need it), and th
 - `Material::Acrylic` is a transparent window with the background colour `#00000000`, so there is no white flash before
   the page draws, and Windows' acrylic behind it.
 
+Text is drawn in shades of gray in every window the crate opens (the browser argument `--disable-lcd-text`, beside those wry
+passes when a window gives none): on an opaque window WebView2 would draw it with ClearType, whose colour fringes make it
+look thinner and harder than on a transparent one. A window that gives arguments of its own keeps them, and gray text is
+added. WebView2 refuses a second webview on the same data folder with other arguments: an app that opens one gives it
+`browser_args` of its config.
+
 Facts about the material:
 
 - On Windows 11 22H2 and later the acrylic is the DWM system backdrop `DWMSBT_TRANSIENTWINDOW`. That material is the

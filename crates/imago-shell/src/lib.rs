@@ -32,7 +32,7 @@ mod window_state;
 pub use guard::Origins;
 pub use main_window::{on_run_event, open_main, plugin, show_main, Options};
 pub use recovery::ProcessFailure;
-pub use theme::{Material, DARK_GROUND, LIGHT_GROUND};
+pub use theme::{browser_args, Material, DARK_GROUND, LIGHT_GROUND};
 
 use std::{
     ffi::OsString,
