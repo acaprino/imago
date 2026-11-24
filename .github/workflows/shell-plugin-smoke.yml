@@ -1,0 +1,26 @@
+name: Smoke (throwaway, branch shell-plugin only)
+
+on:
+  push:
+    branches: [shell-plugin]
+    paths: ['.github/workflows/shell-plugin-smoke.yml', '.github/shell-plugin-smoke.ps1']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: gh run download 45459349035 --name imago-demo --dir demo
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: ./.github/shell-plugin-smoke.ps1 -Exe "$PWD/demo/imago-demo.exe" -Data "$env:RUNNER_TEMP/demo-data"
