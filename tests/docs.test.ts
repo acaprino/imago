@@ -350,7 +350,7 @@ describe('exports', () => {
 describe('the crate', () => {
   test('lib.rs re-exports names the test can read', () => {
     const names = crateRootNames();
-    for (const name of ['glass_window_config', 'install_snap_layouts', 'recovery_action', 'SnapLayouts', 'Recovery']) assert.ok(names.includes(name), `lib.rs does not re-export ${name}`);
+    for (const name of ['open_main', 'show_main', 'on_run_event', 'plugin', 'Options']) assert.ok(names.includes(name), `lib.rs does not re-export ${name}`);
   });
 
   test('docs/desktop-shell.md names every item the crate re-exports from its root', () => {

@@ -156,9 +156,11 @@ fn text(error: impl Display) -> String {
 
 // ---- the plugin ------------------------------------------------------------------------------
 //
-// The commands are `async`, off the window's thread. Tauri holds its list of plugins while a plugin's
-// command runs on that thread, and takes it again for each window event: a command that shows the
-// window there waits for itself, forever.
+// The commands are `async`, off the window's thread, and must stay so. Tauri holds the lock on its
+// list of plugins while a plugin's command runs, and takes it again on the window's thread for each
+// window event: a command there that shows the window waits for itself, and the window hangs for
+// good. It did, on a real window (CI run 45461302594); the mock runtime of the tests has no window
+// events, so no test here fails if one is made sync again.
 
 /// The plugin. An app registers it on its builder before anything calls the crate.
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
