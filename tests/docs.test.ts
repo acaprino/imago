@@ -46,7 +46,7 @@ const spansOf = (text: string): string[] => [...split(text).prose.matchAll(/`([^
 
 const escapeRegExp = (text: string): string => text.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&');
 
-// The one table an app's migration reads: its first column, the old name, is what the code no longer has. It is a section of
+// The table of removed names: its first column, the old name, is what the code no longer has. It is a section of
 // using-imago.md, from its heading to the next heading of its level; tests/check.test.ts compares it with removed.mjs.
 const MOVING_HEADING = /^## (?:\d+\. )?Moving from 0\.4\.1\s*$/;
 

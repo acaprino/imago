@@ -1,8 +1,8 @@
 # Using Imago in an app
 
 How an app of the suite depends on Imago, what it imports and what it wires. The rules are in
-[design-file.md](design-file.md); the window techniques are in [desktop-shell.md](desktop-shell.md). What an app on 0.4.1
-changes is the table [Moving from 0.4.1](#7-moving-from-041) at the end.
+[design-file.md](design-file.md); the window techniques are in [desktop-shell.md](desktop-shell.md). The names that are gone
+are the table [Moving from 0.4.1](#7-moving-from-041) at the end.
 
 ## 1. Depend on it
 
@@ -27,8 +27,8 @@ an app pins both to the same tag or the same commit (`imago-check` reports pins 
 imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 ```
 
-- A release of an app, the merge into its `main`, pins a **tag** of Imago: `v<x>`. While an app migrates, its `develop` may
-  pin a **commit** of Imago's `develop`: `github:acaprino/imago#<commit>` in npm, and `rev = "<commit>"` in Cargo.
+- A release of an app, the merge into its `main`, pins a **tag** of Imago: `v<x>`. The app's `develop` may pin a
+  **commit** of Imago's `develop`: `github:acaprino/imago#<commit>` in npm, and `rev = "<commit>"` in Cargo.
 - Sigrid 6 (`^6.0.0`) and React 19 are peers: the app has one copy of each.
 - **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
   `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`, so that
@@ -182,25 +182,19 @@ A rule that is skipped says so. The rules are in [design-file.md](design-file.md
 
 ## 7. Moving from 0.4.1
 
-Imago's own look is gone: the CSS, the string renderers, the two looks, the tokens, the graphs, the React binding on the old
-classes and the page side of the window. Nothing of it is kept as an alias. An app moves by writing its interface on Sigrid;
-one that has not moved stays on the tag `v0.4.1`, whose documents say how its names work (and what an app older than it
-changes). Each row is a name, or a family of names (`*` stands for the rest of the name), with what to write instead.
-`imago-check` reports every name of this table (rule `removed-name`).
+Imago's own look is gone, with nothing kept as an alias. Each row is a name, or a family of names (`*` stands for the rest of
+the name). `imago-check` reports every one of them (rule `removed-name`).
 
-| Old name | New name, or what to do instead |
+| Old name | What to write instead |
 |---|---|
-| `im-*` | Every class. The part of Sigrid for that need: `agents/catalog.json` of `@acaprino/sigrid` lists them |
-| `data-im-*` | Every attribute. The props of that part |
-| `--im-*` | Every token. The theme, which Sigrid computes from the app's accent |
+| `im-*` | A part of Sigrid |
+| `data-im-*` | The props of that part |
+| `--im-*` | The theme |
 | `@acaprino/imago/css/*` | `@acaprino/sigrid/styles.css` |
-| `@acaprino/imago/ui` | `@acaprino/sigrid/primitives`, `/components`, `/layout` and `/assemblies`: the commands and the palette are `CommandsProvider`, `useCommand` and `CommandPalette`, the notices `Toasts`, the frame `AppShell` |
-| `@acaprino/imago/shell` | `@acaprino/sigrid/tauri`: `useWindowControls`, `useSnapLayouts`, `useZoom`, `useWindowTheme`. The guard is `useDesktopGuard` of `@acaprino/sigrid`; light and dark are `useSchemeCommands` of `@acaprino/sigrid/assemblies` |
+| `@acaprino/imago/ui` | `@acaprino/sigrid/primitives`, `/components`, `/layout`, `/assemblies` |
+| `@acaprino/imago/shell` | `@acaprino/sigrid/tauri` |
 | `@acaprino/imago/tauri` | `@acaprino/sigrid/tauri` |
-| `@acaprino/imago/graph` | `GraphCanvas` of `@acaprino/sigrid/graph` |
-| `@acaprino/imago/graph-layout` | `layoutGraph` of `@acaprino/sigrid/graph` |
-| `@acaprino/imago/react` | `AppShell`, `Sidebar`, `Inspector` and `Panel` of `@acaprino/sigrid/layout` |
+| `@acaprino/imago/graph` | `@acaprino/sigrid/graph` |
+| `@acaprino/imago/graph-layout` | `@acaprino/sigrid/graph` |
+| `@acaprino/imago/react` | `@acaprino/sigrid/layout` |
 | `@acaprino/imago/tokens` | `colorTheme` of `@acaprino/sigrid` |
-| The key `entry` of the `"imago"` block | Remove it: its rule is gone |
-| The option `--package` of `imago-check` | Remove it: the package has no CSS |
-| The rules of `imago-check` on colours, sizes, spaces, cursors, opacities, widths, keys, the mark and unknown names | `sigrid-check` |
