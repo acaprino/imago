@@ -1,9 +1,23 @@
 // The look of the suite, after Xiox: a theme for Sigrid's engine, made from the one colour of an app. The surfaces, the
 // control border, the corners and the keys are the suite's; the hue is the app's. Sigrid's own defaults are not touched.
-import type { ThemeDef, ThemeTone } from '@acaprino/sigrid';
+import { applyDensity, type ThemeDef, type ThemeTone } from '@acaprino/sigrid';
+
+// What the suite asks of Sigrid by name, beside its colours. Each is a choice Sigrid leaves off: the theme's own here, then
+// the tone, then what is put on the page.
+const HOOKS = {
+  shape: 'soft',
+  radii: { sm: 4, md: 6, lg: 10, xl: 10, chip: 4 },
+  keys: 'boxed',
+  controls: 'strong',
+} satisfies Partial<ThemeDef>;
 
 /** The tone as the colours are written: Sigrid's default one would make them more saturated. */
 export const SHELL_TONE: ThemeTone = { intensity: 'theme', light: 'theme' };
+
+/** Puts on the page what is not the theme's. */
+export function dress(root: HTMLElement): void {
+  applyDensity(root, 'compact');
+}
 
 const gamma = (value: number): number => (value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055);
 
@@ -55,7 +69,7 @@ export function shellTheme({ id, name, accent }: { id: string; name: string; acc
   return {
     // The hue of the grays is that of the surfaces below: the engine gives it to a ground that has almost no colour of its own.
     id, label: name, hue: 264, chroma: 0, accent: [0.12, hue], sidebar: 'tenue', palette: 'crisp',
-    shape: 'soft', radii: { sm: 4, md: 6, lg: 10, xl: 10, chip: 4 }, keys: 'boxed', controls: 'strong',
+    ...HOOKS,
     surfaces: {
       // design-check-ignore-next-line color-value: the dark surfaces of the suite, which the theme engine is given
       dark: { paper: '#1a202c', sidebar: '#12161e', raised: '#232834', line: '#2a3240', ink: '#e8ecf3', input: '#8791a6', accent: dark, fill: dark },

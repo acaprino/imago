@@ -1,21 +1,38 @@
 // The screens of the demo: a list with its details, a form, the notices, and one that fails.
 import { useState, type RefObject } from 'react';
-import { Badge, Button, Cluster, Column, Icon, Input, Select, Switch, Text, Textarea } from '@acaprino/sigrid/primitives';
+import { useMedia } from '@acaprino/sigrid';
+import { Badge, Button, Cluster, Column, Icon, Input, Select, Switch, Text, Textarea, ToggleGroup, ToggleGroupItem } from '@acaprino/sigrid/primitives';
 import { DescriptionList, Empty, FormField, ItemList, ItemRow, SearchField, SettingRow } from '@acaprino/sigrid/components';
 import { Inspector, Panel } from '@acaprino/sigrid/layout';
 import { useNotify, useWindow } from '@acaprino/imago';
-import { STATES, type Item, type State } from './items';
+import { KINDS, STATES, type Item, type Kind, type State } from './items';
 
 function StateBadge({ state }: { state: State }) {
   const { tone, label } = STATES.find(({ id }) => id === state)!;
   return <Badge tone={tone}>{label}</Badge>;
 }
 
-type ItemsProps = { items: readonly Item[]; chosen: Item | null; choose: (item: Item) => void; asked: string; ask: (text: string) => void; field: RefObject<HTMLInputElement | null> };
+type ItemsProps = {
+  items: readonly Item[]; chosen: Item | null; choose: (item: Item) => void;
+  asked: string; ask: (text: string) => void; field: RefObject<HTMLInputElement | null>;
+  kind: Kind; filter: (kind: Kind) => void;
+};
 
-export function Items({ items, chosen, choose, asked, ask, field }: ItemsProps) {
+export function Items({ items, chosen, choose, asked, ask, field, kind, filter }: ItemsProps) {
+  // The filter is beside the search where both fit, and under it elsewhere.
+  const beside = useMedia('(width >= 620px)');
+  const tools = (
+    <>
+      <Column fill={beside} width={beside ? undefined : 'page'}>
+        <SearchField ref={field} aria-label="Search the items" placeholder="Search the items" value={asked} onValueChange={ask} />
+      </Column>
+      <ToggleGroup aria-label="Which items" value={kind} onValueChange={filter}>
+        {KINDS.map(({ id, label }) => <ToggleGroupItem key={id} value={id}>{label}</ToggleGroupItem>)}
+      </ToggleGroup>
+    </>
+  );
   return (
-    <Panel title="Items" subtitle={`${items.length} shown`} tools={<SearchField ref={field} aria-label="Search the items" placeholder="Search the items" value={asked} onValueChange={ask} />}>
+    <Panel title="Items" subtitle={`${items.length} shown`} tools={tools}>
       {items.length === 0 ? <Empty fill title="No items" description="No item is in this state and has these words." /> : (
         <Column pad="md">
           <ItemList aria-label="Items">

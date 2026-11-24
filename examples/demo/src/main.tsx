@@ -6,7 +6,7 @@ import { NavItem, Sidebar, SidebarGroup, ToolbarButton } from '@acaprino/sigrid/
 import { useCommand } from '@acaprino/sigrid/assemblies';
 import { AppWindow, defineApp, startApp, useNotify, useWindow, type AppView } from '@acaprino/imago';
 import '@acaprino/sigrid/styles.css';
-import { ITEMS, STATES, type Item, type State } from './items';
+import { ITEMS, KINDS, STATES, type Item, type Kind, type State } from './items';
 import { Broken, Form, ItemDetails, Items, mend, Notices } from './screens';
 
 const DEMO = defineApp({
@@ -28,6 +28,7 @@ function Demo() {
   const [items, setItems] = useState<readonly Item[]>(ITEMS);
   const [chosen, setChosen] = useState<Item | null>(null);
   const [asked, setAsked] = useState('');
+  const [kind, setKind] = useState<Kind>('all');
   const field = useRef<HTMLInputElement>(null);
   useEffect(() => window_.onShown(() => notify('The window is back.')), [notify, window_]);
   // The job of the app: how far it is, in percent, while it runs.
@@ -42,7 +43,8 @@ function Demo() {
     return () => clearTimeout(timer);
   }, [job, notify, window_]);
 
-  const shown = items.filter((item) => (state === null || item.state === state) && item.title.toLowerCase().includes(asked.toLowerCase()));
+  const { holds } = KINDS.find(({ id }) => id === kind)!;
+  const shown = items.filter((item) => (state === null || item.state === state) && holds(item) && item.title.toLowerCase().includes(asked.toLowerCase()));
   const go = (next: View) => {
     setChosen(null);
     setView(next);
@@ -100,7 +102,7 @@ function Demo() {
       footer={<Text>{shown.length} of {items.length} shown</Text>}
       hints={['demo.check']}
     >
-      {view === 'items' && <Items items={shown} chosen={chosen} choose={setChosen} asked={asked} ask={setAsked} field={field} />}
+      {view === 'items' && <Items items={shown} chosen={chosen} choose={setChosen} asked={asked} ask={setAsked} field={field} kind={kind} filter={setKind} />}
       {view === 'new' && <Form add={add} cancel={() => go('items')} />}
       {view === 'notices' && <Notices />}
       {view === 'broken' && <Broken />}

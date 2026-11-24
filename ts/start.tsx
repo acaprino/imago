@@ -1,9 +1,10 @@
 // The start of an app: its look on the page before anything is drawn, then the app inside the shell.
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { applyDensity, WordsProvider } from '@acaprino/sigrid';
+import { WordsProvider } from '@acaprino/sigrid';
 import { applyKeptScheme, CommandsProvider } from '@acaprino/sigrid/assemblies';
 import type { App } from './app.js';
+import { dress } from './preset.js';
 import { lookOf, ShellProvider } from './shell.js';
 
 /**
@@ -21,7 +22,7 @@ function keepDark(key: string): void {
 /** Draws `node`, the app, in `root`, inside the shell. Returns how to take it away. */
 export function startApp(app: App, root: HTMLElement, node: ReactNode): () => void {
   document.documentElement.lang = app.lang;
-  applyDensity(document.documentElement, 'compact');
+  dress(document.documentElement);
   keepDark(app.storage.scheme);
   applyKeptScheme(lookOf(app));
   const react = createRoot(root);

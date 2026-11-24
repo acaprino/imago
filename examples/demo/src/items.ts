@@ -11,6 +11,14 @@ export const STATES: { id: State; label: string; tone: BadgeTone; icon: IconName
   { id: 'failed', label: 'Failed', tone: 'danger', icon: 'error' },
 ];
 
+export type Kind = 'all' | 'open' | 'caution';
+/** The filter beside the search: what each of its parts shows. */
+export const KINDS: { id: Kind; label: string; holds: (item: Item) => boolean }[] = [
+  { id: 'all', label: 'All', holds: () => true },
+  { id: 'open', label: 'Open', holds: ({ state }) => state === 'running' },
+  { id: 'caution', label: 'Caution', holds: ({ state }) => state === 'late' || state === 'failed' },
+];
+
 export const ITEMS: Item[] = [
   { id: 'a', title: 'Browser cache', about: 'Pages and images saved to load faster', state: 'done', size: '1.50 GB' },
   { id: 'b', title: 'Model cache', about: 'Models downloaded for local tools', state: 'running', size: '14.0 GB' },

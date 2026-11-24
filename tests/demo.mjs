@@ -255,6 +255,23 @@ try {
     await page.getByText('This view has no search.').waitFor();
   });
 
+  await onPage('the segmented filter of the list is beside the search, and under it on a phone', {}, async (page) => {
+    const rows = () => page.getByRole('list', { name: 'Items' }).getByRole('listitem').count();
+    const box = (locator) => locator.boundingBox();
+    const filter = page.getByRole('group', { name: 'Which items' });
+    const [field, group] = [await box(page.getByRole('searchbox')), await box(filter)];
+    assert.ok(group.x >= field.x + field.width && Math.abs(group.y + group.height / 2 - field.y - field.height / 2) <= 1, 'the filter is not beside the search');
+    await filter.getByRole('button', { name: 'Caution' }).click();
+    assert.equal(await rows(), 2);
+    await shot(page, 'filter');
+    await filter.getByRole('button', { name: 'All' }).click();
+    assert.equal(await rows(), 6);
+    await page.setViewportSize({ width: 340, height: 800 });
+    await page.locator('[data-slot="app-shell-bottom"]').waitFor();
+    const [under, over] = [await box(filter), await box(page.getByRole('searchbox'))];
+    assert.ok(under.y >= over.y + over.height && over.width > 250, 'the filter is not under the search');
+  });
+
   await onPage('F6 goes round the regions, and Tab goes through them in the order they are read', {}, async (page) => {
     await page.getByRole('button', { name: /^Model cache/ }).click();
     await page.locator('[data-slot="inspector-body"]').waitFor();
