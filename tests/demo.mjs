@@ -74,8 +74,8 @@ const browser = await chromium.launch({ args: ['--disable-lcd-text'] });
 const failures = [];
 
 /** Opens the page in a context of its own, with `scheme` as the choice kept, and runs `look` on it; an error of the page fails it. */
-async function onPage(name, { width = 1440, scheme, system = 'light', own = false, kept, glass, refused, reduced = false, expected } = {}, look) {
-  const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: system, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+async function onPage(name, { width = 1440, scheme, system = 'light', own = false, kept, glass, refused, reduced = false, touch = false, expected } = {}, look) {
+  const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: system, reducedMotion: reduced ? 'reduce' : 'no-preference', hasTouch: touch });
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
   const problems = [];
@@ -716,6 +716,62 @@ try {
       await told(word === 'light' ? 1 : 2);
     }
     assert.deepEqual(await themes(page), [{ theme: 'light', resolved: 'light' }, { theme: 'dark', resolved: 'dark' }]);
+  });
+
+  // The switch of the bar: its name says what a press does, and it is the palette's command of the other scheme.
+  const switcher = (page) => page.locator('[data-slot="title-bar"]').getByRole('button', { name: /^Switch to (light|dark)$/ });
+  const kept = (page) => page.evaluate(() => localStorage.getItem('imago.scheme'));
+  for (const width of [340, 1440]) {
+    await onPage(`the switch of the bar draws the other scheme at one press, and the choice is kept, at ${width}`, { width, system: 'light' }, async (page) => {
+      const button = switcher(page);
+      await page.locator('[data-slot="title-bar"]').getByRole('button', { name: 'Switch to light' }).waitFor();
+      const bar = await page.locator('[data-slot="title-bar"]').boundingBox();
+      const [own, commands] = [await button.boundingBox(), await page.locator('[data-slot="title-bar"]').getByRole('button', { name: /^Commands/ }).boundingBox()];
+      assert.ok(own.x + own.width <= commands.x && own.y >= bar.y && own.y + own.height <= bar.y + bar.height, 'the switch is in the bar, before Commands');
+      const before = await places(page);
+      await button.click();
+      await page.waitForFunction(() => document.documentElement.dataset.scheme === 'light');
+      assert.equal(await kept(page), 'light');
+      await page.getByRole('button', { name: 'Switch to dark' }).waitFor();
+      assert.deepEqual(await places(page), before, 'the press moves nothing of the bar');
+      assert.deepEqual(await overflow(page), []);
+      await shot(page, `switch-light-${width}`);
+      await page.reload();
+      await page.waitForSelector('[data-slot="app-shell"]');
+      assert.equal(await scheme(page), 'light');
+      // From the keyboard too.
+      await page.getByRole('button', { name: 'Switch to dark' }).focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.documentElement.dataset.scheme === 'dark');
+      assert.equal(await kept(page), 'dark');
+      await shot(page, `switch-dark-${width}`);
+    });
+  }
+
+  await onPage('the system's look, then a press of the switch: the other scheme, chosen', { system: 'dark' }, async (page) => {
+    await palette(page, 'system theme');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => localStorage.getItem('imago.scheme') === 'system');
+    assert.equal(await scheme(page), 'dark');
+    await switcher(page).click();
+    await page.waitForFunction(() => document.documentElement.dataset.scheme === 'light');
+    assert.equal(await kept(page), 'light');
+    await palette(page, 'theme');
+    assert.equal(await page.getByRole('option').filter({ hasText: 'Light theme' }).getAttribute('aria-checked'), 'true', 'the palette shows the choice');
+  });
+
+  await onPage('the switch is as big as a finger needs', { width: 500, touch: true }, async (page) => {
+    assert.ok(await page.evaluate(() => matchMedia('(pointer: coarse)').matches), 'the page is not told of a finger: the test shows nothing');
+    const { width, height } = await switcher(page).boundingBox();
+    assert.ok(width >= 44 && height >= 44, `the switch is ${width} by ${height}`);
+    assert.deepEqual(await overflow(page), []);
+  });
+
+  await onPage('in a window the switch tells the window its theme', { own: true, system: 'dark' }, async (page) => {
+    await drawn(page);
+    await switcher(page).click();
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_theme').length === 2);
+    assert.deepEqual((await themes(page)).at(-1), { theme: 'light', resolved: 'light' });
   });
 
   const glassCalls = (page) => page.evaluate(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_glass').map(([, args]) => args));

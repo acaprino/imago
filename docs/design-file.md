@@ -73,7 +73,10 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 - Motion is on for the whole app, on Fluent's curves in 90 to 180 ms: the line of the chosen view grows from its middle. A person who asked
   the system for less motion sees none. What a press does is done at once: nothing waits for a movement.
 - Dark until the person chooses. Light, dark and the system's look are the same three commands of the palette in every app, and
-  no app draws a switch for them. The choice is kept under the app's own storage key, and is on the page before the first paint.
+  the title bar has one switch for them, before «Commands», in a window and in a browser: an icon, the sun in dark and the moon in
+  light, whose name and hint say what a press does («Switch to light», «Switch to dark», the app's words). A press draws the
+  other scheme of the one drawn now, as the palette's command of it does: chosen and kept, also when the choice was the system's.
+  No app draws another. The choice is kept under the app's own storage key, and is on the page before the first paint.
 - A state is a `Badge` with a `tone` and a word. Surfaces are opaque, until the person chooses glass.
 - Glass is the person's choice, in a window of its own only: Windows' acrylic behind the page. It is off until the app says
   otherwise in its program (`Options::glass` of the crate), or the person chooses it: «Glass» (the app's word) is a command of
@@ -92,8 +95,8 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 
 - One frame: Sigrid's `AppShell` with `frame="sheet"`, and `desktop` in a window. The regions are its own: title bar, views,
   status, sidebar, content, inspector, actions, footer.
-- The title bar holds, in this order: the brand, the views, the room that moves the window, the view's tools, "Commands"
-  with its key, and in a window the three buttons. The shared controls keep their places from one view to the next.
+- The title bar holds, in this order: the brand, the views, the room that moves the window, the view's tools, the switch of
+  light and dark, "Commands" with its key, and in a window the three buttons. The switch stays at every width, an icon alone. The shared controls keep their places from one view to the next.
 - The views are in the title bar from 860px, in a row under it from 620px to 860px and in any narrower window, and at the
   foot only under 620px in a browser.
 - Every view is also a command, the one in use checked. `Ctrl+K` opens the palette; `Ctrl+F` is the search of the view, and where
