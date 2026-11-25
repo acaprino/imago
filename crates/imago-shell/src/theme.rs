@@ -114,18 +114,20 @@ pub(crate) fn drawn_by_page(theme: WindowTheme, resolved: Option<&str>) -> Theme
     }
 }
 
-/// The tint of the acrylic (RGBA) in `theme`, light or dark.
+/// The tint of the acrylic (RGBA) in `theme`, light or dark: the ground of the suite in that theme,
+/// which is what Sigrid's glass takes the acrylic's own colour to be.
 ///
 /// Only the acrylic of Windows 10 (and of the first Windows 11, before 22H2) takes its colour from
 /// the tint: there a light page needs a light tint and a dark page a dark one. On Windows 11 22H2
 /// and later the acrylic ignores it ([`acrylic`] says why it does no harm there).
 fn acrylic_tint(theme: Theme) -> Color {
-    match theme {
-        // `#F6F7F9` at 88%, 0.88 x 255 = 224.4.
-        Theme::Light => Color(0xF6, 0xF7, 0xF9, 224),
-        // `#0C111D` at 80%, 0.8 x 255 = 204. Dark, and any theme a later Tauri adds.
-        _ => Color(0x0C, 0x11, 0x1D, 204),
-    }
+    let (Color(red, green, blue, _), alpha) = match theme {
+        // At 88%, 0.88 x 255 = 224.4.
+        Theme::Light => (LIGHT_GROUND, 224),
+        // At 80%, 0.8 x 255 = 204. Dark, and any theme a later Tauri adds.
+        _ => (DARK_GROUND, 204),
+    };
+    Color(red, green, blue, alpha)
 }
 
 /// Keeps the theme in `<data_dir>/window-theme` for the next start. The file is written whole or
@@ -610,7 +612,7 @@ mod tests {
             let [_, red, green, blue] = hex.to_be_bytes();
             Color(red, green, blue, (percent / 100.0 * 255.0).round() as u8)
         };
-        assert_eq!(acrylic_tint(Theme::Dark), ground(0x0C111D, 80.0));
+        assert_eq!(acrylic_tint(Theme::Dark), ground(0x12161E, 80.0));
         assert_eq!(acrylic_tint(Theme::Light), ground(0xF6F7F9, 88.0));
     }
 

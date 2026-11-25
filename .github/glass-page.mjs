@@ -35,6 +35,11 @@ if (action === 'clear') {
   // In the light scheme of CSS an empty page shows the engine's background, which is the window's own colour (in the dark one
   // Chromium paints its own dark canvas over it).
   await page.addStyleTag({ content: ':root { color-scheme: light !important; } html, body, [data-slot="app-shell"], [data-slot="title-bar"], [data-slot="title-bar"] * { background: transparent !important; }' });
+} else if (action === 'command') {
+  // The command of the look, as a person chooses it: the page draws Sigrid's glass and tells the window.
+  const was = await page.evaluate(() => document.documentElement.dataset.material === 'glass');
+  await palette('glass');
+  await page.waitForFunction((before) => (document.documentElement.dataset.material === 'glass') !== before, was);
 } else if (action === 'glass') said = await invoke('set_glass', { glass: arg === 'on' });
 else if (action === 'kept') said = await invoke('kept_glass', {});
 else if (action === 'light' || action === 'dark') {

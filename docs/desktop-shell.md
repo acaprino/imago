@@ -42,8 +42,8 @@ Facts about the material:
   The tint reaches only Windows 10 (and the first Windows 11, 21H2), where the legacy `SetWindowCompositionAttribute`
   path is used (and is slow to drag).
 - There the acrylic has no colour but the tint, so the tint follows the theme the page draws, which the page sends with
-  the window theme (1.2): `#0C111D` and an alpha of 204 in dark, `#F6F7F9` and 224 in light. The first frame keeps the
-  tint of the app's own config, until the page's first `set_theme`. On Windows 11 22H2 and later nothing changes:
+  the window theme (1.2): the ground, `#12161E` with an alpha of 204 in dark and `#F6F7F9` with 224 in light. The first
+  frame keeps the tint of the app's own config, until the page's first `set_theme`. On Windows 11 22H2 and later nothing changes:
   setting the effect again sets the backdrop the window already has, and that backdrop takes no tint.
 - The acrylic is a blur of what is behind the window, with a nearly fixed luminosity. Measured from the screen
   (0 to 255): light acrylic about **143 over a dark window and 226 over a white one**; dark acrylic about **84 over a

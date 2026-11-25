@@ -152,6 +152,16 @@ $demo = $run.p
 Say (($run.seen | ForEach-Object { $_ } | Where-Object { -not (Same $_ $DARK) -and -not (Same $_ $FLOOR) }).Count -eq 0) 'no flash: the window is the dark ground from its first frame (or not composed yet: the floor)'
 $said = Ask 'kept'
 Say ($said.said.ok -and $said.said.answer -eq $false) "kept_glass answers the app's default: $($said.said | ConvertTo-Json -Compress)"
+
+Write-Host '--- the page as Sigrid draws it: the command of the look'
+$page = Ask 'command'
+Say ($page.material -eq 'glass' -and (Kept) -eq 'glass') "the command: the page is glass ($($page.material)), the window keeps $(Kept)"
+$drawn = Both $demo 'page-glass'
+Say (Glassy $drawn) 'the title bar of the page as Sigrid draws glass is neither the ground nor what lies behind'
+$page = Ask 'command'
+Say ($null -eq $page.material -and (Kept) -eq 'solid') "the command again: the page is solid, the window keeps $(Kept)"
+$drawn = Both $demo 'page-solid'
+Say (Ground $drawn $DARK) 'and the title bar is the ground again'
 $null = Ask 'clear'
 $off = Both $demo 'off'
 Say (Ground $off $DARK) 'without glass the window is its dark ground, over a dark window and a bright one'
