@@ -8,43 +8,36 @@
     "node": ">=24"
   },
   "exports": {
-    "./css/*": "./css/*",
-    "./icons/*": "./icons/*",
-    "./ui": "./lib/ui/index.js",
-    "./shell": "./lib/shell/index.js",
-    "./tokens": "./tokens/imago.tokens.json",
-    "./tauri": "./lib/tauri.js",
-    "./graph": "./lib/graph.js",
-    "./graph-layout": "./lib/graph-layout.js",
-    "./react": "./react/index.js"
+    ".": "./lib/index.js",
+    "./icons/*": "./icons/*"
   },
   "bin": {
     "imago-check": "./scripts/check/cli.mjs"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts examples/demo/capture-rules.test.mjs",
-    "tokens": "node scripts/build-tokens.mjs",
     "icons": "node scripts/icons.mjs",
-    "gallery": "vite --config gallery/vite.config.ts",
-    "build": "npm run build:package && tsc --noEmit && vite build --config gallery/vite.config.ts",
-    "test:gallery": "node tests/gallery/run.mjs",
+    "build": "npm run build:package && tsc --noEmit && npm run demo:web",
+    "check": "sigrid-check ts && sigrid-check examples/demo/src",
+    "test:demo": "node tests/demo.mjs",
+    "test:install": "node tests/install.mjs",
     "demo": "cd examples/demo/src-tauri && tauri dev",
-    "demo:web": "vite build --config gallery/vite.config.ts --outDir ../examples/demo/dist",
+    "demo:serve": "vite --config examples/demo/vite.config.ts",
+    "demo:web": "npm run build:package && vite build --config examples/demo/vite.config.ts",
     "demo:build": "cd examples/demo/src-tauri && tauri build --debug --no-bundle --features custom-protocol",
     "demo:fetch": "node examples/demo/fetch.mjs",
     "capture": "node examples/demo/capture.mjs",
-    "check": "node scripts/check/cli.mjs --package",
-    "verify": "npm run tokens -- --check && npm test && npm run check && npm run build && npm run test:gallery && cargo test -p imago-shell",
-    "prepare": "npm run build:package",
+    "verify": "npm run build && npm run check && npm run test:demo && npm test && npm run test:install && cargo test -p imago-shell",
+    "prepack": "npm run build:package",
     "build:package": "tsc -p tsconfig.package.json",
     "pretest": "npm run build:package"
   },
   "devDependencies": {
+    "@acaprino/sigrid": "https://github.com/acaprino/sigrid/releases/download/v6.5.1/acaprino-sigrid-6.5.1.tgz",
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/cli": "2.12.4",
-    "@types/d3-selection": "3.0.12",
-    "@types/d3-zoom": "3.0.9",
     "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "playwright": "1.63.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -52,29 +45,15 @@
     "vite": "8.3.5"
   },
   "peerDependencies": {
-    "@tauri-apps/api": "^2.12.4",
-    "react": ">=18 <20"
-  },
-  "peerDependenciesMeta": {
-    "@tauri-apps/api": {
-      "optional": true
-    },
-    "react": {
-      "optional": true
-    }
+    "@acaprino/sigrid": "^6.5.1",
+    "@tauri-apps/api": "^2.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "files": [
     "lib",
-    "css",
     "docs",
-    "tokens",
     "icons",
-    "ts",
-    "react",
     "scripts/check"
-  ],
-  "dependencies": {
-    "d3-selection": "3.0.1",
-    "d3-zoom": "3.0.1"
-  }
+  ]
 }

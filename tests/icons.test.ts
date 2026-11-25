@@ -11,15 +11,11 @@ import { dirname, join } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
-import { APPS as GALLERY_APPS, APP_IDS } from '../gallery/apps.ts';
-import { colorValueToHex, contrast } from '../scripts/color.mjs';
 import { APPS, FAVICON_SIZES, FILES, ICON_SIZES, PNG_SIZES, drawingRefusal, icoFile, iconSvg } from '../scripts/icons.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const script = join(root, 'scripts', 'icons.mjs');
 const iconsDir = join(root, 'icons');
-const tokens = JSON.parse(readFileSync(join(root, 'tokens', 'imago.tokens.json'), 'utf8'));
-const tokensCss = readFileSync(join(root, 'css', 'tokens.css'), 'utf8');
 
 type Rgba = { width: number; height: number; at: (x: number, y: number) => number[] };
 
@@ -67,13 +63,20 @@ function decodePng(bytes: Buffer): Rgba {
 
 const bytesOf = (parts: string[]): number[] => parts.flatMap((hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16)));
 
-/** What the tokens say an app's dark accent and its ink are: the two colours of the icon, read the way the build reads them. */
+/** The two colours of an app's icon. */
 function coloursOf(app: string): { fill: string; ink: string } {
-  const hue = tokens.app[app].hue.$value;
-  return {
-    fill: colorValueToHex(tokens.accent.dark.accent.$value, hue),
-    ink: colorValueToHex(tokens.accent.dark['accent-on'].$value, hue),
+  const [, , fill, ink] = (APPS as string[][]).find(([id]) => id === app)!;
+  return { fill, ink };
+}
+
+/** WCAG contrast ratio of two opaque `#RRGGBB` colours, 1 to 21. */
+function contrast(one: string, other: string): number {
+  const luminance = (hex: string): number => {
+    const [r, g, b] = bytesOf([hex]).map((byte) => (byte / 255 <= 0.04045 ? byte / 255 / 12.92 : ((byte / 255 + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
+  const [high, low] = [luminance(one), luminance(other)].sort((x, y) => y - x);
+  return (high + 0.05) / (low + 0.05);
 }
 
 /** The entries of an .ico: size, the PNG it holds and the directory fields. */
@@ -99,16 +102,10 @@ function readIco(bytes: Buffer) {
   });
 }
 
-const ids = APPS.map(([id]: [string, string]) => id);
+const ids = (APPS as string[][]).map(([id]) => id);
 const file = (app: string, name: string): Buffer => readFileSync(join(iconsDir, app, name));
 
 describe('the apps', () => {
-  test('the script lists the five apps of the tokens and of the gallery, with the gallery\'s names', () => {
-    assert.deepEqual([...ids].sort(), Object.keys(tokens.app).sort());
-    assert.deepEqual([...ids].sort(), [...APP_IDS].sort());
-    for (const [id, name] of APPS as [string, string][]) assert.equal(name, (GALLERY_APPS as Record<string, { name: string }>)[id].name, `the name of ${id}`);
-  });
-
   test('icons/ holds a folder for each app and nothing else', () => {
     assert.deepEqual(readdirSync(iconsDir).sort(), [...ids].sort());
   });
@@ -167,8 +164,8 @@ describe('the files of an app', () => {
 });
 
 describe('the SVG', () => {
-  for (const [app, name] of APPS as [string, string][]) {
-    test(`${app}: the letter is ${name[0]}, the fill and the ink are the dark accent and its ink from the tokens`, () => {
+  for (const [app, name] of APPS as string[][]) {
+    test(`${app}: the letter is ${name[0]}, the fill and the ink are the app's`, () => {
       const { fill, ink } = coloursOf(app);
       const svg = file(app, 'icon.svg').toString('utf8');
       assert.match(svg, /^<svg [^>]*width="256" height="256" viewBox="0 0 256 256"/, 'a 256 by 256 square');
@@ -179,13 +176,6 @@ describe('the SVG', () => {
       assert.match(svg, /text-anchor="middle"/);
       assert.equal(svg.match(/<text /g)?.length, 1, 'one letter');
       assert.deepEqual(file(app, 'favicon.svg'), file(app, 'icon.svg'), 'the favicon is the icon');
-    });
-
-    test(`${app}: the fill and the ink are the sRGB values css/tokens.css carries for the app in the dark theme`, () => {
-      const { fill, ink } = coloursOf(app);
-      const block = new RegExp(`\\[data-im-app="${app}"\\]\\[data-im-theme="dark"\\] \\{([^}]*)\\}`).exec(tokensCss)?.[1] ?? '';
-      assert.ok(block.includes(`--im-accent: ${fill};`), `tokens.css does not give ${app} the accent ${fill}`);
-      assert.ok(block.includes(`--im-accent-on: ${ink};`), `tokens.css does not give ${app} the ink ${ink}`);
     });
 
     test(`${app}: the SVG is one line without a line break, so that no checkout changes a byte of it`, () => {

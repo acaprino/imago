@@ -1,34 +1,27 @@
-// The glass as it is on screen. Opens the demo window (an isolated data folder), puts a dark and then a bright window
-// behind it, and photographs the real window from the screen in each look and theme: a webview screenshot draws the
-// acrylic as white and cannot judge the glass. Then, in the same run, what only a real window can show: the real
-// mouse over the maximize button (Snap Layouts), a real click maximizing and restoring, Ctrl+= twice and the zoom
-// kept across a restart. The window is raised above every other for the run and closed at the end.
+// The window as it is on screen. Opens the demo window (an isolated data folder), puts a dark and then a bright window
+// behind it, and photographs the real window from the screen in each theme: the page is opaque, and what lies behind
+// must not show. Then, in the same run, what only a real window can show: the real mouse over the maximize button (Snap
+// Layouts), a real click maximizing and restoring, Ctrl+= twice and the zoom kept across a restart. The window is raised
+// above every other for the run and closed at the end.
 //
 // Usage: npm run demo:fetch   (once, and after a change the Verify workflow has built)   then   npm run capture
 // The demo app is never built on this machine: the Verify workflow builds it and keeps it as the artifact
 // `imago-demo`, and `npm run demo:fetch` puts the one of the latest successful run on develop in examples/demo/app/
 // (examples/demo/fetch.mjs: never an artifact of a pull request) and says which commit built it. IMAGO_DEMO_EXE names
 // another file.
-// Output: examples/demo/captures/<look>-<theme>-<over-dark|over-bright>.png (eight), snap-layouts-*.png, and the
-// title-bar pixel of each on the console. The exit code is 1 when a check fails.
+// Output: examples/demo/captures/<theme>-<over-dark|over-bright>.png (four), snap-layouts-*.png, and the title-bar
+// pixel of each on the console. The exit code is 1 when a check fails.
 //
-// The look and the theme are switched through `window.__imago.set` in the page (the WebView2 debugging port), never
-// by reloading. Raising can fail now and then: a capture whose pixels are not the app's is the window in front;
-// repeat the run.
+// The theme is switched in the page as another page of the app would: the choice is written to the browser's storage and
+// the `storage` event is sent (Sigrid's useSchemeCommands follows it), never by reloading. Raising can fail now and then:
+// a capture whose pixels are not the app's is the window in front; repeat the run.
 //
 // The restart check leaves the window in the theme OPPOSITE to Windows' own apps theme before it closes it, and reads
 // the page's colour scheme once, at the first contact with the page after the restart (in `launch`, before anything
 // waits). Three things can give the page its scheme there: the saved theme (the window's first frame), Windows' own
-// theme (when no saved theme reached the window) and the page's own boot call: the gallery always starts on Smooth
-// dark and `gallery/mount/desktop.ts` sends `dark` to the window at its first mount, which also rewrites the saved
-// file. `judgeSavedTheme` (capture-rules.mjs) says what a read proves; the read says whether the page had mounted yet
-// (`window.__imago` exists once its first, synchronous drawing is done, so its boot call has been sent):
-//   - Windows' apps light (the saved theme is dark): a light read proves a failure; a dark read proves delivery only
-//     when it was taken before the page mounted, else it may be the boot call.
-//   - Windows' apps dark (the saved theme is light): a light read proves delivery; a dark read proves a failure only
-//     when it was taken before the page mounted, else the boot call may have won the race.
-//   - Windows' theme unreadable: a light read may be Windows' own.
-// What a read cannot prove is printed as "cannot tell" and is not a failure.
+// theme (when no saved theme reached the window) and the page's own boot call, which sends the choice the page keeps.
+// `judgeSavedTheme` (capture-rules.mjs) says what a read proves; the read says whether the page had mounted yet. What a
+// read cannot prove is printed as "cannot tell" and is not a failure.
 //
 // `launch` also records in the page what it was pressed on (pointer, click, key: `demoPressed`, the `pressed` console
 // lines) and prints the last of them when the demo ends by itself. It stays on purpose: it is what showed that the
@@ -43,16 +36,17 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { judgeSavedTheme, judgeSheetDenser, judgeShowThrough, judgeTitleBar } from './capture-rules.mjs';
+import { judgeOpaque, judgeSavedTheme, judgeThemes } from './capture-rules.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 const exe = process.env.IMAGO_DEMO_EXE ? resolve(process.env.IMAGO_DEMO_EXE) : resolve(here, 'app/imago-demo.exe');
 const out = resolve(here, 'captures');
 
-const LOOKS = ['smooth', 'oni'];
 const THEMES = ['dark', 'light'];
-/** The window behind the demo window, as RGB. Shinatama's measurements were over a dark terminal and a white page. */
+/** The key of the browser's storage the page keeps its choice of theme under (examples/demo/src/main.tsx). */
+const SCHEME_KEY = 'imago.scheme';
+/** The window behind the demo window, as RGB. */
 const BACKDROPS = [['over-dark', '12,12,12'], ['over-bright', '255,255,255']];
 
 const failures = [];
@@ -122,16 +116,16 @@ async function launch(fixture) {
     };
     const view = await page();
     // The first contact: the page's colour scheme, before anything else waits (a restart judges it). `mounted` is false
-    // when the page's script has not yet drawn the gallery, so its own boot call (the window theme `dark`) is not sent yet.
-    const firstRead = await view.evaluate(() => ({ light: matchMedia('(prefers-color-scheme: light)').matches, mounted: Boolean(window.__imago), at: Math.round(performance.now()) }));
+    // when the page has drawn nothing yet, so its own boot call (the window theme) is not sent yet.
+    const firstRead = await view.evaluate(() => ({ light: matchMedia('(prefers-color-scheme: light)').matches, mounted: document.querySelector('[data-slot="app-shell"]') !== null, at: Math.round(performance.now()) }));
     // What the page was pressed on, kept here: when the demo ends by itself this says whether a pointer or a key did it.
     const pressed = [];
     view.on('console', (message) => { if (message.text().startsWith('pressed ')) pressed.push(message.text().slice(8)); });
     await view.evaluate(() => {
-      const say = (event) => console.debug(`pressed ${event.type} ${event.target?.closest?.('[data-im-window]')?.getAttribute('data-im-window') ?? event.target?.tagName ?? event.key}`);
+      const say = (event) => console.debug(`pressed ${event.type} ${event.target?.closest?.('[data-window-control]')?.getAttribute('data-window-control') ?? event.target?.tagName ?? event.key}`);
       for (const type of ['pointerdown', 'click', 'keydown']) document.addEventListener(type, say, true);
     });
-    await view.waitForFunction(() => window.__imago?.ready && document.querySelector('#g-window')?.classList.contains('im-glass'), null, { timeout: 30000 });
+    await view.waitForSelector('[data-slot="window-controls"]', { timeout: 30000 });
     demoPressed.set(app, pressed);
     return { app, pid: app.pid, page: view, exited, pressed, firstRead, close: () => browser.close().catch(() => {}) };
   } catch (error) {
@@ -159,39 +153,44 @@ function placeWindow(demo) {
   return placed;
 }
 
-/** Switches the look and the theme in the page and waits for the window theme to reach Windows and the acrylic to repaint. */
-async function select(demo, fixture, look, theme) {
-  await demo.page.evaluate(([nextLook, nextTheme]) => window.__imago.set({ look: nextLook, theme: nextTheme }), [look, theme]);
-  await demo.page.waitForFunction(([nextLook, nextTheme]) => {
-    const window_ = document.querySelector('#g-window');
-    return window_.dataset.imLook === nextLook && window_.dataset.imTheme === nextTheme && window_.classList.contains('im-glass');
-  }, [look, theme]);
+/** Switches the theme in the page and waits for it to reach the window and the screen. */
+async function select(demo, fixture, theme) {
+  // The other theme first: the page tells the window only when the scheme it draws changes (from the system's to dark, on a
+  // dark Windows, it does not).
+  for (const choice of [theme === 'dark' ? 'light' : 'dark', theme]) {
+    await demo.page.evaluate(([key, value]) => {
+      localStorage.setItem(key, value);
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: value }));
+    }, [SCHEME_KEY, choice]);
+    await demo.page.waitForFunction((wanted) => document.documentElement.dataset.scheme === wanted, choice);
+    await delay(300);
+  }
   await delay(900);
   // The native side keeps the theme it was told in a file, for the first frame of the next start.
   const kept = (await readFile(resolve(fixture, 'data', 'window-theme'), 'utf8').catch(() => '')).trim();
-  if (kept !== theme) fail(`${look} ${theme}: the window theme kept on disk is "${kept}", not "${theme}": set_window_theme did not reach the native side`);
+  if (kept !== theme) fail(`${theme}: the window theme kept on disk is "${kept}", not "${theme}": set_theme did not reach the native side`);
 }
 
 /** Where the title bar and the work sheet can be read: empty spots of the real window, in physical pixels of its client area. */
 const spots = (demo) => demo.page.evaluate(() => {
   const ratio = window.devicePixelRatio;
   const physical = (value) => Math.round(value * ratio);
-  const spacer = document.querySelector('.im-titlebar > .im-spacer').getBoundingClientRect();
-  const content = document.querySelector('.im-content').getBoundingClientRect();
+  const spacer = document.querySelector('[data-slot="title-bar"] [data-slot="toolbar-spacer"]').getBoundingClientRect();
+  const content = document.querySelector('[data-slot="app-shell-content"]').getBoundingClientRect();
   const sheetX = content.left + content.width / 2;
   const sheetY = content.bottom - 14;
   const there = document.elementFromPoint(sheetX, sheetY);
-  const maximize = document.querySelector('[data-im-window="maximize"]').getBoundingClientRect();
+  const maximize = document.querySelector('[data-window-control="maximize"], [data-window-control="restore"]').getBoundingClientRect();
   return {
     title: [physical(spacer.left + spacer.width / 2), physical(8)],
     sheet: [physical(sheetX), physical(sheetY)],
-    sheetOn: there ? `${there.tagName.toLowerCase()}.${String(there.className).split(' ')[0]}` : 'nothing',
+    sheetOn: there ? `${there.tagName.toLowerCase()} ${there.dataset.slot ?? ''}`.trim() : 'nothing',
     maximize: [physical(maximize.left + maximize.width / 2), physical(maximize.top + maximize.height / 2)],
     ratio,
   };
 });
 
-// ---- phase 1: eight photographs of the glass --------------------------------------------------------------------------
+// ---- phase 1: four photographs of the window ---------------------------------------------------------------------------
 
 /** The copy of the window from the screen. It must be of the active window: it is taken again (up to three times) when Windows gave the foreground away. */
 function photograph(demo, name, points) {
@@ -209,47 +208,35 @@ async function photographs(demo, fixture) {
   for (const [backdrop, color] of BACKDROPS) {
     const behind = await startBackdrop(demo.pid, color);
     try {
-      for (const look of LOOKS) {
-        for (const theme of THEMES) {
-          await select(demo, fixture, look, theme);
-          const spot = await spots(demo);
-          const name = `${look}-${theme}-${backdrop}`;
-          const shot = photograph(demo, name, `title:${spot.title.join(':')};sheet:${spot.sheet.join(':')}`);
-          const { title, sheet } = shot.pixels;
-          taken[name] = { look, theme, backdrop, title, sheet };
-          note(`${name.padEnd(26)} title bar ${title.join(',').padEnd(12)} work sheet ${sheet.join(',').padEnd(12)} (on ${spot.sheetOn}, ${shot.width}x${shot.height}${shot.active ? '' : ', NOT THE ACTIVE WINDOW'})`);
-          if (!shot.active) fail(`${name}: the demo window was not the active window, so Windows drew a plain fill instead of the acrylic and nothing here can be judged`);
-          check(name, judgeTitleBar({ look, theme, backdrop, pixel: title }));
-        }
+      for (const theme of THEMES) {
+        await select(demo, fixture, theme);
+        const spot = await spots(demo);
+        const name = `${theme}-${backdrop}`;
+        const shot = photograph(demo, name, `title:${spot.title.join(':')};sheet:${spot.sheet.join(':')}`);
+        const { title, sheet } = shot.pixels;
+        taken[name] = { title, sheet };
+        note(`${name.padEnd(18)} title bar ${title.join(',').padEnd(12)} work sheet ${sheet.join(',').padEnd(12)} (on ${spot.sheetOn}, ${shot.width}x${shot.height}${shot.active ? '' : ', NOT THE ACTIVE WINDOW'})`);
+        if (!shot.active) fail(`${name}: the demo window was not the active window, so nothing here can be judged`);
       }
     } finally {
       killTree(behind.pid);
     }
   }
-  for (const look of LOOKS) {
-    for (const theme of THEMES) {
-      const dark = taken[`${look}-${theme}-over-dark`];
-      const bright = taken[`${look}-${theme}-over-bright`];
-      if (!dark || !bright) continue;
-      check(`${look}-${theme}`, judgeShowThrough({ overDark: dark.title, overBright: bright.title }));
-      if (look === 'smooth') {
-        check(`${look}-${theme}`, judgeSheetDenser({ frame: { overDark: dark.title, overBright: bright.title }, sheet: { overDark: dark.sheet, overBright: bright.sheet } }));
-      }
-    }
+  for (const place of ['title', 'sheet']) {
+    for (const theme of THEMES) check(`${theme}, ${place}`, judgeOpaque({ overDark: taken[`${theme}-over-dark`][place], overBright: taken[`${theme}-over-bright`][place] }));
+    check(place, judgeThemes({ dark: taken['dark-over-dark'][place], light: taken['light-over-dark'][place] }));
   }
-  const files = (await readdir(out)).filter((file) => /^(smooth|oni)-(dark|light)-over-(dark|bright)\.png$/.test(file));
-  if (files.length !== 8) fail(`${files.length} captures in ${out}, not eight`);
 }
 
 // ---- phase 2: what the real mouse and keyboard do ----------------------------------------------------------------------
 
 const maximizeState = (demo) => demo.page.evaluate(() => {
-  const button = document.querySelector('[data-im-window="maximize"]');
-  return { os: button.getAttribute('data-im-os'), maximized: button.getAttribute('data-im-maximized') };
+  const button = document.querySelector('[data-window-control="maximize"], [data-window-control="restore"]');
+  return { os: button.getAttribute('data-os-state'), maximized: button.getAttribute('data-window-control') === 'restore' };
 });
 
 async function interaction(demo, fixture) {
-  await select(demo, fixture, 'smooth', 'dark');
+  await select(demo, fixture, 'dark');
   placeWindow(demo);
   // The flyout Snap Layouts opens under the button reaches past the window: the backdrop is laid wide and long.
   const behind = await startBackdrop(demo.pid, '12,12,12', ['-Margin', '320', '-Below', '560']);
@@ -270,8 +257,8 @@ async function interaction(demo, fixture) {
     await delay(2200);
     const hover = await maximizeState(demo);
     const after = screen('region', ['-X', rx, '-Y', ry, '-Width', rw, '-Height', rh, '-Out', resolve(out, 'snap-layouts-hover.png'), '-Compare', resolve(out, 'snap-layouts-before.png')]);
-    note(`snap layouts: the pointer on the maximize button, the page reports data-im-os="${hover.os}"; ${after.changed} of ${after.sampled} sampled pixels of the region under the button changed (snap-layouts-hover.png against snap-layouts-before.png)`);
-    if (hover.os !== 'hover') fail(`the real pointer on the maximize button did not reach the page: data-im-os is "${hover.os}", not "hover" (the native overlay or the caption-maximize event)`);
+    note(`snap layouts: the pointer on the maximize button, the page reports data-os-state="${hover.os}"; ${after.changed} of ${after.sampled} sampled pixels of the region under the button changed (snap-layouts-hover.png against snap-layouts-before.png)`);
+    if (hover.os !== 'hover') fail(`the real pointer on the maximize button did not reach the page: data-os-state is "${hover.os}", not "hover" (the native overlay or the caption-maximize event)`);
     if (!(after.changed > 400)) fail(`no flyout under the maximize button: only ${after.changed} sampled pixels changed (see snap-layouts-hover.png)`);
 
     // A click on the native overlay maximizes, a second one restores.
@@ -280,24 +267,24 @@ async function interaction(demo, fixture) {
       if (!pressed.clicked) fail(`the pointer was not on the maximize button (at ${pressed.at.join(',')}, not ${pressed.x},${pressed.y}): someone moved the mouse, the click was not made`);
       return pressed.clicked;
     };
-    const waitFor = (state) => demo.page.waitForFunction((wanted) => document.querySelector('[data-im-window="maximize"]').getAttribute('data-im-maximized') === wanted, state, { timeout: 8000 }).catch(() => {});
+    const waitFor = (control) => demo.page.waitForSelector(`[data-window-control="${control}"]`, { timeout: 8000 }).catch(() => {});
     const before = geometry;
-    if (click()) await waitFor('true');
+    if (click()) await waitFor('restore');
     await delay(600);
     const maximized = onWindow(demo, 'rect');
     const state = await maximizeState(demo);
-    note(`click on the maximize button: ${before.width}x${before.height} -> ${maximized.width}x${maximized.height}, data-im-maximized="${state.maximized}"`);
-    if (state.maximized !== 'true' || (maximized.width <= before.width && maximized.height <= before.height)) fail('a real click on the maximize button did not maximize the window');
+    note(`click on the maximize button: ${before.width}x${before.height} -> ${maximized.width}x${maximized.height}, maximized: ${state.maximized}`);
+    if (!state.maximized || (maximized.width <= before.width && maximized.height <= before.height)) fail('a real click on the maximize button did not maximize the window');
     geometry = maximized;
     spot = await spots(demo);
     screen('move', ['-X', button()[0], '-Y', button()[1]]);
     await delay(900);
-    if (click()) await waitFor('false');
+    if (click()) await waitFor('maximize');
     await delay(600);
     const restored = onWindow(demo, 'rect');
     const last = await maximizeState(demo);
-    note(`second click: ${maximized.width}x${maximized.height} -> ${restored.width}x${restored.height}, data-im-maximized="${last.maximized}"`);
-    if (last.maximized !== 'false') fail('a second real click on the maximize button did not restore the window');
+    note(`second click: ${maximized.width}x${maximized.height} -> ${restored.width}x${restored.height}, maximized: ${last.maximized}`);
+    if (last.maximized) fail('a second real click on the maximize button did not restore the window');
   } finally {
     killTree(behind.pid);
   }
@@ -305,7 +292,7 @@ async function interaction(demo, fixture) {
 
 /** Presses Ctrl+= twice and leaves the window in the theme `saved.theme`, the one the restart must find again. */
 async function zoomTwice(demo, fixture, saved) {
-  await select(demo, fixture, 'smooth', saved.theme);
+  await select(demo, fixture, saved.theme);
   const ratio = () => demo.page.evaluate(() => window.devicePixelRatio);
   const base = await ratio();
   for (let press = 1; press <= 2; press++) {
@@ -323,7 +310,7 @@ async function zoomTwice(demo, fixture, saved) {
 /** The real close button of the page ends the window and the application. */
 async function closeWindow(demo) {
   closing.add(demo.app);
-  await demo.page.click('[data-im-window="close"]');
+  await demo.page.click('[data-window-control="close"]');
   const ended = await Promise.race([demo.exited.then(() => true), delay(10000).then(() => false)]);
   if (!ended) fail('the close button did not end the demo');
   await demo.close();
@@ -354,7 +341,7 @@ async function restart(fixture, base, saved) {
     const first = demo.firstRead;
     const scheme = first.light ? 'light' : 'dark';
     const windows = saved.windows === null ? "Windows' theme could not be read" : `Windows' apps are ${saved.windows}`;
-    note(`restart: the window theme saved was ${saved.theme}; the page's colour scheme, read ${first.at} ms after the page started and ${first.mounted ? 'after' : 'before'} its first mount (its own boot call sends dark), was ${scheme}; ${windows}`);
+    note(`restart: the window theme saved was ${saved.theme}; the page's colour scheme, read ${first.at} ms after the page started and ${first.mounted ? 'after' : 'before'} its first mount (its own boot call sends the choice it keeps), was ${scheme}; ${windows}`);
     const { verdict, why } = judgeSavedTheme({ saved: saved.theme, windows: saved.windows, scheme, mounted: first.mounted });
     if (verdict === 'failed') fail(`after a restart ${why}`);
     else if (verdict === 'unproven') { unproven.push('the saved window theme at a restart'); note(`restart: cannot tell whether the saved window theme reached the first frame: ${why}`); }

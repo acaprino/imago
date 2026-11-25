@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"], "strict": true, "noEmit": true,
-    "skipLibCheck": true, "allowImportingTsExtensions": true, "types": ["vite/client"], "resolveJsonModule": true
+    "skipLibCheck": true, "types": ["vite/client"]
   },
-  "include": ["ts", "gallery"]
+  "include": ["ts", "examples/demo/src", "examples/demo/vite.config.ts"]
 }

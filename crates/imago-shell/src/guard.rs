@@ -3,59 +3,64 @@
 //! (Ctrl+click, middle click, `window.open`), and the browser's own keys do nothing
 //! ([`disable_browser_accelerators`]), and the engine's context menu holds the editing commands
 //! only ([`trim_context_menu`]).
+use std::sync::{Arc, PoisonError, RwLock};
 use tauri::{
     webview::NewWindowResponse, Manager, Runtime, Url, WebviewWindow, WebviewWindowBuilder,
 };
 
-/// Registers the navigation policy on a window builder. The app's embedded frontend and the
-/// origins in `app_origins` (typically the dev server in development builds) are allowed.
-/// Every other navigation and every request for a new window is refused.
-///
-/// On Windows and Android this accepts both HTTP and HTTPS forms of Tauri's protocol.
-/// Use [`guard_navigation_with_scheme`] to limit a window to its configured protocol.
-pub fn guard_navigation<'a, R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'a, R, M>,
-    app_origins: &[&str],
-) -> WebviewWindowBuilder<'a, R, M> {
-    with_origins(builder, app_origins, None)
-}
+/// The origins a window may show besides the app's embedded frontend. The clones share one list, so
+/// an origin can be allowed after the window was opened (the app's own server, once its port is
+/// known).
+#[derive(Clone, Debug, Default)]
+pub struct Origins(Arc<RwLock<Vec<Url>>>);
 
-/// Configures Tauri's protocol and limits navigation to that exact origin and `app_origins`.
-/// Pass the window configuration's `use_https_scheme` when building from a config.
-pub fn guard_navigation_with_scheme<'a, R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'a, R, M>,
-    app_origins: &[&str],
-    use_https_scheme: bool,
-) -> WebviewWindowBuilder<'a, R, M> {
-    with_origins(
-        builder.use_https_scheme(use_https_scheme),
-        app_origins,
-        Some(use_https_scheme),
-    )
-}
+impl Origins {
+    /// Allows `origin` (`http://127.0.0.1:50123`; only the origin of a longer URL counts). False
+    /// when it is not a URL with a host: nothing is allowed then.
+    pub fn allow(&self, origin: &str) -> bool {
+        let Some(origin) = parse_origin(origin) else {
+            return false;
+        };
+        let mut origins = self.0.write().unwrap_or_else(PoisonError::into_inner);
+        origins.push(origin);
+        true
+    }
 
-fn embedded_origins(http_mapped: bool, use_https: Option<bool>) -> &'static [&'static str] {
-    match (http_mapped, use_https) {
-        (false, _) => &["tauri://localhost"],
-        (true, Some(false)) => &["http://tauri.localhost"],
-        (true, Some(true)) => &["https://tauri.localhost"],
-        (true, None) => &["http://tauri.localhost", "https://tauri.localhost"],
+    fn allows(&self, url: &Url) -> bool {
+        is_allowed(url, &self.0.read().unwrap_or_else(PoisonError::into_inner))
     }
 }
 
-fn with_origins<'a, R: Runtime, M: Manager<R>>(
+/// The origin of the app's embedded frontend.
+fn embedded_origin(http_mapped: bool, use_https: bool) -> &'static str {
+    match (http_mapped, use_https) {
+        (false, _) => "tauri://localhost",
+        (true, false) => "http://tauri.localhost",
+        (true, true) => "https://tauri.localhost",
+    }
+}
+
+/// Registers the navigation policy on a window builder, and Tauri's protocol: the embedded frontend
+/// at that exact origin and `origins` are allowed, every other navigation and every request for a
+/// new window is refused. `opening` is told each page the window goes to.
+pub(crate) fn guard_window<'a, R: Runtime, M: Manager<R>>(
     builder: WebviewWindowBuilder<'a, R, M>,
-    app_origins: &[&str],
-    use_https: Option<bool>,
+    origins: Origins,
+    use_https_scheme: bool,
+    opening: impl Fn(&Url) + Send + 'static,
 ) -> WebviewWindowBuilder<'a, R, M> {
-    let embedded = embedded_origins(cfg!(any(windows, target_os = "android")), use_https);
-    let origins: Vec<Url> = embedded
-        .iter()
-        .chain(app_origins)
-        .filter_map(|origin| parse_origin(origin))
-        .collect();
+    let http_mapped = cfg!(any(windows, target_os = "android"));
+    let embedded = Origins::default();
+    embedded.allow(embedded_origin(http_mapped, use_https_scheme));
     builder
-        .on_navigation(move |url| is_allowed(url, &origins))
+        .use_https_scheme(use_https_scheme)
+        .on_navigation(move |url| {
+            let allowed = embedded.allows(url) || origins.allows(url);
+            if allowed {
+                opening(url);
+            }
+            allowed
+        })
         .on_new_window(|_, _| NewWindowResponse::Deny)
 }
 
@@ -63,13 +68,13 @@ fn with_origins<'a, R: Runtime, M: Manager<R>>(
 /// rest of what makes a window feel like a web page. Editing keys (copy, cut, paste...) and every
 /// key the page handles keep working. WebView2's default is on.
 ///
-/// The app decides when: Shinatama calls it in release builds only (`!tauri::is_dev()`), because a
-/// development build keeps reload and DevTools. Call it on each window right after it is built, a
-/// rebuilt window included. The page's own `guardDesktop` covers the keys the engine leaves to it.
+/// The page's own guard covers the keys the engine leaves to it.
 ///
 /// The `Ok` of a window that exists means the change was handed to the thread that owns the
 /// webview, where COM can still fail; nothing reports that. On other targets this does nothing.
-pub fn disable_browser_accelerators<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
+pub(crate) fn disable_browser_accelerators<R: Runtime>(
+    window: &WebviewWindow<R>,
+) -> tauri::Result<()> {
     #[cfg(windows)]
     {
         window.with_webview(|webview| {
@@ -104,14 +109,11 @@ pub fn disable_browser_accelerators<R: Runtime>(window: &WebviewWindow<R>) -> ta
 /// is not shown at all. WebView2's default is the browser's whole menu.
 ///
 /// This decides what the menu holds when WebView2 opens it, on its `ContextMenuRequested` event.
-/// Where it opens at all is the page's own `guardDesktop`, which refuses it outside fields, the
-/// places that run their own menus and selected text. The app decides when, as for
-/// [`disable_browser_accelerators`]: the demo trims it in release builds only, so a development
-/// build keeps Inspect. Call it on each window right after it is built, a rebuilt window included.
+/// Where it opens at all is the page's own guard.
 ///
 /// The `Ok` of a window that exists means the handler was handed to the thread that owns the
 /// webview, where COM can still fail; nothing reports that. On other targets this does nothing.
-pub fn trim_context_menu<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
+pub(crate) fn trim_context_menu<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
     #[cfg(windows)]
     {
         win::install(window)
@@ -270,10 +272,7 @@ mod tests {
             (false, false, 2),
             (false, true, 2),
         ] {
-            let origins: Vec<_> = embedded_origins(http_mapped, Some(https))
-                .iter()
-                .map(|origin| url(origin))
-                .collect();
+            let origins = [url(embedded_origin(http_mapped, https))];
             for (i, candidate) in urls.iter().enumerate() {
                 assert_eq!(is_allowed(&url(candidate), &origins), i == allowed);
             }
@@ -336,6 +335,33 @@ mod tests {
         assert!(parse_origin("localhost:1420 and more").is_none());
         assert!(parse_origin("").is_none());
         assert!(parse_origin("not a url").is_none());
+    }
+
+    #[test]
+    fn an_origin_is_allowed_later_through_any_clone() {
+        let origins = Origins::default();
+        let of_the_window = origins.clone();
+        let page = url("http://127.0.0.1:50123/app/?token=x");
+        assert!(!of_the_window.allows(&page), "nothing is allowed at first");
+        assert!(origins.allow("http://127.0.0.1:50123/app/?token=x"));
+        assert!(of_the_window.allows(&page));
+        assert!(of_the_window.allows(&url("http://127.0.0.1:50123/map")));
+        for other in [
+            "http://127.0.0.1:50124/",
+            "http://localhost:50123/",
+            "https://127.0.0.1:50123/",
+            "http://127.0.0.1.evil.test:50123/",
+        ] {
+            assert!(!of_the_window.allows(&url(other)), "{other}");
+        }
+        assert!(origins.allow("http://127.0.0.1:50124"), "another port");
+        assert!(of_the_window.allows(&url("http://127.0.0.1:50124/")));
+        assert!(
+            of_the_window.allows(&page),
+            "what was allowed stays allowed"
+        );
+        assert!(!origins.allow("not an origin"));
+        assert!(!origins.allow(""));
     }
 
     // ---- the context menu ------------------------------------------------------------------

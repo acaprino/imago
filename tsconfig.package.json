@@ -5,8 +5,7 @@
     "outDir": "./lib",
     "noEmit": false,
     "declaration": true,
-    "rewriteRelativeImportExtensions": true,
     "types": []
   },
-  "include": ["ts/**/*.ts"]
+  "include": ["ts"]
 }

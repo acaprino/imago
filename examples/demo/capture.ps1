@@ -10,8 +10,8 @@ param(
   # region: a picture to compare with; the answer says how many pixels differ.
   [string]$Compare = ''
 )
-# Photographs the real window from the screen, and moves the real mouse over it. A webview screenshot draws the
-# acrylic backdrop as white and cannot judge the glass: only a copy of the screen has what Windows composes.
+# Photographs the real window from the screen, and moves the real mouse over it: only a copy of the screen has what
+# Windows composes.
 # Every answer is one line of JSON on the output.
 $ErrorActionPreference = 'Stop'
 Add-Type @'

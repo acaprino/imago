@@ -9,7 +9,7 @@
 //! Space press it).
 //!
 //! The page reports where its maximize button is, in physical pixels of the client area, on every
-//! layout change; the app's command passes it to [`SnapLayouts::set_rect`]. The page has already
+//! layout change; the command `caption` passes it to [`SnapLayouts::set_rect`]. The page has already
 //! done the arithmetic (`getBoundingClientRect` in CSS pixels times `devicePixelRatio`, which
 //! includes the zoom of the page and the monitor's scale), so the command passes the four numbers
 //! on as they come: no conversion on this side. An empty rectangle (the button hidden, as in a
@@ -23,17 +23,9 @@
 use std::sync::Arc;
 use tauri::{Runtime, WebviewWindow};
 
-/// The child window over the HTML maximize button of one window. Cheap to clone; keep it in the
-/// app's state and call [`set_rect`](SnapLayouts::set_rect) from the command the page reports to.
-///
-/// It belongs to one window: keep one for each window label, for instance a `Mutex<HashMap<String,
-/// SnapLayouts>>` in the app's state, and **replace** the entry when the window is built again
-/// (after a lost browser process, see [`RecoveryAction::Rebuild`](crate::RecoveryAction::Rebuild)).
-/// The old one points at a window that is gone and does nothing. Tauri's `manage` is no way to do
-/// that: it does nothing when the type is already managed, so the first window's overlay would stay
-/// and the rebuilt window's would be dropped.
-#[derive(Clone)]
-pub struct SnapLayouts {
+/// The child window over the HTML maximize button of one window. A window built again gets a new
+/// one: the old points at a window that is gone and does nothing.
+pub(crate) struct SnapLayouts {
     #[cfg(windows)]
     overlay: Arc<win::Overlay>,
 }
@@ -42,7 +34,7 @@ impl SnapLayouts {
     /// The page's maximize button is at (`x`, `y`) and `width` x `height` big, in physical pixels
     /// of the client area. An empty rectangle hides the overlay. Nothing is returned: a window that
     /// is already gone has no button to place.
-    pub fn set_rect(&self, x: i32, y: i32, width: i32, height: i32) {
+    pub(crate) fn set_rect(&self, x: i32, y: i32, width: i32, height: i32) {
         #[cfg(windows)]
         win::set_rect(&self.overlay, x, y, width, height);
         #[cfg(not(windows))]
@@ -51,10 +43,11 @@ impl SnapLayouts {
 }
 
 /// Prepares the Snap Layouts overlay for `window`, which has no frame of its own (an HTML title
-/// bar). The child window itself is made at the first non-empty rectangle. Call it on each window
-/// right after it is built, a rebuilt one included, and keep the result as [`SnapLayouts`] says.
-/// On other targets this does nothing and [`SnapLayouts::set_rect`] too.
-pub fn install_snap_layouts<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<SnapLayouts> {
+/// bar). The child window itself is made at the first non-empty rectangle. On other targets this
+/// does nothing and [`SnapLayouts::set_rect`] too.
+pub(crate) fn install_snap_layouts<R: Runtime>(
+    window: &WebviewWindow<R>,
+) -> tauri::Result<SnapLayouts> {
     #[cfg(windows)]
     {
         use tauri::Emitter;
@@ -88,16 +81,13 @@ pub fn install_snap_layouts<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Res
 }
 
 /// Adds an item called `label` to the window's system menu (Alt+Space, Shift+right click on the
-/// taskbar button), after a separator, and calls `on_reload` when it is chosen. The app words the
-/// label ("Reload interface") and decides what a reload is: Shinatama asks a live page to save its
-/// layout first and reloads it after three seconds if the page does not answer; a dead or hung
-/// page never answers.
+/// taskbar button), after a separator, and calls `on_reload` when it is chosen.
 ///
 /// `on_reload` runs on a thread of its own, not the window's: the window's thread may be waiting
 /// for the page, and the reload exists for when the page does not answer. A window with no system
 /// menu gets nothing. Asking twice for one window adds nothing the second time. On other targets
 /// this does nothing.
-pub fn install_reload_menu<R: Runtime>(
+pub(crate) fn install_reload_menu<R: Runtime>(
     window: &WebviewWindow<R>,
     label: &str,
     on_reload: impl Fn() + Send + Sync + 'static,
@@ -1033,8 +1023,8 @@ mod tests {
 
     #[test]
     fn the_overlay_can_be_kept_in_tauri_state() {
-        // `App::manage` takes only what is `Send + Sync + 'static`; the app keeps one per window.
-        fn kept_in_state<T: Send + Sync + Clone + 'static>() {}
+        // `App::manage` takes only what is `Send + Sync + 'static`.
+        fn kept_in_state<T: Send + Sync + 'static>() {}
         kept_in_state::<SnapLayouts>();
     }
 
