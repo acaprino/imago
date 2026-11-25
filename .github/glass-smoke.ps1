@@ -31,7 +31,8 @@ public static class W {
     return found; }
   // The client area on the screen: left, top, width, height.
   public static int[] Client(IntPtr h) { R r; GetClientRect(h, out r); P o = new P(); ClientToScreen(h, ref o); return new[] { o.X, o.Y, r.Rr, r.B }; }
-  public static int[] Pixel(int x, int y) { IntPtr dc = GetDC(IntPtr.Zero); uint c = GetPixel(dc, x, y); ReleaseDC(IntPtr.Zero, dc); return new[] { (int)(c & 0xFF), (int)((c >> 8) & 0xFF), (int)((c >> 16) & 0xFF) }; }
+  // A point off the screen is -1, -1, -1.
+  public static int[] Pixel(int x, int y) { IntPtr dc = GetDC(IntPtr.Zero); uint c = GetPixel(dc, x, y); ReleaseDC(IntPtr.Zero, dc); if (c == 0xFFFFFFFF) return new[] { -1, -1, -1 }; return new[] { (int)(c & 0xFF), (int)((c >> 8) & 0xFF), (int)((c >> 16) & 0xFF) }; }
 }
 '@
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms
@@ -92,20 +93,23 @@ function Glassy($look) { ($look.dark + $look.bright | Where-Object { (Same $_ $D
 # What lies behind shows through the acrylic: it differs over a dark and over a bright window. Said, not judged: a runner
 # may draw the acrylic with nothing of what is behind it.
 function Through($look) { $seen = -not (Same $look.dark[0] $look.bright[0] 12); Write-Host "      what lies behind shows through: $seen"; $seen }
-# The window is made wider by 200 over the bright window, and its new strip (within the bright window) is looked at for half
-# a second: never bright.
+# The window, 700 by 600 at 40,40 over the bright window, is made 200 wider, and its new strip (within the bright window) is
+# looked at for half a second: never bright. The screen of the runner is 1024 wide: the window is made smaller first.
 function Edge($p, [string]$name) {
   $h = Win $p.Id $true
+  $was = [W]::Client($h)
+  $null = [W]::SetWindowPos($h, [IntPtr]::Zero, 40, 40, 700, 600, 0x14); Start-Sleep -Milliseconds 600
   Behind $p.Id '255,255,255'; $null = Front $h; Start-Sleep -Milliseconds 500
   $c = [W]::Client($h)
+  Write-Host "      $name, the window at $($c -join ',')"
   $null = [W]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, $c[2] + 200, $c[3], 0x16)
   $seen = @(); $start = Get-Date
   while (((Get-Date) - $start).TotalMilliseconds -lt 500) { $seen += , [W]::Pixel($c[0] + $c[2] + 40, $c[1] + 8); $seen += , [W]::Pixel($c[0] + $c[2] + 40, $c[1] + [int]($c[3] / 2)); Start-Sleep -Milliseconds 5 }
   Shot "$name-wider"
-  $null = [W]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, $c[2], $c[3], 0x16); Start-Sleep -Milliseconds 500
+  $null = [W]::SetWindowPos($h, [IntPtr]::Zero, $was[0], $was[1], $was[2], $was[3], 0x14); Start-Sleep -Milliseconds 600
   $shades = $seen | ForEach-Object { Text $_ } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }
   Write-Host "      $name, the new strip of a wider window: $($shades -join ', ')"
-  ($seen | Where-Object { ($_ | Measure-Object -Minimum).Minimum -gt 200 }).Count -eq 0
+  ($seen | Where-Object { ($_ | Measure-Object -Minimum).Minimum -gt 200 -or $_[0] -lt 0 }).Count -eq 0
 }
 
 $env:IMAGO_DEMO_HOME = $Data
@@ -162,9 +166,9 @@ $null = Through $on
 
 Write-Host '--- the theme changes under glass'
 $null = Ask 'light'
-$light = Both $demo 'on-light'
-Say (Glassy $light) 'a theme told after glass keeps the glass'
-$null = Through $light
+$underLight = Both $demo 'on-light'
+Say (Glassy $underLight) 'a theme told after glass keeps the glass'
+$null = Through $underLight
 $null = Ask 'glass' 'off'
 $lightOff = Both $demo 'off-light'
 Say (Ground $lightOff $LIGHT) 'glass off in light: the light ground, over both'
