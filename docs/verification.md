@@ -56,6 +56,26 @@ and the ink. The program is the debug profile with nothing added to its config.
 | Pixels of text with a colour fringe (over 0.1 apart) | 756 of 921, the widest 0.81 | 0 of 898, the widest 0.01 |
 | The arguments the engine was started with | The two of wry | The same two, and `--disable-lcd-text` |
 
+## The glass window: not run on a real window
+
+Written on 2026-11-25 and **never run on a real window, nor on a runner**: what follows was read, and tested only where a test
+can reach it.
+
+- Tested by the Verify run (the Node tests and the plugin on Tauri's mock runtime, never a real window): the choice kept in
+  `window-material` and read back; `set_material` refusing an unknown word, an app whose material is its own and an app with no
+  data folder; `material` answering what was built and what the next start builds; an optional material built as opaque or as
+  glass; the page's theme in both materials with the same colours; and the contrast of the ground in the five accents and both
+  schemes over the backdrops of [desktop-shell.md](desktop-shell.md), 1.3 (143, 226, 84, and the engine's white and black
+  desktops behind an acrylic that keeps half). The demo's page, with a window that pretends to be Tauri's, shows the switch,
+  keeps the choice and says «Restart needed».
+- **Not proven:** that the window really is transparent with the acrylic behind it when it is built from `window-material`; the
+  look of the ground over a real bright and a real dark desktop; the dark acrylic over a bright window, which was not measured
+  (the test uses the engine's model there); a window that is not in front, in battery saver or with transparency off, where
+  Windows draws a solid colour; high contrast; that a rebuilt window (a lost browser process) takes the choice made meanwhile.
+- For the owner, by hand and by eye, from the demo: turn on "Glass window" in the Window view, see «Restart needed», start the
+  program again and look at it over a bright and over a dark desktop in both themes; turn it off and see it opaque again; and the
+  same from the palette.
+
 ## Not run: for the coordinator
 
 From the artifact of a run of Verify on `develop`, on a desktop of Windows 11 (`npm run demo:fetch`, then `npm run capture`). The
@@ -103,5 +123,5 @@ A capture is a copy of the screen: the demo window must stay the active one, and
 ## Never run
 
 - A page that stops answering, and the question the person is asked after three reloads, with the page of the shell.
-- The tint of the acrylic (`Material::Acrylic`) on Windows 10. No app of the suite asks for the acrylic.
+- The tint of the acrylic (`Material::Acrylic`) on Windows 10. An app of the suite has it only when the person turned glass on.
 - Battery saver, transparency effects off, Windows 10.

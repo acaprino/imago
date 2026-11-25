@@ -29,7 +29,7 @@ release, already built: nothing is compiled when it is installed.
 imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 ```
 
-- Sigrid (`^6.5.1`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
+- Sigrid (`^6.8.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
   the last one too: it is loaded only in a window, but its bundler must find it.
 - **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
   `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`, so that
@@ -81,10 +81,16 @@ startApp(MURO, document.getElementById('app')!, <Muro />)
 | `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component |
 | `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`: its drawer, whether it is collapsed, and the button of that at its head): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. The children are the screen, and the app decides what each view mounts: what two views share stays as it is when the view changes, and a screen that must start again has the view as its `key`. `contentLabel` names the content, when the view's label does not |
 | `useNotify` | `Notify`: says something in a notice. Its options are those of Sigrid's notice: `kind: 'error'`, `undo`, `actions`, `id`. One with the `id` of another takes its place: it is read again and its time starts again, also when the text is the same, so an app says it when there is something to hear |
-| `useWindow` | `WindowHandle`: whether the app runs in a window of its own, its title, the progress on the taskbar, and a call when it is shown again |
+| `useWindow` | `WindowHandle`: whether the app runs in a window of its own (`own`), its title, the progress on the taskbar, a call when it is shown again, and the glass window: `glass` (the window was built as glass), `glassOptional` (the person may choose), `glassPending` (the choice kept is not yet the window's: «Restart needed») and `setGlass` (keeps the choice for the next start; the window stays as it is). In a browser `glass` is false and `setGlass` does nothing |
 | `ScreenBoundary` | What fails while it is drawn says so in its place. When its `of` (what it draws) changes, what failed is drawn again and what did not is kept. `AppWindow` has one round the screen, of the view; an app puts one round an inspector that may fail |
 | `useFocusKept` | When one of its arguments changes and what had the focus has gone, the content takes it. `AppWindow` does it for the view; an app with steps of its own passes the step |
 | `focusContent` | Gives the focus to the content: after a press whose own control goes away with what it did |
+
+The glass window is the person's option, and its switch is the app's, in its settings: Sigrid's `Switch` in a `SettingRow`, drawn
+where `glassOptional` is true, checked when the kept choice is glass (`glass` unless `glassPending`, then the other way), and
+`setGlass` as its `onCheckedChange`. The setting says «Restart needed» while `glassPending`. The shell draws no settings. It adds
+the same choice as a command of the palette, "Glass window", beside light, dark and the system's look; an app in another
+language gives its words in `words.shell` (`glass`, `glassRestart`). `examples/demo/src/screens.tsx` has the setting.
 
 The commands of the app are Sigrid's `useCommand`, in any component. `examples/demo/src` of the repository `acaprino/imago` is a
 whole app: views, a list with its details, a form, the notices, a job, a screen that fails.
@@ -95,19 +101,13 @@ The page writes nothing for its window: the shell calls the plugin of `imago-she
 3.4), and in a browser nothing of Tauri is called or loaded. The program of the app is this, and what it adds of its own:
 
 ```rust
-use imago_shell::{on_run_event, open_main, plugin, Material, Options, DARK_GROUND, LIGHT_GROUND};
+use imago_shell::{on_run_event, open_main, plugin, Options};
 
 fn main() {
     tauri::Builder::default()
         .plugin(plugin())
         .setup(|app| {
-            let options = Options {
-                material: Material::Opaque {
-                    dark: DARK_GROUND,
-                    light: LIGHT_GROUND,
-                },
-                ..Options::for_app(app)?
-            };
+            let options = Options::for_app(app)?;
             open_main(app.handle(), options)?;
             Ok(())
         })
@@ -119,8 +119,12 @@ fn main() {
 
 - **`on_run_event` goes to `run`.** When the browser process of the window is lost the window is destroyed and built again, and
   without it that ends the app. An app with a handler of its own calls it there, but not for an exit it prevents.
-- The two grounds are those of the look ([design-file.md](design-file.md), "The look"): they show before the page has drawn and at
-  the edge of a window that is resized.
+- The material of `Options` is `Material::SUITE` unless the app says otherwise: opaque, in the two grounds of the look
+  ([design-file.md](design-file.md), "The look"; `DARK_GROUND` and `LIGHT_GROUND`, which show before the page has drawn and at the
+  edge of a window that is resized), unless the person turned glass on in the app's settings. An app writes no colour. One that
+  decides for itself writes `Material::Opaque` (never glass, with the two grounds) or `Material::Acrylic`
+  (always glass), and gives the person no choice. The choice is kept in `window-material` of the data folder, which the app's
+  `data_dir` names, and holds from the next start ([desktop-shell.md](desktop-shell.md), 1.3).
 - The window is the one called `main` in `tauri.conf.json`, with `"create": false` and no decorations. Its material, its
   visibility and its place are the crate's.
 - A program that does not start says why with `message::tell` ([desktop-shell.md](desktop-shell.md), section 3.2).
@@ -150,7 +154,7 @@ Tauri 2 lets the page call the window, the webview or an event only when a capab
 
 What each one is for is in [desktop-shell.md](desktop-shell.md), section 3.5. The working file is
 `examples/demo/src-tauri/capabilities/default.json` of the repository `acaprino/imago`. The plugin's own commands, `set_theme`, `kept_theme`,
-`caption`, `ready` and `chrome`, which the shell sends, are granted by `imago-shell:default`, in a capability beside it (`capabilities/shell.json` of the demo); `tauri.conf.json` lists both. The events `caption-maximize` and `window-shown`, which come back, need the two `core:event` permissions of the nine.
+`material`, `set_material`, `caption`, `ready` and `chrome`, which the shell sends, are granted by `imago-shell:default`, in a capability beside it (`capabilities/shell.json` of the demo); `tauri.conf.json` lists both. The events `caption-maximize` and `window-shown`, which come back, need the two `core:event` permissions of the nine.
 
 ## 5. The icons of the executables
 

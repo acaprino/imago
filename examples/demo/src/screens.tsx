@@ -88,6 +88,14 @@ export function Form({ add, cancel }: { add: (item: Item) => void; cancel: () =>
   );
 }
 
+/** The setting of the glass window: what the person kept, and «Restart needed» while the window is not yet what was kept. */
+function GlassRow() {
+  const { glass, glassPending, setGlass } = useWindow();
+  const kept = glass !== glassPending;
+  const about = glassPending ? 'Restart needed: it changes the next time the app starts.' : kept ? 'On: the window lets the desktop show through.' : 'Off: the window is opaque.';
+  return <SettingRow label="Glass window" description={about} control={<Switch aria-label="Glass window" checked={kept} onCheckedChange={setGlass} />} />;
+}
+
 /** The screen of two views: the words typed in it are said in a notice, or are the title of the window. */
 export function Words({ view }: { view: 'notices' | 'window' }) {
   const notify = useNotify();
@@ -102,10 +110,14 @@ export function Words({ view }: { view: 'notices' | 'window' }) {
         <Text as="p">{about}</Text>
         <FormField label="Words"><Input value={words} onChange={(event) => setWords(event.target.value)} /></FormField>
         {view === 'window' ? (
-          <Cluster>
-            <Button variant="outline" onClick={() => window_.setTitle(words)}>Title of the window</Button>
-            <Button variant="outline" onClick={() => window_.setTitle(null)}>Its own title</Button>
-          </Cluster>
+          <>
+            <Cluster>
+              <Button variant="outline" onClick={() => window_.setTitle(words)}>Title of the window</Button>
+              <Button variant="outline" onClick={() => window_.setTitle(null)}>Its own title</Button>
+            </Cluster>
+            {/* Only a window the person may choose the glass of: not a browser, and not an app that fixed its material. */}
+            {window_.glassOptional && <GlassRow />}
+          </>
         ) : (
           <>
             <Cluster>

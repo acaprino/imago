@@ -74,7 +74,8 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
   the system for less motion sees none. What a press does is done at once: nothing waits for a movement.
 - Dark until the person chooses. Light, dark and the system's look are the same three commands of the palette in every app, and
   no app draws a switch for them. The choice is kept under the app's own storage key, and is on the page before the first paint.
-- A state is a `Badge` with a `tone` and a word. Surfaces are opaque: there is no glass.
+- A state is a `Badge` with a `tone` and a word. Surfaces are opaque. Glass is the person's option and not a look of an app: it is
+  off until the person turns it on, and the rules of "The window" say what then changes.
 - Every text has 4.5:1 on what it lies on, and every part of a control 3:1, for the five apps in both schemes
   (`tests/preset.test.ts`).
 - An app of the suite writes no class, no style and no stylesheet. `sigrid-check` with its rule `own-class` is clean on its
@@ -109,6 +110,19 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 - A call the person asked for (a window button, the zoom) that fails is said in a notice. What the page tells the window by itself
   is written in the console when it fails.
 
+- **Glass is optional, and the person's** (decided by the owner on 2026-11-25). The window is opaque, in the two grounds of the look,
+  until the person turns on "Glass window" in the app's settings; the choice is kept and holds from the next start, because the
+  material is a property the window has from its creation. The settings say "Restart needed" while the window is not yet what was
+  kept. An app draws that one switch itself, from Sigrid's `Switch` in a `SettingRow`, and tells the window with `useWindow`
+  (`glass`, `glassOptional`, `glassPending`, `setGlass`); the shell draws no settings, and offers the same choice as a command of
+  the palette, "Glass window", beside light, dark and the system's look.
+- The blur is the window's own, Windows' acrylic behind a transparent window; the page draws no blur. With glass the one ground
+  (the title bar, the sidebar) lets it through, as thin as Sigrid's engine measures its text allows, and the sheet stays the opaque
+  paper: the text on the sheet is what it is without glass. What opens over the page stays opaque too. Where the person asked the
+  system for less transparency, or for forced colours, every surface is opaque again, by Sigrid's stylesheet alone.
+- An app that decides for itself (`Material::Opaque`, or `Material::Acrylic`) gives the person no choice: `glassOptional` is false and
+  the switch is not drawn. The suite's default is the person's choice.
+
 The techniques and the wiring are in [desktop-shell.md](desktop-shell.md).
 
 ## The icons of the executables
@@ -140,3 +154,6 @@ nothing. The program prints every exception it accepted. Every rule fails the ru
 - The words are in the app's language, Sigrid's own included.
 - The real window, in both themes: the buttons, the drag, Snap Layouts, the zoom, the first frame. What has been seen so is
   in [verification.md](verification.md).
+- The real window with glass on, over a bright and over a dark desktop, in both themes: the text of the title bar and of the
+  sidebar reads, the sheet is solid, and a window that is not in front (Windows then drops the acrylic to a solid colour) is
+  still readable.
