@@ -845,6 +845,45 @@ try {
     assert.deepEqual(await glassCalls(page), [{ glass: true }]);
   });
 
+  // A second window of the app (secondary.html, started with `{ secondary: true }`): in a window of its own, the shell asks the plugin
+  // nothing, the page paints no ground, and it follows the scheme the main window keeps.
+  for (const [chosen, system] of [['dark', 'light'], ['light', 'dark']]) {
+    const name = `a second window, ${chosen}`;
+    const context = await browser.newContext({ viewport: { width: 440, height: 220 }, colorScheme: system });
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    const problems = [];
+    page.on('pageerror', (error) => problems.push(error.message));
+    page.on('console', (message) => { if (message.type() === 'error' || message.type() === 'warning') problems.push(message.text()); });
+    await page.addInitScript((value) => { localStorage.setItem('imago.scheme', value); }, chosen);
+    await page.addInitScript(fakeWindow, { kept: null, glass: false, refused: [] });
+    try {
+      await page.goto(`${url}secondary.html`);
+      const card = page.getByRole('region', { name: 'A notice' });
+      await card.waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      // It asked the plugin nothing; the main window's page, in the same fake window, asks it.
+      assert.deepEqual((await page.evaluate(() => window.calls.map(([name]) => name))).filter((name) => name.startsWith('plugin:imago-shell|')), []);
+      // No ground: the page and the body are transparent, and the material is the clear one.
+      assert.deepEqual(await page.evaluate(() => [document.documentElement.dataset.material, getComputedStyle(document.documentElement).backgroundColor, getComputedStyle(document.body).backgroundColor]), ['clear', 'rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)']);
+      assert.equal(await scheme(page), chosen);
+      // No frame, and no shell's command: the card is all the page holds.
+      assert.equal(await page.locator('[data-slot="app-shell"], [data-slot="title-bar"]').count(), 0);
+      // The main window changes the scheme; this page, of the same origin, follows it.
+      const other = chosen === 'dark' ? 'light' : 'dark';
+      await page.evaluate((value) => { localStorage.setItem('imago.scheme', value); window.dispatchEvent(new StorageEvent('storage', { key: 'imago.scheme', newValue: value })); }, other);
+      await page.waitForFunction((value) => document.documentElement.dataset.scheme === value, other);
+      assert.deepEqual(await page.evaluate(() => window.calls.map(([name]) => name)).then((names) => names.filter((call) => call.startsWith('plugin:imago-shell|'))), [], 'a choice made elsewhere is not told to the plugin');
+      await page.screenshot({ path: join(shots, `second-window-${chosen}.png`), omitBackground: true });
+      assert.deepEqual(problems, []);
+      console.log(`ok   ${name}`);
+    } catch (error) {
+      failures.push(name);
+      console.log(`FAIL ${name}\n     ${String(error?.stack ?? error).split('\n').slice(0, 24).join('\n     ')}${problems.length ? `\n     the page said: ${problems.join(' | ')}` : ''}`);
+    }
+    await context.close();
+  }
+
   // For the eye: the top of Xiox, as Imago drew it on 2026-11-20 (tests/xiox), over the top of the demo, at twice its size.
   const tops = [];
   for (const chosen of ['dark', 'light']) {
