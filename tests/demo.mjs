@@ -791,6 +791,8 @@ try {
     await page.waitForFunction(() => document.documentElement.dataset.material === 'glass');
     await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|set_glass'));
     assert.deepEqual(await glassCalls(page), [{ glass: true }]);
+    // The levels of the suite: what floats takes its glass too, and the ground is the one stated.
+    assert.deepEqual(await page.evaluate(() => [document.documentElement.dataset.float, getComputedStyle(document.body).backgroundColor]), ['glass', 'rgba(12, 17, 29, 0.8)']);
     await shot(page, 'window-glass');
     assert.equal(await (await glassOption(page)).getAttribute('aria-checked'), 'true');
     await page.keyboard.press('Escape');
