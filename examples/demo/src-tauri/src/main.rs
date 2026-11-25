@@ -5,22 +5,14 @@
 use imago_shell::{
     on_run_event, open_main, plugin, show_main,
     single_instance::{launch, Launch},
-    Material, Options, DARK_GROUND, LIGHT_GROUND,
+    Options,
 };
 use std::path::PathBuf;
 use tauri::App;
 
-/// The ground the page draws in each theme.
-const MATERIAL: Material = Material::Opaque {
-    dark: DARK_GROUND,
-    light: LIGHT_GROUND,
-};
-
 fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
-    let mut options = Options {
-        material: MATERIAL,
-        ..Options::for_app(app)?
-    };
+    // The material is the suite's: opaque, in the grounds of the look, unless the person turned glass on in the settings.
+    let mut options = Options::for_app(app)?;
     // A clean folder for what the window keeps, which the capture runs on.
     if let Some(home) = std::env::var_os("IMAGO_DEMO_HOME") {
         options.data_dir = Some(PathBuf::from(home));

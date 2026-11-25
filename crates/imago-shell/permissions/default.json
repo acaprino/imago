@@ -1,7 +1,7 @@
 {
   "default": {
-    "description": "The window's own commands: its theme, its maximize button, its first frame, its title and its taskbar button.",
-    "permissions": ["allow-set-theme", "allow-kept-theme", "allow-caption", "allow-ready", "allow-chrome"]
+    "description": "The window's own commands: its theme, its material, its maximize button, its first frame, its title and its taskbar button.",
+    "permissions": ["allow-set-theme", "allow-kept-theme", "allow-material", "allow-set-material", "allow-caption", "allow-ready", "allow-chrome"]
   },
   "permission": [
     {
@@ -13,6 +13,16 @@
       "identifier": "allow-kept-theme",
       "description": "The page asks the window which theme it keeps.",
       "commands": { "allow": ["kept_theme"] }
+    },
+    {
+      "identifier": "allow-material",
+      "description": "The page asks the window what it was built of and what the next start builds.",
+      "commands": { "allow": ["material"] }
+    },
+    {
+      "identifier": "allow-set-material",
+      "description": "The page tells the window which material the person chose, for the next start.",
+      "commands": { "allow": ["set_material"] }
     },
     {
       "identifier": "allow-caption",
