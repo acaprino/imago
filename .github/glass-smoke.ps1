@@ -125,7 +125,7 @@ $f.Show()
 $until = (Get-Date).AddSeconds(900)
 while ((Get-Date) -lt $until) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 40 }
 '@
-$floor = Start-Process pwsh -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-File', "$Data/floor.ps1"
+$under = Start-Process pwsh -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-File', "$Data/floor.ps1"
 Start-Sleep 3
 
 # The window from the moment it is visible: every look of its title bar for a second and a half, over the dark floor.
@@ -214,6 +214,6 @@ $null = Ask 'close'
 $null = $demo.WaitForExit(15000)
 if (-not $demo.HasExited) { Stop-Process -Id $demo.Id -Force }
 Lift
-Stop-Process -Id $floor.Id -Force -ErrorAction SilentlyContinue
+Stop-Process -Id $under.Id -Force -ErrorAction SilentlyContinue
 Write-Host "failures: $script:bad"
 exit $script:bad
