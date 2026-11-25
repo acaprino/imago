@@ -1,8 +1,9 @@
 // What the parts of the shell share, for the whole page: the app, its words, the one stack of notices and the window.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useDesktopGuard } from '@acaprino/sigrid';
-import { useSchemeCommands, type SchemeCommandsOptions } from '@acaprino/sigrid/assemblies';
+import { useDesktopGuard, useWords, type ThemeDef } from '@acaprino/sigrid';
+import { useCommand, useSchemeCommands, type SchemeCommandsOptions } from '@acaprino/sigrid/assemblies';
 import { Toasts, type ToastItem } from '@acaprino/sigrid/components';
+import { Icon } from '@acaprino/sigrid/primitives';
 import { readHost, tauriApi, useZoom, type TauriErrorHandler } from '@acaprino/sigrid/tauri';
 import type { App } from './app.js';
 import { useFocusFollowed } from './focus.js';
@@ -28,11 +29,19 @@ export interface WindowHandle {
   onShown(handler: () => void): () => void;
 }
 
+/**
+ * Whether the window is glass, and how to make it so or not: Windows' acrylic behind the page, or the opaque ground. In a
+ * window of its own the choice is the window's, kept for the next start; in a browser there is no glass, and `set` does
+ * nothing.
+ */
+export type Glass = readonly [on: boolean, set: (on: boolean) => void];
+
 interface Shell {
   app: App;
   words: ShellWords;
   notify: Notify;
   window: WindowHandle;
+  glass: Glass;
   /** A call to the window that failed: one the person asked for is said to them, the others are written in the console. */
   failed: TauriErrorHandler;
 }
@@ -51,8 +60,20 @@ export const useNotify = (): Notify => useShell().notify;
 /** The window the app runs in. */
 export const useWindow = (): WindowHandle => useShell().window;
 
-/** The app's look, and the key its light, dark or system's choice is kept under. */
-export const lookOf = (app: App): SchemeCommandsOptions => ({ theme: app.theme, tone: SHELL_TONE, storageKey: app.storage.scheme });
+/** Whether the window is glass, and how to change it, for an app's settings. In a browser it is off. */
+export const useGlass = (): Glass => useShell().glass;
+
+// The theme of an app as glass: one object for each app, so that the theme is put again only when the glass changes.
+const glassy = new WeakMap<App, ThemeDef>();
+const themeOf = (app: App, glass: boolean): ThemeDef => {
+  if (!glass) return app.theme;
+  let theme = glassy.get(app);
+  if (!theme) glassy.set(app, (theme = { ...app.theme, material: 'glass' }));
+  return theme;
+};
+
+/** The app's look, as glass or not, and the key its light, dark or system's choice is kept under. */
+export const lookOf = (app: App, glass = false): SchemeCommandsOptions => ({ theme: themeOf(app, glass), tone: SHELL_TONE, storageKey: app.storage.scheme });
 
 const PLUGIN = 'plugin:imago-shell|';
 const READY_FALLBACK_MS = 250;
@@ -88,20 +109,31 @@ function inTurn(command: string): (args: Record<string, unknown>) => Promise<voi
   };
 }
 const setTheme = inTurn('set_theme');
+const setGlass = inTurn('set_glass');
 /** The choice the window keeps, written as the person makes it: what the browser keeps reaches the disk later. Null is none. */
 export const keptTheme = (): Promise<unknown> => tauriApi.invoke(`${PLUGIN}kept_theme`);
+/** Whether the window is glass: the person's choice it keeps, or the app's default. */
+export const keptGlass = (): Promise<unknown> => tauriApi.invoke(`${PLUGIN}kept_glass`);
 const chrome = inTurn('chrome');
 let themeTold: Promise<void> = Promise.resolve();
+let glassTold: Promise<void> = Promise.resolve();
 
 /** A notice in the stack: its `id` is its own, and `said` is the one its caller gave. */
 type Notice = ToastItem & { said: string | undefined };
 
 let notices = 0; // not crypto.randomUUID, which a page served over plain http does not have
 
-/** The state of the shell around the app, with the notices drawn once. `untold`: the window did not say which theme it keeps. */
-export function ShellProvider({ app, untold, children }: { app: App; untold: boolean; children: ReactNode }) {
+/** What the window said it keeps when the page started: its theme (`untold` when it did not say), and whether it is glass (null when it did not say). */
+export interface Kept {
+  untold: boolean;
+  glass: boolean | null;
+}
+
+/** The state of the shell around the app, with the notices drawn once. */
+export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; children: ReactNode }) {
   const own = useMemo(() => readHost().ownWindow, []);
   const words = useMemo(() => ({ ...SHELL_WORDS, ...app.words?.shell }), [app]);
+  const [glass, setGlass] = useState(own && kept.glass === true);
   const [items, setItems] = useState<Notice[]>([]);
   const [title, setTitle] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -115,6 +147,7 @@ export function ShellProvider({ app, untold, children }: { app: App; untold: boo
     };
     return {
       app, words, notify,
+      glass: [glass, (on) => { if (own) setGlass(on); }],
       window: {
         own, setTitle,
         setProgress: (percent) => setProgress(percent === null ? null : Math.round(Math.min(100, Math.max(0, percent)))),
@@ -128,7 +161,7 @@ export function ShellProvider({ app, untold, children }: { app: App; untold: boo
         else console.warn(`imago: ${call}:`, error);
       },
     };
-  }, [app, own, words]);
+  }, [app, own, words, glass]);
 
   useFocusFollowed();
   useDesktopGuard(own && released);
@@ -144,7 +177,7 @@ export function ShellProvider({ app, untold, children }: { app: App; untold: boo
     const send = (): void => {
       if (sent) return;
       sent = true;
-      void themeTold.then(() => tell('ready'));
+      void Promise.all([themeTold, glassTold]).then(() => tell('ready'));
     };
     let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(send); });
     const timer = setTimeout(send, READY_FALLBACK_MS);
@@ -174,7 +207,9 @@ export function ShellProvider({ app, untold, children }: { app: App; untold: boo
     <ShellContext value={shell}>
       {children}
       {/* After the app, so that its commands come after the app's in the palette. */}
-      <Look app={app} own={own} untold={untold} />
+      <Look app={app} own={own} untold={kept.untold} glass={glass} />
+      {own ? <GlassCommand /> : null}
+      {own ? <GlassTold glass={glass} /> : null}
       <Toasts items={items} durationMs={NOTICE_MS} onDismiss={(id) => setItems((now) => now.filter((item) => item.id !== id))} />
     </ShellContext>
   );
@@ -184,13 +219,35 @@ export function ShellProvider({ app, untold, children }: { app: App; untold: boo
  * Light, dark and the system's look as commands, and the window told of the choice and of the scheme drawn, when either changes;
  * one that did not say what it keeps is told nothing until the person chooses, so that its own is not written over.
  */
-function Look({ app, own, untold }: { app: App; own: boolean; untold: boolean }) {
-  const { choice, scheme } = useSchemeCommands(lookOf(app));
+function Look({ app, own, untold, glass }: { app: App; own: boolean; untold: boolean; glass: boolean }) {
+  const { choice, scheme } = useSchemeCommands(lookOf(app, glass));
   const unchosen = useRef(untold ? choice : null);
   useEffect(() => {
     if (!own || choice === unchosen.current) return;
     unchosen.current = null;
     themeTold = setTheme({ theme: choice, resolved: scheme });
   }, [own, choice, scheme]);
+  return null;
+}
+
+/** Glass as a command of the look, checked when the window is glass. Only in a window of its own. */
+function GlassCommand() {
+  const { words, glass: [on, set] } = useShell();
+  const { group, keywords } = useWords().scheme;
+  useCommand({ id: 'imago.glass', label: words.glass, group, keywords, icon: <Icon name="layers" />, checked: on, run: () => set(!on) });
+  return null;
+}
+
+/**
+ * The window told whether it is glass when the person changes it. It is not told at the start: it is what it said, and a
+ * choice nobody made is not kept as one.
+ */
+function GlassTold({ glass }: { glass: boolean }) {
+  const unchosen = useRef<boolean | null>(glass);
+  useEffect(() => {
+    if (glass === unchosen.current) return;
+    unchosen.current = null;
+    glassTold = setGlass({ glass });
+  }, [glass]);
   return null;
 }

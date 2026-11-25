@@ -38,7 +38,7 @@ test('Node loads the root entry with no browser, and defineApp gives back what i
 });
 
 test('what is read of Sigrid by the shell is not handed on: the root exports its own names only', async () => {
-  assert.deepEqual(Object.keys(await import('@acaprino/imago')).sort(), ['AppWindow', 'ScreenBoundary', 'defineApp', 'focusContent', 'startApp', 'useFocusKept', 'useNotify', 'useWindow']);
+  assert.deepEqual(Object.keys(await import('@acaprino/imago')).sort(), ['AppWindow', 'ScreenBoundary', 'defineApp', 'focusContent', 'startApp', 'useFocusKept', 'useGlass', 'useNotify', 'useWindow']);
 });
 
 test('sigrid-check, run as `npm run check` runs it, refuses a class of the app\'s own', () => {

@@ -23,9 +23,11 @@ minimum width of 500 or the app's own if larger (the snap zones need it), and th
 
 - `Material::Opaque` is one colour for each theme, the ground the page draws there. It shows before the page has drawn,
   while it is reloaded and at the edge of a window that is resized. It is the material of the suite, whose page is opaque:
-  its two grounds are `DARK_GROUND` and `LIGHT_GROUND` of the crate.
+  its two grounds are `DARK_GROUND` and `LIGHT_GROUND` of the crate, and `Options::for_app` gives them. The person may make
+  such a window glass, and opaque again (1.4).
 - `Material::Acrylic` is a transparent window with the background colour `#00000000`, so there is no white flash before
-  the page draws, and Windows' acrylic behind it.
+  the page draws, and Windows' acrylic behind it. It has no colour to be without the acrylic: it is glass whatever the
+  person chooses. No app of the suite asks for it.
 
 Text is drawn in shades of gray in every window the crate opens (the browser argument `--disable-lcd-text`, beside those wry
 passes when a window gives none): on an opaque window WebView2 would draw it with ClearType, whose colour fringes make it
@@ -89,6 +91,27 @@ Rust may be built.) Shinatama's method still holds:
 - Discard a capture whose title bar pixel is not the app's: it photographed the window in front.
 - Switch the theme through the page, not by reloading.
 
+### 1.4 Glass, on and off while the window runs
+
+Glass is the person's choice: Windows' acrylic behind the page, or the ground of `Material::Opaque`. It is off until the
+person chooses it, or the app says otherwise in its program (`glass` of `Options`, off in `Options::for_app`).
+
+1. The page asks for it before it draws (`kept_glass`, 3.3): the answer is the choice the window keeps, or the app's
+   default. The page draws with it (Sigrid's material `glass`, which decides what lets the acrylic through), and does not
+   tell it back: a choice nobody made is not kept as one.
+2. When the person changes it, by the command of the look or by a setting of the app (`useGlass`), the page sends it
+   (`set_glass`). The window changes at once, with no reload and no new window. Into glass, DWM composes the window with what
+   is behind it (`DwmEnableBlurBehindWindow` with an empty region, which is what tao does when it builds a transparent
+   window), then the window takes the acrylic, then the webview's background is clear. Out of it, the other way round: the
+   ground first, under the page, then no effect, then no composition with what is behind.
+3. The choice is kept in `window-material` in the app's data folder, the word `glass` or `solid`, whole or not at all. At the
+   next start the window is built as glass (transparent, with the acrylic, as `Material::Acrylic` is) or opaque with its
+   ground, so the **first frame** already has it. A window built again after a WebView2 crash keeps what it had.
+4. The theme and the glass are one state of the window: a theme told while it is glass keeps the glass, with the tint of
+   the theme drawn (1.1), and glass told before the page has said its theme takes the window's own.
+
+What was seen of it on a real window is in [verification.md](verification.md).
+
 ## 2. The window: Tauri techniques
 
 | Behaviour | How | Where |
@@ -104,6 +127,7 @@ Rust may be built.) Shinatama's method still holds:
 | Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, the content and what carries `data-selectable` are selectable | `AppShell` of Sigrid with `desktop` |
 | Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `useZoom` of Sigrid |
 | Theme | The window theme from the person's choice, saved for the first frame (1.2), and the colour of the material (1.1) | the shell (section 3.4), the plugin (`set_theme`), `Material` |
+| Glass | The acrylic or the ground, the person's choice, changed while the window runs and saved for the first frame (1.4) | the shell (section 3.4), the plugin (`set_glass`, `kept_glass`), `Options` |
 | Place of the window | The position, size and maximized state are saved, and brought back inside the monitors there are now | `open_main` |
 
 The place of the window is Xiox's, moved into the shell: `window.json` in the data folder with the fields `x`, `y`,
@@ -132,8 +156,9 @@ The crate is a Tauri plugin that opens the main window of an app and watches it.
 | Field | What it is | Default |
 |---|---|---|
 | `window` | The window's config: title, size, minimum, first page. The window is made with `WebviewWindowBuilder::from_config`, so the fields the crate does not set (`dragDropEnabled`, `center`) hold as the app wrote them | The window `main` of the app's config |
-| `data_dir` | Where the theme and the place are kept; with none, neither is | The app's data folder |
-| `material` | `Material` (1.1) | `Material::Acrylic` |
+| `data_dir` | Where the theme, the glass and the place are kept; with none, none is | The app's data folder |
+| `material` | `Material` (1.1): what the window is made of without glass | `Material::Opaque` with `DARK_GROUND` and `LIGHT_GROUND` |
+| `glass` | Glass until the person chooses (1.4) | No |
 | `origins` | `Origins`: what the window may show besides its embedded page. Clones share one list, and `Origins::allow` adds to it also after the window is open | None, and the dev server in development |
 | `background` | Started with Windows: hidden until `show_main` | No |
 | `reload_label`, `stopped_message`, `lost_message` | The reload item of the window menu, the question when reloading did not help, and what is said when the window cannot be built again (the app then ends) | English |
@@ -164,6 +189,8 @@ notice (`useNotify`).
 |---|---|---|
 | The window theme | `plugin:imago-shell\|set_theme`, `theme` (`light`, `dark` or `system`, the choice) and, optional, `resolved` (`light` or `dark`, the theme drawn). A page that sends no `resolved` draws its word's own, and dark for `system` | page to Rust. The window takes the theme and its material's colour, and keeps the choice (1.2) |
 | The theme kept | `plugin:imago-shell\|kept_theme`, no arguments | page to Rust. The answer is the choice in `window-theme`, or null when there is none (1.2) |
+| Glass | `plugin:imago-shell\|set_glass`, `glass` (true or false) | page to Rust. The window becomes glass or opaque at once, and keeps the choice (1.4) |
+| Glass kept | `plugin:imago-shell\|kept_glass`, no arguments | page to Rust. The answer is true or false: the choice in `window-material`, or else the app's default; true for `Material::Acrylic` (1.4) |
 | The maximize button's rectangle | `plugin:imago-shell\|caption`, `x`, `y`, `width`, `height` | page to Rust. The numbers go to the overlay unchanged |
 | The first frame | `plugin:imago-shell\|ready`, no arguments | page to Rust. The page has drawn: the window is shown |
 | The title and the taskbar | `plugin:imago-shell\|chrome`, `title` and `progress` (a whole number from 0 to 100, or null), always both | page to Rust. A job that ends while the window is not in front asks for attention |
@@ -190,18 +217,19 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 
 The shell of `@acaprino/imago` does it; an app writes none of it.
 
-1. Before React draws: the density, the kept scheme and the theme. In a window `kept_theme` is asked, and the choice it answers is
-   the page's; with none there the one of the browser's storage is, and with none at all dark. When the call fails the page
-   draws the one of its storage, and sends no `set_theme` until the person chooses.
+1. Before React draws: the density, the kept scheme and the theme. In a window `kept_theme` and `kept_glass` are asked together. The
+   choice `kept_theme` answers is the page's; with none there the one of the browser's storage is, and with none at all dark.
+   When the call fails the page draws the one of its storage, and sends no `set_theme` until the person chooses. The page is glass
+   when `kept_glass` says so; when that call fails it is not.
 2. In a window, outside development: the browser's own keys and menu taken away (`useDesktopGuard` of Sigrid).
 3. The first frame drawn, `ready`, once: after two animation frames, or after 250 ms, since a hidden window may run none.
-4. `set_theme`: the choice and the scheme drawn, when either changes.
+4. `set_theme`: the choice and the scheme drawn, when either changes. `set_glass`: the person's glass, when it changes.
 5. The title bar drawn, `caption`, by `useSnapLayouts`; `caption-maximize` comes back.
 6. `useWindowControls` and `useZoom` of Sigrid for the buttons and the zoom.
 7. `chrome`: the title and the progress, from the first time the app sets one; `window-shown` comes back.
 
-`set_theme` and `chrome` go one at a time: the next is sent when the one before has answered, and of those that came meanwhile only
-the last. A button or the zoom that fails is said in a notice; a failure of the rest is written in the console. In a browser nothing
+`set_theme`, `set_glass` and `chrome` go one at a time: the next is sent when the one before has answered, and of those that came
+meanwhile only the last. `ready` waits for the theme and the glass told before it. A button or the zoom that fails is said in a notice; a failure of the rest is written in the console. In a browser nothing
 of Tauri is called or loaded.
 
 ### 3.5 The capabilities
@@ -222,7 +250,7 @@ serves a part of the wiring that an app can leave out, and says so:
 A call the capability does not allow is a rejected promise. Sigrid's hooks pass it to their `onError`, and a refused zoom
 goes back to the level it had; a refused drag leaves the window where it is, and nobody is told.
 
-The five commands of the plugin are granted by `imago-shell:default`, in a capability beside it
+The seven commands of the plugin are granted by `imago-shell:default`, in a capability beside it
 (`examples/demo/src-tauri/capabilities/shell.json`). A page that is not embedded in the app (a server on
 `http://127.0.0.1`) is refused every command until a capability names it, the plugin's and Tauri's own alike:
 `"remote": { "urls": ["http://127.0.0.1:*"] }` is any port of that address and no other host. A capability may also be

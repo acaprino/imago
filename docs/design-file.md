@@ -31,7 +31,7 @@ The design system up to 0.4.1 (the CSS, the renderers, the two looks, the graphs
 - Sigrid and React are peers, so that an app has one copy of each.
 - A part the suite needs and Sigrid lacks is added to Sigrid, not to Imago or to an app.
 
-The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNotify`, `useWindow`, `useFocusKept`,
+The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNotify`, `useWindow`, `useGlass`, `useFocusKept`,
 `focusContent`, and `ScreenBoundary` round a part that may fail. [using-imago.md](using-imago.md), section 3, has them.
 
 - An app does not write what the shell draws: `AppShell`, `TitleBar`, `WindowControls`, `CommandPalette`, `CommandsProvider`,
@@ -74,7 +74,15 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
   the system for less motion sees none. What a press does is done at once: nothing waits for a movement.
 - Dark until the person chooses. Light, dark and the system's look are the same three commands of the palette in every app, and
   no app draws a switch for them. The choice is kept under the app's own storage key, and is on the page before the first paint.
-- A state is a `Badge` with a `tone` and a word. Surfaces are opaque: there is no glass.
+- A state is a `Badge` with a `tone` and a word. Surfaces are opaque, until the person chooses glass.
+- Glass is the person's choice, in a window of its own only: Windows' acrylic behind the page. It is off until the app says
+  otherwise in its program (`Options::glass` of the crate), or the person chooses it: «Glass» (the app's word) is a command of
+  the look, checked when it is on, beside light, dark and the system's look, and an app's settings may set it too with
+  `useGlass` and a `Switch`. The window keeps the choice, and the next start is glass, or not, from its first frame. Turning it
+  on or off changes the window at once, with no reload. The page is then drawn with Sigrid's material `glass`, which decides
+  what lets the acrylic through. A browser has no glass: the command is not there, and nothing is sent.
+- The contrasts below are those of the opaque surfaces. Over the acrylic they are Sigrid's to keep, and Windows draws the
+  acrylic as a plain colour where it drops it (an inactive window, battery saver, transparency off, high contrast).
 - Every text has 4.5:1 on what it lies on, and every part of a control 3:1, for the five apps in both schemes
   (`tests/preset.test.ts`).
 - An app of the suite writes no class, no style and no stylesheet. `sigrid-check` with its rule `own-class` is clean on its
@@ -103,8 +111,8 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 - The page asks where it runs (`readHost`), and only in a window of its own draws the buttons, marks what drags the window,
   takes the browser's keys away and speaks to the native side. In a browser nothing of Tauri is called or loaded.
 - The one way from the page to the window is `@acaprino/sigrid/tauri`. The one native side is the crate `imago-shell`.
-- The window is hidden until the page has drawn and its theme was told, and has the ground of the look until then, so that no start
-  flashes. An app passes `on_run_event` to the run loop: without it a window built again ends the app.
+- The window is hidden until the page has drawn and its theme was told, and has the ground of the look, or its glass, until then,
+  so that no start flashes. An app passes `on_run_event` to the run loop: without it a window built again ends the app.
 - The choice of light, dark or the system's and the scheme drawn are both told, when either changes.
 - A call the person asked for (a window button, the zoom) that fails is said in a notice. What the page tells the window by itself
   is written in the console when it fails.

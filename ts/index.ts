@@ -2,7 +2,7 @@
 export { defineApp, type App, type AppDefinition } from './app.js';
 export { startApp } from './start.js';
 export { AppWindow, type AppView, type AppWindowProps, type SidebarState } from './app-window.js';
-export { useNotify, useWindow, type Notify, type WindowHandle } from './shell.js';
+export { useGlass, useNotify, useWindow, type Glass, type Notify, type WindowHandle } from './shell.js';
 export { ScreenBoundary } from './screen-boundary.js';
 export { focusContent, useFocusKept } from './focus.js';
 export type { ShellWords } from './words.js';

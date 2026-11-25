@@ -3,7 +3,7 @@ name: Glass smoke (throwaway, branch glass only)
 on:
   push:
     branches: [glass]
-    paths: ['.github/workflows/glass-smoke.yml', '.github/glass-smoke.ps1', '.github/glass-page.mjs', 'crates/**', 'ts/**', 'examples/demo/**', 'package-lock.json']
+    paths: ['.github/workflows/glass-smoke.yml', '.github/glass-smoke.ps1', '.github/glass-page.mjs', 'crates/**']
 
 permissions:
   contents: read
