@@ -78,9 +78,9 @@ export function shellTheme({ id, name, accent }: { id: string; name: string; acc
     ...HOOKS,
     surfaces: {
       // design-check-ignore-next-line color-value: the dark surfaces of the suite, which the theme engine is given
-      dark: { paper: '#1a202c', sidebar: '#12161e', raised: '#232834', line: '#2a3240', ink: '#e8ecf3', mute: '#9aa5b8', input: '#8791a6', accent: dark, fill: dark },
+      dark: { paper: '#1a202c', sidebar: '#12161e', raised: '#232834', line: '#2a3240', ink: '#e8ecf3', mute: '#9aa5b8', input: '#8791a6', accent: dark, fill: dark, glass: { ground: '#0c111dcc', sheet: '#1a202cf0', float: '#242935f5' } },
       // design-check-ignore-next-line color-value: the light surfaces of the suite, which the theme engine is given
-      light: { paper: '#ffffff', sidebar: '#f6f7f9', raised: '#ffffff', line: '#e3e6ea', ink: '#111827', mute: '#5b6472', input: '#767e8b', accent: light, fill: light },
+      light: { paper: '#ffffff', sidebar: '#f6f7f9', raised: '#ffffff', line: '#e3e6ea', ink: '#111827', mute: '#5b6472', input: '#767e8b', accent: light, fill: light, glass: { ground: '#f6f7f9e0', sheet: '#fffffff2', float: '#fffffff7' } },
     },
   };
 }

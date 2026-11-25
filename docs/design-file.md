@@ -82,8 +82,9 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
   otherwise in its program (`Options::glass` of the crate), or the person chooses it: «Glass» (the app's word) is a command of
   the look, checked when it is on, beside light, dark and the system's look, and an app's settings may set it too with
   `useGlass` and a `Switch`. The window keeps the choice, and the next start is glass, or not, from its first frame. Turning it
-  on or off changes the window at once, with no reload. The page is then drawn with Sigrid's material `glass`, which decides
-  what lets the acrylic through. A browser has no glass: the command is not there, and nothing is sent.
+  on or off changes the window at once, with no reload. The page is then drawn with Sigrid's material `glass`, at the levels
+  of the suite (`Surfaces.glass` of the preset, those of 0.4.1): the ground `#0C111D` at 80%, the sheet `#1A202C` at 94% and
+  what floats `#242935` at 96% in dark; `#F6F7F9` at 88%, `#FFFFFF` at 95% and at 97% in light. A browser has no glass: the command is not there, and nothing is sent.
 - The contrasts below are those of the opaque surfaces. Over the acrylic they are Sigrid's to keep, and Windows draws the
   acrylic as a plain colour where it drops it (an inactive window, battery saver, transparency off, high contrast).
 - Every text has 4.5:1 on what it lies on, and every part of a control 3:1, for the five apps in both schemes
