@@ -1,7 +1,7 @@
 // node tests/demo.mjs, after `npm run build` (it opens what `npm run demo:web` built, examples/demo/dist).
 // The demo app in a browser, and in a window that only pretends to be Tauri's. At each width where the frame changes and in
 // both schemes nothing overflows, the views are where the width puts them and the shared controls keep their places; then
-// the keys, the palette, the focus, the notices, a screen that fails, and what the window is told. Photographs of the page
+// the keys, the palette, the focus, the notices, a screen of two views, a screen that fails, and what the window is told. Photographs of the page
 // go to examples/demo/shots.
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
@@ -19,7 +19,7 @@ const policy = JSON.parse(readFileSync(join(root, 'examples/demo/src-tauri/tauri
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.woff2': 'font/woff2' };
 const WIDTHS = [340, 500, 620, 860, 1000, 1440];
 const SHOTS = [340, 620, 860, 1440];
-const VIEWS = ['items', 'new', 'notices', 'failure'];
+const VIEWS = ['items', 'new', 'notices', 'failure', 'window'];
 
 const server = createServer((request, response) => {
   const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
@@ -235,7 +235,7 @@ try {
         ground: color('app-shell'), sheet: color('app-shell-work'),
       };
     });
-    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], loaded: [], weights: ['700', '500', '500', '500'], strip: [40, '14px'], segment: ['6px', '4px'], bar: 46, head: ['600', true, true], commands: ['rgb(42, 50, 64)', 'rgb(154, 165, 184)'], control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
+    assert.deepEqual(look, { lang: 'en', keys: 'boxed', controls: 'strong', density: 'compact', tabs: 'bold', font: ['system', '"Segoe UI Variable Text"'], loaded: [], weights: ['700', '500', '500', '500', '500'], strip: [40, '14px'], segment: ['6px', '4px'], bar: 46, head: ['600', true, true], commands: ['rgb(42, 50, 64)', 'rgb(154, 165, 184)'], control: '32px', radius: ['6px', '10px'], ground: 'rgb(18, 22, 30)', sheet: 'rgb(26, 32, 44)' });
   });
 
   await onPage('the light look: its ground and its sheet', { scheme: 'light', system: 'dark' }, async (page) => {
@@ -431,7 +431,8 @@ try {
     await page.getByRole('button', { name: 'Always the same' }).click();
     await page.getByRole('button', { name: 'Always the same' }).click();
     await page.getByText('The server is busy.').first().waitFor();
-    assert.equal(await page.getByText('The server is busy.', { exact: true }).count(), 1);
+    // The one before leaves, out of reach, while the one that takes its place enters.
+    await page.waitForFunction(() => document.querySelectorAll('[data-toasts] [data-part="root"]').length === 1);
     await page.getByRole('button', { name: 'One with Undo' }).click();
     await page.getByRole('button', { name: /^Undo/ }).click();
     await page.getByText('The item is back.').waitFor();
@@ -445,6 +446,61 @@ try {
     assert.equal(await page.getByText('The server did not answer.').count(), 1, 'the error is gone');
     await page.getByRole('button', { name: /Close the notice: The server did not answer/ }).click();
     await page.getByText('The server did not answer.').waitFor({ state: 'hidden' });
+  });
+
+  // A screen reader reads what is added to the region: a notice that only stays there is not heard again.
+  await onPage('a notice said again is added again, and its time starts again', {}, async (page) => {
+    await open(page, 'notices');
+    await page.waitForFunction(() => document.documentElement.hasAttribute('data-motion'));
+    const say = page.getByRole('button', { name: 'Always the same' });
+    const left = async () => Number(await page.locator('[data-toasts] [data-part="root"]:not([inert]) [data-slot="toast-timer"]').textContent());
+    await say.click();
+    await page.getByText('The server is busy.').waitFor();
+    await page.waitForTimeout(2500);
+    assert.ok(await left() <= 3, 'no time has gone');
+    await page.evaluate(() => {
+      window.added = [];
+      new MutationObserver((changes) => {
+        for (const { addedNodes } of changes) for (const node of addedNodes) if (node.textContent.includes('The server is busy.')) window.added.push(node.textContent);
+      }).observe(document.querySelector('[data-toasts]'), { childList: true, subtree: true });
+    });
+    await say.click();
+    await page.waitForFunction(() => window.added.length > 0);
+    assert.ok(await left() >= 4, 'its time goes on');
+    await page.waitForFunction(() => document.querySelectorAll('[data-toasts] [data-part="root"]').length === 1);
+  });
+
+  await onPage('a screen that two views share stays as it is when the view changes, and one that is not shared goes', {}, async (page) => {
+    const words = page.getByRole('textbox', { name: 'Words' });
+    const name = page.getByRole('textbox', { name: 'Name' });
+    await open(page, 'notices');
+    await words.fill('Typed by the person');
+    const field = await words.elementHandle();
+    for (const [view, part] of [['window', 'Its own title'], ['notices', 'Always the same']]) {
+      await open(page, view);
+      await page.getByRole('button', { name: part }).waitFor();
+      assert.deepEqual([await field.evaluate((element) => element.isConnected), await words.inputValue()], [true, 'Typed by the person'], view);
+    }
+    await open(page, 'new');
+    await name.fill('An item');
+    assert.equal(await field.evaluate((element) => element.isConnected), false);
+    await open(page, 'window');
+    await open(page, 'new');
+    assert.equal(await name.inputValue(), '');
+  });
+
+  await onPage('a view opened after a screen that failed is drawn, and the failed one fails again', { expected: 'items.json' }, async (page) => {
+    const failed = page.getByText('This screen could not be shown');
+    for (const [view, part] of [['window', page.getByRole('textbox', { name: 'Words' })], ['items', page.getByRole('list', { name: 'Items' })]]) {
+      await open(page, 'failure');
+      await failed.waitFor();
+      await page.getByRole('button', { name: 'Try again' }).focus();
+      // The view changes with no press of the person, which would take the focus to the bar.
+      await tab(page, view).evaluate((element) => element.click());
+      await part.waitFor();
+      assert.equal(await failed.count(), 0);
+      assert.equal(await region(page), 'app-shell-content', 'the content takes the focus of the button that went');
+    }
   });
 
   await onPage('a screen that fails says so in its place, the bar stays, and it can be drawn again', { expected: 'items.json' }, async (page) => {
@@ -606,7 +662,7 @@ try {
     const together = await page.evaluate(() => window.together);
     assert.deepEqual([together['plugin:imago-shell|chrome'], together['plugin:imago-shell|set_theme']], [1, 1], 'the next call waits for the answer to the one before');
     assert.ok(jobs.length < 12, `${jobs.length} calls: of the values that came meanwhile only the last is sent`);
-    await open(page, 'notices');
+    await open(page, 'window');
     await page.getByRole('button', { name: 'Title of the window' }).click();
     await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|chrome').at(-1)[1].title === '3 items · Imago demo');
     assert.equal(await page.title(), '3 items · Imago demo');

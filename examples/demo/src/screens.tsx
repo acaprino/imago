@@ -1,4 +1,4 @@
-// The screens of the demo: a list with its details, a form, the notices, and one that fails.
+// The screens of the demo: a list with its details, a form, the words of two views, and one that fails.
 import { useState, type RefObject } from 'react';
 import { useMedia } from '@acaprino/sigrid';
 import { Badge, Button, Cluster, Column, Icon, Input, Select, Switch, Text, Textarea, ToggleGroup, ToggleGroupItem } from '@acaprino/sigrid/primitives';
@@ -88,24 +88,36 @@ export function Form({ add, cancel }: { add: (item: Item) => void; cancel: () =>
   );
 }
 
-export function Notices() {
+/** The screen of two views: the words typed in it are said in a notice, or are the title of the window. */
+export function Words({ view }: { view: 'notices' | 'window' }) {
   const notify = useNotify();
   const window_ = useWindow();
+  const [words, setWords] = useState('3 items · Imago demo');
+  const about = view === 'window'
+    ? 'The words are the title of the window, until it has its own again.'
+    : 'A notice goes by itself. An error stays until it is closed. A notice with the id of one that is there takes its place, and is read again.';
   return (
-    <Panel title="Notices">
+    <Panel title={view === 'window' ? 'Window' : 'Notices'}>
       <Column gap="lg" pad="lg" width="prose">
-        <Text as="p">A notice goes by itself. An error stays until it is closed. A notice with the id of one that is there takes its place.</Text>
-        <Cluster>
-          <Button variant="outline" onClick={() => notify('The item is saved.')}>A notice</Button>
-          <Button variant="outline" onClick={() => notify('The item is gone.', { undo: { onClick: () => notify('The item is back.') } })}>One with Undo</Button>
-          <Button variant="outline" onClick={() => notify('The server did not answer.', { kind: 'error' })}>An error</Button>
-          <Button variant="outline" onClick={() => notify('The server is busy.', { id: 'busy' })}>Always the same</Button>
-        </Cluster>
-        <Cluster>
-          <Button variant="outline" onClick={() => window_.setTitle('3 items · Imago demo')}>Title of the window</Button>
-          <Button variant="outline" onClick={() => window_.setTitle(null)}>Its own title</Button>
-        </Cluster>
-        <Cluster>{STATES.map(({ id }) => <StateBadge key={id} state={id} />)}<Badge variant="secondary">Neutral</Badge></Cluster>
+        <Text as="p">{about}</Text>
+        <FormField label="Words"><Input value={words} onChange={(event) => setWords(event.target.value)} /></FormField>
+        {view === 'window' ? (
+          <Cluster>
+            <Button variant="outline" onClick={() => window_.setTitle(words)}>Title of the window</Button>
+            <Button variant="outline" onClick={() => window_.setTitle(null)}>Its own title</Button>
+          </Cluster>
+        ) : (
+          <>
+            <Cluster>
+              <Button variant="outline" onClick={() => notify(words)}>The words</Button>
+              <Button variant="outline" onClick={() => notify('The item is saved.')}>A notice</Button>
+              <Button variant="outline" onClick={() => notify('The item is gone.', { undo: { onClick: () => notify('The item is back.') } })}>One with Undo</Button>
+              <Button variant="outline" onClick={() => notify('The server did not answer.', { kind: 'error' })}>An error</Button>
+              <Button variant="outline" onClick={() => notify('The server is busy.', { id: 'busy' })}>Always the same</Button>
+            </Cluster>
+            <Cluster>{STATES.map(({ id }) => <StateBadge key={id} state={id} />)}<Badge variant="secondary">Neutral</Badge></Cluster>
+          </>
+        )}
       </Column>
     </Panel>
   );

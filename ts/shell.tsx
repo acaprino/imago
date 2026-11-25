@@ -11,7 +11,8 @@ import { SHELL_WORDS, type ShellWords } from './words.js';
 
 /**
  * Says something in a notice. `options` are those of Sigrid's notice: `kind: 'error'` stays until it is closed, `undo` and
- * `actions` are its buttons, and a notice with the `id` of one that is there takes its place.
+ * `actions` are its buttons, and a notice with the `id` of one that is there takes its place: it is read again, and its time
+ * starts again, also when the text is the same.
  */
 export type Notify = (text: string, options?: Partial<Omit<ToastItem, 'text'>>) => void;
 
@@ -92,21 +93,25 @@ export const keptTheme = (): Promise<unknown> => tauriApi.invoke(`${PLUGIN}kept_
 const chrome = inTurn('chrome');
 let themeTold: Promise<void> = Promise.resolve();
 
+/** A notice in the stack: its `id` is its own, and `said` is the one its caller gave. */
+type Notice = ToastItem & { said: string | undefined };
+
 let notices = 0; // not crypto.randomUUID, which a page served over plain http does not have
 
 /** The state of the shell around the app, with the notices drawn once. `untold`: the window did not say which theme it keeps. */
 export function ShellProvider({ app, untold, children }: { app: App; untold: boolean; children: ReactNode }) {
   const own = useMemo(() => readHost().ownWindow, []);
   const words = useMemo(() => ({ ...SHELL_WORDS, ...app.words?.shell }), [app]);
-  const [items, setItems] = useState<ToastItem[]>([]);
+  const [items, setItems] = useState<Notice[]>([]);
   const [title, setTitle] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const shown = useRef(new Set<() => void>());
 
   const shell = useMemo<Shell>(() => {
     const notify: Notify = (text, options) => {
-      const item: ToastItem = { ...options, id: options?.id ?? `notice-${++notices}`, text };
-      setItems((now) => [...now.filter(({ id }) => id !== item.id), item]);
+      // A new id each time: Sigrid keeps the node of one it has, and a screen reader reads only what is added.
+      const item: Notice = { ...options, id: `notice-${++notices}`, said: options?.id, text };
+      setItems((now) => [...now.filter(({ said }) => said === undefined || said !== item.said), item]);
     };
     return {
       app, words, notify,
