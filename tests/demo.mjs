@@ -38,13 +38,11 @@ const url = `http://127.0.0.1:${server.address().port}/`;
  * The window of Tauri as the page finds it: it answers every call and writes it down, but for those of `window.refused`. The
  * plugin answers late, as off the window's thread; `together` is the most calls of a command that were in the air at once.
  */
-function fakeWindow({ kept = null, refused = [], material }) {
+function fakeWindow({ kept = null, glass = false, refused = [] }) {
   window.calls = [];
   window.refused = refused;
   window.log = [];
   window.together = {};
-  // What the window was built of (`glass`), what the next start builds (`next`), and whether the person may choose.
-  window.material = material;
   const late = { 'plugin:imago-shell|set_theme': 400, 'plugin:imago-shell|chrome': 1000 };
   const air = {};
   const handlers = [];
@@ -64,9 +62,8 @@ function fakeWindow({ kept = null, refused = [], material }) {
       window.log.push(`${command} answered`);
       if (window.refused.includes(command)) throw new Error('refused');
       if (command === 'plugin:event|listen') (listeners[args.event] ??= []).push(args.handler);
-      if (command === 'plugin:imago-shell|set_material') window.material = { ...window.material, next: args.material === 'glass' };
-      if (command === 'plugin:imago-shell|material') return window.material;
-      return command === 'plugin:window|is_maximized' ? false : command === 'plugin:event|listen' ? 1 : command === 'plugin:imago-shell|kept_theme' ? kept : null;
+      const answers = { 'plugin:window|is_maximized': false, 'plugin:event|listen': 1, 'plugin:imago-shell|kept_theme': kept, 'plugin:imago-shell|kept_glass': glass };
+      return command in answers ? answers[command] : null;
     },
   };
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
@@ -77,7 +74,7 @@ const browser = await chromium.launch({ args: ['--disable-lcd-text'] });
 const failures = [];
 
 /** Opens the page in a context of its own, with `scheme` as the choice kept, and runs `look` on it; an error of the page fails it. */
-async function onPage(name, { width = 1440, scheme, system = 'light', own = false, kept, refused, reduced = false, expected, material = { glass: false, next: false, optional: false } } = {}, look) {
+async function onPage(name, { width = 1440, scheme, system = 'light', own = false, kept, glass, refused, reduced = false, expected } = {}, look) {
   const context = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: system, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
@@ -88,7 +85,7 @@ async function onPage(name, { width = 1440, scheme, system = 'light', own = fals
   page.on('requestfailed', (request) => problems.push(`${request.url()} failed`));
   page.on('request', (request) => { if (request.resourceType() === 'script') scripts.push(new URL(request.url()).pathname); });
   if (scheme) await page.addInitScript((value) => { if (!localStorage.getItem('imago.scheme')) localStorage.setItem('imago.scheme', value); }, scheme);
-  if (own) await page.addInitScript(fakeWindow, { kept, refused, material });
+  if (own) await page.addInitScript(fakeWindow, { kept, glass, refused });
   try {
     await page.goto(url);
     await page.waitForSelector('[data-slot="app-shell"]');
@@ -252,6 +249,7 @@ try {
     const options = await page.getByRole('option').allTextContents();
     const at = (word) => options.findIndex((option) => option.includes(word));
     for (const word of ['Check all items', 'Search in this view', 'Go to Items', 'Go to Failure', 'Light theme', 'System theme']) assert.notEqual(at(word), -1, `${word} is not in ${options.join(' | ')}`);
+    assert.equal(at('Glass'), -1, 'a browser has no glass');
     assert.ok(at('Go to Items') < at('Go to New item') && at('Go to Failure') < at('Light theme'), options.join(' | '));
     await shot(page, 'palette');
     await page.keyboard.type('light theme');
@@ -622,6 +620,9 @@ try {
   await onPage('in a browser there are no window buttons, and nothing of Tauri is loaded', {}, async (page, scripts) => {
     for (const view of VIEWS.slice(0, 3)) await open(page, view);
     assert.equal(await page.locator('[data-slot="window-controls"]').count(), 0);
+    await open(page, 'window');
+    assert.equal(await page.getByRole('switch', { name: 'Glass' }).count(), 0, 'a browser has no glass to set');
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.material ?? null), null);
     assert.deepEqual(scripts.filter((script) => TAURI.test(script)), []);
     assert.ok(scripts.length > 0);
   });
@@ -687,76 +688,9 @@ try {
     assert.equal(await page.getByText(/chrome/).count(), 0, 'what the page tells by itself is not said to the person');
   });
 
-  const drawn = (page) => page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|ready'));
-  // The glass window: the person's choice, kept for the next start; the window itself stays as it was built.
-  const optional = { glass: false, next: false, optional: true };
-  const setMaterial = (page) => page.evaluate(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_material').map(([, args]) => args));
-  const glassSwitch = (page) => page.getByRole('switch', { name: 'Glass window' });
-  const built = (page) => page.evaluate(() => document.documentElement.dataset.material ?? null);
-
-  await onPage('in a browser there is no glass window and no choice of it', {}, async (page) => {
-    await open(page, 'window');
-    assert.equal(await glassSwitch(page).count(), 0);
-    assert.equal(await built(page), null);
-    await palette(page, 'glass window');
-    assert.equal(await page.getByRole('option', { name: /Glass window/ }).count(), 0, 'no command either');
-    await page.keyboard.press('Escape');
-  });
-
-  await onPage('in a window that may be glass the setting keeps the choice for the next start and says «Restart needed»', { own: true, scheme: 'dark', material: optional }, async (page) => {
-    await drawn(page);
-    await open(page, 'window');
-    assert.equal(await built(page), null, 'built opaque');
-    assert.equal(await glassSwitch(page).isChecked(), false);
-    await page.getByText('Off: the window is opaque.').waitFor();
-    await page.locator('[data-slot="switch"]').click();
-    await page.getByText('Restart needed', { exact: false }).first().waitFor();
-    assert.equal(await glassSwitch(page).isChecked(), true);
-    assert.deepEqual(await setMaterial(page), [{ material: 'glass' }]);
-    assert.equal(await built(page), null, 'the window it has is not changed');
-    // The same from the palette, which says so too; choosing the glass the window has needs no restart.
-    await palette(page, 'glass window');
-    await page.keyboard.press('Enter');
-    await page.getByText('Off: the window is opaque.').waitFor();
-    // One write at a time: the second is sent when the first has answered.
-    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_material').length === 2);
-    assert.deepEqual(await setMaterial(page), [{ material: 'glass' }, { material: 'opaque' }]);
-    await shot(page, 'window-glass-setting');
-  });
-
-  await onPage('a window built as glass draws the glass theme, and the setting shows what is kept', { own: true, scheme: 'dark', material: { glass: true, next: true, optional: true } }, async (page) => {
-    await drawn(page);
-    assert.equal(await built(page), 'glass');
-    assert.match(await page.evaluate(() => document.documentElement.style.getPropertyValue('--glass-ground')), /^#[0-9a-f]{6}[0-9a-f]{2}$/);
-    await open(page, 'window');
-    assert.equal(await glassSwitch(page).isChecked(), true);
-    await page.getByText('On: the window lets the desktop show through.').waitFor();
-    await page.locator('[data-slot="switch"]').click();
-    await page.getByText('Restart needed', { exact: false }).first().waitFor();
-    assert.equal(await built(page), 'glass', 'still the window it was built as');
-    await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|set_material'));
-    assert.deepEqual(await setMaterial(page), [{ material: 'opaque' }]);
-  });
-
-  await onPage('a window that does not say its material is opaque, with no choice', { own: true, scheme: 'dark', refused: ['plugin:imago-shell|material'], material: optional }, async (page) => {
-    await drawn(page);
-    await open(page, 'window');
-    assert.equal(await built(page), null);
-    assert.equal(await glassSwitch(page).count(), 0);
-  });
-
-  await onPage('a choice the window did not keep is said, and the setting goes back to what is kept', { own: true, scheme: 'dark', material: optional }, async (page) => {
-    await drawn(page);
-    await open(page, 'window');
-    await page.evaluate(() => window.refused.push('plugin:imago-shell|set_material'));
-    await page.locator('[data-slot="switch"]').click();
-    await page.getByText('The window did not answer (setMaterial): refused').waitFor();
-    await page.getByText('Off: the window is opaque.').waitFor();
-    assert.equal(await glassSwitch(page).isChecked(), false);
-  });
-
   // WebView2 writes the page's storage some seconds late: after it dies, what the browser keeps is old, or gone.
   const themes = (page) => page.evaluate(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_theme').map(([, args]) => args));
+  const drawn = (page) => page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|ready'));
   for (const [before, chosen] of [['none', undefined], ['another', 'dark']]) {
     await onPage(`in a window the theme it keeps is the page's, with ${before} in the browser`, { system: 'dark', own: true, kept: 'light', scheme: chosen }, async (page) => {
       await drawn(page);
@@ -782,6 +716,59 @@ try {
       await told(word === 'light' ? 1 : 2);
     }
     assert.deepEqual(await themes(page), [{ theme: 'light', resolved: 'light' }, { theme: 'dark', resolved: 'dark' }]);
+  });
+
+  const glassCalls = (page) => page.evaluate(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_glass').map(([, args]) => args));
+  const material = (page) => page.evaluate(() => document.documentElement.dataset.material ?? null);
+  const glassOption = async (page) => {
+    await palette(page, 'glass');
+    return page.getByRole('option').filter({ hasText: 'Glass' });
+  };
+  await onPage('in a window glass is a command of the look and a setting, told to the window and drawn by the page', { own: true }, async (page) => {
+    await drawn(page);
+    const log = await page.evaluate(() => window.log);
+    assert.ok(log.indexOf('plugin:imago-shell|kept_glass answered') < log.indexOf('plugin:imago-shell|ready'), 'the window says its glass before the page is drawn');
+    assert.deepEqual([await glassCalls(page), await material(page)], [[], null], 'a window that is not glass is told nothing at the start');
+    const option = await glassOption(page);
+    assert.equal(await option.getAttribute('aria-checked'), 'false');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.documentElement.dataset.material === 'glass');
+    await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|set_glass'));
+    assert.deepEqual(await glassCalls(page), [{ glass: true }]);
+    await shot(page, 'window-glass');
+    assert.equal(await (await glassOption(page)).getAttribute('aria-checked'), 'true');
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
+    // A theme chosen under glass keeps it.
+    await palette(page, 'light theme');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.documentElement.dataset.scheme === 'light');
+    assert.equal(await material(page), 'glass');
+    await open(page, 'window');
+    const setting = page.getByRole('switch', { name: 'Glass' });
+    assert.equal(await setting.isChecked(), true);
+    await setting.focus();
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => !document.documentElement.hasAttribute('data-material'));
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_glass').length === 2);
+    assert.deepEqual(await glassCalls(page), [{ glass: true }, { glass: false }]);
+    assert.deepEqual(await overflow(page), []);
+  });
+
+  await onPage('a window that is glass starts the page as glass, and is told nothing', { own: true, glass: true }, async (page) => {
+    await drawn(page);
+    assert.equal(await material(page), 'glass');
+    assert.deepEqual(await glassCalls(page), []);
+    assert.equal(await (await glassOption(page)).getAttribute('aria-checked'), 'true');
+  });
+
+  await onPage('a window that does not say whether it is glass draws the page without it', { own: true, refused: ['plugin:imago-shell|kept_glass'], expected: 'kept_glass' }, async (page) => {
+    await drawn(page);
+    assert.deepEqual([await material(page), await glassCalls(page)], [null, []]);
+    await (await glassOption(page)).click();
+    await page.waitForFunction(() => document.documentElement.dataset.material === 'glass');
+    await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|set_glass'));
+    assert.deepEqual(await glassCalls(page), [{ glass: true }]);
   });
 
   // For the eye: the top of Xiox, as Imago drew it on 2026-11-20 (tests/xiox), over the top of the demo, at twice its size.

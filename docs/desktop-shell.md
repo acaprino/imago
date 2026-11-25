@@ -22,14 +22,12 @@ from Shinatama's work or from reading the code.
 minimum width of 500 or the app's own if larger (the snap zones need it), and the theme it had last time (1.2).
 
 - `Material::Opaque` is one colour for each theme, the ground the page draws there. It shows before the page has drawn,
-  while it is reloaded and at the edge of a window that is resized. Its two grounds, for the suite, are `DARK_GROUND` and
-  `LIGHT_GROUND` of the crate.
+  while it is reloaded and at the edge of a window that is resized. It is the material of the suite, whose page is opaque:
+  its two grounds are `DARK_GROUND` and `LIGHT_GROUND` of the crate, and `Options::for_app` gives them. The person may make
+  such a window glass, and opaque again (1.4).
 - `Material::Acrylic` is a transparent window with the background colour `#00000000`, so there is no white flash before
-  the page draws, and Windows' acrylic behind it. It is the glass window.
-- `Material::Optional` is the material of the suite (`Material::SUITE`, the default of `Options::for_app`): opaque, in the grounds
-  of `Opaque`, unless the person turned glass on, and then `Acrylic`. The app decides nothing: the person's choice is kept in
-  `window-material` of the data folder (1.3), and read when the window is built. An app that decides for itself passes `Opaque`
-  (never glass) or `Acrylic` (always glass), and the person has no choice.
+  the page draws, and Windows' acrylic behind it. It has no colour to be without the acrylic: it is glass whatever the
+  person chooses. No app of the suite asks for it.
 
 Text is drawn in shades of gray in every window the crate opens (the browser argument `--disable-lcd-text`, beside those wry
 passes when a window gives none): on an opaque window WebView2 would draw it with ClearType, whose colour fringes make it
@@ -44,8 +42,8 @@ Facts about the material:
   The tint reaches only Windows 10 (and the first Windows 11, 21H2), where the legacy `SetWindowCompositionAttribute`
   path is used (and is slow to drag).
 - There the acrylic has no colour but the tint, so the tint follows the theme the page draws, which the page sends with
-  the window theme (1.2): `#0C111D` and an alpha of 204 in dark, `#F6F7F9` and 224 in light. The first frame keeps the
-  tint of the app's own config, until the page's first `set_theme`. On Windows 11 22H2 and later nothing changes:
+  the window theme (1.2): the ground, `#12161E` with an alpha of 204 in dark and `#F6F7F9` with 224 in light. The first
+  frame keeps the tint of the app's own config, until the page's first `set_theme`. On Windows 11 22H2 and later nothing changes:
   setting the effect again sets the backdrop the window already has, and that backdrop takes no tint.
 - The acrylic is a blur of what is behind the window, with a nearly fixed luminosity. Measured from the screen
   (0 to 255): light acrylic about **143 over a dark window and 226 over a white one**; dark acrylic about **84 over a
@@ -77,33 +75,7 @@ person's choice: `light`, `dark` or `system`.
 for the first frame. The calls the page makes on the window
 itself (minimize, maximize, close, drag, zoom, listening to an event) do need permissions: see section 3.5.
 
-### 1.3 The glass window is the person's choice
-
-The material of a window is a property it has from its creation: Windows is told at that moment, and a window that is opaque
-cannot become a transparent one, nor the other way. So the person's choice is for the next start.
-
-1. The person's switch (the app's settings, or the command "Glass window" of the palette) calls `setGlass` of `useWindow`. The
-   plugin's command `set_material` takes the word `glass` or `opaque`, refuses any other, and keeps it as the bare word in
-   `window-material` of the app's data folder, whole or not at all, as `window-theme` is. It changes nothing in the window that
-   runs. It is refused for an app whose material is not `Material::Optional`, and for one with no data folder.
-2. `open_main` reads that file when it builds the window (and when it builds it again after a lost browser process): an optional
-   material becomes `Acrylic` for `glass` and `Opaque` otherwise, and nothing kept is opaque. What the window was built with is
-   kept apart from the file, and the commands that follow (`set_theme`) use it, not the file.
-3. The page asks `material` before it draws and learns three things: `glass` (the window was built as glass), `next` (what the next
-   start builds) and `optional` (the person may choose). It draws the theme of its app with Sigrid's `material: 'glass'` when
-   `glass`, so that the one ground is translucent and the window's acrylic shows through; `useWindow` gives the page these as
-   `glass`, `glassPending` (`next` differs from `glass`: «Restart needed») and `glassOptional`.
-4. A page that does not hear the window (a browser, or a call that fails) is opaque and has no choice.
-
-What the person sees: the ground of the frame, the title bar and the sidebar, is the stated ground at an alpha that the engine of
-Sigrid computes so that every text keeps 4.5:1 over the worst of what can lie behind it; the sheet, the work area, is the opaque
-paper. `tests/preset.test.ts` states the ratios for the five apps in both schemes over the backdrops of section 1.1: 143 and 226
-for the light acrylic, 84 for the dark one over a dark window, and the engine's own white and black desktops behind an acrylic
-that keeps half. What is **not** measured: the dark acrylic over a bright window, the acrylic with the window not in front (Windows
-then draws a solid colour, and the page cannot tell), and the tint on Windows 10. [verification.md](verification.md) says what has
-been seen on a real window.
-
-### 1.4 How to check it on screen
+### 1.3 How to check it on screen
 
 A webview screenshot does not show what Windows composes. Photograph the real window from the screen. Imago's demo app
 (`examples/demo` of the repository `acaprino/imago`) is a small app on the shell in a real window, and `npm run capture` copies
@@ -118,6 +90,27 @@ Rust may be built.) Shinatama's method still holds:
   ends up behind the window in use.
 - Discard a capture whose title bar pixel is not the app's: it photographed the window in front.
 - Switch the theme through the page, not by reloading.
+
+### 1.4 Glass, on and off while the window runs
+
+Glass is the person's choice: Windows' acrylic behind the page, or the ground of `Material::Opaque`. It is off until the
+person chooses it, or the app says otherwise in its program (`glass` of `Options`, off in `Options::for_app`).
+
+1. The page asks for it before it draws (`kept_glass`, 3.3): the answer is the choice the window keeps, or the app's
+   default. The page draws with it (Sigrid's material `glass`, which decides what lets the acrylic through), and does not
+   tell it back: a choice nobody made is not kept as one.
+2. When the person changes it, by the command of the look or by a setting of the app (`useGlass`), the page sends it
+   (`set_glass`). The window changes at once, with no reload and no new window. Into glass, DWM composes the window with what
+   is behind it (`DwmEnableBlurBehindWindow` with an empty region, which is what tao does when it builds a transparent
+   window), then the window takes the acrylic, then the webview's background is clear. Out of it, the other way round: the
+   ground first, under the page, then no effect, then no composition with what is behind.
+3. The choice is kept in `window-material` in the app's data folder, the word `glass` or `solid`, whole or not at all. At the
+   next start the window is built as glass (transparent, with the acrylic, as `Material::Acrylic` is) or opaque with its
+   ground, so the **first frame** already has it. A window built again after a WebView2 crash keeps what it had.
+4. The theme and the glass are one state of the window: a theme told while it is glass keeps the glass, with the tint of
+   the theme drawn (1.1), and glass told before the page has said its theme takes the window's own.
+
+What was seen of it on a real window is in [verification.md](verification.md).
 
 ## 2. The window: Tauri techniques
 
@@ -134,7 +127,7 @@ Rust may be built.) Shinatama's method still holds:
 | Chrome versus content | Chrome is not selectable and keeps the arrow cursor; fields, the content and what carries `data-selectable` are selectable | `AppShell` of Sigrid with `desktop` |
 | Zoom | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` and `Ctrl`+wheel, 50 to 200%, saved per machine | `useZoom` of Sigrid |
 | Theme | The window theme from the person's choice, saved for the first frame (1.2), and the colour of the material (1.1) | the shell (section 3.4), the plugin (`set_theme`), `Material` |
-| Glass | The material the person chose, kept for the next start and read when the window is built (1.3) | the plugin (`material`, `set_material`), `useWindow`, `Material::Optional` |
+| Glass | The acrylic or the ground, the person's choice, changed while the window runs and saved for the first frame (1.4) | the shell (section 3.4), the plugin (`set_glass`, `kept_glass`), `Options` |
 | Place of the window | The position, size and maximized state are saved, and brought back inside the monitors there are now | `open_main` |
 
 The place of the window is Xiox's, moved into the shell: `window.json` in the data folder with the fields `x`, `y`,
@@ -163,8 +156,9 @@ The crate is a Tauri plugin that opens the main window of an app and watches it.
 | Field | What it is | Default |
 |---|---|---|
 | `window` | The window's config: title, size, minimum, first page. The window is made with `WebviewWindowBuilder::from_config`, so the fields the crate does not set (`dragDropEnabled`, `center`) hold as the app wrote them | The window `main` of the app's config |
-| `data_dir` | Where the theme, the material and the place are kept; with none, none is, and the person has no choice of material | The app's data folder |
-| `material` | `Material` (1.1) | `Material::SUITE`: opaque unless the person turned glass on |
+| `data_dir` | Where the theme, the glass and the place are kept; with none, none is | The app's data folder |
+| `material` | `Material` (1.1): what the window is made of without glass | `Material::Opaque` with `DARK_GROUND` and `LIGHT_GROUND` |
+| `glass` | Glass until the person chooses (1.4) | No |
 | `origins` | `Origins`: what the window may show besides its embedded page. Clones share one list, and `Origins::allow` adds to it also after the window is open | None, and the dev server in development |
 | `background` | Started with Windows: hidden until `show_main` | No |
 | `reload_label`, `stopped_message`, `lost_message` | The reload item of the window menu, the question when reloading did not help, and what is said when the window cannot be built again (the app then ends) | English |
@@ -195,8 +189,8 @@ notice (`useNotify`).
 |---|---|---|
 | The window theme | `plugin:imago-shell\|set_theme`, `theme` (`light`, `dark` or `system`, the choice) and, optional, `resolved` (`light` or `dark`, the theme drawn). A page that sends no `resolved` draws its word's own, and dark for `system` | page to Rust. The window takes the theme and its material's colour, and keeps the choice (1.2) |
 | The theme kept | `plugin:imago-shell\|kept_theme`, no arguments | page to Rust. The answer is the choice in `window-theme`, or null when there is none (1.2) |
-| The material | `plugin:imago-shell\|material`, no arguments | page to Rust. The answer is `{ glass, next, optional }`: the window was built as glass, the next start builds it so, the person may choose (1.3) |
-| The material chosen | `plugin:imago-shell\|set_material`, `material` (`glass` or `opaque`) | page to Rust. The choice is kept in `window-material` for the next start; the window is not changed. An unknown word, an app whose material is its own and one with no data folder are refused |
+| Glass | `plugin:imago-shell\|set_glass`, `glass` (true or false) | page to Rust. The window becomes glass or opaque at once, and keeps the choice (1.4) |
+| Glass kept | `plugin:imago-shell\|kept_glass`, no arguments | page to Rust. The answer is true or false: the choice in `window-material`, or else the app's default; true for `Material::Acrylic` (1.4) |
 | The maximize button's rectangle | `plugin:imago-shell\|caption`, `x`, `y`, `width`, `height` | page to Rust. The numbers go to the overlay unchanged |
 | The first frame | `plugin:imago-shell\|ready`, no arguments | page to Rust. The page has drawn: the window is shown |
 | The title and the taskbar | `plugin:imago-shell\|chrome`, `title` and `progress` (a whole number from 0 to 100, or null), always both | page to Rust. A job that ends while the window is not in front asks for attention |
@@ -223,19 +217,19 @@ message or when the rectangle is empty (the overlay hidden), which also ends a p
 
 The shell of `@acaprino/imago` does it; an app writes none of it.
 
-1. Before React draws: the density, the kept scheme and the theme. In a window `material` is asked first, and the theme drawn is the
-   glass one when the window was built as glass (1.3); then `kept_theme` is asked, and the choice it answers is
-   the page's; with none there the one of the browser's storage is, and with none at all dark. When the call fails the page
-   draws the one of its storage, and sends no `set_theme` until the person chooses.
+1. Before React draws: the density, the kept scheme and the theme. In a window `kept_theme` and `kept_glass` are asked together. The
+   choice `kept_theme` answers is the page's; with none there the one of the browser's storage is, and with none at all dark.
+   When the call fails the page draws the one of its storage, and sends no `set_theme` until the person chooses. The page is glass
+   when `kept_glass` says so; when that call fails it is not.
 2. In a window, outside development: the browser's own keys and menu taken away (`useDesktopGuard` of Sigrid).
 3. The first frame drawn, `ready`, once: after two animation frames, or after 250 ms, since a hidden window may run none.
-4. `set_theme`: the choice and the scheme drawn, when either changes.
+4. `set_theme`: the choice and the scheme drawn, when either changes. `set_glass`: the person's glass, when it changes.
 5. The title bar drawn, `caption`, by `useSnapLayouts`; `caption-maximize` comes back.
 6. `useWindowControls` and `useZoom` of Sigrid for the buttons and the zoom.
 7. `chrome`: the title and the progress, from the first time the app sets one; `window-shown` comes back.
 
-`set_material` goes one at a time too, in the order it was asked. `set_theme` and `chrome` go one at a time: the next is sent when the one before has answered, and of those that came meanwhile only
-the last. A button, the zoom or the choice of glass that fails is said in a notice; a failure of the rest is written in the console. In a browser nothing
+`set_theme`, `set_glass` and `chrome` go one at a time: the next is sent when the one before has answered, and of those that came
+meanwhile only the last. `ready` waits for the theme and the glass told before it. A button or the zoom that fails is said in a notice; a failure of the rest is written in the console. In a browser nothing
 of Tauri is called or loaded.
 
 ### 3.5 The capabilities
@@ -306,7 +300,7 @@ own and is not in the package.
    newer one does not build until the crate moves.
 2. Open the window with the plugin (section 3.1) and grant its commands (section 3.5).
 3. Draw the app with the shell (section 3.4).
-4. Check the result with a screen capture (section 1.4) in each theme, over a dark and a bright window, and with glass on.
+4. Check the result with a screen capture (section 1.3) in each theme, over a dark and a bright window.
 
 ## 7. What is not verified on a real window
 

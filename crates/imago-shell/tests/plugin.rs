@@ -19,12 +19,6 @@ use tauri::{
 const PAGE: &str = "http://127.0.0.1:50123/app/?token=x";
 const ORIGIN: &str = "http://127.0.0.1:50123";
 const LOCAL: &str = "http://tauri.localhost";
-/// What the app of the suite is by default: opaque unless the person turned glass on.
-const OPTIONAL: Material = Material::Optional {
-    dark: DARK_GROUND,
-    light: LIGHT_GROUND,
-};
-/// An app that decided for itself that its window is never glass.
 const OPAQUE: Material = Material::Opaque {
     dark: DARK_GROUND,
     light: LIGHT_GROUND,
@@ -38,8 +32,8 @@ fn commands() -> [(&'static str, Value); 7] {
     [
         ("set_theme", json!({ "theme": "dark", "resolved": "dark" })),
         ("kept_theme", json!({})),
-        ("material", json!({})),
-        ("set_material", json!({ "material": "opaque" })),
+        ("set_glass", json!({ "glass": false })),
+        ("kept_glass", json!({})),
         (
             "caption",
             json!({ "x": 1, "y": 0, "width": 46, "height": 32 }),
@@ -69,29 +63,20 @@ fn main_config() -> WindowConfig {
     }
 }
 
-/// An app with its main window opened, of `material`; with its data folder, which already holds what
-/// the person kept.
-fn app_of(material: Material, kept: &[(&str, &str)]) -> (App<MockRuntime>, tempfile::TempDir) {
+/// An app with its main window opened; with its data folder.
+fn app() -> (App<MockRuntime>, tempfile::TempDir) {
     let app = app_with(vec![main_config()]);
     let data = tempfile::tempdir().unwrap();
-    for (name, word) in kept {
-        std::fs::write(data.path().join(name), word).unwrap();
-    }
     open_main(
         app.handle(),
         Options {
             data_dir: Some(data.path().to_owned()),
-            material,
+            material: OPAQUE,
             ..Options::for_app(&app).unwrap()
         },
     )
     .unwrap();
     (app, data)
-}
-
-/// An app with its main window opened, in the material of the suite; with its data folder.
-fn app() -> (App<MockRuntime>, tempfile::TempDir) {
-    app_of(OPTIONAL, &[])
 }
 
 /// A capability of the window `main` for the pages at `urls`, and for no local page.
@@ -215,14 +200,88 @@ fn the_theme_the_page_chose_is_kept_for_the_next_start() {
 }
 
 #[test]
+fn glass_the_page_chose_is_kept_for_the_next_start_and_said_back() {
+    let (app, data) = app();
+    app.add_capability(remote(&["http://127.0.0.1:*"])).unwrap();
+    let set = |glass| call(&app, "main", PAGE, "set_glass", json!({ "glass": glass }));
+    let said = || call(&app, "main", PAGE, "kept_glass", json!({})).unwrap();
+    let kept = || std::fs::read_to_string(data.path().join("window-material")).unwrap();
+    assert_eq!(said(), json!(false), "a fresh install: the app's default");
+    assert!(!data.path().join("window-material").exists());
+    set(true).unwrap();
+    assert_eq!((kept(), said()), ("glass".into(), json!(true)));
+    // A theme told after it keeps the glass.
+    call(
+        &app,
+        "main",
+        PAGE,
+        "set_theme",
+        json!({ "theme": "light", "resolved": "light" }),
+    )
+    .unwrap();
+    assert_eq!(said(), json!(true));
+    set(false).unwrap();
+    assert_eq!((kept(), said()), ("solid".into(), json!(false)));
+    let wrong = call(&app, "main", PAGE, "set_glass", json!({ "glass": "yes" })).unwrap_err();
+    assert!(wrong.contains("glass"), "{wrong}");
+    assert_eq!(kept(), "solid");
+}
+
+#[test]
+fn the_window_opens_with_the_glass_kept_or_else_the_apps_default() {
+    for (file, default, glass) in [
+        (None, true, true),
+        (None, false, false),
+        (Some("glass"), false, true),
+        (Some("solid"), true, false),
+        (Some("garbage"), true, true),
+    ] {
+        let app = app_with(vec![main_config()]);
+        let data = tempfile::tempdir().unwrap();
+        if let Some(word) = file {
+            std::fs::write(data.path().join("window-material"), word).unwrap();
+        }
+        let options = Options {
+            data_dir: Some(data.path().to_owned()),
+            glass: default,
+            ..Options::for_app(&app).unwrap()
+        };
+        open_main(app.handle(), options).unwrap();
+        app.add_capability(remote(&[ORIGIN])).unwrap();
+        let said = call(&app, "main", PAGE, "kept_glass", json!({}));
+        assert_eq!(said, Ok(json!(glass)), "{file:?}, default {default}");
+    }
+}
+
+#[test]
+fn an_acrylic_window_is_glass_whatever_the_choice() {
+    let app = app_with(vec![main_config()]);
+    let data = tempfile::tempdir().unwrap();
+    let options = Options {
+        data_dir: Some(data.path().to_owned()),
+        material: Material::Acrylic,
+        ..Options::for_app(&app).unwrap()
+    };
+    open_main(app.handle(), options).unwrap();
+    app.add_capability(remote(&[ORIGIN])).unwrap();
+    call(&app, "main", PAGE, "set_glass", json!({ "glass": false })).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(data.path().join("window-material")).unwrap(),
+        "solid",
+        "the choice is kept all the same"
+    );
+    assert_eq!(
+        call(&app, "main", PAGE, "kept_glass", json!({})),
+        Ok(json!(true))
+    );
+}
+
+#[test]
 fn the_options_start_from_the_main_window_of_the_apps_config() {
     let options = Options::for_app(&app_with(vec![main_config()])).unwrap();
     assert_eq!(options.window, main_config());
-    assert_eq!(
-        options.material, OPTIONAL,
-        "opaque unless the person turned glass on"
-    );
-    assert_eq!(options.material, Material::SUITE);
+    assert_eq!(options.material, OPAQUE, "the grounds of the suite");
+    assert!(!options.glass, "no glass until the app or the person asks");
     assert!(!options.background);
     assert!((options.before_reload)(None), "a reload is not refused");
     let other = WindowConfig {
@@ -237,127 +296,14 @@ fn the_commands_work_without_a_data_folder() {
     let app = app_with(vec![main_config()]);
     let options = Options {
         data_dir: None,
-        material: OPTIONAL,
+        material: OPAQUE,
         ..Options::for_app(&app).unwrap()
     };
     open_main(app.handle(), options).unwrap();
     app.add_capability(remote(&[ORIGIN])).unwrap();
-    for (command, arguments) in commands() {
-        // What cannot be kept is refused, and says why: the page's setting is told there is no choice.
-        if command != "set_material" {
-            let answer = call(&app, "main", PAGE, command, arguments);
-            assert!(answer.is_ok(), "{command}: {answer:?}");
-        }
-    }
+    assert_allowed(&app, PAGE);
     let kept = call(&app, "main", PAGE, "kept_theme", json!({}));
     assert_eq!(kept, Ok(Value::Null), "a theme was told and none is kept");
-    let material = call(&app, "main", PAGE, "material", json!({}));
-    assert_eq!(
-        material,
-        Ok(json!({ "glass": false, "next": false, "optional": false })),
-        "with nowhere to keep it there is no choice"
-    );
-    let refused = call(
-        &app,
-        "main",
-        PAGE,
-        "set_material",
-        json!({ "material": "glass" }),
-    );
-    assert!(refused.unwrap_err().contains("no data folder"));
-}
-
-#[test]
-fn the_material_the_person_chose_is_kept_for_the_next_start_and_changes_nothing_now() {
-    let (app, data) = app();
-    app.add_capability(remote(&["http://127.0.0.1:*"])).unwrap();
-    let said = || call(&app, "main", PAGE, "material", json!({})).unwrap();
-    let set = |word: &str| {
-        call(
-            &app,
-            "main",
-            PAGE,
-            "set_material",
-            json!({ "material": word }),
-        )
-    };
-    let kept = || std::fs::read_to_string(data.path().join("window-material")).unwrap();
-    let state = |glass, next| json!({ "glass": glass, "next": next, "optional": true });
-    assert_eq!(said(), state(false, false), "a fresh install is opaque");
-    set("glass").unwrap();
-    assert_eq!(
-        (kept(), said()),
-        ("glass".into(), state(false, true)),
-        "the window stays as it was built; the next start differs"
-    );
-    set("opaque").unwrap();
-    assert_eq!((kept(), said()), ("opaque".into(), state(false, false)));
-    for word in ["acrylic", "Glass", ""] {
-        let unknown = set(word).unwrap_err();
-        assert!(unknown.contains("unknown window material"), "{unknown}");
-    }
-    assert_eq!(kept(), "opaque");
-}
-
-#[test]
-fn a_window_built_after_the_choice_is_glass_and_takes_its_theme_as_glass() {
-    let (app, _data) = app_of(OPTIONAL, &[("window-material", "glass")]);
-    app.add_capability(remote(&["http://127.0.0.1:*"])).unwrap();
-    assert_allowed_but_set_material(&app);
-    let said = call(&app, "main", PAGE, "material", json!({})).unwrap();
-    assert_eq!(
-        said,
-        json!({ "glass": true, "next": true, "optional": true })
-    );
-    // The person turns it off meanwhile: this window stays glass, the next start is opaque.
-    call(
-        &app,
-        "main",
-        PAGE,
-        "set_material",
-        json!({ "material": "opaque" }),
-    )
-    .unwrap();
-    let said = call(&app, "main", PAGE, "material", json!({})).unwrap();
-    assert_eq!(
-        said,
-        json!({ "glass": true, "next": false, "optional": true })
-    );
-}
-
-#[test]
-fn an_app_that_fixed_its_material_has_no_choice_for_the_person() {
-    // Whatever was kept, an opaque app is opaque and an acrylic one is glass.
-    for (material, glass) in [(OPAQUE, false), (Material::Acrylic, true)] {
-        let (app, data) = app_of(material, &[("window-material", "glass")]);
-        app.add_capability(remote(&["http://127.0.0.1:*"])).unwrap();
-        let said = call(&app, "main", PAGE, "material", json!({})).unwrap();
-        assert_eq!(
-            said,
-            json!({ "glass": glass, "next": glass, "optional": false })
-        );
-        let refused = call(
-            &app,
-            "main",
-            PAGE,
-            "set_material",
-            json!({ "material": "opaque" }),
-        )
-        .unwrap_err();
-        assert!(refused.contains("the app's own"), "{refused}");
-        let kept = std::fs::read_to_string(data.path().join("window-material")).unwrap();
-        assert_eq!(kept, "glass", "the file is not touched");
-    }
-}
-
-/// Every command but `set_material` is answered.
-fn assert_allowed_but_set_material(app: &App<MockRuntime>) {
-    for (command, arguments) in commands() {
-        if command != "set_material" {
-            let answer = call(app, "main", PAGE, command, arguments);
-            assert!(answer.is_ok(), "{command}: {answer:?}");
-        }
-    }
 }
 
 #[test]

@@ -4,7 +4,7 @@ import { useMedia } from '@acaprino/sigrid';
 import { Badge, Button, Cluster, Column, Icon, Input, Select, Switch, Text, Textarea, ToggleGroup, ToggleGroupItem } from '@acaprino/sigrid/primitives';
 import { DescriptionList, Empty, FormField, ItemList, ItemRow, SearchField, SettingRow } from '@acaprino/sigrid/components';
 import { Inspector, Panel } from '@acaprino/sigrid/layout';
-import { useNotify, useWindow } from '@acaprino/imago';
+import { useGlass, useNotify, useWindow } from '@acaprino/imago';
 import { KINDS, STATES, type Item, type Kind, type State } from './items';
 
 function StateBadge({ state }: { state: State }) {
@@ -88,18 +88,11 @@ export function Form({ add, cancel }: { add: (item: Item) => void; cancel: () =>
   );
 }
 
-/** The setting of the glass window: what the person kept, and «Restart needed» while the window is not yet what was kept. */
-function GlassRow() {
-  const { glass, glassPending, setGlass } = useWindow();
-  const kept = glass !== glassPending;
-  const about = glassPending ? 'Restart needed: it changes the next time the app starts.' : kept ? 'On: the window lets the desktop show through.' : 'Off: the window is opaque.';
-  return <SettingRow label="Glass window" description={about} control={<Switch aria-label="Glass window" checked={kept} onCheckedChange={setGlass} />} />;
-}
-
-/** The screen of two views: the words typed in it are said in a notice, or are the title of the window. */
+/** The screen of two views: the words typed in it are said in a notice, or are the title of the window, whose glass is set there. */
 export function Words({ view }: { view: 'notices' | 'window' }) {
   const notify = useNotify();
   const window_ = useWindow();
+  const [glass, setGlass] = useGlass();
   const [words, setWords] = useState('3 items · Imago demo');
   const about = view === 'window'
     ? 'The words are the title of the window, until it has its own again.'
@@ -115,8 +108,8 @@ export function Words({ view }: { view: 'notices' | 'window' }) {
               <Button variant="outline" onClick={() => window_.setTitle(words)}>Title of the window</Button>
               <Button variant="outline" onClick={() => window_.setTitle(null)}>Its own title</Button>
             </Cluster>
-            {/* Only a window the person may choose the glass of: not a browser, and not an app that fixed its material. */}
-            {window_.glassOptional && <GlassRow />}
+            {/* A browser has no glass: the setting is in a window of its own. */}
+            {window_.own && <SettingRow label="Glass" description="What is behind the window shows through it" control={<Switch aria-label="Glass" checked={glass} onCheckedChange={setGlass} />} />}
           </>
         ) : (
           <>

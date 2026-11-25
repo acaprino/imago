@@ -2,11 +2,12 @@
 //! through. What every app of the suite wired by hand is here once, around the pieces of the other
 //! modules:
 //!
-//! - [`plugin`]: the commands `set_theme`, `kept_theme`, `material`, `set_material`, `caption`,
-//!   `ready` and `chrome`. As a plugin they have permissions of their own (`imago-shell:default`), so a page that is not local (one on
-//!   `http://127.0.0.1`) gets them by its capability, without an application manifest.
+//! - [`plugin`]: the commands `set_theme`, `kept_theme`, `set_glass`, `kept_glass`, `caption`,
+//!   `ready` and `chrome`. As a plugin they have permissions of their own (`imago-shell:default`),
+//!   so a page that is not local (one on `http://127.0.0.1`) gets them by its capability, without
+//!   an application manifest.
 //! - [`open_main`]: the window, with everything a window needs right after it is built; hidden
-//!   until the page has drawn, where it was last time, in the theme it had.
+//!   until the page has drawn, where it was last time, in the theme and the glass it had.
 //! - A lost page is reloaded, a lost browser process builds the window again, and what neither
 //!   mends is asked of the person ([`recovery_action`]).
 //! - [`on_run_event`]: what the exit of the application and the end of the window mean for that.
@@ -15,12 +16,9 @@ use crate::{
     guard::{disable_browser_accelerators, guard_window, trim_context_menu},
     message,
     recovery::{recovery_action, watch_process_failures, Recovery, RecoveryAction},
-    theme::{
-        drawn_by_page, material_state, parse_material, parse_theme, save_glass, save_theme,
-        saved_glass, saved_theme, MaterialState,
-    },
+    theme::{drawn_by_page, parse_theme, save_glass, save_theme, saved_glass, saved_theme},
     window_state::{load_state, measure, restore, save_state, state_to_save, WindowState},
-    Material, Origins, ProcessFailure,
+    Material, Origins, ProcessFailure, DARK_GROUND, LIGHT_GROUND,
 };
 use std::{
     fmt::Display,
@@ -37,8 +35,8 @@ use tauri::{
     plugin::{Builder, TauriPlugin},
     utils::config::{PreventOverflowConfig, WindowConfig},
     window::{ProgressBarState, ProgressBarStatus},
-    AppHandle, Emitter, Manager, RunEvent, Runtime, State, Url, UserAttentionType, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, Manager, RunEvent, Runtime, State, Theme, Url, UserAttentionType,
+    WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 
 /// The label of the window in `tauri.conf.json`.
@@ -65,12 +63,12 @@ pub struct Options {
     /// The window, from `tauri.conf.json` (`"create": false`): its title, its size, its minimum and
     /// its first page. The material, the decorations and the visibility are the crate's.
     pub window: WindowConfig,
-    /// Where the theme, the material and the place of the window are kept. `None`: none is read or
-    /// kept, and the person has no choice of material.
+    /// Where the theme, the glass and the place of the window are kept. `None`: none is kept.
     pub data_dir: Option<PathBuf>,
-    /// What the window is made of. [`Material::Optional`], the default, is opaque unless the person
-    /// turned glass on in the app's settings; that choice is kept for the next start.
+    /// What the window is made of without glass: its colour in each theme.
     pub material: Material,
+    /// Glass until the person chooses (`set_glass`): the app's default, for a fresh install.
+    pub glass: bool,
     /// What the window may show besides the embedded frontend (and the dev server in development).
     pub origins: Origins,
     /// The window stays hidden until [`show_main`]: the app was started with Windows.
@@ -88,8 +86,8 @@ pub struct Options {
 }
 
 impl Options {
-    /// The window `main` of `tauri.conf.json` in the suite's material (opaque unless the person
-    /// turned glass on, [`Material::SUITE`]), the app's data folder, and words in English. An error when the app has no such window.
+    /// The window `main` of `tauri.conf.json` with the grounds of the suite and no glass, the app's
+    /// data folder, and words in English. An error when the app has no such window.
     pub fn for_app<R: Runtime>(app: &impl Manager<R>) -> tauri::Result<Self> {
         let windows = &app.config().app.windows;
         let window = windows
@@ -99,7 +97,11 @@ impl Options {
         Ok(Self {
             window: window.clone(),
             data_dir: app.path().app_data_dir().ok(),
-            material: Material::SUITE,
+            material: Material::Opaque {
+                dark: DARK_GROUND,
+                light: LIGHT_GROUND,
+            },
+            glass: false,
             origins: Origins::default(),
             background: false,
             reload_label: "Reload interface".into(),
@@ -110,16 +112,27 @@ impl Options {
     }
 }
 
+/// What the window looks like: the person's choice of glass, what the window is made of now, and
+/// the theme the page draws. One lock for the three, so that a theme and a glass told together
+/// leave the window as the last of them says, with the other one's part.
+#[derive(Clone, Copy, Debug, Default)]
+struct Look {
+    /// The person's choice, or the app's default ([`Options::glass`]).
+    glass: bool,
+    /// The window is glass now ([`Material::is_glass`]).
+    glassy: bool,
+    /// The theme the page draws, since it said it.
+    resolved: Option<Theme>,
+}
+
 /// The one main window, kept across a rebuild of it.
 #[derive(Default)]
 struct Shell {
     /// `None` until [`open_main`].
     options: Mutex<Option<Arc<Options>>>,
+    look: Mutex<Look>,
     overlay: Mutex<Option<SnapLayouts>>,
     recovery: Mutex<Recovery>,
-    /// What the window was built with: the app's material, and for an optional one the person's
-    /// choice of that time. A choice made since is for the next start. `None` until [`open_main`].
-    built: Mutex<Option<Material>>,
     /// The last place seen while the window was neither maximized nor minimized.
     normal: Mutex<Option<WindowState>>,
     /// The page the window went to last: a rebuild opens it again.
@@ -144,11 +157,6 @@ impl Shell {
         self.options()
             .filter(|options| options.window.label == window.label())
             .ok_or_else(|| format!("window \"{}\" is not imago-shell's", window.label()))
-    }
-
-    /// The material of the window now open: what the page draws for.
-    fn built(&self) -> Option<Material> {
-        *lock(&self.built)
     }
 
     fn is_current(&self, generation: u64) -> bool {
@@ -180,13 +188,7 @@ fn text(error: impl Display) -> String {
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("imago-shell")
         .invoke_handler(tauri::generate_handler![
-            set_theme,
-            kept_theme,
-            material,
-            set_material,
-            caption,
-            ready,
-            chrome
+            set_theme, kept_theme, set_glass, kept_glass, caption, ready, chrome
         ])
         .setup(|app, _| {
             app.manage(Shell::default());
@@ -207,12 +209,16 @@ fn set_theme<R: Runtime>(
     let options = shell.options_of(&window)?;
     let theme = parse_theme(&theme).ok_or_else(|| format!("unknown window theme \"{theme}\""))?;
     let resolved = drawn_by_page(theme, resolved.as_deref());
-    // The window takes the theme in the material it was built with, not in the one kept for later.
-    shell
-        .built()
-        .unwrap_or(options.material)
-        .apply(&window, theme, resolved)
+    let mut look = lock(&shell.look);
+    window.set_theme(theme.to_tauri()).map_err(text)?;
+    let glassy = options.material.is_glass(look.glass);
+    options
+        .material
+        .paint(&window, look.glassy, glassy, resolved)
         .map_err(text)?;
+    look.glassy = glassy;
+    look.resolved = Some(resolved);
+    drop(look);
     match &options.data_dir {
         Some(dir) => save_theme(dir, theme).map_err(text),
         None => Ok(()),
@@ -232,42 +238,49 @@ fn kept_theme<R: Runtime>(
     Ok(kept.map(|theme| theme.word()))
 }
 
-/// What the window was built of and what the next start builds, so that the page draws its ground
-/// for the window it has and the person's setting shows the choice kept: `glass`, `next` and
-/// `optional` (the person can choose, [`Material::Optional`]).
+/// Whether the window is glass, as the person chose: it becomes so at once, in the theme the page
+/// draws, and keeps the choice for the first frame of the next start. A window whose material is
+/// [`Material::Acrylic`] stays glass, and keeps the choice all the same.
 #[tauri::command(async)]
-fn material<R: Runtime>(
+fn set_glass<R: Runtime>(
     window: WebviewWindow<R>,
     shell: State<'_, Shell>,
-) -> Result<MaterialState, String> {
-    let options = shell.options_of(&window)?;
-    let built = shell.built().unwrap_or(options.material);
-    Ok(material_state(
-        options.material,
-        built,
-        options.data_dir.as_deref(),
-    ))
-}
-
-/// The person's choice of the window's material (`glass` or `opaque`), kept for the next start. The
-/// window is not changed: its material is a property it has from its creation. Refused when the app
-/// fixed its material, or has no data folder to keep the choice in.
-#[tauri::command(async)]
-fn set_material<R: Runtime>(
-    window: WebviewWindow<R>,
-    shell: State<'_, Shell>,
-    material: String,
+    glass: bool,
 ) -> Result<(), String> {
     let options = shell.options_of(&window)?;
-    if !options.material.is_optional() {
-        return Err("the material of this window is the app's own, not the person's".into());
-    }
-    let glass = parse_material(&material)
-        .ok_or_else(|| format!("unknown window material \"{material}\""))?;
+    let mut look = lock(&shell.look);
+    // Before the page says its theme, the window's own.
+    let resolved = match look.resolved {
+        Some(resolved) => resolved,
+        None => window.theme().map_err(text)?,
+    };
+    let glassy = options.material.is_glass(glass);
+    options
+        .material
+        .paint(&window, look.glassy, glassy, resolved)
+        .map_err(text)?;
+    *look = Look {
+        glass,
+        glassy,
+        ..*look
+    };
+    drop(look);
     match &options.data_dir {
         Some(dir) => save_glass(dir, glass).map_err(text),
-        None => Err("the app has no data folder to keep the choice in".into()),
+        None => Ok(()),
     }
+}
+
+/// Whether the window is glass now: the person's choice, kept by [`set_glass`], or else the app's
+/// default. The page takes it when it starts.
+#[tauri::command(async)]
+fn kept_glass<R: Runtime>(
+    window: WebviewWindow<R>,
+    shell: State<'_, Shell>,
+) -> Result<bool, String> {
+    let options = shell.options_of(&window)?;
+    let glass = lock(&shell.look).glass;
+    Ok(options.material.is_glass(glass))
 }
 
 /// Where the page's maximize button is, in physical pixels of the client area.
@@ -345,6 +358,11 @@ pub fn open_main<R: Runtime>(app: &AppHandle<R>, options: Options) -> tauri::Res
     }
     let place = options.data_dir.as_deref().and_then(load_state);
     let visible = !options.background;
+    let glass = options.data_dir.as_deref().and_then(saved_glass);
+    *lock(&shell.look) = Look {
+        glass: glass.unwrap_or(options.glass),
+        ..Look::default()
+    };
     // A window opened anew counts from nothing; one built again keeps its count.
     *lock(&shell.recovery) = Recovery::new();
     *lock(&shell.page) = None;
@@ -419,11 +437,11 @@ fn build<R: Runtime>(
     let shell = app.state::<Shell>();
     let options = shell.options().ok_or(tauri::Error::WindowNotFound)?;
     let saved = options.data_dir.as_deref().and_then(saved_theme);
-    // The material is the window's from here on: what the person chooses later is for the next one.
-    let glass = options.data_dir.as_deref().and_then(saved_glass);
-    let made = options.material.built(glass.unwrap_or(false));
-    *lock(&shell.built) = Some(made);
-    let mut config = made.window_config(options.window.clone(), saved);
+    // A window built again keeps the glass it had, chosen or not.
+    let glassy = options.material.is_glass(lock(&shell.look).glass);
+    let mut config = options
+        .material
+        .window_config(options.window.clone(), saved, glassy);
     config.visible = false;
     config
         .prevent_overflow
@@ -458,7 +476,8 @@ fn build<R: Runtime>(
             });
         }
     }
-    made.paint_first_frame(&window)?;
+    lock(&shell.look).glassy = glassy;
+    options.material.paint_first_frame(&window, glassy)?;
     // A development build keeps reload, DevTools and the engine's whole context menu (Inspect).
     if !tauri::is_dev() {
         disable_browser_accelerators(&window)?;

@@ -30,7 +30,7 @@ try {
   // The page's calls to a window are imported when they are made: a bundler must find them, in an app that runs in a browser too.
   assert.ok(existsSync(join(app, 'node_modules', '@tauri-apps', 'api')), '@tauri-apps/api is not installed with the package');
   const exported = run(['--input-type=module', '-e', "console.log(Object.keys(await import('@acaprino/imago')).sort().join())"], app).trim();
-  assert.equal(exported, 'AppWindow,ScreenBoundary,defineApp,focusContent,startApp,useFocusKept,useNotify,useWindow');
+  assert.equal(exported, 'AppWindow,ScreenBoundary,defineApp,focusContent,startApp,useFocusKept,useGlass,useNotify,useWindow');
   assert.match(run([join(installed, 'scripts', 'check', 'cli.mjs'), '--help'], app), /Usage: imago-check/);
   console.log(`ok   ${asset} installs in an empty project and is imported: ${exported}`);
 } finally {

@@ -1,6 +1,6 @@
 // What the parts of the shell share, for the whole page: the app, its words, the one stack of notices and the window.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useDesktopGuard, useWords } from '@acaprino/sigrid';
+import { useDesktopGuard, useWords, type ThemeDef } from '@acaprino/sigrid';
 import { useCommand, useSchemeCommands, type SchemeCommandsOptions } from '@acaprino/sigrid/assemblies';
 import { Toasts, type ToastItem } from '@acaprino/sigrid/components';
 import { Icon } from '@acaprino/sigrid/primitives';
@@ -27,31 +27,21 @@ export interface WindowHandle {
   setProgress(percent: number | null): void;
   /** Calls `handler` when the window is shown again (from the notification area, or because the app was started again); returns how to stop. */
   onShown(handler: () => void): () => void;
-  /** The window was built as glass: its own material shows through the ground. Always false in a browser. */
-  readonly glass: boolean;
-  /** The person may choose glass: the app runs in a window, lets the person choose, and can keep the choice. The switch of the settings is drawn only then. */
-  readonly glassOptional: boolean;
-  /** The choice kept is not what the window was built with: it holds from the next start («Restart needed»). */
-  readonly glassPending: boolean;
-  /** Keeps the choice of glass for the next start. The window stays as it is: its material is the one it was built with. Does nothing where `glassOptional` is false. */
-  setGlass(on: boolean): void;
 }
 
-/** What the window says of its material: what it was built of, what the next start builds, and whether the person may choose. */
-export interface WindowMaterial {
-  readonly glass: boolean;
-  readonly next: boolean;
-  readonly optional: boolean;
-}
-
-/** A browser, a window that does not say, and an app that fixed its material: opaque, and no choice. */
-export const OPAQUE_WINDOW: WindowMaterial = { glass: false, next: false, optional: false };
+/**
+ * Whether the window is glass, and how to make it so or not: Windows' acrylic behind the page, or the opaque ground. In a
+ * window of its own the choice is the window's, kept for the next start; in a browser there is no glass, and `set` does
+ * nothing.
+ */
+export type Glass = readonly [on: boolean, set: (on: boolean) => void];
 
 interface Shell {
   app: App;
   words: ShellWords;
   notify: Notify;
   window: WindowHandle;
+  glass: Glass;
   /** A call to the window that failed: one the person asked for is said to them, the others are written in the console. */
   failed: TauriErrorHandler;
 }
@@ -70,14 +60,26 @@ export const useNotify = (): Notify => useShell().notify;
 /** The window the app runs in. */
 export const useWindow = (): WindowHandle => useShell().window;
 
-/** The app's look, and the key its light, dark or system's choice is kept under. */
-export const lookOf = (app: App, glass = false): SchemeCommandsOptions => ({ theme: glass ? app.glassTheme : app.theme, tone: SHELL_TONE, storageKey: app.storage.scheme });
+/** Whether the window is glass, and how to change it, for an app's settings. In a browser it is off. */
+export const useGlass = (): Glass => useShell().glass;
+
+// The theme of an app as glass: one object for each app, so that the theme is put again only when the glass changes.
+const glassy = new WeakMap<App, ThemeDef>();
+const themeOf = (app: App, glass: boolean): ThemeDef => {
+  if (!glass) return app.theme;
+  let theme = glassy.get(app);
+  if (!theme) glassy.set(app, (theme = { ...app.theme, material: 'glass' }));
+  return theme;
+};
+
+/** The app's look, as glass or not, and the key its light, dark or system's choice is kept under. */
+export const lookOf = (app: App, glass = false): SchemeCommandsOptions => ({ theme: themeOf(app, glass), tone: SHELL_TONE, storageKey: app.storage.scheme });
 
 const PLUGIN = 'plugin:imago-shell|';
 const READY_FALLBACK_MS = 250;
 const NOTICE_MS = 5000;
 /** What the person asks the window for: a failure of these is said. */
-const ASKED = new Set(['minimize', 'toggleMaximize', 'close', 'setZoom', 'setMaterial']);
+const ASKED = new Set(['minimize', 'toggleMaximize', 'close', 'setZoom']);
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 /** Not in development, where reload and the developer tools are needed. */
 const released = !(import.meta as { env?: { DEV?: boolean } }).env?.DEV;
@@ -107,78 +109,59 @@ function inTurn(command: string): (args: Record<string, unknown>) => Promise<voi
   };
 }
 const setTheme = inTurn('set_theme');
+const setGlass = inTurn('set_glass');
 /** The choice the window keeps, written as the person makes it: what the browser keeps reaches the disk later. Null is none. */
 export const keptTheme = (): Promise<unknown> => tauriApi.invoke(`${PLUGIN}kept_theme`);
+/** Whether the window is glass: the person's choice it keeps, or the app's default. */
+export const keptGlass = (): Promise<unknown> => tauriApi.invoke(`${PLUGIN}kept_glass`);
 const chrome = inTurn('chrome');
-
-const isFlag = (value: unknown): value is boolean => typeof value === 'boolean';
-/** What the window was built of, as it says; a window that does not say, or says what is not understood, is opaque. */
-export async function windowMaterial(): Promise<WindowMaterial> {
-  try {
-    const said = (await tauriApi.invoke(`${PLUGIN}material`)) as Partial<Record<keyof WindowMaterial, unknown>> | null;
-    if (said && isFlag(said.glass) && isFlag(said.next) && isFlag(said.optional)) return { glass: said.glass, next: said.next, optional: said.optional };
-    console.warn('imago: material: not understood:', said);
-  } catch (error) {
-    console.warn('imago: material:', error);
-  }
-  return OPAQUE_WINDOW;
-}
-/** The choice of glass, kept for the next start. */
-const keepMaterial = (glass: boolean): Promise<unknown> => tauriApi.invoke(`${PLUGIN}set_material`, { material: glass ? 'glass' : 'opaque' });
 let themeTold: Promise<void> = Promise.resolve();
+let glassTold: Promise<void> = Promise.resolve();
 
 /** A notice in the stack: its `id` is its own, and `said` is the one its caller gave. */
 type Notice = ToastItem & { said: string | undefined };
 
 let notices = 0; // not crypto.randomUUID, which a page served over plain http does not have
 
-/**
- * The state of the shell around the app, with the notices drawn once. `untold`: the window did not say which theme it keeps.
- * `material`: what the window said it was built of.
- */
-export function ShellProvider({ app, untold, material, children }: { app: App; untold: boolean; material: WindowMaterial; children: ReactNode }) {
+/** What the window said it keeps when the page started: its theme (`untold` when it did not say), and whether it is glass (null when it did not say). */
+export interface Kept {
+  untold: boolean;
+  glass: boolean | null;
+}
+
+/** The state of the shell around the app, with the notices drawn once. */
+export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; children: ReactNode }) {
   const own = useMemo(() => readHost().ownWindow, []);
   const words = useMemo(() => ({ ...SHELL_WORDS, ...app.words?.shell }), [app]);
+  const [glass, setGlass] = useState(own && kept.glass === true);
   const [items, setItems] = useState<Notice[]>([]);
   const [title, setTitle] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const shown = useRef(new Set<() => void>());
 
-  // What the notices and the failures say does not change with the window's state: the app's effects depend on them.
-  const notify = useMemo<Notify>(() => (text, options) => {
-    // A new id each time: Sigrid keeps the node of one it has, and a screen reader reads only what is added.
-    const item: Notice = { ...options, id: `notice-${++notices}`, said: options?.id, text };
-    setItems((now) => [...now.filter(({ said }) => said === undefined || said !== item.said), item]);
-  }, []);
-  const failed = useMemo(() => (call: string, error: unknown): void => {
-    if (ASKED.has(call)) notify(words.windowFailed(call, message(error)), { id: `window-${call}`, kind: 'error' });
-    else console.warn(`imago: ${call}:`, error);
-  }, [notify, words]);
-
-  // The choice of glass that was kept, which may differ from the glass the window was built with. One write at a time, in order.
-  const [next, setNext] = useState(material.next);
-  const keeping = useRef<Promise<unknown>>(Promise.resolve());
-  const window_ = useMemo<WindowHandle>(() => ({
-    own, setTitle,
-    setProgress: (percent) => setProgress(percent === null ? null : Math.round(Math.min(100, Math.max(0, percent)))),
-    onShown: (handler) => {
-      shown.current.add(handler);
-      return () => { shown.current.delete(handler); };
-    },
-    glass: material.glass,
-    glassOptional: own && material.optional,
-    glassPending: own && material.optional && next !== material.glass,
-    setGlass: (on) => {
-      if (!own || !material.optional) return;
-      setNext(on);
-      keeping.current = keeping.current.then(() => keepMaterial(on)).catch(async (error: unknown) => {
-        failed('setMaterial', error);
-        setNext((await windowMaterial()).next);
-      });
-    },
-  }), [own, material, next, failed]);
-
-  const shell = useMemo<Shell>(() => ({ app, words, notify, window: window_, failed }), [app, words, notify, window_, failed]);
+  const shell = useMemo<Shell>(() => {
+    const notify: Notify = (text, options) => {
+      // A new id each time: Sigrid keeps the node of one it has, and a screen reader reads only what is added.
+      const item: Notice = { ...options, id: `notice-${++notices}`, said: options?.id, text };
+      setItems((now) => [...now.filter(({ said }) => said === undefined || said !== item.said), item]);
+    };
+    return {
+      app, words, notify,
+      glass: [glass, (on) => { if (own) setGlass(on); }],
+      window: {
+        own, setTitle,
+        setProgress: (percent) => setProgress(percent === null ? null : Math.round(Math.min(100, Math.max(0, percent)))),
+        onShown: (handler) => {
+          shown.current.add(handler);
+          return () => { shown.current.delete(handler); };
+        },
+      },
+      failed: (call, error) => {
+        if (ASKED.has(call)) notify(words.windowFailed(call, message(error)), { id: `window-${call}`, kind: 'error' });
+        else console.warn(`imago: ${call}:`, error);
+      },
+    };
+  }, [app, own, words, glass]);
 
   useFocusFollowed();
   useDesktopGuard(own && released);
@@ -194,7 +177,7 @@ export function ShellProvider({ app, untold, material, children }: { app: App; u
     const send = (): void => {
       if (sent) return;
       sent = true;
-      void themeTold.then(() => tell('ready'));
+      void Promise.all([themeTold, glassTold]).then(() => tell('ready'));
     };
     let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(send); });
     const timer = setTimeout(send, READY_FALLBACK_MS);
@@ -224,8 +207,9 @@ export function ShellProvider({ app, untold, material, children }: { app: App; u
     <ShellContext value={shell}>
       {children}
       {/* After the app, so that its commands come after the app's in the palette. */}
-      <Look app={app} own={own} untold={untold} glass={material.glass} />
-      {shell.window.glassOptional ? <GlassCommand /> : null}
+      <Look app={app} own={own} untold={kept.untold} glass={glass} />
+      {own ? <GlassCommand /> : null}
+      {own ? <GlassTold glass={glass} /> : null}
       <Toasts items={items} durationMs={NOTICE_MS} onDismiss={(id) => setItems((now) => now.filter((item) => item.id !== id))} />
     </ShellContext>
   );
@@ -246,19 +230,24 @@ function Look({ app, own, untold, glass }: { app: App; own: boolean; untold: boo
   return null;
 }
 
-/** The glass window as a command, next to light, dark and the system's look; drawn only where the person may choose it. */
+/** Glass as a command of the look, checked when the window is glass. Only in a window of its own. */
 function GlassCommand() {
-  const { words, notify, window: { glass, glassPending, setGlass } } = useShell();
-  const group = useWords().scheme.group;
-  // What is checked is the choice kept, which holds from the next start: the window itself stays as it was built.
-  const kept = glassPending ? !glass : glass;
-  useCommand({
-    id: 'imago.glass', label: words.glass, group, icon: <Icon name="layers" />, checked: kept,
-    run: () => {
-      setGlass(!kept);
-      // A choice that is the glass the window has holds at once and needs no restart.
-      if (!kept !== glass) notify(words.glassRestart, { id: 'imago.glass' });
-    },
-  });
+  const { words, glass: [on, set] } = useShell();
+  const { group, keywords } = useWords().scheme;
+  useCommand({ id: 'imago.glass', label: words.glass, group, keywords, icon: <Icon name="layers" />, checked: on, run: () => set(!on) });
+  return null;
+}
+
+/**
+ * The window told whether it is glass when the person changes it. It is not told at the start: it is what it said, and a
+ * choice nobody made is not kept as one.
+ */
+function GlassTold({ glass }: { glass: boolean }) {
+  const unchosen = useRef<boolean | null>(glass);
+  useEffect(() => {
+    if (glass === unchosen.current) return;
+    unchosen.current = null;
+    glassTold = setGlass({ glass });
+  }, [glass]);
   return null;
 }

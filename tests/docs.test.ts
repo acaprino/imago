@@ -240,18 +240,11 @@ describe('the window\'s material', () => {
     assert.deepEqual(crate, [['DARK_GROUND', surfaces!.dark.sidebar], ['LIGHT_GROUND', surfaces!.light.sidebar]]);
   });
 
-  // The material of the suite is the person's choice over those grounds, and is the default of `Options`: an app writes the
-  // crate's names, never a colour of its own.
-  test('the material of the suite is optional glass over those grounds, and the default of the options', () => {
-    assert.match(read('crates/imago-shell/src/theme.rs'), /pub const SUITE: Material = Material::Optional \{\s*dark: DARK_GROUND,\s*light: LIGHT_GROUND,\s*\};/);
-    assert.match(read('crates/imago-shell/src/main_window.rs'), /material: Material::SUITE,/);
-  });
-
   for (const file of ['examples/demo/src-tauri/src/main.rs', USING]) {
-    test(`${file} takes the material from the crate and writes no colour`, () => {
+    test(`${file} takes them from the crate`, () => {
       const text = read(file);
+      assert.match(text, /Material::Opaque \{\s*dark: DARK_GROUND,\s*light: LIGHT_GROUND,\s*\}/);
       assert.doesNotMatch(text, /Color\(0x/);
-      assert.doesNotMatch(text, /Material::Opaque \{\s*dark: DARK_GROUND/, 'an app that does not decide for itself leaves the person the choice');
     });
   }
 

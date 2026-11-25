@@ -2,17 +2,12 @@
 //! a transparent one, the frame Windows draws and the page's `prefers-color-scheme`. The page tells
 //! it, and it is kept in a file in the data folder: the next start builds the window with that theme
 //! in its config and the first frame already has the right one. A window built again after a
-//! WebView2 crash gets it too.
+//! WebView2 crash gets it too. Glass, the person's choice of the acrylic or the opaque ground, is
+//! kept the same way, in a file of its own, and changes while the window runs.
 //!
 //! `Window::set_theme` reaches DWM through tao (`DWMWA_USE_IMMERSIVE_DARK_MODE`), and tauri-runtime-wry
 //! passes the new theme to WebView2's `PreferredColorScheme`. The JavaScript `setTheme()` would need
 //! `core:window:allow-set-theme` and cannot keep the choice for the first frame.
-//!
-//! The material of the window is a property it has from its creation. An app says whether it is
-//! always glass, never glass, or the person's choice ([`Material::Optional`]); the person's choice is
-//! kept in a file of the data folder, as the theme is, and read when the window is built. A choice
-//! made while the window runs changes nothing in it: it is for the next start.
-use serde::Serialize;
 use std::{fs, io, path::Path};
 use tauri::{
     utils::{
@@ -25,8 +20,11 @@ use tauri::{
 /// The main window's theme, kept in the data folder for the next start.
 const THEME_FILE: &str = "window-theme";
 
-/// The material the person chose for the main window, kept in the data folder for the next start.
-const MATERIAL_FILE: &str = "window-material";
+/// Whether the main window is glass, kept in the data folder for the next start: `glass` or `solid`.
+const GLASS_FILE: &str = "window-material";
+
+/// The background of a window that shows what is behind it.
+const CLEAR: Color = Color(0, 0, 0, 0);
 
 /// The narrowest window of the suite. A `minWidth` of 500 is what gives the window its snap zones.
 const MIN_WIDTH: f64 = 500.0;
@@ -85,7 +83,7 @@ impl WindowTheme {
     }
 
     /// What Tauri takes: `None` is the system's.
-    fn to_tauri(self) -> Option<Theme> {
+    pub(crate) fn to_tauri(self) -> Option<Theme> {
         match self {
             WindowTheme::Light => Some(Theme::Light),
             WindowTheme::Dark => Some(Theme::Dark),
@@ -116,18 +114,20 @@ pub(crate) fn drawn_by_page(theme: WindowTheme, resolved: Option<&str>) -> Theme
     }
 }
 
-/// The tint of the acrylic (RGBA) in `theme`, light or dark.
+/// The tint of the acrylic (RGBA) in `theme`, light or dark: the ground of the suite in that theme,
+/// which is what Sigrid's glass takes the acrylic's own colour to be.
 ///
 /// Only the acrylic of Windows 10 (and of the first Windows 11, before 22H2) takes its colour from
 /// the tint: there a light page needs a light tint and a dark page a dark one. On Windows 11 22H2
-/// and later the acrylic ignores it ([`apply_theme`] says why it does no harm there).
+/// and later the acrylic ignores it ([`acrylic`] says why it does no harm there).
 fn acrylic_tint(theme: Theme) -> Color {
-    match theme {
-        // `#F6F7F9` at 88%, 0.88 x 255 = 224.4.
-        Theme::Light => Color(0xF6, 0xF7, 0xF9, 224),
-        // `#0C111D` at 80%, 0.8 x 255 = 204. Dark, and any theme a later Tauri adds.
-        _ => Color(0x0C, 0x11, 0x1D, 204),
-    }
+    let (Color(red, green, blue, _), alpha) = match theme {
+        // At 88%, 0.88 x 255 = 224.4.
+        Theme::Light => (LIGHT_GROUND, 224),
+        // At 80%, 0.8 x 255 = 204. Dark, and any theme a later Tauri adds.
+        _ => (DARK_GROUND, 204),
+    };
+    Color(red, green, blue, alpha)
 }
 
 /// Keeps the theme in `<data_dir>/window-theme` for the next start. The file is written whole or
@@ -142,90 +142,80 @@ pub(crate) fn saved_theme(data_dir: &Path) -> Option<WindowTheme> {
     parse_theme(fs::read_to_string(data_dir.join(THEME_FILE)).ok()?.trim())
 }
 
-/// `glass` or `opaque`, in lower case and nothing else: whether the person turned glass on.
-pub(crate) fn parse_material(word: &str) -> Option<bool> {
-    match word {
+/// Keeps whether the window is glass in `<data_dir>/window-material` for the next start, as
+/// [`save_theme`] keeps the theme.
+pub(crate) fn save_glass(data_dir: &Path, glass: bool) -> io::Result<()> {
+    let word = if glass { "glass" } else { "solid" };
+    crate::write_atomically(&data_dir.join(GLASS_FILE), word.as_bytes())
+}
+
+/// Whether the window was glass last time. A missing, unreadable or corrupt file is `None` (a fresh
+/// install: the app's default).
+pub(crate) fn saved_glass(data_dir: &Path) -> Option<bool> {
+    match fs::read_to_string(data_dir.join(GLASS_FILE)).ok()?.trim() {
         "glass" => Some(true),
-        "opaque" => Some(false),
+        "solid" => Some(false),
         _ => None,
     }
 }
 
-/// The word the file and the page use for the material.
-pub(crate) fn material_word(glass: bool) -> &'static str {
-    if glass {
-        "glass"
-    } else {
-        "opaque"
-    }
-}
-
-/// Keeps the person's choice of glass in `<data_dir>/window-material` for the next start, whole or
-/// not at all like the theme.
-pub(crate) fn save_glass(data_dir: &Path, glass: bool) -> io::Result<()> {
-    crate::write_atomically(
-        &data_dir.join(MATERIAL_FILE),
-        material_word(glass).as_bytes(),
-    )
-}
-
-/// Whether the person turned glass on, as last kept. A missing, unreadable or corrupt file is
-/// `None`: the person has not chosen.
-pub(crate) fn saved_glass(data_dir: &Path) -> Option<bool> {
-    parse_material(
-        fs::read_to_string(data_dir.join(MATERIAL_FILE))
-            .ok()?
-            .trim(),
-    )
-}
-
-/// What the page is told of the material, for the switch of its settings.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub(crate) struct MaterialState {
-    /// The window was built as glass: the page draws a ground that lets it show through.
-    pub glass: bool,
-    /// The next start builds it as glass: what the person kept, or what the app says.
-    pub next: bool,
-    /// The person can choose: the app's material is [`Material::Optional`] and a choice can be kept.
-    pub optional: bool,
-}
-
-/// The material of the window `built` for an app whose own is `app`, with the choice kept in
-/// `data_dir`.
-pub(crate) fn material_state(
-    app: Material,
-    built: Material,
-    data_dir: Option<&Path>,
-) -> MaterialState {
-    let kept = data_dir.and_then(saved_glass).unwrap_or(false);
-    MaterialState {
-        glass: built.is_glass(),
-        next: app.built(kept).is_glass(),
-        optional: app.is_optional() && data_dir.is_some(),
-    }
-}
-
-/// An acrylic window takes `theme`, and its acrylic the tint of the theme the page draws, `resolved`
+/// The acrylic of a window, with the tint of the theme the page draws, `resolved`
 /// ([`acrylic_tint`]).
 ///
 /// The tint is for Windows 10, where the acrylic takes its colour from it. On Windows 11 22H2 and
 /// later it does no harm: there the acrylic is the system backdrop `DWMSBT_TRANSIENTWINDOW`, which
 /// takes no colour and follows only the window's theme, which is set first. Setting the effect again
 /// sets the backdrop the window already has.
-///
-/// The first frame is not this function's: it has the theme saved with [`save_theme`] and the tint
-/// of the app's own config, until the page's first call.
-pub(crate) fn apply_theme<R: Runtime>(
-    window: &WebviewWindow<R>,
-    theme: WindowTheme,
-    resolved: Theme,
-) -> tauri::Result<()> {
-    window.set_theme(theme.to_tauri())?;
-    window.set_effects(WindowEffectsConfig {
+fn acrylic(resolved: Theme) -> WindowEffectsConfig {
+    WindowEffectsConfig {
         effects: vec![WindowEffect::Acrylic],
         color: Some(acrylic_tint(resolved)),
         ..Default::default()
-    })
+    }
+}
+
+/// Whether DWM composes the window with what is behind it, as tao does when it builds a transparent
+/// one: a blur region that is empty, so nothing is blurred and the backdrop shows where nothing is
+/// drawn. A window built opaque becomes so here, and one built transparent stops being so. It runs
+/// on the window's thread, in turn with the calls before it. On other targets this does nothing.
+fn see_through<R: Runtime>(window: &WebviewWindow<R>, on: bool) -> tauri::Result<()> {
+    #[cfg(windows)]
+    {
+        let hwnd = window.hwnd()?.0 as isize;
+        window.run_on_main_thread(move || {
+            use windows_sys::Win32::Graphics::{
+                Dwm::{
+                    DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND,
+                },
+                Gdi::{CreateRectRgn, DeleteObject},
+            };
+            // SAFETY: on the thread that owns the window; the region is made here, and deleted once
+            // DWM has taken it.
+            unsafe {
+                let region = if on {
+                    CreateRectRgn(0, 0, -1, -1)
+                } else {
+                    std::ptr::null_mut()
+                };
+                let blur = DWM_BLURBEHIND {
+                    dwFlags: DWM_BB_ENABLE | if on { DWM_BB_BLURREGION } else { 0 },
+                    fEnable: i32::from(on),
+                    hRgnBlur: region,
+                    fTransitionOnMaximized: 0,
+                };
+                // A window that refuses stays as it was: the next change asks again.
+                let _ = DwmEnableBlurBehindWindow(hwnd as _, &blur);
+                if !region.is_null() {
+                    DeleteObject(region);
+                }
+            }
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, on);
+        Ok(())
+    }
 }
 
 /// The window as the glass material needs it, from the app's own config (label, size, URL...):
@@ -243,7 +233,7 @@ pub(crate) fn apply_theme<R: Runtime>(
 fn glass_window_config(base: WindowConfig, saved: Option<WindowTheme>) -> WindowConfig {
     let mut config = base;
     config.transparent = true;
-    config.background_color = Some(Color(0, 0, 0, 0));
+    config.background_color = Some(CLEAR);
     config.decorations = false;
     config.min_width = Some(config.min_width.unwrap_or(0.0).max(MIN_WIDTH));
     config.additional_browser_args = Some(browser_args(&config));
@@ -266,95 +256,90 @@ pub enum Material {
     /// page has drawn, while it is reloaded and at the edge of a window that is resized. The suite's
     /// are [`DARK_GROUND`] and [`LIGHT_GROUND`].
     Opaque { dark: Color, light: Color },
-    /// Opaque, with those grounds, unless the person turned glass on: then Acrylic. The choice is
-    /// kept in `window-material` of the data folder and read when the window is built, so it holds
-    /// from the next start; with no data folder the window is always opaque. The default of an app
-    /// of the suite ([`Options::for_app`](crate::Options::for_app)).
-    Optional { dark: Color, light: Color },
 }
 
 impl Material {
-    /// The suite's own: opaque in the grounds of the look, glass when the person turned it on.
-    pub const SUITE: Material = Material::Optional {
-        dark: DARK_GROUND,
-        light: LIGHT_GROUND,
-    };
-
-    /// The colour of an opaque window in `theme`. An optional material, not yet built
-    /// ([`Material::built`]), is the opaque one.
+    /// The colour of an opaque window in `theme`.
     fn ground(self, theme: Theme) -> Option<Color> {
         match (self, theme) {
             (Material::Acrylic, _) => None,
-            (Material::Opaque { light, .. } | Material::Optional { light, .. }, Theme::Light) => {
-                Some(light)
-            }
+            (Material::Opaque { light, .. }, Theme::Light) => Some(light),
             // Dark, and any theme a later Tauri adds.
-            (Material::Opaque { dark, .. } | Material::Optional { dark, .. }, _) => Some(dark),
+            (Material::Opaque { dark, .. }, _) => Some(dark),
         }
     }
 
-    /// The window is made of the system's glass.
-    pub(crate) fn is_glass(self) -> bool {
-        self == Material::Acrylic
+    /// Whether the window is glass when the person's choice is `glass`. [`Material::Acrylic`] has
+    /// no colour to be without it, and is glass whatever the choice.
+    pub(crate) fn is_glass(self, glass: bool) -> bool {
+        glass || self == Material::Acrylic
     }
 
-    /// The person chooses whether the window is glass.
-    pub(crate) fn is_optional(self) -> bool {
-        matches!(self, Material::Optional { .. })
-    }
-
-    /// The material a window is built with: an optional one is glass when `glass` (the person's kept
-    /// choice) and opaque otherwise; the app's own, acrylic or opaque, is what the app said.
-    pub(crate) fn built(self, glass: bool) -> Material {
-        match self {
-            Material::Optional { .. } if glass => Material::Acrylic,
-            Material::Optional { dark, light } => Material::Opaque { dark, light },
-            fixed => fixed,
-        }
-    }
-
-    /// The window of this material, from the app's own config, with the theme of `saved`: without
-    /// decorations and at least 500 wide.
+    /// The window from the app's own config, with the theme of `saved`: without decorations and at
+    /// least 500 wide; glass when `glass` ([`Material::is_glass`]), else the colour of its theme.
     pub(crate) fn window_config(
         self,
         base: WindowConfig,
         saved: Option<WindowTheme>,
+        glass: bool,
     ) -> WindowConfig {
         let config = glass_window_config(base, saved);
         match self.ground(config.theme.unwrap_or(Theme::Dark)) {
-            None => config,
-            ground => WindowConfig {
+            ground @ Some(_) if !self.is_glass(glass) => WindowConfig {
                 transparent: false,
                 window_effects: None,
                 background_color: ground,
                 ..config
             },
+            _ => config,
         }
     }
 
-    /// An opaque window that follows Windows gets the ground of the theme Windows has.
+    /// An opaque window that follows Windows gets the ground of the theme Windows has. A glass one
+    /// keeps what its config gave it.
     pub(crate) fn paint_first_frame<R: Runtime>(
         self,
         window: &WebviewWindow<R>,
+        glass: bool,
     ) -> tauri::Result<()> {
         match self.ground(window.theme()?) {
-            None => Ok(()),
-            ground => window.set_background_color(ground),
+            ground @ Some(_) if !self.is_glass(glass) => window.set_background_color(ground),
+            _ => Ok(()),
         }
     }
 
-    /// The window takes the theme the page chose, and the material of the theme it draws.
-    pub(crate) fn apply<R: Runtime>(
+    /// The window, glass now or not (`from`), becomes glass or not (`to`), both as
+    /// [`Material::is_glass`] says, in the theme the page draws, `resolved`: the acrylic with its
+    /// tint ([`acrylic`]), or the ground of `resolved`. The window's own theme is set before.
+    ///
+    /// Into glass the window lets what is behind it through first, then takes the acrylic, then
+    /// lets the page through; out of it the other way round, so the ground is under the page before
+    /// the window stops showing what is behind it.
+    pub(crate) fn paint<R: Runtime>(
         self,
         window: &WebviewWindow<R>,
-        theme: WindowTheme,
+        from: bool,
+        to: bool,
         resolved: Theme,
     ) -> tauri::Result<()> {
         match self.ground(resolved) {
-            None => apply_theme(window, theme, resolved),
-            ground => {
-                window.set_theme(theme.to_tauri())?;
-                window.set_background_color(ground)
+            Some(ground) if !to => {
+                window.set_background_color(Some(ground))?;
+                if from {
+                    window.set_effects(None)?;
+                    see_through(window, false)?;
+                }
+                Ok(())
+            }
+            _ => {
+                if !from {
+                    see_through(window, true)?;
+                }
+                window.set_effects(acrylic(resolved))?;
+                if !from {
+                    window.set_background_color(Some(CLEAR))?;
+                }
+                Ok(())
             }
         }
     }
@@ -385,7 +370,7 @@ mod tests {
             (Some(WindowTheme::System), dark),
             (None, dark),
         ] {
-            let config = opaque.window_config(base.clone(), saved);
+            let config = opaque.window_config(base.clone(), saved, false);
             assert!(!config.transparent && !config.decorations, "{saved:?}");
             assert!(config.window_effects.is_none(), "{saved:?}");
             assert_eq!(config.background_color, Some(ground), "{saved:?}");
@@ -398,7 +383,7 @@ mod tests {
 
     #[test]
     fn an_acrylic_window_is_the_glass_window() {
-        let config = Material::Acrylic.window_config(WindowConfig::default(), None);
+        let config = Material::Acrylic.window_config(WindowConfig::default(), None, false);
         assert!(config.transparent);
         assert_eq!(config.background_color, Some(Color(0, 0, 0, 0)));
         assert_eq!(
@@ -406,6 +391,52 @@ mod tests {
             vec![WindowEffect::Acrylic]
         );
         assert_eq!(Material::Acrylic.ground(Theme::Light), None);
+    }
+
+    #[test]
+    fn an_opaque_window_the_person_made_glass_is_the_glass_window() {
+        let opaque = Material::Opaque {
+            dark: DARK_GROUND,
+            light: LIGHT_GROUND,
+        };
+        let base = WindowConfig {
+            min_width: Some(300.0),
+            ..Default::default()
+        };
+        for saved in [Some(WindowTheme::Light), Some(WindowTheme::Dark), None] {
+            assert_eq!(
+                opaque.window_config(base.clone(), saved, true),
+                glass_window_config(base.clone(), saved),
+                "{saved:?}"
+            );
+        }
+        assert!(opaque.is_glass(true) && !opaque.is_glass(false));
+        assert!(
+            Material::Acrylic.is_glass(false),
+            "the acrylic has no colour to be without it"
+        );
+        assert_eq!(
+            Material::Acrylic.window_config(base.clone(), None, false),
+            glass_window_config(base, None)
+        );
+    }
+
+    #[test]
+    fn glass_is_kept_as_one_of_two_words() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(saved_glass(dir.path()), None, "a fresh install");
+        for glass in [true, false] {
+            save_glass(dir.path(), glass).unwrap();
+            assert_eq!(saved_glass(dir.path()), Some(glass));
+        }
+        let file = dir.path().join("window-material");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "solid");
+        std::fs::write(&file, "glass\n").unwrap();
+        assert_eq!(saved_glass(dir.path()), Some(true), "a hand edit");
+        for other in ["Glass", "on", "true", ""] {
+            std::fs::write(&file, other).unwrap();
+            assert_eq!(saved_glass(dir.path()), None, "{other:?}");
+        }
     }
 
     #[test]
@@ -434,7 +465,7 @@ mod tests {
         };
         for material in [Material::Acrylic, opaque] {
             for window in [&plain, &own] {
-                let config = material.window_config(window.clone(), None);
+                let config = material.window_config(window.clone(), None, false);
                 assert_eq!(config.additional_browser_args, Some(browser_args(window)));
             }
         }
@@ -581,7 +612,7 @@ mod tests {
             let [_, red, green, blue] = hex.to_be_bytes();
             Color(red, green, blue, (percent / 100.0 * 255.0).round() as u8)
         };
-        assert_eq!(acrylic_tint(Theme::Dark), ground(0x0C111D, 80.0));
+        assert_eq!(acrylic_tint(Theme::Dark), ground(0x12161E, 80.0));
         assert_eq!(acrylic_tint(Theme::Light), ground(0xF6F7F9, 88.0));
     }
 
@@ -608,168 +639,6 @@ mod tests {
             glass_window_config(WindowConfig::default(), None).theme,
             None,
             "a fresh install follows Windows"
-        );
-    }
-
-    const GROUNDS: Material = Material::Optional {
-        dark: DARK_GROUND,
-        light: LIGHT_GROUND,
-    };
-
-    #[test]
-    fn an_optional_material_is_opaque_unless_the_person_turned_glass_on() {
-        let opaque = Material::Opaque {
-            dark: DARK_GROUND,
-            light: LIGHT_GROUND,
-        };
-        assert_eq!(GROUNDS, Material::SUITE);
-        assert_eq!(GROUNDS.built(false), opaque);
-        assert_eq!(GROUNDS.built(true), Material::Acrylic);
-        // What an app says for itself is not the person's to change.
-        for glass in [false, true] {
-            assert_eq!(opaque.built(glass), opaque);
-            assert_eq!(Material::Acrylic.built(glass), Material::Acrylic);
-        }
-        assert!(GROUNDS.is_optional() && !opaque.is_optional() && !Material::Acrylic.is_optional());
-        assert!(Material::Acrylic.is_glass() && !opaque.is_glass() && !GROUNDS.is_glass());
-    }
-
-    #[test]
-    fn an_optional_material_not_yet_built_has_the_grounds_of_an_opaque_one() {
-        for theme in [Theme::Light, Theme::Dark] {
-            assert_eq!(
-                GROUNDS.ground(theme),
-                GROUNDS.built(false).ground(theme),
-                "{theme:?}"
-            );
-        }
-        assert_eq!(GROUNDS.ground(Theme::Dark), Some(DARK_GROUND));
-        assert_eq!(GROUNDS.ground(Theme::Light), Some(LIGHT_GROUND));
-    }
-
-    #[test]
-    fn the_window_is_built_as_the_person_chose() {
-        let base = WindowConfig::default();
-        let plain = GROUNDS.built(false).window_config(base.clone(), None);
-        assert!(!plain.transparent && plain.window_effects.is_none());
-        assert_eq!(plain.background_color, Some(DARK_GROUND));
-        let glass = GROUNDS.built(true).window_config(base, None);
-        assert!(glass.transparent);
-        assert_eq!(glass.background_color, Some(Color(0, 0, 0, 0)));
-        assert_eq!(
-            glass.window_effects.expect("an acrylic effect").effects,
-            vec![WindowEffect::Acrylic]
-        );
-        assert!(!glass.decorations && glass.min_width == Some(500.0));
-    }
-
-    #[test]
-    fn parse_material_reads_only_its_two_words() {
-        assert_eq!(parse_material("glass"), Some(true));
-        assert_eq!(parse_material("opaque"), Some(false));
-        for word in ["Glass", "OPAQUE", "acrylic", "true", ""] {
-            assert_eq!(parse_material(word), None, "{word:?}");
-        }
-        for glass in [true, false] {
-            assert_eq!(parse_material(material_word(glass)), Some(glass));
-        }
-    }
-
-    #[test]
-    fn the_choice_of_glass_is_the_bare_word_written_atomically() {
-        let dir = tempfile::tempdir().unwrap();
-        let data = dir.path().join("not").join("there").join("yet");
-        assert_eq!(saved_glass(&data), None, "no file yet");
-        save_glass(&data, true).unwrap();
-        assert_eq!(
-            std::fs::read_to_string(data.join("window-material")).unwrap(),
-            "glass"
-        );
-        assert_eq!(saved_glass(&data), Some(true));
-        save_glass(&data, false).unwrap();
-        assert_eq!(
-            std::fs::read_to_string(data.join("window-material")).unwrap(),
-            "opaque"
-        );
-        assert_eq!(saved_glass(&data), Some(false));
-        assert_eq!(
-            crate::tests::names_in(&data),
-            ["window-material"],
-            "the temporary file is renamed away"
-        );
-    }
-
-    #[test]
-    fn a_file_of_the_material_with_anything_else_in_it_is_no_choice() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("window-material");
-        let contents: [&[u8]; 3] = [b"garbage", b"", &[0xff, 0xfe, 0x00]];
-        for content in contents {
-            std::fs::write(&file, content).unwrap();
-            assert_eq!(saved_glass(dir.path()), None, "{content:?}");
-        }
-        std::fs::write(&file, "glass\n").unwrap();
-        assert_eq!(saved_glass(dir.path()), Some(true), "a hand edit's newline");
-    }
-
-    #[test]
-    fn the_page_is_told_what_was_built_and_what_the_next_start_builds() {
-        let dir = tempfile::tempdir().unwrap();
-        let state = |app: Material, built: Material, data: Option<&Path>| {
-            let MaterialState {
-                glass,
-                next,
-                optional,
-            } = material_state(app, built, data);
-            (glass, next, optional)
-        };
-        let opaque = GROUNDS.built(false);
-        // Nothing chosen: opaque, now and next, and the person may choose.
-        assert_eq!(
-            state(GROUNDS, opaque, Some(dir.path())),
-            (false, false, true)
-        );
-        // Chosen while the window runs: it stays as it was built, and the next start differs.
-        save_glass(dir.path(), true).unwrap();
-        assert_eq!(
-            state(GROUNDS, opaque, Some(dir.path())),
-            (false, true, true)
-        );
-        // Built after the choice: both are glass.
-        assert_eq!(
-            state(GROUNDS, GROUNDS.built(true), Some(dir.path())),
-            (true, true, true)
-        );
-        save_glass(dir.path(), false).unwrap();
-        assert_eq!(
-            state(GROUNDS, GROUNDS.built(true), Some(dir.path())),
-            (true, false, true)
-        );
-        // No data folder: nothing can be kept, so there is no choice.
-        assert_eq!(state(GROUNDS, opaque, None), (false, false, false));
-        // An app's own material is not the person's, whatever is kept.
-        save_glass(dir.path(), true).unwrap();
-        let fixed = Material::Opaque {
-            dark: DARK_GROUND,
-            light: LIGHT_GROUND,
-        };
-        assert_eq!(state(fixed, fixed, Some(dir.path())), (false, false, false));
-        assert_eq!(
-            state(Material::Acrylic, Material::Acrylic, Some(dir.path())),
-            (true, true, false)
-        );
-    }
-
-    #[test]
-    fn the_state_goes_to_the_page_as_three_words() {
-        let state = MaterialState {
-            glass: true,
-            next: false,
-            optional: true,
-        };
-        assert_eq!(
-            serde_json::to_string(&state).unwrap(),
-            r#"{"glass":true,"next":false,"optional":true}"#
         );
     }
 }
