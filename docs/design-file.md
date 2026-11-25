@@ -39,6 +39,12 @@ The app calls, each once: `defineApp`, `startApp`, `AppWindow`. Inside: `useNoti
   commands (`useCommand`).
 - The person collapses the sidebar to its rail, and opens it again, with the button at its head and with a command of the palette.
   It is open at first, and the choice is kept under the app's own storage key. Its head is the name of the list and its count.
+- An app with an engine that takes the keys for itself (a terminal, a code editor) gives `ownKeysIn` to `defineApp`: the selector
+  of those engines, `'.xterm, .cm-editor'`, and no other. In them the shell takes away no key of the browser and runs no key of a
+  command, so Ctrl+R, F and K reach the engine; everywhere else the shell's keys stay as they are. An app never calls
+  `useDesktopGuard` or `CommandsProvider` itself.
+- The zoom is the shell's: `useWindow` gives its level (`zoom`) and `setZoom`, for a setting of the app. An app starts no `useZoom`
+  of its own, and keeps no level of its own.
 - A prop is added to `AppWindow` when a second app needs it. Until then the need is met by a region.
 
 ## The look
