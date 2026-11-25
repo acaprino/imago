@@ -108,3 +108,68 @@ describe('contrast', () => {
     }
   }
 });
+
+describe('glass', () => {
+  // Sigrid's `material: 'glass'`: the window's own acrylic shows through the ground of the title bar and the sidebar, and the sheet
+  // (the work area) stays the opaque paper. The ground is one of the stated backgrounds with an alpha the engine computes.
+  const GROUND = '--glass-ground';
+  /** The colours that may lie on the ground of the frame, with the ratio each needs: the text 4.5, the border of a control 3. */
+  const HELD: [string, number][] = [...['ink', 'ink-soft', 'ink-mute', 'accent', 'spot-ink', 'destructive', 'success', 'warning', 'info'].map((name): [string, number] => [name, 4.5]), ['input', 3]];
+  const gray = (level: number): string => `#${level.toString(16).padStart(2, '0').repeat(3)}`;
+
+  /**
+   * What lies behind the ground of a glass window. Measured on Windows 11 (docs/desktop-shell.md, 1.1): the light acrylic gives
+   * 143 over a dark window and 226 over a white one, the dark acrylic 84 over a dark one. Not measured: the dark acrylic over a
+   * bright window, and the light one over a black one beyond the 143; those are the engine's own worst cases, a white and a black
+   * desktop behind an acrylic that keeps half of it and gives the rest the paper.
+   */
+  function behind(scheme: (typeof SCHEMES)[number], paper: string): [string, string][] {
+    const model: [string, string][] = [['a white desktop, half kept', over('#ffffff', paper, 0.5)], ['a black desktop, half kept', over('#000000', paper, 0.5)]];
+    return scheme === 'light'
+      ? [['light acrylic over a dark window, 143', gray(143)], ['light acrylic over a white window, 226', gray(226)], ...model]
+      : [['dark acrylic over a dark window, 84', gray(84)], ...model];
+  }
+
+  for (const { id, light } of ACCENTS) {
+    for (const scheme of SCHEMES) {
+      const opaque = tokensFor(shellTheme({ id, name: id, accent: light }), scheme, SHELL_TONE);
+      const glass = tokensFor(shellTheme({ id, name: id, accent: light }, true), scheme, SHELL_TONE);
+
+      test(`${id}, ${scheme}: glass changes only the ground; the colours and the opaque sheet are the stated ones`, () => {
+        assert.deepEqual(glass.colors, opaque.colors);
+        assert.deepEqual(glass.corrected, []);
+        assert.deepEqual(glass.attributes, { ...opaque.attributes, 'data-material': 'glass' });
+        assert.equal(GROUND in opaque.shape, false);
+        assert.equal(glass.colors.paper, shellTheme({ id, name: id, accent: light }).surfaces![scheme].paper);
+        const ground = glass.shape[GROUND]!;
+        assert.match(ground, /^#[0-9a-f]{8}$/);
+        const stated = Object.values(shellTheme({ id, name: id, accent: light }).surfaces![scheme]);
+        assert.ok(stated.includes(ground.slice(0, 7)), `${ground} is not one of the stated backgrounds`);
+      });
+
+      test(`${id}, ${scheme}: every text is 4.5:1 and the control border 3:1 on the ground over what is behind the window`, (t) => {
+        const ground = glass.shape[GROUND]!;
+        const alpha = Number.parseInt(ground.slice(7), 16) / 255;
+        t.diagnostic(`the ground is ${ground.slice(0, 7)} at ${(alpha * 100).toFixed(0)}%`);
+        const colors = glass.colors as Record<string, string>;
+        const short: string[] = [];
+        for (const [what, backdrop] of behind(scheme, colors.paper)) {
+          const lies = over(ground.slice(0, 7), backdrop, alpha);
+          for (const [name, needs] of HELD) {
+            if (!colors[name]) continue;
+            const ratio = contrast(colors[name], lies);
+            if (!(ratio >= needs)) short.push(`${name} over ${what}: ${ratio.toFixed(2)} of ${needs}`);
+          }
+        }
+        assert.deepEqual(short, []);
+      });
+    }
+  }
+
+  test('an app has the opaque theme and the glass one, which differ in the material alone', () => {
+    const app = defineApp({ id: 'x', name: 'X', lang: 'en', accent: '#006398', storage: { scheme: 'x.theme', zoom: 'x.zoom', sidebar: 'x.sidebar' } });
+    assert.equal(app.theme.material, undefined);
+    assert.equal(app.glassTheme.material, 'glass');
+    assert.deepEqual({ ...app.glassTheme, material: undefined }, { ...app.theme, material: undefined });
+  });
+});

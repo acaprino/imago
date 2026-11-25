@@ -11,8 +11,11 @@ export interface ShellWords {
   /** A screen that failed while it was drawn, and the button that draws it again. */
   screenFailed: string;
   retry: string;
-  /** A window that did not do what the person asked (`minimize`, `toggleMaximize`, `close`, `setZoom`), and why. */
+  /** A window that did not do what the person asked (`minimize`, `toggleMaximize`, `close`, `setZoom`, `setMaterial`), and why. */
   windowFailed: (call: string, cause: string) => string;
+  /** The command of the palette that turns the glass window on or off, and what is said when the choice holds only from the next start. */
+  glass: string;
+  glassRestart: string;
 }
 
 export const SHELL_WORDS: ShellWords = {
@@ -23,4 +26,6 @@ export const SHELL_WORDS: ShellWords = {
   screenFailed: 'This screen could not be shown',
   retry: 'Try again',
   windowFailed: (call, cause) => `The window did not answer (${call}): ${cause}`,
+  glass: 'Glass window',
+  glassRestart: 'Restart needed: the glass window changes the next time the app starts.',
 };

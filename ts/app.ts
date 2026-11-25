@@ -21,10 +21,12 @@ export interface AppDefinition {
 /** An app, with the theme computed from its colour. */
 export interface App extends AppDefinition {
   readonly theme: ThemeDef;
+  /** The same theme for a window built as glass: the same colours, and the window's material shows through the ground. */
+  readonly glassTheme: ThemeDef;
 }
 
 /** The definition of an app, checked, with its theme. */
 export function defineApp(app: AppDefinition): App {
   if (!/^#[0-9a-f]{6}$/i.test(app.accent)) throw new Error(`the accent of ${app.id} is ${app.accent}, not a colour as #rrggbb`);
-  return { ...app, theme: shellTheme(app) };
+  return { ...app, theme: shellTheme(app), glassTheme: shellTheme(app, true) };
 }

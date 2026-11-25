@@ -69,13 +69,17 @@ export function accentsOf(accent: string): { hue: number; dark: string; light: s
   return { hue, dark: darkAccent(hue), light: lightAccent(hue) };
 }
 
-/** The theme of an app. */
-export function shellTheme({ id, name, accent }: { id: string; name: string; accent: string }): ThemeDef {
+/**
+ * The theme of an app. With `glass` the window's own material shows through the ground of the page and of the frame (Sigrid's
+ * `material: 'glass'`: the engine computes how thin the ground may be, the work area stays the opaque sheet); the colours are the same.
+ */
+export function shellTheme({ id, name, accent }: { id: string; name: string; accent: string }, glass = false): ThemeDef {
   const { hue, dark, light } = accentsOf(accent);
   return {
     // The hue of the grays is that of the surfaces below: the engine gives it to a ground that has almost no colour of its own.
     id, label: name, hue: 264, chroma: 0, accent: [0.12, hue], sidebar: 'tenue', palette: 'crisp',
     ...HOOKS,
+    ...(glass ? { material: 'glass' as const } : {}),
     surfaces: {
       // design-check-ignore-next-line color-value: the dark surfaces of the suite, which the theme engine is given
       dark: { paper: '#1a202c', sidebar: '#12161e', raised: '#232834', line: '#2a3240', ink: '#e8ecf3', mute: '#9aa5b8', input: '#8791a6', accent: dark, fill: dark },
