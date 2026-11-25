@@ -32,9 +32,10 @@ test('Sigrid, React and the API of Tauri are peers, and the Sigrid the package i
 
 test('Node loads the root entry with no browser, and defineApp gives back what it is given, with the theme', () => {
   const app = { id: 'demo', name: 'Demo', lang: 'en', accent: '#006398', storage: { scheme: 'demo.scheme', zoom: 'demo.zoom', sidebar: 'demo.sidebar' } };
-  const { theme, ...rest } = defineApp(app);
+  const { theme, glassTheme, ...rest } = defineApp(app);
   assert.deepEqual(rest, app);
   assert.equal(theme.id, 'demo');
+  assert.deepEqual([theme.material, glassTheme.id, glassTheme.material], [undefined, 'demo', 'glass']);
 });
 
 test('what is read of Sigrid by the shell is not handed on: the root exports its own names only', async () => {
