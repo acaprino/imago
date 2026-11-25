@@ -718,6 +718,8 @@ try {
     await palette(page, 'glass window');
     await page.keyboard.press('Enter');
     await page.getByText('Off: the window is opaque.').waitFor();
+    // One write at a time: the second is sent when the first has answered.
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_material').length === 2);
     assert.deepEqual(await setMaterial(page), [{ material: 'glass' }, { material: 'opaque' }]);
     await shot(page, 'window-glass-setting');
   });
@@ -732,6 +734,7 @@ try {
     await page.locator('[data-slot="switch"]').click();
     await page.getByText('Restart needed', { exact: false }).first().waitFor();
     assert.equal(await built(page), 'glass', 'still the window it was built as');
+    await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|set_material'));
     assert.deepEqual(await setMaterial(page), [{ material: 'opaque' }]);
   });
 
