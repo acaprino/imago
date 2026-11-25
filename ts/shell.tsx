@@ -150,7 +150,7 @@ export function ShellProvider({ app, untold, material, children }: { app: App; u
     const item: Notice = { ...options, id: `notice-${++notices}`, said: options?.id, text };
     setItems((now) => [...now.filter(({ said }) => said === undefined || said !== item.said), item]);
   }, []);
-  const failed = useMemo<TauriErrorHandler>(() => (call, error) => {
+  const failed = useMemo(() => (call: string, error: unknown): void => {
     if (ASKED.has(call)) notify(words.windowFailed(call, message(error)), { id: `window-${call}`, kind: 'error' });
     else console.warn(`imago: ${call}:`, error);
   }, [notify, words]);
