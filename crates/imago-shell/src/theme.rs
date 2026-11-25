@@ -182,7 +182,9 @@ fn see_through<R: Runtime>(window: &WebviewWindow<R>, on: bool) -> tauri::Result
         let hwnd = window.hwnd()?.0 as isize;
         window.run_on_main_thread(move || {
             use windows_sys::Win32::Graphics::{
-                Dwm::{DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND},
+                Dwm::{
+                    DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND,
+                },
                 Gdi::{CreateRectRgn, DeleteObject},
             };
             // SAFETY: on the thread that owns the window; the region is made here, and deleted once

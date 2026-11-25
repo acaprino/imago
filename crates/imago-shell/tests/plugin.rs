@@ -270,7 +270,10 @@ fn an_acrylic_window_is_glass_whatever_the_choice() {
         "solid",
         "the choice is kept all the same"
     );
-    assert_eq!(call(&app, "main", PAGE, "kept_glass", json!({})), Ok(json!(true)));
+    assert_eq!(
+        call(&app, "main", PAGE, "kept_glass", json!({})),
+        Ok(json!(true))
+    );
 }
 
 #[test]

@@ -87,7 +87,26 @@ function Both($p, [string]$name) {
   @{ dark = $dark; bright = $bright; active = $active }
 }
 function Ground($look, $ground) { ($look.dark + $look.bright | Where-Object { -not (Same $_ $ground) }).Count -eq 0 }
-function Through($look) { -not (Same $look.dark[0] $look.bright[0] 12) -and -not (Same $look.dark[1] $look.bright[1] 12) }
+# Glass: neither ground, nor what lies behind the window as it is (the dark or the bright window): the acrylic.
+function Glassy($look) { ($look.dark + $look.bright | Where-Object { (Same $_ $DARK 6) -or (Same $_ $LIGHT 6) -or (Same $_ $FLOOR 6) -or (Same $_ @(255, 255, 255) 6) }).Count -eq 0 }
+# What lies behind shows through the acrylic: it differs over a dark and over a bright window. Said, not judged: a runner
+# may draw the acrylic with nothing of what is behind it.
+function Through($look) { $seen = -not (Same $look.dark[0] $look.bright[0] 12); Write-Host "      what lies behind shows through: $seen"; $seen }
+# The window is made wider by 200 over the bright window, and its new strip (within the bright window) is looked at for half
+# a second: never bright.
+function Edge($p, [string]$name) {
+  $h = Win $p.Id $true
+  Behind $p.Id '255,255,255'; $null = Front $h; Start-Sleep -Milliseconds 500
+  $c = [W]::Client($h)
+  $null = [W]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, $c[2] + 200, $c[3], 0x16)
+  $seen = @(); $start = Get-Date
+  while (((Get-Date) - $start).TotalMilliseconds -lt 500) { $seen += , [W]::Pixel($c[0] + $c[2] + 40, $c[1] + 8); $seen += , [W]::Pixel($c[0] + $c[2] + 40, $c[1] + [int]($c[3] / 2)); Start-Sleep -Milliseconds 5 }
+  Shot "$name-wider"
+  $null = [W]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, $c[2], $c[3], 0x16); Start-Sleep -Milliseconds 500
+  $shades = $seen | ForEach-Object { Text $_ } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }
+  Write-Host "      $name, the new strip of a wider window: $($shades -join ', ')"
+  ($seen | Where-Object { ($_ | Measure-Object -Minimum).Minimum -gt 200 }).Count -eq 0
+}
 
 $env:IMAGO_DEMO_HOME = $Data
 $env:WEBVIEW2_USER_DATA_FOLDER = [IO.Path]::Combine($Data, "webview")
@@ -138,13 +157,14 @@ $said = Ask 'glass' 'on'
 Say ($said.said.ok) "set_glass on answered: $($said.said | ConvertTo-Json -Compress)"
 Say ((Kept) -eq 'glass') "the choice is kept: $(Kept)"
 $on = Both $demo 'on'
-Say (-not (Same $on.dark[0] $DARK) -or -not (Same $on.bright[0] $DARK)) 'with glass the window is no longer its ground'
-Say (Through $on) 'with glass what lies behind the window shows through it (it differs over a dark and a bright window)'
+Say (Glassy $on) 'with glass the window is the acrylic: neither its ground nor what lies behind it'
+$null = Through $on
 
 Write-Host '--- the theme changes under glass'
 $null = Ask 'light'
 $light = Both $demo 'on-light'
-Say ((-not (Same $light.dark[0] $LIGHT)) -and (Through $light)) 'a theme told after glass keeps the glass'
+Say (Glassy $light) 'a theme told after glass keeps the glass'
+$null = Through $light
 $null = Ask 'glass' 'off'
 $lightOff = Both $demo 'off-light'
 Say (Ground $lightOff $LIGHT) 'glass off in light: the light ground, over both'
@@ -153,6 +173,7 @@ $null = Ask 'glass' 'on'
 $null = Ask 'glass' 'off'
 $back = Both $demo 'on-then-off'
 Say (Ground $back $DARK) 'on, then off: the dark ground again, over both'
+Say (Edge $demo 'on-then-off') 'on, then off: the edge of a window made wider is never what lies behind it'
 Say ((Kept) -eq 'solid') "kept: $(Kept)"
 
 Write-Host '--- the choice survives a restart: glass'
@@ -168,10 +189,12 @@ $said = Ask 'kept'
 Say ($said.said.ok -and $said.said.answer -eq $true) "kept_glass answers the kept choice: $($said.said | ConvertTo-Json -Compress)"
 $null = Ask 'clear'
 $started = Both $demo 'started-glass'
-Say (Through $started) 'the window starts as glass'
+Say (Glassy $started) 'the window starts as glass'
+$null = Through $started
 $null = Ask 'glass' 'off'
 $startedOff = Both $demo 'started-glass-off'
 Say (Ground $startedOff $DARK) 'a window built as glass and turned off is its dark ground, over both'
+Say (Edge $demo 'built-glass-then-off') 'its edge, made wider, is never what lies behind it'
 
 Write-Host '--- the choice survives a restart: no glass'
 $null = Ask 'close'
@@ -186,6 +209,7 @@ Say ($said.said.ok -and $said.said.answer -eq $false) "kept_glass: $($said.said 
 $null = Ask 'clear'
 $solid = Both $demo 'started-solid'
 Say (Ground $solid $DARK) 'it starts as its ground'
+Say (Edge $demo 'solid') 'its edge, made wider, is never what lies behind it'
 $null = Ask 'close'
 $null = $demo.WaitForExit(15000)
 if (-not $demo.HasExited) { Stop-Process -Id $demo.Id -Force }

@@ -32,7 +32,9 @@ const read = () => page.evaluate(() => ({
 let said = {};
 if (action === 'clear') {
   // What the page draws is taken away: what shows is the window's own colour, or what lies behind it.
-  await page.addStyleTag({ content: 'html, body, [data-slot="app-shell"], [data-slot="title-bar"], [data-slot="title-bar"] * { background: transparent !important; }' });
+  // In the light scheme of CSS an empty page shows the engine's background, which is the window's own colour (in the dark one
+  // Chromium paints its own dark canvas over it).
+  await page.addStyleTag({ content: ':root { color-scheme: light !important; } html, body, [data-slot="app-shell"], [data-slot="title-bar"], [data-slot="title-bar"] * { background: transparent !important; }' });
 } else if (action === 'glass') said = await invoke('set_glass', { glass: arg === 'on' });
 else if (action === 'kept') said = await invoke('kept_glass', {});
 else if (action === 'light' || action === 'dark') {
