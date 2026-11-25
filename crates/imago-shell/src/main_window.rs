@@ -16,8 +16,8 @@ use crate::{
     message,
     recovery::{recovery_action, watch_process_failures, Recovery, RecoveryAction},
     theme::{
-        drawn_by_page, material_state, parse_material, save_glass, save_theme, saved_glass,
-        saved_theme, MaterialState,
+        drawn_by_page, material_state, parse_material, parse_theme, save_glass, save_theme,
+        saved_glass, saved_theme, MaterialState,
     },
     window_state::{load_state, measure, restore, save_state, state_to_save, WindowState},
     Material, Origins, ProcessFailure,
