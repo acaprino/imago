@@ -19,11 +19,13 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 
 # The Win32 areas src/frame.rs calls (the Snap Layouts child window, the reload item of the window
-# menu, which subclasses the window with Win32_UI_Shell), src/message.rs (a message box) and
-# src/single_instance.rs (named events), and no more.
+# menu, which subclasses the window with Win32_UI_Shell), src/message.rs (a message box),
+# src/single_instance.rs (named events) and src/theme.rs (a window that shows what is behind it), and
+# no more.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_System_LibraryLoader",

@@ -1,7 +1,7 @@
 {
   "default": {
-    "description": "The window's own commands: its theme, its maximize button, its first frame, its title and its taskbar button.",
-    "permissions": ["allow-set-theme", "allow-kept-theme", "allow-caption", "allow-ready", "allow-chrome"]
+    "description": "The window's own commands: its theme, its glass, its maximize button, its first frame, its title and its taskbar button.",
+    "permissions": ["allow-set-theme", "allow-kept-theme", "allow-set-glass", "allow-kept-glass", "allow-caption", "allow-ready", "allow-chrome"]
   },
   "permission": [
     {
@@ -13,6 +13,16 @@
       "identifier": "allow-kept-theme",
       "description": "The page asks the window which theme it keeps.",
       "commands": { "allow": ["kept_theme"] }
+    },
+    {
+      "identifier": "allow-set-glass",
+      "description": "The page tells the window whether it is glass.",
+      "commands": { "allow": ["set_glass"] }
+    },
+    {
+      "identifier": "allow-kept-glass",
+      "description": "The page asks the window whether it is glass.",
+      "commands": { "allow": ["kept_glass"] }
     },
     {
       "identifier": "allow-caption",

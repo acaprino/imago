@@ -28,10 +28,12 @@ const OPAQUE: Material = Material::Opaque {
 const _: fn(&str, &str) = imago_shell::message::tell;
 
 /// Every command, with arguments it takes.
-fn commands() -> [(&'static str, Value); 5] {
+fn commands() -> [(&'static str, Value); 7] {
     [
         ("set_theme", json!({ "theme": "dark", "resolved": "dark" })),
         ("kept_theme", json!({})),
+        ("set_glass", json!({ "glass": false })),
+        ("kept_glass", json!({})),
         (
             "caption",
             json!({ "x": 1, "y": 0, "width": 46, "height": 32 }),
@@ -198,10 +200,85 @@ fn the_theme_the_page_chose_is_kept_for_the_next_start() {
 }
 
 #[test]
+fn glass_the_page_chose_is_kept_for_the_next_start_and_said_back() {
+    let (app, data) = app();
+    app.add_capability(remote(&["http://127.0.0.1:*"])).unwrap();
+    let set = |glass| call(&app, "main", PAGE, "set_glass", json!({ "glass": glass }));
+    let said = || call(&app, "main", PAGE, "kept_glass", json!({})).unwrap();
+    let kept = || std::fs::read_to_string(data.path().join("window-material")).unwrap();
+    assert_eq!(said(), json!(false), "a fresh install: the app's default");
+    assert!(!data.path().join("window-material").exists());
+    set(true).unwrap();
+    assert_eq!((kept(), said()), ("glass".into(), json!(true)));
+    // A theme told after it keeps the glass.
+    call(
+        &app,
+        "main",
+        PAGE,
+        "set_theme",
+        json!({ "theme": "light", "resolved": "light" }),
+    )
+    .unwrap();
+    assert_eq!(said(), json!(true));
+    set(false).unwrap();
+    assert_eq!((kept(), said()), ("solid".into(), json!(false)));
+    let wrong = call(&app, "main", PAGE, "set_glass", json!({ "glass": "yes" })).unwrap_err();
+    assert!(wrong.contains("glass"), "{wrong}");
+    assert_eq!(kept(), "solid");
+}
+
+#[test]
+fn the_window_opens_with_the_glass_kept_or_else_the_apps_default() {
+    for (file, default, glass) in [
+        (None, true, true),
+        (None, false, false),
+        (Some("glass"), false, true),
+        (Some("solid"), true, false),
+        (Some("garbage"), true, true),
+    ] {
+        let app = app_with(vec![main_config()]);
+        let data = tempfile::tempdir().unwrap();
+        if let Some(word) = file {
+            std::fs::write(data.path().join("window-material"), word).unwrap();
+        }
+        let options = Options {
+            data_dir: Some(data.path().to_owned()),
+            glass: default,
+            ..Options::for_app(&app).unwrap()
+        };
+        open_main(app.handle(), options).unwrap();
+        app.add_capability(remote(&[ORIGIN])).unwrap();
+        let said = call(&app, "main", PAGE, "kept_glass", json!({}));
+        assert_eq!(said, Ok(json!(glass)), "{file:?}, default {default}");
+    }
+}
+
+#[test]
+fn an_acrylic_window_is_glass_whatever_the_choice() {
+    let app = app_with(vec![main_config()]);
+    let data = tempfile::tempdir().unwrap();
+    let options = Options {
+        data_dir: Some(data.path().to_owned()),
+        material: Material::Acrylic,
+        ..Options::for_app(&app).unwrap()
+    };
+    open_main(app.handle(), options).unwrap();
+    app.add_capability(remote(&[ORIGIN])).unwrap();
+    call(&app, "main", PAGE, "set_glass", json!({ "glass": false })).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(data.path().join("window-material")).unwrap(),
+        "solid",
+        "the choice is kept all the same"
+    );
+    assert_eq!(call(&app, "main", PAGE, "kept_glass", json!({})), Ok(json!(true)));
+}
+
+#[test]
 fn the_options_start_from_the_main_window_of_the_apps_config() {
     let options = Options::for_app(&app_with(vec![main_config()])).unwrap();
     assert_eq!(options.window, main_config());
-    assert_eq!(options.material, Material::Acrylic);
+    assert_eq!(options.material, OPAQUE, "the grounds of the suite");
+    assert!(!options.glass, "no glass until the app or the person asks");
     assert!(!options.background);
     assert!((options.before_reload)(None), "a reload is not refused");
     let other = WindowConfig {
