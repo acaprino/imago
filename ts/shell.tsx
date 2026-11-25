@@ -69,17 +69,19 @@ export const useWindow = (): WindowHandle => useShell().window;
 /** Whether the window is glass, and how to change it, for an app's settings. In a browser it is off. */
 export const useGlass = (): Glass => useShell().glass;
 
-// The theme of an app as glass: one object for each app, so that the theme is put again only when the glass changes.
-const glassy = new WeakMap<App, ThemeDef>();
-const themeOf = (app: App, glass: boolean): ThemeDef => {
-  if (!glass) return app.theme;
-  let theme = glassy.get(app);
-  if (!theme) glassy.set(app, (theme = { ...app.theme, material: 'glass' }));
+// The theme of an app as glass, or as clear for a secondary window: one object for each app and material, so that the theme is put
+// again only when the material changes.
+const materials = { glass: new WeakMap<App, ThemeDef>(), clear: new WeakMap<App, ThemeDef>() };
+const themeOf = (app: App, glass: boolean, secondary: boolean): ThemeDef => {
+  const material = secondary ? 'clear' : glass ? 'glass' : null;
+  if (!material) return app.theme;
+  let theme = materials[material].get(app);
+  if (!theme) materials[material].set(app, (theme = { ...app.theme, material }));
   return theme;
 };
 
-/** The app's look, as glass or not, and the key its light, dark or system's choice is kept under. */
-export const lookOf = (app: App, glass = false): SchemeCommandsOptions => ({ theme: themeOf(app, glass), tone: SHELL_TONE, storageKey: app.storage.scheme });
+/** The app's look, as glass, or as clear in a secondary window, and the key its light, dark or system's choice is kept under. */
+export const lookOf = (app: App, glass = false, secondary = false): SchemeCommandsOptions => ({ theme: themeOf(app, glass, secondary), tone: SHELL_TONE, storageKey: app.storage.scheme });
 
 const PLUGIN = 'plugin:imago-shell|';
 const READY_FALLBACK_MS = 250;
@@ -136,8 +138,10 @@ export interface Kept {
 }
 
 /** The state of the shell around the app, with the notices drawn once. */
-export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; children: ReactNode }) {
-  const own = useMemo(() => readHost().ownWindow, []);
+export function ShellProvider({ app, kept, secondary = false, children }: { app: App; kept: Kept; secondary?: boolean; children: ReactNode }) {
+  // `own`: the window the plugin serves. A secondary window is in a window of its own and is not that one.
+  const inWindow = useMemo(() => readHost().ownWindow, []);
+  const own = inWindow && !secondary;
   const words = useMemo(() => ({ ...SHELL_WORDS, ...app.words?.shell }), [app]);
   const [glass, setGlass] = useState(own && kept.glass === true);
   const [scheme, setScheme] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.scheme === 'light' ? 'light' : 'dark'));
@@ -158,7 +162,7 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
   // shortcut: the zoom is in the browser's storage alone, and is lost when every process of the engine is killed; when that
   // matters to an app, the plugin keeps it as it keeps the theme.
   // The one controller of the page: the app reads and sets it through `useWindow`, and never starts a second one.
-  const { zoom, setZoom } = useZoom({ storageKey: app.storage.zoom, onError: failed });
+  const { zoom, setZoom } = useZoom({ storageKey: app.storage.zoom, onError: failed, enabled: secondary ? false : undefined });
 
   const shell = useMemo<Shell>(() => {
     return {
@@ -177,7 +181,7 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
   }, [app, own, words, glass, notify, failed, zoom, setZoom, scheme]);
 
   useFocusFollowed();
-  useDesktopGuard(own && released, { ownKeysIn: app.ownKeysIn });
+  useDesktopGuard(inWindow && released, { ownKeysIn: app.ownKeysIn });
 
   // The first frame is drawn: the window, which is hidden until then, is shown in its theme. A hidden window may run no
   // animation frame.
@@ -217,7 +221,7 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
     <ShellContext value={shell}>
       {children}
       {/* After the app, so that its commands come after the app's in the palette. */}
-      <Look app={app} own={own} untold={kept.untold} glass={glass} drawn={setScheme} />
+      <Look app={app} own={own} secondary={secondary} untold={kept.untold} glass={glass} drawn={setScheme} />
       {own ? <GlassCommand /> : null}
       {own ? <GlassTold glass={glass} /> : null}
       <Toasts items={items} durationMs={NOTICE_MS} onDismiss={(id) => setItems((now) => now.filter((item) => item.id !== id))} />
@@ -229,8 +233,8 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
  * Light, dark and the system's look as commands, and the window told of the choice and of the scheme drawn, when either changes;
  * one that did not say what it keeps is told nothing until the person chooses, so that its own is not written over.
  */
-function Look({ app, own, untold, glass, drawn }: { app: App; own: boolean; untold: boolean; glass: boolean; drawn: (scheme: 'light' | 'dark') => void }) {
-  const { choice, scheme } = useSchemeCommands(lookOf(app, glass));
+function Look({ app, own, secondary, untold, glass, drawn }: { app: App; own: boolean; secondary: boolean; untold: boolean; glass: boolean; drawn: (scheme: 'light' | 'dark') => void }) {
+  const { choice, scheme } = useSchemeCommands(lookOf(app, glass, secondary));
   useEffect(() => drawn(scheme), [drawn, scheme]);
   const unchosen = useRef(untold ? choice : null);
   useEffect(() => {

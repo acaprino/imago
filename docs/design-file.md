@@ -124,6 +124,9 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 - The window is hidden until the page has drawn and its theme was told, and has the ground of the look, or its glass, until then,
   so that no start flashes. An app passes `on_run_event` to the run loop: without it a window built again ends the app.
 - The choice of light, dark or the system's and the scheme drawn are both told, when either changes.
+- A window of the app's own besides the main one (a notice that floats over the desktop) is started with `startApp(..., { secondary: true })`: the
+  shell asks the plugin nothing, which serves the main window alone, the page paints no ground (Sigrid's material `clear`) and follows the
+  scheme the main window keeps. It is the app's to build and to show; it has no frame, no commands of the shell and no glass.
 - A call the person asked for (a window button, the zoom) that fails is said in a notice. What the page tells the window by itself
   is written in the console when it fails.
 
