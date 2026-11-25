@@ -56,6 +56,31 @@ and the ink. The program is the debug profile with nothing added to its config.
 | Pixels of text with a colour fringe (over 0.1 apart) | 756 of 921, the widest 0.81 | 0 of 898, the widest 0.01 |
 | The arguments the engine was started with | The two of wry | The same two, and `--disable-lcd-text` |
 
+## Glass on and off
+
+On 2026-11-25 throwaway runs on the same kind of runner (Windows 10.0.26100, a screen of 1024x768, transparency effects on) built
+the demo from the branch `glass`, started it with a clean data folder, and drove its page over the debugging port. The page's own
+grounds were taken away there (its root, the frame and the title bar made transparent, in the light scheme of CSS), so that two
+points of the title bar showed the window itself; they were read from the screen with the window active, over a dark and over a
+bright window. Run 45633402945 passed every check, and run 45634731478, on Sigrid 6.8.0, passed them again with the rows that
+begin «The command»:
+
+| What | Measured |
+|---|---|
+| A fresh install | The app's default: `kept_glass` answered false, and the window was the dark ground, `#12161E`, over both windows |
+| `set_glass` on, while it runs | The window became the acrylic at once, 84,84,84 in dark and 211,211,211 in light, and `window-material` held `glass` |
+| A theme chosen under glass | The glass stayed, with the other scheme's acrylic |
+| The command «Glass» of the palette, the page as Sigrid draws it | The root had `data-material="glass"` and `window-material` held `glass`; the title bar, in dark, was 38,41,47 (Sigrid's ground over the acrylic) where it is `#12161E` without glass |
+| The command again | The page solid, `window-material` held `solid`, and the title bar `#12161E` again |
+| Off again, after on | The ground of the scheme exactly, `#12161E` or `#F6F7F9`, over both windows; `window-material` held `solid` |
+| The edge of a window made 200 pixels wider, after on and off, and for a window that was never glass | Only the ground and the page, never the bright window behind, in the half second after |
+| The start, with each choice | From the first frame seen, every look of the title bar was the page's ground, for a second and a half: no frame of another colour |
+| The choice across a restart | Glass: `kept_glass` answered true and the window was the acrylic; then off, the ground. Off: the ground |
+| A window built as glass, then turned off | The ground, over both windows |
+
+The acrylic of that runner was the same over the dark and over the bright window: Windows drew it, and nothing of what lies behind
+showed through it. That it does on a desktop is not seen: the owner looks at the demo on their own desktop.
+
 ## Not run: for the coordinator
 
 From the artifact of a run of Verify on `develop`, on a desktop of Windows 11 (`npm run demo:fetch`, then `npm run capture`). The
@@ -68,6 +93,8 @@ that is the cause.
 2. The flyout of Snap Layouts under the real pointer (the runner above opened none).
 3. A real click on the maximize button, through the overlay: maximize, then restore.
 4. The zoom and the kept theme across a restart, in the theme opposite to Windows' own.
+5. Glass on a desktop of Windows 11: what lies behind the window shows through the acrylic, where Sigrid's material `glass` lets
+   it, in both themes; the text keeps its contrast there.
 
 ## Not run: for the owner
 
@@ -103,5 +130,5 @@ A capture is a copy of the screen: the demo window must stay the active one, and
 ## Never run
 
 - A page that stops answering, and the question the person is asked after three reloads, with the page of the shell.
-- The tint of the acrylic (`Material::Acrylic`) on Windows 10. No app of the suite asks for the acrylic.
+- The tint of the acrylic (glass, or `Material::Acrylic`) on Windows 10.
 - Battery saver, transparency effects off, Windows 10.

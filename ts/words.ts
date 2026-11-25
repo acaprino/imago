@@ -11,6 +11,8 @@ export interface ShellWords {
   /** A screen that failed while it was drawn, and the button that draws it again. */
   screenFailed: string;
   retry: string;
+  /** The command of the look that makes the window glass: Windows' acrylic behind the page. */
+  glass: string;
   /** A window that did not do what the person asked (`minimize`, `toggleMaximize`, `close`, `setZoom`), and why. */
   windowFailed: (call: string, cause: string) => string;
 }
@@ -22,5 +24,6 @@ export const SHELL_WORDS: ShellWords = {
   nextRegion: 'Next region',
   screenFailed: 'This screen could not be shown',
   retry: 'Try again',
+  glass: 'Glass',
   windowFailed: (call, cause) => `The window did not answer (${call}): ${cause}`,
 };
