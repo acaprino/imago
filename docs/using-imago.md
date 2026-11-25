@@ -29,7 +29,7 @@ release, already built: nothing is compiled when it is installed.
 imago-shell = { git = "https://github.com/acaprino/imago", tag = "v<x>" }
 ```
 
-- Sigrid (`^6.8.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
+- Sigrid (`^6.9.0`), React 19 and `@tauri-apps/api` are peers: the app has one copy of each. An app that runs only in a browser has
   the last one too: it is loaded only in a window, but its bundler must find it.
 - **The app's `tauri` must resolve to exactly 2.12.5.** The crate pins `tauri = "=2.12.5"`, and with it `serde = "=1.0.229"`,
   `serde_json = "=1.0.154"`, `webview2-com = "=0.39.1"`, `windows-core = "=0.62.2"` and `windows-sys = "=0.61.2"`, so that
@@ -77,7 +77,7 @@ startApp(MURO, document.getElementById('app')!, <Muro />)
 
 | Export | What it is |
 |---|---|
-| `defineApp` | The app: `AppDefinition` in, `App` out, which has the `theme` made from the one colour. `words` are the app's language: `words.sigrid` Sigrid's, `words.shell` the shell's (`ShellWords`, `glass` among them, the name of the command of glass). It refuses an accent that is not `#rrggbb` |
+| `defineApp` | The app: `AppDefinition` in, `App` out, which has the `theme` made from the one colour. `words` are the app's language: `words.sigrid` Sigrid's, `words.shell` the shell's (`ShellWords`: among them `glass`, the name of the command of glass, and `toLight` and `toDark`, the names of the switch of the title bar). It refuses an accent that is not `#rrggbb` |
 | `defineApp` `ownKeysIn` | An optional CSS selector for the places of the app that run their own keys and menu, `'.xterm, .cm-editor'` for a terminal and a code editor. In them the shell leaves alone the browser's keys it takes away in a window (Ctrl+R, F, D, N, P, U, H and the others of `useDesktopGuard`) and the keys of every command, the palette's Ctrl+K among them, so they reach the engine. It is handed to `useDesktopGuard` and to `CommandsProvider` of Sigrid. The app writes the selector of its engines and nothing wider: what it names has none of the shell's keys, and an empty one is refused |
 | `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component |
 | `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`: its drawer, whether it is collapsed, and the button of that at its head): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. The children are the screen, and the app decides what each view mounts: what two views share stays as it is when the view changes, and a screen that must start again has the view as its `key`. `contentLabel` names the content, when the view's label does not |

@@ -49,8 +49,8 @@ describe('what the preset states', () => {
 
   test('the surfaces, the corners, the keys, the controls and the tone are those approved', () => {
     assert.deepEqual(theme.surfaces, {
-      dark: { paper: '#1a202c', sidebar: '#12161e', raised: '#232834', line: '#2a3240', ink: '#e8ecf3', mute: '#9aa5b8', input: '#8791a6', accent: '#6ed0ff', fill: '#6ed0ff' },
-      light: { paper: '#ffffff', sidebar: '#f6f7f9', raised: '#ffffff', line: '#e3e6ea', ink: '#111827', mute: '#5b6472', input: '#767e8b', accent: '#006398', fill: '#006398' },
+      dark: { paper: '#1a202c', sidebar: '#12161e', raised: '#232834', line: '#2a3240', ink: '#e8ecf3', mute: '#9aa5b8', input: '#8791a6', accent: '#6ed0ff', fill: '#6ed0ff', glass: { ground: '#0c111dcc', sheet: '#1a202cf0', float: '#242935f5' } },
+      light: { paper: '#ffffff', sidebar: '#f6f7f9', raised: '#ffffff', line: '#e3e6ea', ink: '#111827', mute: '#5b6472', input: '#767e8b', accent: '#006398', fill: '#006398', glass: { ground: '#f6f7f9e0', sheet: '#fffffff2', float: '#fffffff7' } },
     });
     const { shape, radii, keys, controls, tabs, statusStrip } = theme;
     assert.deepEqual({ shape, radii, keys, controls, tabs, statusStrip }, { shape: 'soft', radii: { sm: 4, md: 6, lg: 10, xl: 10, chip: 4 }, keys: 'boxed', controls: 'strong', tabs: 'bold', statusStrip: 'tall' });

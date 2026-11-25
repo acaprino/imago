@@ -55,7 +55,8 @@ Facts about the material:
 ### 1.2 The window theme follows the page
 
 The theme of the window decides its material, the frame Windows draws and the colour scheme of WebView2. It is the
-person's choice: `light`, `dark` or `system`.
+person's choice: `light`, `dark` or `system`, made in the palette or with the switch of the title bar, which chooses the
+other scheme of the one drawn ([design-file.md](design-file.md), "The look").
 
 1. The page sends the choice as `theme` and the scheme it draws (`light` or `dark`, never `system`) as `resolved`, when
    either changes. The shell of `@acaprino/imago` does it (section 3.4).

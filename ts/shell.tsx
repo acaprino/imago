@@ -46,6 +46,8 @@ interface Shell {
   notify: Notify;
   window: WindowHandle;
   glass: Glass;
+  /** The scheme drawn now: the person's light or dark, or the system's for the system's look. */
+  scheme: 'light' | 'dark';
   /** A call to the window that failed: one the person asked for is said to them, the others are written in the console. */
   failed: TauriErrorHandler;
 }
@@ -138,6 +140,7 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
   const own = useMemo(() => readHost().ownWindow, []);
   const words = useMemo(() => ({ ...SHELL_WORDS, ...app.words?.shell }), [app]);
   const [glass, setGlass] = useState(own && kept.glass === true);
+  const [scheme, setScheme] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.scheme === 'light' ? 'light' : 'dark'));
   const [items, setItems] = useState<Notice[]>([]);
   const [title, setTitle] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -159,7 +162,7 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
 
   const shell = useMemo<Shell>(() => {
     return {
-      app, words, notify,
+      app, words, notify, scheme,
       glass: [glass, (on) => { if (own) setGlass(on); }],
       window: {
         own, setTitle, zoom, setZoom,
@@ -171,7 +174,7 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
       },
       failed,
     };
-  }, [app, own, words, glass, notify, failed, zoom, setZoom]);
+  }, [app, own, words, glass, notify, failed, zoom, setZoom, scheme]);
 
   useFocusFollowed();
   useDesktopGuard(own && released, { ownKeysIn: app.ownKeysIn });
@@ -214,7 +217,7 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
     <ShellContext value={shell}>
       {children}
       {/* After the app, so that its commands come after the app's in the palette. */}
-      <Look app={app} own={own} untold={kept.untold} glass={glass} />
+      <Look app={app} own={own} untold={kept.untold} glass={glass} drawn={setScheme} />
       {own ? <GlassCommand /> : null}
       {own ? <GlassTold glass={glass} /> : null}
       <Toasts items={items} durationMs={NOTICE_MS} onDismiss={(id) => setItems((now) => now.filter((item) => item.id !== id))} />
@@ -226,8 +229,9 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
  * Light, dark and the system's look as commands, and the window told of the choice and of the scheme drawn, when either changes;
  * one that did not say what it keeps is told nothing until the person chooses, so that its own is not written over.
  */
-function Look({ app, own, untold, glass }: { app: App; own: boolean; untold: boolean; glass: boolean }) {
+function Look({ app, own, untold, glass, drawn }: { app: App; own: boolean; untold: boolean; glass: boolean; drawn: (scheme: 'light' | 'dark') => void }) {
   const { choice, scheme } = useSchemeCommands(lookOf(app, glass));
+  useEffect(() => drawn(scheme), [drawn, scheme]);
   const unchosen = useRef(untold ? choice : null);
   useEffect(() => {
     if (!own || choice === unchosen.current) return;

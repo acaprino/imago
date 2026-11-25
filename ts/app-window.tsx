@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { useMedia, useWords } from '@acaprino/sigrid';
 import { Icon, Spacer, type IconName } from '@acaprino/sigrid/primitives';
 import { APP_SHELL_STEPS, AppShell, DrawerButton, TitleBar, Toolbar, ToolbarBrand, ToolbarButton, ToolbarSpacer, ToolbarTab, ToolbarTabs, WindowControls } from '@acaprino/sigrid/layout';
-import { CommandPalette, formatKeys, KeyHints, useCommand, useCommandPalette, type KeyHint } from '@acaprino/sigrid/assemblies';
+import { CommandPalette, formatKeys, KeyHints, useCommand, useCommandPalette, useCommands, type KeyHint } from '@acaprino/sigrid/assemblies';
 import { DRAG_REGION, useSnapLayouts, useWindowControls } from '@acaprino/sigrid/tauri';
 import { focusContent, useFocusKept } from './focus.js';
 import { ScreenBoundary } from './screen-boundary.js';
@@ -103,6 +103,17 @@ function SidebarCommand({ collapsed, onCollapsedChange }: Pick<SidebarState, 'co
   return null;
 }
 
+/**
+ * Light or dark at one press, beside «Commands»: it runs the palette's command of the other scheme, so the choice is kept as
+ * the palette keeps it, and one made by the system's look becomes the other scheme, chosen.
+ */
+function SchemeSwitch() {
+  const { words, scheme } = useShell();
+  const other = scheme === 'dark' ? 'light' : 'dark';
+  const command = useCommands().find(({ id }) => id === `sigrid.scheme.${other}`);
+  return <ToolbarButton label={other === 'light' ? words.toLight : words.toDark} icon={<Icon name={scheme === 'dark' ? 'sun' : 'moon'} />} variant="quiet" onClick={() => command?.run()} />;
+}
+
 /** The window of the app, with its screen as the children. */
 export function AppWindow<Id extends string>({ views, view, onView, tools, status, sidebar, inspector, actions, footer, hints = [], search, contentLabel, children }: AppWindowProps<Id>) {
   const { app, words, notify, window: { own }, failed } = useShell();
@@ -152,6 +163,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
               {wide ? tabs : null}
               <ToolbarSpacer />
               {tools}
+              <SchemeSwitch />
               <ToolbarButton label={commands} icon={<Icon name="search" />} shortcut={formatKeys('Ctrl+K')} variant="quiet" onClick={() => palette.setOpen(true)}>{commands}</ToolbarButton>
             </Toolbar>
           </TitleBar>
