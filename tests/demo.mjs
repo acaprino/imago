@@ -748,7 +748,7 @@ try {
     });
   }
 
-  await onPage('the system's look, then a press of the switch: the other scheme, chosen', { system: 'dark' }, async (page) => {
+  await onPage("the system's look, then a press of the switch: the other scheme, chosen", { system: 'dark' }, async (page) => {
     await palette(page, 'system theme');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => localStorage.getItem('imago.scheme') === 'system');
