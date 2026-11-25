@@ -733,6 +733,7 @@ try {
     assert.equal(await option.getAttribute('aria-checked'), 'false');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.documentElement.dataset.material === 'glass');
+    await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|set_glass'));
     assert.deepEqual(await glassCalls(page), [{ glass: true }]);
     await shot(page, 'window-glass');
     assert.equal(await (await glassOption(page)).getAttribute('aria-checked'), 'true');
@@ -749,6 +750,7 @@ try {
     await setting.focus();
     await page.keyboard.press('Space');
     await page.waitForFunction(() => !document.documentElement.hasAttribute('data-material'));
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:imago-shell|set_glass').length === 2);
     assert.deepEqual(await glassCalls(page), [{ glass: true }, { glass: false }]);
     assert.deepEqual(await overflow(page), []);
   });
@@ -765,6 +767,7 @@ try {
     assert.deepEqual([await material(page), await glassCalls(page)], [null, []]);
     await (await glassOption(page)).click();
     await page.waitForFunction(() => document.documentElement.dataset.material === 'glass');
+    await page.waitForFunction(() => window.calls.some(([name]) => name === 'plugin:imago-shell|set_glass'));
     assert.deepEqual(await glassCalls(page), [{ glass: true }]);
   });
 

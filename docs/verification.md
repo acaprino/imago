@@ -62,13 +62,16 @@ On 2026-11-25 throwaway runs on the same kind of runner (Windows 10.0.26100, a s
 the demo from the branch `glass`, started it with a clean data folder, and drove its page over the debugging port. The page's own
 grounds were taken away there (its root, the frame and the title bar made transparent, in the light scheme of CSS), so that two
 points of the title bar showed the window itself; they were read from the screen with the window active, over a dark and over a
-bright window. The last run, 45633402945, passed every check:
+bright window. Run 45633402945 passed every check, and run 45634731478, on Sigrid 6.8.0, passed them again with the rows that
+begin «The command»:
 
 | What | Measured |
 |---|---|
 | A fresh install | The app's default: `kept_glass` answered false, and the window was the dark ground, `#12161E`, over both windows |
 | `set_glass` on, while it runs | The window became the acrylic at once, 84,84,84 in dark and 211,211,211 in light, and `window-material` held `glass` |
 | A theme chosen under glass | The glass stayed, with the other scheme's acrylic |
+| The command «Glass» of the palette, the page as Sigrid draws it | The root had `data-material="glass"` and `window-material` held `glass`; the title bar, in dark, was 38,41,47 (Sigrid's ground over the acrylic) where it is `#12161E` without glass |
+| The command again | The page solid, `window-material` held `solid`, and the title bar `#12161E` again |
 | Off again, after on | The ground of the scheme exactly, `#12161E` or `#F6F7F9`, over both windows; `window-material` held `solid` |
 | The edge of a window made 200 pixels wider, after on and off, and for a window that was never glass | Only the ground and the page, never the bright window behind, in the half second after |
 | The start, with each choice | From the first frame seen, every look of the title bar was the page's ground, for a second and a half: no frame of another colour |
@@ -76,8 +79,7 @@ bright window. The last run, 45633402945, passed every check:
 | A window built as glass, then turned off | The ground, over both windows |
 
 The acrylic of that runner was the same over the dark and over the bright window: Windows drew it, and nothing of what lies behind
-showed through it. That it does on a desktop is not seen. The page as Sigrid draws it with its material `glass` was not part of
-these runs: they took the page's grounds away by hand.
+showed through it. That it does on a desktop is not seen: the owner looks at the demo on their own desktop.
 
 ## Not run: for the coordinator
 
