@@ -38,6 +38,17 @@ tokens, up to v0.4.1, are gone: the look and the components are Sigrid's.
 - The demo (`examples/demo/src`) is the executable example of an app on the shell. A change to it is proved by
   `tests/demo.mjs`, at every width where the frame changes and in both schemes, and looked at in the artifact `demo-shots`.
 
+## Where the no-build rules apply (the owner, 2026-11-25)
+
+- The two rules below ("Rust is built and tested on GitHub only" and "Nothing is compiled on this machine") are for the
+  owner's own computer, where Codex, Claude Code or any other agent runs locally: nothing is compiled, built, linted or
+  tested there.
+- A cloud session (Claude Code on the web, or an agent in a container; its system prompt says it runs in a remote execution
+  environment) is not that machine. There an agent may install dependencies, compile, build, lint and run the tests
+  (`npm ci`, `tsc`, `vite build`, `npm test`, `cargo` where the platform allows it). What only Windows or the release can
+  prove (the native window, the installer) is still proved by GitHub Actions: push to `develop` and read the run.
+- When it is not clear which machine it is, treat it as the owner's computer and compile nothing.
+
 ## Rust is built and tested on GitHub only
 
 - Never run `cargo build`, `cargo test`, `cargo clippy`, `cargo check`, `cargo run`, `cargo doc`, `tauri dev` or

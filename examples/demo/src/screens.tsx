@@ -110,6 +110,9 @@ export function Words({ view }: { view: 'notices' | 'window' }) {
             </Cluster>
             {/* A browser has no glass: the setting is in a window of its own. */}
             {window_.own && <SettingRow label="Glass" description="What is behind the window shows through it" control={<Switch aria-label="Glass" checked={glass} onCheckedChange={setGlass} />} />}
+            {window_.own && <SettingRow label="Zoom" description={`${Math.round(window_.zoom * 100)}%`} control={<Button variant="outline" onClick={() => void window_.setZoom(1)}>Reset zoom</Button>} />}
+            {/* The place of an engine of its own (a terminal, an editor): the app names it in `ownKeysIn`. */}
+            {window_.own && <Text as="p" data-engine="">Its keys are its own: this line is where a terminal would be.</Text>}
           </>
         ) : (
           <>
