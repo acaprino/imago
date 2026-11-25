@@ -675,6 +675,22 @@ try {
     await page.keyboard.press('Control+Equal');
     await page.waitForFunction(() => window.calls.some(([name, args]) => name === 'plugin:webview|set_webview_zoom' && args.value === 1.1));
     assert.equal(await page.evaluate(() => localStorage.getItem('imago.zoom')), '1.1');
+    await page.getByText('110%').waitFor();
+    await page.getByRole('button', { name: 'Reset zoom' }).click();
+    await page.waitForFunction(() => window.calls.filter(([name]) => name === 'plugin:webview|set_webview_zoom').at(-1)[1].value === 1);
+    await page.getByText('100%').waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem('imago.zoom')), '1');
+
+    // The keys of the browser are taken away, but not in the place the app named in `ownKeysIn`; and a command's key is not run there.
+    const refused = (selector, key) => page.evaluate(([where, name]) => {
+      const event = new KeyboardEvent('keydown', { key: name, code: `Key${name.toUpperCase()}`, ctrlKey: true, bubbles: true, cancelable: true });
+      document.querySelector(where).dispatchEvent(event);
+      return event.defaultPrevented;
+    }, [selector, key]);
+    assert.equal(await refused('[data-engine]', 'r'), false, 'Ctrl+R reaches the engine');
+    assert.equal(await refused('body', 'r'), true, 'Ctrl+R elsewhere is refused');
+    await page.evaluate(() => document.querySelector('[data-engine]').dispatchEvent(new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', ctrlKey: true, bubbles: true, cancelable: true })));
+    assert.equal(await page.getByRole('dialog').count(), 0, 'Ctrl+K in the engine opens no palette');
 
     await page.evaluate(() => window.emit('window-shown', null));
     await page.getByText('The window is back.').waitFor();

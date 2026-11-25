@@ -35,6 +35,13 @@ describe('the accent', () => {
     for (const accent of ['red', '#fff', '006398', '']) assert.throws(() => defineApp({ ...app, accent }), /#rrggbb/);
     assert.equal(defineApp({ ...app, accent: '#006398' }).theme.label, 'X');
   });
+
+  test('defineApp carries the places that keep their own keys, and refuses an empty one', () => {
+    const app = { id: 'x', name: 'X', lang: 'en', accent: '#006398', storage: { scheme: 'x.theme', zoom: 'x.zoom', sidebar: 'x.sidebar' } };
+    assert.equal(defineApp(app).ownKeysIn, undefined);
+    assert.equal(defineApp({ ...app, ownKeysIn: '.xterm, .cm-editor' }).ownKeysIn, '.xterm, .cm-editor');
+    for (const ownKeysIn of ['', '  ']) assert.throws(() => defineApp({ ...app, ownKeysIn }), /ownKeysIn of x/);
+  });
 });
 
 describe('what the preset states', () => {

@@ -1,5 +1,5 @@
 // What the parts of the shell share, for the whole page: the app, its words, the one stack of notices and the window.
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useDesktopGuard, useWords, type ThemeDef } from '@acaprino/sigrid';
 import { useCommand, useSchemeCommands, type SchemeCommandsOptions } from '@acaprino/sigrid/assemblies';
 import { Toasts, type ToastItem } from '@acaprino/sigrid/components';
@@ -27,6 +27,10 @@ export interface WindowHandle {
   setProgress(percent: number | null): void;
   /** Calls `handler` when the window is shown again (from the notification area, or because the app was started again); returns how to stop. */
   onShown(handler: () => void): () => void;
+  /** The zoom of the page, the one the shell controls with the keys and the wheel: 1 is 100%, from 0.5 to 2. In a browser it is 1. */
+  readonly zoom: number;
+  /** Zooms to `level` (to the nearest tenth, kept in the app's storage); 1 is back to 100%. Resolves to whether the window took it; in a browser it does nothing and resolves to false. */
+  setZoom(level: number): Promise<boolean>;
 }
 
 /**
@@ -142,35 +146,38 @@ export function ShellProvider({ app, kept, children }: { app: App; kept: Kept; c
   const [progress, setProgress] = useState<number | null>(null);
   const shown = useRef(new Set<() => void>());
 
+  const notify = useCallback<Notify>((text, options) => {
+    // A new id each time: Sigrid keeps the node of one it has, and a screen reader reads only what is added.
+    const item: Notice = { ...options, id: `notice-${++notices}`, said: options?.id, text };
+    setItems((now) => [...now.filter(({ said }) => said === undefined || said !== item.said), item]);
+  }, []);
+  const failed = useMemo<TauriErrorHandler>(() => (call, error) => {
+    if (ASKED.has(call)) notify(words.windowFailed(call, message(error)), { id: `window-${call}`, kind: 'error' });
+    else console.warn(`imago: ${call}:`, error);
+  }, [notify, words]);
+  // shortcut: the zoom is in the browser's storage alone, and is lost when every process of the engine is killed; when that
+  // matters to an app, the plugin keeps it as it keeps the theme.
+  // The one controller of the page: the app reads and sets it through `useWindow`, and never starts a second one.
+  const { zoom, setZoom } = useZoom({ storageKey: app.storage.zoom, onError: failed });
+
   const shell = useMemo<Shell>(() => {
-    const notify: Notify = (text, options) => {
-      // A new id each time: Sigrid keeps the node of one it has, and a screen reader reads only what is added.
-      const item: Notice = { ...options, id: `notice-${++notices}`, said: options?.id, text };
-      setItems((now) => [...now.filter(({ said }) => said === undefined || said !== item.said), item]);
-    };
     return {
       app, words, notify, scheme,
       glass: [glass, (on) => { if (own) setGlass(on); }],
       window: {
-        own, setTitle,
+        own, setTitle, zoom, setZoom,
         setProgress: (percent) => setProgress(percent === null ? null : Math.round(Math.min(100, Math.max(0, percent)))),
         onShown: (handler) => {
           shown.current.add(handler);
           return () => { shown.current.delete(handler); };
         },
       },
-      failed: (call, error) => {
-        if (ASKED.has(call)) notify(words.windowFailed(call, message(error)), { id: `window-${call}`, kind: 'error' });
-        else console.warn(`imago: ${call}:`, error);
-      },
+      failed,
     };
-  }, [app, own, words, glass, scheme]);
+  }, [app, own, words, glass, notify, failed, zoom, setZoom, scheme]);
 
   useFocusFollowed();
-  useDesktopGuard(own && released);
-  // shortcut: the zoom is in the browser's storage alone, and is lost when every process of the engine is killed; when that
-  // matters to an app, the plugin keeps it as it keeps the theme.
-  useZoom({ storageKey: app.storage.zoom, onError: shell.failed });
+  useDesktopGuard(own && released, { ownKeysIn: app.ownKeysIn });
 
   // The first frame is drawn: the window, which is hidden until then, is shown in its theme. A hidden window may run no
   // animation frame.

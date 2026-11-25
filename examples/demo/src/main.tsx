@@ -16,6 +16,7 @@ const DEMO = defineApp({
   // design-check-ignore-next-line color-value: the demo's accent, the one colour an app gives
   accent: '#006398',
   storage: { scheme: 'imago.scheme', zoom: 'imago.zoom', sidebar: 'imago.sidebar' },
+  ownKeysIn: '[data-engine]',
 });
 
 type View = 'items' | 'new' | 'notices' | 'broken' | 'window';

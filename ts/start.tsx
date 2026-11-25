@@ -35,7 +35,7 @@ export function startApp(app: App, root: HTMLElement, node: ReactNode): () => vo
     react.render(
       <MotionProvider animated {...SHELL_MOTION}>
         <WordsProvider words={app.words?.sigrid}>
-          <CommandsProvider>
+          <CommandsProvider ownKeysIn={app.ownKeysIn}>
             <ShellProvider app={app} kept={kept}>{node}</ShellProvider>
           </CommandsProvider>
         </WordsProvider>
