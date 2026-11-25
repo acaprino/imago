@@ -79,7 +79,7 @@ startApp(MURO, document.getElementById('app')!, <Muro />)
 |---|---|
 | `defineApp` | The app: `AppDefinition` in, `App` out, which has the `theme` made from the one colour. `words` are the app's language: `words.sigrid` Sigrid's, `words.shell` the shell's (`ShellWords`: among them `glass`, the name of the command of glass, and `toLight` and `toDark`, the names of the switch of the title bar). It refuses an accent that is not `#rrggbb` |
 | `defineApp` `ownKeysIn` | An optional CSS selector for the places of the app that run their own keys and menu, `'.xterm, .cm-editor'` for a terminal and a code editor. In them the shell leaves alone the browser's keys it takes away in a window (Ctrl+R, F, D, N, P, U, H and the others of `useDesktopGuard`) and the keys of every command, the palette's Ctrl+K among them, so they reach the engine. It is handed to `useDesktopGuard` and to `CommandsProvider` of Sigrid. The app writes the selector of its engines and nothing wider: what it names has none of the shell's keys, and an empty one is refused |
-| `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component |
+| `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component. A fourth argument, `StartOptions`, is for a page that is not the app's window: `secondary` (section 4, «A second window») |
 | `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`: its drawer, whether it is collapsed, and the button of that at its head): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. The children are the screen, and the app decides what each view mounts: what two views share stays as it is when the view changes, and a screen that must start again has the view as its `key`. `contentLabel` names the content, when the view's label does not |
 | `useNotify` | `Notify`: says something in a notice. Its options are those of Sigrid's notice: `kind: 'error'`, `undo`, `actions`, `id`. One with the `id` of another takes its place: it is read again and its time starts again, also when the text is the same, so an app says it when there is something to hear |
 | `useWindow` | `WindowHandle`: whether the app runs in a window of its own, its title, the progress on the taskbar, a call when it is shown again, and the zoom: `zoom` (1 is 100%, from 0.5 to 2) and `setZoom` (a level in, to the nearest tenth; 1 is back to 100%; it resolves to whether the window took it) for the app's settings (a picker of the zoom). They are the zoom the shell already controls with the keys and the wheel, and the level is kept under `storage.zoom`: an app never starts a second `useZoom`, which would be a second controller. In a browser `zoom` is 1 and `setZoom` does nothing |
@@ -130,6 +130,24 @@ fn main() {
 - A program that does not start says why with `message::tell` ([desktop-shell.md](desktop-shell.md), section 3.2).
 - The other fields of `Options`, `show_main` and `single_instance` (one running copy) are in [desktop-shell.md](desktop-shell.md),
   sections 3.1 and 3.2. `examples/demo/src-tauri/src/main.rs` of the repository `acaprino/imago` uses them.
+
+### A second window
+
+An app may own a small window besides the one the shell opens: a notice that floats over the desktop, always on top and never
+focused. The plugin serves the window `open_main` built and refuses every other (`window "<label>" is not imago-shell's`), and
+`startApp` for the main window draws an opaque ground over the window. The page of the other window is started with
+`startApp(APP, root, <Notice />, { secondary: true })`:
+
+- the shell asks the plugin nothing: no `kept_theme`, `kept_glass`, `ready`, `set_theme`, `set_glass` or `chrome`, so there is no
+  refusal in the console and the window needs no `imago-shell:default` in its capability file. The app that built the window shows it;
+- the page is drawn with Sigrid's material `clear`: `html` and `body` paint no ground, so a transparent window shows the desktop around
+  the part the page holds (a `Card`, which has its own surface). Use no `AppWindow` there;
+- it has the light or dark the app's window keeps, read from the browser's storage under the same `storage.scheme` (both pages are of one
+  origin) and followed when the person changes it in the main window. No glass, no zoom, no title and no job;
+- the browser's keys stay away in a window, as in the main one. The window needs `core:event:allow-listen` and `core:event:allow-unlisten`
+  when its page listens to an event of the app, and nothing else.
+
+The material `clear` is Sigrid's (`ThemeDef.material`, added after 6.11.0); with a Sigrid that lacks it the page is drawn with the opaque ground and nothing else changes. `examples/demo/secondary.html` is such a page; `tests/demo.mjs` proves it on a window that only pretends to be Tauri's.
 
 Tauri 2 lets the page call the window, the webview or an event only when a capability file grants it. The app needs a file in
 `src-tauri/capabilities/` with these nine permissions. `windows` lists the label of every window that carries the title bar:
