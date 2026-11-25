@@ -53,6 +53,7 @@ export interface AppWindowProps<Id extends string = string> {
   search?: (() => void) | null;
   /** The name of the content, for screen readers. Absent: the label of the view. */
   contentLabel?: string;
+  /** The screen. The shell keeps what two views share; a screen that must start again has the view as its `key`. */
   children?: ReactNode;
 }
 
@@ -163,7 +164,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
         actions={actions}
         footer={phone ? undefined : !keys ? footer : <>{footer}<Spacer /><KeyHints ids={[...hints, ...(search ? [SEARCH] : []), { keys: 'F6', label: words.nextRegion }]} /></>}
       >
-        <ScreenBoundary key={view}>{children}</ScreenBoundary>
+        <ScreenBoundary of={view}>{children}</ScreenBoundary>
         {/* Inside the frame, so that in a window it opens under the title bar. */}
         <CommandPalette />
       </AppShell>

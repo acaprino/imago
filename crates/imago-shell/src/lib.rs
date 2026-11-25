@@ -2,7 +2,7 @@
 //! its material and theme, Snap Layouts, the guard, WebView2 recovery and its place.
 //!
 //! What an app calls is here: [`plugin`], [`open_main`] with its [`Options`], [`show_main`],
-//! [`on_run_event`] and [`single_instance`]. The rest is inside:
+//! [`on_run_event`], [`single_instance`] and [`message`]. The rest is inside:
 //!
 //! - `main_window`: the plugin and the one window of an app, which put the other modules together.
 //! - `theme`: [`Material`], glass or opaque, and the window theme (light, dark or the system's), kept
@@ -14,7 +14,6 @@
 //! - `recovery`: what failed in WebView2 and what to do about it; a page is reloaded at most
 //!   three times a minute, and nothing is done once the application is closing.
 //! - `window_state`: where the window was, brought back inside the monitors there are now.
-//! - `message`: a native message, for when the page cannot be asked.
 //!
 //! The decisions (parsing, files, limits, geometry) are plain functions that need no window; the Win32
 //! and Tauri calls are thin around them. Win32 is behind `cfg(windows)`: other targets compile the
@@ -23,7 +22,7 @@
 mod frame;
 mod guard;
 mod main_window;
-mod message;
+pub mod message;
 mod recovery;
 pub mod single_instance;
 mod theme;

@@ -154,6 +154,10 @@ is the page's own guard (3.4).
 (the copy that runs was asked to show its window: end), or `Launch::Closing` (one is still quitting after five
 seconds). An app that quits slowly holds `Quitting::mark` meanwhile, so that a new start waits for it.
 
+A program that does not start, or must end, says why with `message::tell`: a title and a text, in a message of Windows that
+needs no window and no running app. It blocks the thread it is called on until the person closes it. What a page can say is a
+notice (`useNotify`).
+
 ### 3.3 Between the page and Rust
 
 | What | Name | Direction |

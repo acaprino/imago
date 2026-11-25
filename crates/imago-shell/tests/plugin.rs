@@ -24,6 +24,9 @@ const OPAQUE: Material = Material::Opaque {
     light: LIGHT_GROUND,
 };
 
+/// What an app calls when it does not start. It is not called here: it would wait for a person.
+const _: fn(&str, &str) = imago_shell::message::tell;
+
 /// Every command, with arguments it takes.
 fn commands() -> [(&'static str, Value); 5] {
     [

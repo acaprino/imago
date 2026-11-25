@@ -7,7 +7,7 @@ import { useCommand } from '@acaprino/sigrid/assemblies';
 import { AppWindow, defineApp, startApp, useNotify, useWindow, type AppView } from '@acaprino/imago';
 import '@acaprino/sigrid/styles.css';
 import { ITEMS, KINDS, STATES, type Item, type Kind, type State } from './items';
-import { Broken, Form, ItemDetails, Items, mend, Notices } from './screens';
+import { Broken, Form, ItemDetails, Items, mend, Words } from './screens';
 
 const DEMO = defineApp({
   id: 'imago-demo',
@@ -18,7 +18,7 @@ const DEMO = defineApp({
   storage: { scheme: 'imago.scheme', zoom: 'imago.zoom', sidebar: 'imago.sidebar' },
 });
 
-type View = 'items' | 'new' | 'notices' | 'broken';
+type View = 'items' | 'new' | 'notices' | 'broken' | 'window';
 
 function Demo() {
   const notify = useNotify();
@@ -66,6 +66,7 @@ function Demo() {
     { id: 'new', label: 'New item', command: 'Go to New item', icon: 'plus' },
     { id: 'notices', label: 'Notices', command: 'Go to Notices', icon: 'info' },
     { id: 'broken', label: 'Failure', command: 'Go to Failure', icon: 'alert' },
+    { id: 'window', label: 'Window', command: 'Go to Window', icon: 'windowMaximize' },
   ];
   return (
     <AppWindow
@@ -104,7 +105,8 @@ function Demo() {
     >
       {view === 'items' && <Items items={shown} chosen={chosen} choose={setChosen} asked={asked} ask={setAsked} field={field} kind={kind} filter={setKind} />}
       {view === 'new' && <Form add={add} cancel={() => go('items')} />}
-      {view === 'notices' && <Notices />}
+      {/* One screen of two views: it is kept between them, with what was typed in it. */}
+      {(view === 'notices' || view === 'window') && <Words view={view} />}
       {view === 'broken' && <Broken />}
     </AppWindow>
   );

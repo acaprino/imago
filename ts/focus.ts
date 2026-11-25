@@ -19,10 +19,13 @@ export function useFocusFollowed(): void {
   }, []);
 }
 
+/** Gives the focus to the content when what had it has gone or is hidden. */
+export function keepFocus(): void {
+  const at = document.activeElement === document.body ? held : document.activeElement;
+  if (at instanceof Element && (!at.isConnected || at.closest('[hidden]'))) focusContent();
+}
+
 /** When any of `where` (what is in sight) changes and what had the focus has gone or is hidden, the content takes the focus. */
 export function useFocusKept(...where: unknown[]): void {
-  useLayoutEffect(() => {
-    const at = document.activeElement === document.body ? held : document.activeElement;
-    if (at instanceof Element && (!at.isConnected || at.closest('[hidden]'))) focusContent();
-  }, where);
+  useLayoutEffect(keepFocus, where);
 }

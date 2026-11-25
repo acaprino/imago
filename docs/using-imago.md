@@ -79,10 +79,10 @@ startApp(MURO, document.getElementById('app')!, <Muro />)
 |---|---|
 | `defineApp` | The app: `AppDefinition` in, `App` out, which has the `theme` made from the one colour. `words` are the app's language: `words.sigrid` Sigrid's, `words.shell` the shell's (`ShellWords`). It refuses an accent that is not `#rrggbb` |
 | `startApp` | Puts the look on the page and draws the app in a root, inside the shell. Returns how to take it away. Providers of the app go inside, round its own component |
-| `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`: its drawer, whether it is collapsed, and the button of that at its head): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. `contentLabel` names the content, when the view's label does not |
-| `useNotify` | `Notify`: says something in a notice. Its options are those of Sigrid's notice: `kind: 'error'`, `undo`, `actions`, `id` |
+| `AppWindow` | The window: `AppWindowProps`. `views` are `AppView` (`id`, `label`, `icon`, and, when wanted, `command`, the name of its command, and `count`, the number after its word). Regions: `tools`, `status`, `sidebar`, `inspector`, `actions`, `footer`, and the screen as children. `sidebar` is a function that is given the state of the sidebar (`SidebarState`: its drawer, whether it is collapsed, and the button of that at its head): `(state) => <Sidebar {...state} />`, the same in every view. `hints` are the app's keys in the foot. `search` is what Ctrl+F does, absent where the view has none. The children are the screen, and the app decides what each view mounts: what two views share stays as it is when the view changes, and a screen that must start again has the view as its `key`. `contentLabel` names the content, when the view's label does not |
+| `useNotify` | `Notify`: says something in a notice. Its options are those of Sigrid's notice: `kind: 'error'`, `undo`, `actions`, `id`. One with the `id` of another takes its place: it is read again and its time starts again, also when the text is the same, so an app says it when there is something to hear |
 | `useWindow` | `WindowHandle`: whether the app runs in a window of its own, its title, the progress on the taskbar, and a call when it is shown again |
-| `ScreenBoundary` | What fails while it is drawn says so in its place. `AppWindow` has one round the screen; an app puts one round an inspector that may fail |
+| `ScreenBoundary` | What fails while it is drawn says so in its place. When its `of` (what it draws) changes, what failed is drawn again and what did not is kept. `AppWindow` has one round the screen, of the view; an app puts one round an inspector that may fail |
 | `useFocusKept` | When one of its arguments changes and what had the focus has gone, the content takes it. `AppWindow` does it for the view; an app with steps of its own passes the step |
 | `focusContent` | Gives the focus to the content: after a press whose own control goes away with what it did |
 
@@ -123,6 +123,7 @@ fn main() {
   the edge of a window that is resized.
 - The window is the one called `main` in `tauri.conf.json`, with `"create": false` and no decorations. Its material, its
   visibility and its place are the crate's.
+- A program that does not start says why with `message::tell` ([desktop-shell.md](desktop-shell.md), section 3.2).
 - The other fields of `Options`, `show_main` and `single_instance` (one running copy) are in [desktop-shell.md](desktop-shell.md),
   sections 3.1 and 3.2. `examples/demo/src-tauri/src/main.rs` of the repository `acaprino/imago` uses them.
 

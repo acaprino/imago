@@ -92,8 +92,10 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
   there is none the shell says so; `F6` goes to the next region.
 - The foot names the keys that work now, from 620px. A phone has no foot.
 - What had the focus and goes gives it to the content; a view opened from the palette does too, one opened from the bar keeps it.
-- The notices are one stack. One goes by itself, an error stays until it is closed, and one with the id of another takes its place.
-- A screen that fails while it is drawn says so in its place, with a button that draws it again; the bar stays.
+- The notices are one stack. One goes by itself, an error stays until it is closed, and one with the id of another takes its
+  place and is read again.
+- A screen that fails while it is drawn says so in its place, with a button that draws it again; the bar stays, and another view is drawn.
+- The shell throws no screen away: the app decides what each view mounts, and what two views share stays when the view changes.
 - Nothing overflows sideways, at any width from 340px.
 
 ## The window

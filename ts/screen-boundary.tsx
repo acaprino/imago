@@ -3,7 +3,7 @@
 import { Component, type ReactNode } from 'react';
 import { Button, Column, Icon, Text } from '@acaprino/sigrid/primitives';
 import { Note } from '@acaprino/sigrid/components';
-import { focusContent } from './focus.js';
+import { focusContent, keepFocus } from './focus.js';
 import { useShell } from './shell.js';
 
 function Failed({ error, retry }: { error: unknown; retry: () => void }) {
@@ -17,17 +17,30 @@ function Failed({ error, retry }: { error: unknown; retry: () => void }) {
   );
 }
 
+interface ScreenBoundaryProps {
+  /** What it draws (a view, an item): when it changes the children are drawn again if they had failed, and kept if they had not. */
+  of?: unknown;
+  children?: ReactNode;
+}
+
+const DRAWN = { failed: false, error: undefined as unknown };
+
 /** Draws its children, or what failed in them with a button that draws them again. */
-export class ScreenBoundary extends Component<{ children?: ReactNode }, { failed: boolean; error: unknown }> {
-  override state = { failed: false, error: undefined as unknown };
+export class ScreenBoundary extends Component<ScreenBoundaryProps, { failed: boolean; error: unknown }> {
+  override state = DRAWN;
 
   static getDerivedStateFromError(error: unknown): { failed: boolean; error: unknown } {
     return { failed: true, error };
   }
 
+  override componentDidUpdate(before: ScreenBoundaryProps, { failed }: { failed: boolean }): void {
+    // What failed at this very change would only fail again.
+    if (failed && this.state.failed && before.of !== this.props.of) this.setState(DRAWN, keepFocus);
+  }
+
   override render(): ReactNode {
     if (!this.state.failed) return this.props.children;
     // The button goes with the message: the content takes the focus.
-    return <Failed error={this.state.error} retry={() => { focusContent(); this.setState({ failed: false, error: undefined }); }} />;
+    return <Failed error={this.state.error} retry={() => { focusContent(); this.setState(DRAWN); }} />;
   }
 }
