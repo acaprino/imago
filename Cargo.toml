@@ -4,6 +4,6 @@ members = ["crates/imago-shell", "examples/demo/src-tauri"]
 
 # release.mjs writes the version here; the crates inherit it.
 [workspace.package]
-version = "1.4.1"
+version = "1.5.0"
 edition = "2021"
 license = "Apache-2.0"
