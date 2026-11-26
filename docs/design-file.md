@@ -101,7 +101,8 @@ Xiox's, as a theme that Sigrid's engine computes (`ts/preset.ts` of the reposito
 ## The frame
 
 - One frame: Sigrid's `AppShell` with `frame="sheet"`, and `desktop` in a window. The regions are its own: title bar, views,
-  status, sidebar, content, inspector, actions, footer.
+  status, sidebar, content, inspector, actions, footer. The inspector is docked at the end, or beside the sidebar when the app asks for it
+  (`inspectorAt="sidebar"`: details chosen in the sidebar open next to it); as a panel under 1000px it covers the end.
 - The title bar holds, in this order: the brand, the views, the room that moves the window, the view's tools, the switch of
   light and dark, "Commands" with its key, and in a window the three buttons. The switch stays at every width, an icon alone. The shared controls keep their places from one view to the next.
 - The views are in the title bar from 860px, in a row under it from 620px to 860px and in any narrower window, and at the

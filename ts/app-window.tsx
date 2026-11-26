@@ -43,6 +43,8 @@ export interface AppWindowProps<Id extends string = string> {
   sidebar?: (state: SidebarState) => ReactNode;
   /** The `Inspector` of what is selected. */
   inspector?: ReactNode;
+  /** Where the inspector is docked: at the `end` of the window (the default), or beside the `sidebar`, before the content (Sigrid's `inspectorAt`). */
+  inspectorAt?: 'end' | 'sidebar';
   /** The actions on the content, the primary one last. */
   actions?: ReactNode;
   /** The line at the start of the foot. A phone has no foot, and a window under 1000px no keys in it. */
@@ -115,7 +117,7 @@ function SchemeSwitch() {
 }
 
 /** The window of the app, with its screen as the children. */
-export function AppWindow<Id extends string>({ views, view, onView, tools, status, sidebar, inspector, actions, footer, hints = [], search, contentLabel, children }: AppWindowProps<Id>) {
+export function AppWindow<Id extends string>({ views, view, onView, tools, status, sidebar, inspector, inspectorAt, actions, footer, hints = [], search, contentLabel, children }: AppWindowProps<Id>) {
   const { app, words, notify, window: { own }, failed } = useShell();
   const [collapsed, setCollapsed] = useCollapsed(app.storage.sidebar);
   const commands = useWords().palette.command;
@@ -173,6 +175,7 @@ export function AppWindow<Id extends string>({ views, view, onView, tools, statu
         status={status}
         sidebar={navigation}
         inspector={inspector}
+        inspectorAt={inspectorAt}
         actions={actions}
         footer={phone ? undefined : !keys ? footer : <>{footer}<Spacer /><KeyHints ids={[...hints, ...(search ? [SEARCH] : []), { keys: 'F6', label: words.nextRegion }]} /></>}
       >
