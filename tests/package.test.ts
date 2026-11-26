@@ -25,7 +25,7 @@ test('the version is major.minor.patch', () => {
 
 test('Sigrid, React and the API of Tauri are peers, and the Sigrid the package is built with is one the peer allows', () => {
   const { peerDependencies, devDependencies } = manifest();
-  assert.deepEqual(peerDependencies, { '@acaprino/sigrid': '^6.13.0', '@tauri-apps/api': '^2.0.0', react: '^19.0.0', 'react-dom': '^19.0.0' });
+  assert.deepEqual(peerDependencies, { '@acaprino/sigrid': '^6.15.1', '@tauri-apps/api': '^2.0.0', react: '^19.0.0', 'react-dom': '^19.0.0' });
   const [, minor] = /\/download\/v6\.(\d+)\.(\d+)\/acaprino-sigrid-6\.\1\.\2\.tgz$/.exec(devDependencies['@acaprino/sigrid']) ?? [];
   assert.ok(Number(minor) >= 2, devDependencies['@acaprino/sigrid']);
 });
